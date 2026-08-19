@@ -1,0 +1,64 @@
+# Configuration D&D 3.5 — Maître du Jeu
+# Copiez ce fichier en config.yaml et ajustez selon votre installation.
+
+llm:
+  # Backend Ollama (endpoint OpenAI-compatible).
+  base_url: "http://localhost:11434/v1"
+  api_key: "ollama"           # placeholder requis par le client OpenAI
+  model: "gemma4:12b"          # Gemma 4 12B (votre choix)
+  temperature: 0.75
+  top_p: 0.9
+  max_context_tokens: 8192    # Gemma 4 12B accepte jusqu'à 8192 native
+
+  # Options natives transmises à Ollama via le champ `options` du payload
+  # OpenAI-compatible. Permet de tuner le runtime sans modifier le code.
+  # Valeurs calibrées par l'utilisateur pour Gemma 4 12B :
+  options:
+    num_ctx: 60000          # fenêtre de contexte large (tokens)
+    top_k: 64               # sampling diversifié (meilleurs résultats observés)
+
+  # Stratégie de function-calling.
+  # "native"   : envoie le schéma JSON des tools à Ollama (support Gemma 4 limité).
+  # "prompt"   : décrit les tools dans le system prompt + parsing structuré (plus robuste avec Gemma).
+  # "auto"     : tente native, retombe sur prompt si le LLM simule.
+  tool_mode: "prompt"
+
+  # Détecte et corrige les « simulations » textuelles d'appels d'outils
+  # (pattern *(Simulation de l'appel ...)* observé sous OpenWebUI).
+  detect_simulation: true
+  max_tool_iterations: 6      # borne la boucle tool-call / responde
+
+server:
+  host: "127.0.0.1"
+  port: 8000
+  cors_origins: ["http://localhost:5173", "http://127.0.0.1:8000"]
+
+paths:
+  # Racine des données — hérite du projet Dongeon dragon/projet_DnD35/data/
+  data_dir: "./server/data"
+  prompts_dir: "./server/prompts"
+  sections_dir: "./server/prompts/sections"
+
+game:
+  default_title: "Partie D&D 3.5 — Côte des Épées"
+  default_frame: "Côte des Épées (Faerûn)"
+  max_history_events: 50
+  max_recap_chars: 6000
+  stream_to_clients: true      # le MJ stream-token sa réponse aux joueurs
+
+rag:
+  # Base de connaissances RAG (Phase 2). Désactivé par défaut ; passez à
+  # `true` après avoir exécuté `py -m server.rag --ingest` une fois.
+  enabled: false
+  # Dossier racine du corpus à ingérer (projet source OpenWebUI).
+  source_dir: "../Dongeon dragon/projet_DnD35/knowledge_import"
+  # Persistance du vector store ChromaDB embarqué.
+  persist_dir: "./server/data/chroma"
+  embedding_model: "nomic-embed-text"   # doit être `ollama pull` au préalable
+  chunk_size: 1500            # tokens cibles par chunk (cf. MANIFESTE_KNOWLEDGE_BASE)
+  chunk_overlap: 200          # tokens de chevauchement entre chunks consécutifs
+  top_k: 5                    # nombre d'extraits récupérés par requête
+  query_max_tokens: 1500      # budget max injecté dans le system prompt
+  # Filtrage par KB : `null` = interroge les 3 KB ; liste pour restreindre
+  # (ex: ["KB1_Manuels_de_base"] pour les règles en combat uniquement).
+  kb_filter: null

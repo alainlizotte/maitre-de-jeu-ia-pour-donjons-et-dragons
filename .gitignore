@@ -19,6 +19,7 @@ server/data/chroma/
 server/data/bestiaire_cache/
 server/data/portraits_cache/
 server/data/partie_*.json
+server/data/chat_*.json
 server/data/cartes/
 
 # Outils / OS

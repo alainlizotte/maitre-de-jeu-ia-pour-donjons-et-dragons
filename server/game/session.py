@@ -30,6 +30,8 @@ class PartySession:
     partie_id: str
     history: list[Message] = field(default_factory=list)
     connections: set[Any] = field(default_factory=set)  # WebSocket Starlette
+    # Connexions ayant franchi le contrôle de mot de passe (parties protégées).
+    authenticated: set[Any] = field(default_factory=set)
     participants: list[str] = field(default_factory=list)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Persistance conversationnelle (optionnelle mais recommandée en prod).

@@ -52,8 +52,11 @@ export class ChatSocket {
     }
   }
 
-  join(player: string): void {
-    this.send({ type: "join", player });
+  join(player: string, password?: string): void {
+    const payload: Record<string, unknown> = { type: "join", player };
+    // Mot de passe requis pour les parties protégées (sinon ignoré côté serveur).
+    if (password) payload.password = password;
+    this.send(payload);
   }
 
   say(player: string, text: string): void {

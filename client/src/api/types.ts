@@ -79,6 +79,8 @@ export interface ChatMessage {
 export type WsMessage =
   | { type: "sys"; event: "joined"; partie_id: string; participants: string[]; history: { role: string; content: string }[] }
   | { type: "sys"; event: "participant_joined"; player: string }
+  | { type: "sys"; event: "auth_required"; partie_id?: string; detail: string }
+  | { type: "sys"; event: "auth_failed"; detail: string }
   | { type: "sys"; event: "error"; detail: string }
   | { type: "player"; player: string; text: string }
   | { type: "status"; description: string; done?: boolean }
@@ -93,7 +95,7 @@ export type WsMessage =
 export interface PartiesList {
   active: string[];
   persisted: string[];
-  details: Record<string, { titre: string; phase: string; tour: number; pj: number }>;
+  details: Record<string, { titre: string; phase: string; tour: number; pj: number; protegee?: boolean }>;
 }
 
 export interface HealthStatus {
@@ -105,4 +107,16 @@ export interface HealthStatus {
   tools: string[];
   tool_mode: string;
   rag?: { enabled: boolean; collections: Record<string, number>; error?: string };
+}
+
+export interface ModelsList {
+  models: string[];
+  current: string;
+  error?: string;
+}
+
+/** Monstre rencontré en cours de partie (galerie colonne droite). */
+export interface EncounterMonster {
+  url: string;   // /data/bestiaire_cache/<slug>.png|svg
+  nom: string;   // nom lisible dérivé du slug
 }

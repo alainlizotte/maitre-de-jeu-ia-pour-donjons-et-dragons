@@ -17,6 +17,7 @@ Réponse servant de déclencheur MJ : type=say.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -67,7 +68,18 @@ async def lifespan(app: FastAPI):
         max_history_events=cfg.game.max_history_events,
     )
 
-    # Singleton client Ollama
+    # Singleton client Ollama. Le choix de modèle persisté (via /api/model)
+    # prime sur config.yaml — il vit dans data_dir (montage writable en Docker,
+    # contrairement à config/ qui est monté read-only).
+    choice_path = cfg.abs(cfg.paths.data_dir) / "model_choice.json"
+    if choice_path.is_file():
+        try:
+            saved = json.loads(choice_path.read_text(encoding="utf-8"))
+            m = (saved.get("model") or "").strip()
+            if m:
+                cfg.llm.model = m
+        except (json.JSONDecodeError, OSError):
+            pass
     client = OllamaClient(cfg.llm)
     available = await client.list_models()
     model_names = [m.get("id", "") for m in available]
@@ -142,6 +154,29 @@ def _ctx(partie_id: str, player: str) -> ToolContext:
     )
 
 
+def _hash_mot_de_passe(mdp: str) -> str:
+    """Hash SHA-256 du mot de passe de partie (jamais stocké en clair)."""
+    return hashlib.sha256(mdp.encode("utf-8")).hexdigest()
+
+
+def _party_password_hash(partie_id: str) -> Optional[str]:
+    """Lit le hash du mot de passe dans l'état persistant de la partie."""
+    state = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+        partie_id=partie_id,
+        max_history=cfg.game.max_history_events,
+    )
+    etat = state.load()
+    if "_erreur" in etat:
+        return None
+    h = etat.get("meta", {}).get("mot_de_passe_sha256")
+    return h or None
+
+
+def _model_choice_path() -> Path:
+    return cfg.abs(cfg.paths.data_dir) / "model_choice.json"
+
+
 def _orchestrator(app: FastAPI) -> Orchestrator:
     return Orchestrator(
         client=app.state.client,
@@ -208,6 +243,8 @@ async def list_parties() -> dict[str, Any]:
             "phase": etat.get("phase", "opening"),
             "tour": etat.get("tour", 0),
             "pj": len(etat.get("pj", [])),
+            # Partie protégée par mot de passe (sans révéler le hash).
+            "protegee": bool(etat.get("meta", {}).get("mot_de_passe_sha256")),
         }
     return {
         "active": ids,
@@ -221,6 +258,7 @@ async def create_party(payload: dict[str, Any]) -> dict[str, Any]:
     titre = payload.get("titre") or cfg.game.default_title
     cadre = payload.get("cadre") or cfg.game.default_frame
     partie_id = payload.get("partie_id") or uuid.uuid4().hex[:8]
+    mot_de_passe = (payload.get("mot_de_passe") or "").strip()
     state = PartyState(
         data_dir=str(cfg.abs(cfg.paths.data_dir)),
         partie_id=partie_id,
@@ -232,10 +270,19 @@ async def create_party(payload: dict[str, Any]) -> dict[str, Any]:
         "cadre": cadre,
         "regles": "D&D 3.5",
     })
+    if mot_de_passe:
+        etat["meta"]["mot_de_passe_sha256"] = _hash_mot_de_passe(mot_de_passe)
+    else:
+        etat["meta"].pop("mot_de_passe_sha256", None)
     etat["phase"] = "opening"
     state.save(etat)
     sessions.get(partie_id)  # crée la session en mémoire
-    return {"partie_id": partie_id, "titre": titre, "etat": etat}
+    return {
+        "partie_id": partie_id,
+        "titre": titre,
+        "etat": etat,
+        "protegee": bool(mot_de_passe),
+    }
 
 
 @app.get("/api/parties/{partie_id}")
@@ -259,6 +306,70 @@ async def list_tools() -> dict[str, Any]:
         "names": sorted(app.state.tools.keys()),
         "schemas": tools_schemas_all(app.state.tools),
     }
+
+
+# --------------------------------------------------------------------------- #
+#  Modèles IA — sélection à chaud du modèle du MJ (menu déroulant frontend).
+# --------------------------------------------------------------------------- #
+@app.get("/api/models")
+async def list_models() -> dict[str, Any]:
+    """Liste les modèles disponibles sur le backend LLM + le modèle courant."""
+    try:
+        models = await app.state.client.list_models()
+    except Exception as e:                                   # noqa: BLE001
+        return {"models": [], "current": cfg.llm.model, "error": str(e)}
+    return {"models": [m.get("id", "") for m in models], "current": cfg.llm.model}
+
+
+@app.post("/api/model")
+async def set_model(payload: dict[str, Any]) -> dict[str, Any]:
+    """Bascule le modèle du MJ à chaud et persiste le choix (data/model_choice.json).
+
+    Le choix persisté prime sur config.yaml au démarrage suivant — la config
+    reste montée read-only dans Docker alors que data_dir est writable.
+    """
+    model = (payload.get("model") or "").strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="Champ 'model' requis.")
+    models = await app.state.client.list_models()
+    # Si le backend expose une liste non vide, on valide le choix pour éviter
+    # les fautes de frappe qui feraient échouer silencieusement tous les tours.
+    if models and not any(m.get("id") == model for m in models):
+        dispo = ", ".join(m.get("id", "?") for m in models)
+        raise HTTPException(
+            status_code=404,
+            detail=f"Modèle « {model} » introuvable. Disponibles : {dispo}",
+        )
+    cfg.llm.model = model
+    try:
+        _model_choice_path().write_text(
+            json.dumps({"model": model}, ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError:
+        pass  # persistance best-effort ; le changement runtime reste actif
+    return {"ok": True, "model": model}
+
+
+# --------------------------------------------------------------------------- #
+#  Fiches personnages — consultation par le frontend (modal fiche PJ).
+# --------------------------------------------------------------------------- #
+@app.get("/api/fiches/{nom}")
+async def get_fiche(nom: str) -> dict[str, Any]:
+    """Renvoie la fiche persistante d'un personnage (data/fiches/)."""
+    from .tools.fiches import _slug
+    fiches_dir = cfg.abs(cfg.paths.data_dir) / "fiches"
+    path = fiches_dir / f"fiche_{_slug(nom)}.json"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"Aucune fiche pour « {nom} ».")
+    try:
+        fiche = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        raise HTTPException(status_code=500, detail=f"Fiche illisible : {e}")
+    portrait = None
+    png = cfg.abs(cfg.paths.data_dir) / "portraits_cache" / f"{_slug(nom)}.png"
+    if png.is_file():
+        portrait = f"/data/portraits_cache/{_slug(nom)}.png"
+    return {"fiche": fiche, "portrait": portrait}
 
 
 # --------------------------------------------------------------------------- #
@@ -295,16 +406,12 @@ async def rag_ingest(payload: dict[str, Any] | None = None) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 #  WebSocket : canal chat multijoueur
 # --------------------------------------------------------------------------- #
-@app.websocket("/ws/{partie_id}")
-async def ws_chat(ws: WebSocket, partie_id: str) -> None:
-    await ws.accept()
-    session: PartySession = sessions.get(partie_id)
-    session.connections.add(ws)
+async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> None:
+    """Envoie le payload « joined » (historique + participants) à un client.
 
-    # Historique de la partie pour rafraîchir le client qui rejoint.
-    # On envoie une forme simplifiée (role + content uniquement) pour que le
-    # frontend puisse rejouer le fil de conversation sans réinterpreter les
-    # tool_calls internes.
+    Envoyé uniquement aux clients authentifiés — pour une partie protégée par
+    mot de passe, l'historique ne doit pas fuiter avant la vérification.
+    """
     history_payload = [
         {"role": m.role, "content": m.content}
         for m in session.history
@@ -318,6 +425,27 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
         "history": history_payload,
     })
 
+
+@app.websocket("/ws/{partie_id}")
+async def ws_chat(ws: WebSocket, partie_id: str) -> None:
+    await ws.accept()
+    session: PartySession = sessions.get(partie_id)
+    pw_hash = _party_password_hash(partie_id)
+
+    if pw_hash is None:
+        # Partie ouverte : accès immédiat à l'historique + broadcasts.
+        session.connections.add(ws)
+        await _send_joined(ws, session, partie_id)
+    else:
+        # Partie protégée : on exige le mot de passe via un message "join"
+        # avant de révéler quoi que ce soit.
+        await ws.send_json({
+            "type": "sys",
+            "event": "auth_required",
+            "partie_id": partie_id,
+            "detail": "Cette partie est protégée par un mot de passe.",
+        })
+
     try:
         while True:
             raw = await ws.receive_text()
@@ -330,10 +458,23 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
 
             mtype = msg.get("type")
             player = (msg.get("player") or "Joueur").strip()
-            session.add_participant(player)
 
             if mtype == "join":
-                session.connections.add(ws)
+                if pw_hash is not None:
+                    mdp = msg.get("password") or ""
+                    if _hash_mot_de_passe(mdp) != pw_hash:
+                        await ws.send_json({
+                            "type": "sys",
+                            "event": "auth_failed",
+                            "detail": "Mot de passe incorrect.",
+                        })
+                        continue
+                    session.authenticated.add(ws)
+                    session.connections.add(ws)
+                session.add_participant(player)
+                # Pour une partie protégée, l'historique n'arrive qu'ici.
+                if pw_hash is not None:
+                    await _send_joined(ws, session, partie_id)
                 await session.broadcast({
                     "type": "sys",
                     "event": "participant_joined",
@@ -343,6 +484,13 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                 continue
 
             if mtype == "say":
+                if pw_hash is not None and ws not in session.authenticated:
+                    await ws.send_json({
+                        "type": "sys",
+                        "event": "auth_required",
+                        "detail": "Partie protégée : rejoignez avec le mot de passe.",
+                    })
+                    continue
                 await _handle_say(ws, session, partie_id, player, msg.get("text", ""))
                 continue
 
@@ -352,6 +500,7 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
         pass
     finally:
         session.connections.discard(ws)
+        session.authenticated.discard(ws)
 
 
 async def _handle_say(

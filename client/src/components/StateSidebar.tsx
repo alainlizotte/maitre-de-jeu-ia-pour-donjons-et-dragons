@@ -1,6 +1,21 @@
-// Colonne gauche — état partie condensé : lieu, phase, tour, initiative, PJ.
+// Colonne gauche — état partie condensé : lieu, phase, tour, initiative, et
+// cartes des joueurs (nom du joueur au-dessus du portrait de son personnage ;
+// clic sur le nom ou le portrait → fiche complète : caractéristiques,
+// inventaire, sorts, etc.).
 
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api/rest";
 import { useParty } from "../store";
+import type { Personnage } from "../api/types";
+
+/** Slug identique au `_slug` serveur (server/tools/fiches.py) pour retrouver
+ *  le portrait `portraits_cache/<slug>.png` d'un personnage. */
+export function slugify(text: string): string {
+  const norm = text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  const cleaned = norm.trim().replace(/[^A-Za-z0-9_-]+/g, "_");
+  return cleaned.slice(0, 60).replace(/^_+|_+$/g, "").toLowerCase() || "perso";
+}
 
 function PhaseBadge({ phase }: { phase: string }) {
   const colors: Record<string, string> = {
@@ -17,8 +32,241 @@ function PhaseBadge({ phase }: { phase: string }) {
   );
 }
 
+// --------------------------------------------------------------------------- //
+//  Portrait + carte joueur
+// --------------------------------------------------------------------------- //
+function Portrait({ nom, size = "h-20" }: { nom: string; size?: string }) {
+  const [failed, setFailed] = useState(false);
+  const slug = slugify(nom);
+  const url = `/data/portraits_cache/${slug}.png`;
+  if (failed) {
+    // Pas de portrait généré : monogramme stylé dérivé du nom.
+    const initiales = nom
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join("") || "?";
+    return (
+      <div
+        className={`${size} w-full rounded border border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 flex items-center justify-center font-serif text-3xl text-amber-500/70`}
+      >
+        {initiales}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt={nom}
+      className={`${size} w-full object-cover rounded border border-stone-700`}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function PlayerCard({ pj, onOpen }: { pj: Personnage; onOpen: () => void }) {
+  const joueur = (pj.joueur as string | undefined) || "(joueur inconnu)";
+  const pvRatio =
+    pj.pv !== undefined && pj.pv_max ? Math.max(0, Math.min(1, pj.pv / pj.pv_max)) : null;
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left bg-stone-800/40 hover:bg-stone-800/70 rounded p-2 transition-colors group"
+      title={`Voir la fiche de ${pj.nom}`}
+    >
+      <div className="text-center text-xs text-amber-200/90 truncate mb-1" title={joueur}>
+        👤 {joueur}
+      </div>
+      <Portrait nom={pj.nom} />
+      <div className="mt-1 text-center">
+        <div className="text-sm text-stone-100 font-medium truncate">{pj.nom}</div>
+        <div className="text-xs text-stone-400">
+          {[pj.race, pj.classe, pj.niveau != null ? `niv. ${pj.niveau}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
+      </div>
+      {pvRatio !== null && (
+        <div className="mt-1.5">
+          <div className="h-1.5 rounded bg-stone-900 overflow-hidden">
+            <div
+              className={
+                "h-full " +
+                (pvRatio > 0.5 ? "bg-emerald-600" : pvRatio > 0.25 ? "bg-amber-600" : "bg-rose-600")
+              }
+              style={{ width: `${pvRatio * 100}%` }}
+            />
+          </div>
+          <div className="text-center text-xs tabular-nums text-stone-400 mt-0.5">
+            {pj.pv}/{pj.pv_max} pv{pj.ca !== undefined ? ` · CA ${pj.ca}` : ""}
+          </div>
+        </div>
+      )}
+      {(pj as { conditions?: string[] }).conditions?.length ? (
+        <div className="text-xs text-amber-400 mt-1 text-center truncate">
+          {(pj as { conditions: string[] }).conditions.join(", ")}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+/** Joueur connecté sans personnage rattaché (phase de création). */
+function ParticipantCard({ nom }: { nom: string }) {
+  return (
+    <div className="bg-stone-800/20 rounded p-2 opacity-70">
+      <div className="text-center text-xs text-stone-400 truncate mb-1">👤 {nom}</div>
+      <div className="h-20 w-full rounded border border-dashed border-stone-700 bg-stone-900/50 flex items-center justify-center text-stone-600 text-xs italic">
+        perso à venir
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+//  Modal fiche personnage
+// --------------------------------------------------------------------------- //
+function Field({ label, value }: { label: string; value: unknown }) {
+  if (value === undefined || value === null || value === "" || value === "—") return null;
+  const text =
+    typeof value === "object"
+      ? Object.entries(value as Record<string, unknown>)
+          .map(([k, v]) => `${k} ${v}`)
+          .join(", ")
+      : String(value);
+  if (!text.trim()) return null;
+  return (
+    <div className="mb-1.5">
+      <span className="text-stone-500 text-xs">{label} : </span>
+      <span className="text-stone-200 text-xs">{text}</span>
+    </div>
+  );
+}
+
+function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
+  const ficheQuery = useQuery({
+    queryKey: ["fiche", nom],
+    queryFn: () => api.getFiche(nom),
+    retry: false,
+    staleTime: 15_000,
+  });
+  // Repli : l'état de partie connaît déjà nom/race/classe/PV/CA même sans fiche.
+  const pj = useParty((s) => s.state)?.pj?.find((p) => p.nom === nom);
+  const f = (ficheQuery.data?.fiche ?? {}) as Record<string, unknown>;
+
+  const identite = {
+    nom: (f.nom as string) ?? nom,
+    joueur: f.joueur ?? pj?.joueur,
+    race: f.race ?? pj?.race,
+    classe: f.classe ?? pj?.classe,
+    niveau: f.niveau ?? pj?.niveau,
+    alignement: f.alignement,
+  };
+  const pv = (f.pv as number) ?? pj?.pv;
+  const pvMax = (f.pv_max as number) ?? pj?.pv_max;
+  const ca = (f.ca as number) ?? pj?.ca;
+  const portraitUrl = ficheQuery.data?.portrait;
+  const sorts = f.sorts ?? f.sorts_connus;
+  // Champs non rendus explicitement ci-dessous (extension libre de la fiche).
+  const connus = new Set([
+    "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
+    "ca", "carac", "sauvegardes", "bab", "competences", "dons", "equipement",
+    "or", "histoire", "conditions", "sorts", "sorts_connus",
+  ]);
+  const extras = Object.entries(f).filter(([k]) => !connus.has(k));
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-stone-900 border border-stone-700 rounded-lg max-w-lg w-full max-h-[85vh] overflow-auto p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-serif text-xl text-amber-200">{identite.nom}</h3>
+            <p className="text-xs text-stone-400">
+              {[identite.race, identite.classe, identite.niveau != null ? `niv. ${identite.niveau}` : null]
+                .filter(Boolean)
+                .join(" · ") || "personnage"}
+            </p>
+            {identite.joueur && <p className="text-xs text-stone-500">joué par {String(identite.joueur)}</p>}
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-200 text-lg leading-none">
+            ✕
+          </button>
+        </div>
+
+        {portraitUrl && (
+          <img
+            src={portraitUrl}
+            alt={identite.nom}
+            className="w-full max-h-44 object-contain rounded border border-stone-700 mb-3"
+          />
+        )}
+
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-stone-800/60 rounded p-2 text-center">
+            <div className="text-lg text-rose-300 tabular-nums">{pv ?? "?"}<span className="text-xs text-stone-500">/{pvMax ?? "?"}</span></div>
+            <div className="text-xs text-stone-500">PV</div>
+          </div>
+          <div className="bg-stone-800/60 rounded p-2 text-center">
+            <div className="text-lg text-sky-300 tabular-nums">{ca ?? "?"}</div>
+            <div className="text-xs text-stone-500">CA</div>
+          </div>
+          <div className="bg-stone-800/60 rounded p-2 text-center">
+            <div className="text-lg text-amber-300 tabular-nums">
+              {typeof f.bab === "number" ? (f.bab > 0 ? `+${f.bab}` : String(f.bab)) : "?"}
+            </div>
+            <div className="text-xs text-stone-500">BBA</div>
+          </div>
+        </div>
+
+        {ficheQuery.isLoading && <p className="text-stone-500 text-xs italic mb-2">Chargement de la fiche…</p>}
+        {ficheQuery.isError && (
+          <p className="text-amber-500/80 text-xs italic mb-2">
+            Pas de fiche persistante — affichage limité à l'état de partie.
+          </p>
+        )}
+
+        <Field label="Alignement" value={identite.alignement} />
+        <Field label="Caractéristiques" value={f.carac} />
+        <Field label="Sauvegardes" value={f.sauvegardes} />
+        <Field label="Compétences" value={f.competences} />
+        <Field label="Dons" value={f.dons} />
+        {/* Sorts : champ optionnel de la fiche (lanciers) — absent des persos martiaux. */}
+        {sorts ? <Field label="Sorts" value={sorts} /> : null}
+        <Field label="Équipement" value={f.equipement} />
+        {f.or != null && f.or !== 0 && <Field label="Or" value={`${f.or} pc`} />}
+        <Field label="Conditions" value={f.conditions} />
+        {f.histoire ? (
+          <div className="mt-2">
+            <div className="text-xs text-stone-500 mb-0.5">Histoire :</div>
+            <p className="text-xs text-stone-400 italic">{String(f.histoire)}</p>
+          </div>
+        ) : null}
+        {extras.length > 0 && (
+          <div className="mt-2 border-t border-stone-800 pt-2">
+            {extras.map(([k, v]) => (
+              <Field key={k} label={k} value={v} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+//  Colonne
+// --------------------------------------------------------------------------- //
 export function StateSidebar() {
   const state = useParty((s) => s.state);
+  const participants = useParty((s) => s.participants);
+  const [ficheOuverte, setFicheOuverte] = useState<string | null>(null);
+
   if (!state) {
     return (
       <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-auto">
@@ -33,6 +281,17 @@ export function StateSidebar() {
       </aside>
     );
   }
+
+  // Joueurs déjà rattachés à un PJ (comparaison souple casse/accents).
+  const pjPlayers = new Set(
+    (state.pj ?? [])
+      .map((p) => String(p.joueur ?? "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const sansPerso = participants.filter(
+    (p) => p.trim() && !pjPlayers.has(p.trim().toLowerCase()),
+  );
+
   return (
     <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-auto">
       <div className="mb-3">
@@ -76,29 +335,21 @@ export function StateSidebar() {
         </div>
       )}
 
-      <div>
+      <div className="mb-4">
         <h3 className="text-xs uppercase text-stone-500 mb-1">
-          PJ ({state.pj?.length ?? 0})
+          Joueurs ({(state.pj?.length ?? 0) + sansPerso.length})
         </h3>
-        <ul className="space-y-1">
+        <div className="space-y-2">
           {state.pj?.map((p, i) => (
-            <li key={i} className="text-sm bg-stone-800/40 rounded p-1.5">
-              <div className="flex justify-between">
-                <span className="text-stone-100">{p.nom}</span>
-                {p.pv !== undefined && p.pv_max !== undefined && (
-                  <span className="text-xs tabular-nums text-stone-400">
-                    {p.pv}/{p.pv_max}pv · CA {p.ca ?? "?"}
-                  </span>
-                )}
-              </div>
-              {(p as { conditions?: string[] }).conditions?.length ? (
-                <div className="text-xs text-amber-400 mt-0.5">
-                  {(p as { conditions: string[] }).conditions.join(", ")}
-                </div>
-              ) : null}
-            </li>
+            <PlayerCard key={i} pj={p} onOpen={() => setFicheOuverte(p.nom)} />
           ))}
-        </ul>
+          {sansPerso.map((nom) => (
+            <ParticipantCard key={nom} nom={nom} />
+          ))}
+          {(state.pj?.length ?? 0) === 0 && sansPerso.length === 0 && (
+            <p className="text-xs text-stone-500 italic">Aucun joueur pour l'instant.</p>
+          )}
+        </div>
       </div>
 
       {state.pnj && state.pnj.length > 0 && (
@@ -126,6 +377,10 @@ export function StateSidebar() {
             ))}
           </ul>
         </div>
+      )}
+
+      {ficheOuverte && (
+        <SheetModal nom={ficheOuverte} onClose={() => setFicheOuverte(null)} />
       )}
     </aside>
   );

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Node / client
+client/node_modules/
+client/dist/
+client/.vite/
+
+# Config locale (utiliser config.example.yaml comme modèle)
+config/config.yaml
+
+# Données générées au runtime
+server/data/chroma/
+server/data/bestiaire_cache/
+server/data/portraits_cache/
+server/data/partie_*.json
+server/data/cartes/
+
+# Outils / OS
+.zcode/
+.DS_Store
+Thumbs.db

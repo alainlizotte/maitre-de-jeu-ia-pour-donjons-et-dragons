@@ -1,0 +1,20 @@
+{
+  "nom": "Groth",
+  "joueur": "Alain",
+  "race": "Nain",
+  "classe": "Guerrier",
+  "niveau": 1,
+  "carac": "",
+  "pv": 10,
+  "pv_max": 10,
+  "ca": 10,
+  "sauvegardes": "",
+  "bab": 0,
+  "competences": {},
+  "dons": [],
+  "equipement": "",
+  "or": 0,
+  "alignement": "",
+  "histoire": "",
+  "conditions": []
+}

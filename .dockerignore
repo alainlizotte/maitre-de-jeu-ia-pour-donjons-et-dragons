@@ -1,0 +1,17 @@
+client/node_modules
+client/src
+client/vite.config.ts
+client/tsconfig.json
+client/package.json
+client/package-lock.json
+client/README.md
+.git
+.pytest_cache
+.zcode
+tests
+gui-test-screenshots
+*.pyc
+__pycache__
+server/__pycache__
+server/data/chroma
+server/static/assets/*.map

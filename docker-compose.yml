@@ -1,0 +1,37 @@
+# docker-compose.yml — D&D 3.5 Maître du Jeu
+#
+# Démarrage :
+#   docker compose up -d --build
+#   # puis (première fois seulement) peupler le RAG :
+#   docker compose exec dnd35 python -m server.rag --ingest
+#
+# Ollama tourne dans un conteneur séparé (réseau openwebui-net).
+# Le service dnd35 s'y connecte via l'alias réseau `ollama:11434`.
+#
+# Arrêt :
+#   docker compose down               # garde les volumes
+#   docker compose down -v            # supprime aussi le vector store ChromaDB
+
+services:
+  dnd35:
+    build: .
+    image: dnd35-mj:latest
+    container_name: dnd35-mj
+    ports:
+      - "8000:8000"
+    environment:
+      DND35_CONFIG: /app/config/config.yaml
+    volumes:
+      # Configuration (écrasée par l'utilisateur, pas dans l'image).
+      - ./config:/app/config:ro
+      # Données runtime (parties, fiches, images générées, ChromaDB).
+      - ./server/data:/app/server/data
+      # Corpus source RAG (knowledge_import du projet Dongeon dragon).
+      - ../Dongeon dragon/projet_DnD35/knowledge_import:/app/data/knowledge_import:ro
+    restart: unless-stopped
+    networks:
+      - openwebui-net
+
+networks:
+  openwebui-net:
+    external: true

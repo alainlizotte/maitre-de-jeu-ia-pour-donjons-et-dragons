@@ -1,0 +1,27 @@
+{
+  "nom": "Jannedarc de Cormanthor",
+  "joueur": "(a completer lors de l'attribution)",
+  "race": "Demi-elfe",
+  "classe": "Paladin",
+  "niveau": 1,
+  "carac": {"FOR": 16, "DEX": 10, "CON": 14, "INT": 10, "SAG": 13, "CHA": 15},
+  "pv": 12,
+  "pv_max": 12,
+  "ca": 16,
+  "sauvegardes": {"Vigueur": 5, "Reflexes": 0, "Volonte": 2},
+  "bab": 1,
+  "competences": {"Diplomatie": 4, "Connaissance (noblesse)": 2, "Equitation": 4, "Soins": 2, "Religion": 2},
+  "dons": ["Arme de predilection (epee longue)", "Robustesse"],
+  "sorts": {},
+  "equipement": [
+    {"nom": "epee longue", "qte": 1},
+    {"nom": "armure de plaques", "qte": 1},
+    {"nom": "bouclier", "qte": 1},
+    {"nom": "symbole sacre", "qte": 1},
+    {"nom": "kit d'aventurier", "qte": 1}
+  ],
+  "or": 45,
+  "alignement": "Loyal Bon",
+  "histoire": "Inspirée par la geste de Jeanne d'Arc, Jannedarc est une paladine demi-elfe consacrée à Ilmater; sa quête la pousse à délivrer les opprimés de la Côte des Épées.",
+  "conditions": []
+}

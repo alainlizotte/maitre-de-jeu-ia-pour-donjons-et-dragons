@@ -1,0 +1,166 @@
+{
+  "103": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Charger VAE"
+    }
+  },
+  "104": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Charger CLIP"
+    }
+  },
+  "105": {
+    "inputs": {
+      "unet_name": "qwen_image_2512_fp8_e4m3fn_scaled_comfyui.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Charger Modèle Diffusion"
+    }
+  },
+  "107": {
+    "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "109": {
+    "inputs": {
+      "samples": [
+        "106_SEED_NODE",
+        0
+      ],
+      "vae": [
+        "103",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "110": {
+    "inputs": {
+      "shift": 3,
+      "model": [
+        "114",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "ModelSamplingAuraFlow"
+    }
+  },
+  "114": {
+    "inputs": {
+      "lora_name": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+      "strength_model": 1,
+      "model": [
+        "105",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "123": {
+    "inputs": {
+      "filename_prefix": "dnd35_lieu",
+      "images": [
+        "131",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Enregistrer Image"
+    }
+  },
+  "128": {
+    "inputs": {
+      "conditioning": [
+        "108_PROMPT_NODE",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "131": {
+    "inputs": {
+      "value": [
+        "109",
+        0
+      ]
+    },
+    "class_type": "UnloadAllModels",
+    "_meta": {
+      "title": "UnloadAllModels"
+    }
+  },
+  "106_SEED_NODE": {
+    "inputs": {
+      "seed": 1,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "110",
+        0
+      ],
+      "positive": [
+        "108_PROMPT_NODE",
+        0
+      ],
+      "negative": [
+        "128",
+        0
+      ],
+      "latent_image": [
+        "107",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "108_PROMPT_NODE": {
+    "inputs": {
+      "text": "a monster",
+      "clip": [
+        "104",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  }
+}

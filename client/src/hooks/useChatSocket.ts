@@ -3,6 +3,7 @@
 
 import { useEffect, useRef } from "react";
 import { ChatSocket } from "../api/ws";
+import { encounterFromUrl } from "../api/rest";
 import type { ChatMessage, ToolEvent, WsMessage } from "../api/types";
 import { useParty, uid } from "../store";
 
@@ -17,6 +18,7 @@ export function useChatSocket(partie_id: string | null) {
   const setThinking = useParty((s) => s.setThinking);
   const setParticipants = useParty((s) => s.setParticipants);
   const addParticipant = useParty((s) => s.addParticipant);
+  const addMonster = useParty((s) => s.addMonster);
   const player = useParty((s) => s.player);
   const lastJoinRef = useRef<string>("");
 
@@ -43,11 +45,25 @@ export function useChatSocket(partie_id: string | null) {
             setParticipants(msg.participants || []);
             // Dédup : ne pas re-joiner si le WS vient de ce client.
             if (lastJoinRef.current !== partie_id) {
-              sock.join(player);
+              sock.join(player, useParty.getState().password);
               lastJoinRef.current = partie_id;
             }
           } else if (msg.event === "participant_joined") {
             addParticipant(msg.player);
+          } else if (msg.event === "auth_required") {
+            // Partie protégée : le serveur attend le join avec mot de passe.
+            // Marque lastJoinRef pour ne pas re-joiner au `joined` qui suivra.
+            if (lastJoinRef.current !== partie_id) {
+              sock.join(player, useParty.getState().password);
+              lastJoinRef.current = partie_id;
+            }
+          } else if (msg.event === "auth_failed") {
+            addMessage({
+              id: uid(),
+              role: "system",
+              content: `⛔ ${msg.detail} Retournez à l'accueil et retapez le mot de passe de la partie.`,
+              ts: Date.now(),
+            });
           } else if (msg.event === "error") {
             addMessage({
               id: uid(),
@@ -78,21 +94,32 @@ export function useChatSocket(partie_id: string | null) {
           appendDelta(streamId.current, msg.text);
           break;
         }
-        case "tool_event":
-          // On accumule les events image/log sur le stream courant (non-final).
+        case "tool_event": {
+          // Image de monstre en direct → galerie « monstres rencontrés ».
+          const ev = msg.event as ToolEvent;
+          if (ev.image && ev.image.includes("/bestiaire_cache/")) {
+            addMonster(encounterFromUrl(ev.image));
+          }
           if (streamId.current) {
-            // On stocke via finalizeStream neutre sans casser le streaming.
-            // Simplification : on push dans une liste à part via addMessage sys.
             addMessage({
               id: uid(),
               role: "system",
-              content: msg.event.description || "(tool)",
-              image: (msg.event as ToolEvent).image,
+              content: ev.description || "(tool)",
+              image: ev.image,
               ts: Date.now(),
             });
           }
           break;
+        }
         case "dm": {
+          // state_patches du tour : image_monstre → galerie de la colonne droite.
+          const patches = (msg.state_patches || []) as Record<string, unknown>[];
+          for (const p of patches) {
+            const img = p && p.image_monstre;
+            if (typeof img === "string" && img.includes("/bestiaire_cache/")) {
+              addMonster(encounterFromUrl(img));
+            }
+          }
           const sid = streamId.current || uid();
           if (!streamId.current) {
             addMessage({

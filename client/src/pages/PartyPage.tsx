@@ -37,7 +37,10 @@ export function PartyPage() {
   });
 
   useEffect(() => {
-    if (state.data && !("_erreur" in state.data)) setState(state.data);
+    // L'API renvoie {partie_id, etat} — le store veut l'état lui-même
+    // (l'enveloppe n'a ni meta, ni lieu, ni pj : la sidebar resterait vide).
+    const etat = state.data?.etat;
+    if (etat && !("_erreur" in etat)) setState(etat);
   }, [state.data, setState]);
 
   const { sendSay } = useChatSocket(partie_id ?? null);

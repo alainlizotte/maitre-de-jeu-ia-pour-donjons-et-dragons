@@ -1,9 +1,18 @@
 # docker-compose.yml — D&D 3.5 Maître du Jeu
 #
-# Démarrage :
+# Démarrage (arrière-plan, aucune fenêtre de terminal ouverte) :
 #   docker compose up -d --build
 #   # puis (première fois seulement) peupler le RAG :
 #   docker compose exec dnd35 python -m server.rag --ingest
+#
+# Port : l'hôte écoute sur 8123 (conteneur interne 8000). Pour changer :
+#   set DND35_PORT=9000 && docker compose up -d
+#   (ou créez un fichier .env contenant DND35_PORT=9000)
+#
+# Accès public : le port est publié sur toutes les interfaces (0.0.0.0) ;
+# les joueurs hors LAN peuvent y accéder en redirigeant le port 8123 de votre
+# box/routeur vers cette machine, ou via un reverse proxy (Caddy/Nginx) avec
+# HTTPS pour une exposition propre en domaine.
 #
 # Ollama tourne dans un conteneur séparé (réseau openwebui-net).
 # Le service dnd35 s'y connecte via l'alias réseau `ollama:11434`.
@@ -18,7 +27,7 @@ services:
     image: dnd35-mj:latest
     container_name: dnd35-mj
     ports:
-      - "8000:8000"
+      - "${DND35_PORT:-8123}:8000"
     environment:
       DND35_CONFIG: /app/config/config.yaml
     volumes:

@@ -16,7 +16,36 @@ d'OpenWebUI. Le frontend est servi à `/`.
   basculable vers OpenAI / Anthropic via `config.yaml` en changeant `base_url`
   et `model`.
 
-## Démarrage rapide
+# Démarrage rapide (Docker — recommandé, arrière-plan)
+
+```bash
+# 1. Copier la config puis ajuster (model, RAG, …)
+copy config\config.example.yaml config\config.yaml    # Windows
+
+# 2. Démarrer en arrière-plan : aucune fenêtre de terminal ouverte, le
+#    conteneur redémarre automatiquement avec Docker.
+docker compose up -d --build        # ou scripts\demarrer-serveur.bat
+#    → http://localhost:8123       (port hôte 8123, conteneur 8000)
+
+# 3. (Première fois) Peupler le RAG
+docker compose exec dnd35 python -m server.rag --ingest
+
+# Arrêt / journaux
+docker compose down                 # ou scripts\arreter-serveur.bat
+docker compose logs -f dnd35
+```
+
+**Port** : l'hôte écoute sur **8123** par défaut. Pour le changer :
+`set DND35_PORT=9000 && docker compose up -d` (ou fichier `.env` avec
+`DND35_PORT=9000`).
+
+**Accès public** : le port est publié sur toutes les interfaces. Pour jouer
+hors du réseau local, redirigez le port 8123 de votre box vers cette machine,
+ou placez un reverse proxy HTTPS (Caddy/Nginx) devant. Les parties peuvent
+être **protégées par mot de passe** à la création — les joueurs doivent le
+connaître pour rejoindre (vérifié côté serveur sur le WebSocket).
+
+# Démarrage rapide (local, sans Docker)
 
 ```bash
 # 1. Dépendances Python
@@ -44,7 +73,9 @@ py -m uvicorn server.main:app --reload --port 8000
 ```
 
 Cliquez sur **« Nouvelle partie »** puis **« Rejoindre »**, saisissez votre
-prénom, et écrivez « Bonjour, on commence une partie ». Le MJ doit déclencher
+pseudo (« joueur 1 » par défaut — le dernier pseudo utilisé est mémorisé), et
+écrivez « Bonjour, on commence une partie ». Le modèle IA se change à chaud
+depuis le bandeau (menu déroulant + saisie libre). Le MJ doit déclencher
 de **vrais** jets de dés (pas de `*(Simulation...)*`) et s'appuie sur la base
 de connaissances RAG pour les règles (mod carac 17 → +3, sauvegardes, etc.).
 
@@ -69,13 +100,16 @@ de connaissances RAG pour les règles (mod carac 17 → +3, sauvegardes, etc.).
 | Méthode | Route | Rôle |
 |---|---|---|
 | GET  | `/api/health` | Statut serveur + Ollama + tools |
-| GET  | `/api/parties` | Liste parties actives + persistées |
-| POST | `/api/parties` | Crée une nouvelle partie |
+| GET  | `/api/parties` | Liste parties actives + persistées (+ 🔒 protégées) |
+| POST | `/api/parties` | Crée une partie (`mot_de_passe` optionnel → hash SHA-256) |
 | GET  | `/api/parties/{id}` | État persistant d'une partie |
+| GET  | `/api/models` | Modèles disponibles + modèle courant |
+| POST | `/api/model` | Change le modèle du MJ à chaud (persisté) |
+| GET  | `/api/fiches/{nom}` | Fiche personnage persistante (+ portrait) |
 | GET  | `/api/tools` | Introspection des tools (schéma JSON) |
 | GET  | `/api/rag/stats` | Nombre de chunks par collection ChromaDB |
 | POST | `/api/rag/ingest` | Déclenche l'ingestion du corpus (admin, long) |
-| WS   | `/ws/{partie_id}` | Canal chat multijoueur temps réel |
+| WS   | `/ws/{partie_id}` | Canal chat multijoueur temps réel (join avec `password` si partie protégée) |
 
 ## Cycle d'un message joueur (pipeline)
 1. WebSocket `/ws/{partie_id}` reçoit `{"type":"say","player":"Alain","text":"..."}`.
@@ -205,7 +239,9 @@ cd client && npm run build                 # puis http://127.0.0.1:8000
 
 Stack : Vite + React 18 + TypeScript + Tailwind + react-router + zustand +
 `@tanstack/react-query` + `marked` (rendu Markdown narration). Pages : accueil
-(choix/création de partie), partie (sidebar état temps réel via
-`state_patches`, chat/narration avec streaming `delta` + images `/data`,
-sidebar droite avec fiche PJ / dés visuels / carte & donjon SVG / bestiaire /
-manuels).
+(choix/création de partie + mot de passe optionnel, pseudo « joueur 1 » par
+défaut mémorisé), partie (colonne gauche : joueurs avec portraits et fiches
+complètes au clic ; chat/narration avec streaming `delta` + images `/data` ;
+colonne droite : dés visuels, carte du monde de Faerûn (Côte des Épées),
+donjon SVG, bestiaire de 65 monstres, et galerie des monstres rencontrés en
+bas de colonne). Le bandeau permet de changer de modèle IA à chaud.

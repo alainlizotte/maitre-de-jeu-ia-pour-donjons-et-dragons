@@ -106,6 +106,7 @@ de connaissances RAG pour les règles (mod carac 17 → +3, sauvegardes, etc.).
 | GET  | `/api/models` | Modèles disponibles + modèle courant |
 | POST | `/api/model` | Change le modèle du MJ à chaud (persisté) |
 | GET  | `/api/fiches/{nom}` | Fiche personnage persistante (+ portrait) |
+| GET  | `/api/ressources` | Liens permanents : manuels, cartes, scénarios PDF, donjon (`?partie_id=`) |
 | GET  | `/api/tools` | Introspection des tools (schéma JSON) |
 | GET  | `/api/rag/stats` | Nombre de chunks par collection ChromaDB |
 | POST | `/api/rag/ingest` | Déclenche l'ingestion du corpus (admin, long) |
@@ -151,7 +152,11 @@ fiablement que ~10 tools visibles à la fois).
   déplacement), donjon (exploration salle/cellule, portes bloquées, rendu SVG),
   distribution aux joueurs.
 - **Manuels & scénarios** (`manuels.py` 2, `scenarios.py` 2) — distribution
-  des manuels D&D 3.5, lancement du scénario Laelith.
+  des manuels D&D 3.5 ; catalogue de scénarios unifié : univers Laelith
+  **+ 9 scénarios PDF locaux** (`data/scenarios/`, catalogue
+  `data/scenarios.json`). Au chargement d'un scénario PDF, le texte intégral
+  est extrait via PyMuPDF (plafonné) pour que le MJ puisse le mener, et le
+  PDF reste consultable par les joueurs via `/data/scenarios/…`.
 
 ## Images générées (ComfyUI)
 
@@ -244,4 +249,6 @@ défaut mémorisé), partie (colonne gauche : joueurs avec portraits et fiches
 complètes au clic ; chat/narration avec streaming `delta` + images `/data` ;
 colonne droite : dés visuels, carte du monde de Faerûn (Côte des Épées),
 donjon SVG, bestiaire de 65 monstres, et galerie des monstres rencontrés en
-bas de colonne). Le bandeau permet de changer de modèle IA à chaud.
+bas de colonne). Le bandeau permet de changer de modèle IA à chaud, et une
+**barre de ressources permanente** en pied d'écran affiche les liens vers les
+manuels, les cartes (monde + donjon courant) et les scénarios PDF.

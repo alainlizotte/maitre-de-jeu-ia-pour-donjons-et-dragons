@@ -120,3 +120,11 @@ export interface EncounterMonster {
   url: string;   // /data/bestiaire_cache/<slug>.png|svg
   nom: string;   // nom lisible dérivé du slug
 }
+
+/** /api/ressources — liens permanents affichés dans la barre de ressources. */
+export interface Ressources {
+  manuels: { titre: string; description: string; url: string }[];
+  cartes: { titre: string; url: string }[];
+  scenarios: { id: string; titre: string; niveau: string; url: string }[];
+  donjon: string | null;
+}

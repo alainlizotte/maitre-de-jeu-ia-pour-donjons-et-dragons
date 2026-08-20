@@ -10,6 +10,7 @@ import { useChatSocket } from "../hooks/useChatSocket";
 import { StateSidebar } from "../components/StateSidebar";
 import { ChatPanel } from "../components/ChatPanel";
 import { RightSidebar } from "../components/RightSidebar";
+import { RessourcesBar } from "../components/RessourcesBar";
 
 export function PartyPage() {
   const { partie_id } = useParams<{ partie_id: string }>();
@@ -46,10 +47,14 @@ export function PartyPage() {
   const { sendSay } = useChatSocket(partie_id ?? null);
 
   return (
-    <div className="h-full flex">
-      <StateSidebar />
-      <ChatPanel sendSay={sendSay} />
-      <RightSidebar />
+    <div className="h-full flex flex-col">
+      {/* Barre de ressources permanente : manuels, cartes, scénarios PDF. */}
+      <div className="flex-1 min-h-0 flex">
+        <StateSidebar />
+        <ChatPanel sendSay={sendSay} />
+        <RightSidebar />
+      </div>
+      <RessourcesBar partie_id={partie_id} />
     </div>
   );
 }

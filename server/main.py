@@ -373,6 +373,64 @@ async def get_fiche(nom: str) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+#  Ressources — liens permanents (manuels, cartes, scénarios) pour le bandeau
+#  de ressources affiché en permanence sur l'écran de jeu.
+# --------------------------------------------------------------------------- #
+@app.get("/api/ressources")
+async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
+    """Liste les ressources consultables : manuels externes, cartes du monde,
+    scénarios PDF locaux (+ carte du donjon de la partie si `partie_id`)."""
+    from .tools import manuels as M
+    from .tools import scenarios as S
+    from .tools.manuels import _safe_url
+    from urllib.parse import quote
+
+    data_dir = cfg.abs(cfg.paths.data_dir)
+    ctx = ToolContext(
+        partie_id=partie_id or "_",
+        joueur="",
+        data_dir=str(data_dir),
+    )
+
+    manuels = [
+        {
+            "titre": f["titre"],
+            "description": f["description"],
+            "url": _safe_url(M.MANUELS_WEB_BASE_URL, f["public_name"]),
+        }
+        for f in M.FICHIERS_DEFAUT
+    ]
+    cartes = [
+        {"titre": "Carte de la Côte des Épées (basse résolution)",
+         "url": M.WORLD_MAP_LOWRES_URL},
+        {"titre": "Carte de la Côte des Épées (haute résolution)",
+         "url": M.WORLD_MAP_HIGHRES_URL},
+    ]
+    scenarios = [
+        {
+            "id": s.get("id", ""),
+            "titre": s.get("titre", "?"),
+            "niveau": s.get("niveau", "?"),
+            "url": S._url_data(s["fichier"]),
+        }
+        for s in S._charger_scenarios_locaux(ctx)
+    ]
+
+    donjon: Optional[str] = None
+    if partie_id:
+        svg = data_dir / "cartes" / f"donjon_{partie_id}.svg"
+        if svg.is_file():
+            donjon = f"/data/cartes/{quote(svg.name)}"
+
+    return {
+        "manuels": manuels,
+        "cartes": cartes,
+        "scenarios": scenarios,
+        "donjon": donjon,
+    }
+
+
+# --------------------------------------------------------------------------- #
 #  Routes RAG (admin) — ingestion et stats du vector store ChromaDB.
 # --------------------------------------------------------------------------- #
 @app.get("/api/rag/stats")

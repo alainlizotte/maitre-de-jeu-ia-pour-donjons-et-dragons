@@ -1,7 +1,7 @@
 // Client REST minimal pour /api/* (parties, health, tools, rag, modèles, fiches).
 // Pas d'auth — app locale mono-utilisateur. fetch relatif (proxy Vite ou même origine).
 
-import type { EncounterMonster, HealthStatus, ModelsList, PartiesList, PartyState } from "./types";
+import type { EncounterMonster, HealthStatus, ModelsList, PartiesList, PartyState, Ressources } from "./types";
 
 const API = "/api";
 
@@ -52,6 +52,12 @@ export const api = {
   getFiche: (nom: string) =>
     fetch(`${API}/fiches/${encodeURIComponent(nom)}`).then(
       jq<{ fiche: Record<string, unknown>; portrait: string | null }>,
+    ),
+
+  // -- Ressources (liens permanents : manuels, cartes, scénarios) ---------- //
+  ressources: (partieId?: string) =>
+    fetch(`${API}/ressources${partieId ? `?partie_id=${encodeURIComponent(partieId)}` : ""}`).then(
+      jq<Ressources>,
     ),
 
   // -- Tools (introspection / docs) -------------------------------------- //

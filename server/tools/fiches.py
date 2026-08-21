@@ -16,6 +16,7 @@ import json
 import os
 import re
 import unicodedata
+from datetime import datetime
 from typing import Any, Optional
 
 from .base import ToolContext, ToolResult, tool
@@ -240,56 +241,137 @@ async def fiche_perso_creer_rapide(
     joueur: str = "",
 ) -> ToolResult:
     """
-    Version simplifiée de `fiche_perso_creer` : POST-ouverture, à appeler
-    dès que le personnage du joueur a été créé (via etat_partie_patch sur
-    `pj.0.nom/race/classe/...`) pour **persister durablement** sa fiche. Ne
-    demande QUE le nom en obligatoire ; tous les autres champs ont des
-    défauts simples (classe, race, niveau, etc.). Les carac / sauvegardes
-    / équipement sont passés comme **texte libre** (pas du JSON) :
-    ex. "For 14, Dex 12, Con 18, Int 10, Sag 12, Cha 9".
-
-    Plus accessible que `fiche_perso_creer` (qui exige 16 JSON obligatoires)
-    — à utiliser sans hésiter en fin de création de perso.
+    Crée rapidement la fiche d'un personnage. **UN SEUL appel suffit** :
+    si `carac_texte` est vide, les 6 caractéristiques sont tirées
+    automatiquement (4d6 garder les 3 meilleurs). PV, CA, BBA et
+    sauvegardes sont aussi calculés automatiquement selon la classe.
 
     :param nom (str): nom du personnage (OBLIGATOIRE).
-    :param race (str): ex. "Nain".
-    :param classe (str): ex. "Guerrier".
-    :param niveau (int): niveau de classe (commence à 1).
-    :param pv (int): points de vie actuels.
-    :param pv_max (int): PV max.
-    :param ca (int): classe d'armure.
-    :param bab (int): Bonus de Base à l'Attaque.
-    :param carac_texte (str): "For 14, Dex 12, Con 18, …" (texte libre).
-    :param sauvegardes_texte (str): "Vigueur +4, Réflexes +2, Volonté +1".
-    :param equipement_texte (str): "Hache de guerre, armure de cuir, 50 pc".
-    :param alignement (str): ex. "Loyal Bon".
+    :param race (str): ex. "Nain", "Elfe", "Humain".
+    :param classe (str): ex. "Guerrier", "Voleur", "Magicien", "Clerc".
+    :param niveau (int): niveau de classe (défaut: 1).
+    :param carac_texte (str): "For 14, Dex 12, ..." — si vide, tirage auto.
     :param joueur (str): nom du joueur humain.
+    :param alignement (str): ex. "Loyal Bon".
+    :param equipement_texte (str): "Hache de guerre, armure de cuir, 50 pc".
     """
-    # Si joueur vide, on essaie le champ ctx.joueur
+    import random as _rnd
+
     if not joueur:
         joueur = getattr(ctx, "joueur", "") or ""
 
-    # Charger l'éventuelle fiche existante (si le PJ existe déjà dans l'état
-    # partie, on récupère race/classe etc. sans forcer l'utilisateur à
-    # répéter).
+    # ---- Auto-génération des caractéristiques si non fournies ----
+    def _mod(c: int) -> int:
+        return (c - 10) // 2
+
+    noms_carac = ["FOR", "DEX", "CON", "INT", "SAG", "CHA"]
+    carac_vals: dict[str, int] = {}
+
+    if carac_texte and any(k in carac_texte.upper() for k in noms_carac):
+        # Parser le texte libre "For 14, Dex 12, ..."
+        for token in carac_texte.replace(",", " ").split():
+            if token.upper() in noms_carac:
+                current_key = token.upper()
+            elif current_key and token.isdigit():
+                carac_vals[current_key] = int(token)
+                current_key = ""
+    else:
+        # Tirage 4d6 garder les 3 meilleurs × 6
+        for nom_c in noms_carac:
+            quatre = [_rnd.randint(1, 6) for _ in range(4)]
+            trois = sorted(quatre, reverse=True)[:3]
+            carac_vals[nom_c] = sum(trois)
+
+    carac_texte_final = ", ".join(
+        f"{k} {v} (mod {_mod(v):+d})" for k, v in carac_vals.items()
+    )
+
+    # ---- Résolution race ----
+    race = race or ""
+    race_low = race.lower()
+    bonus_con = _mod(carac_vals.get("CON", 10))
+    bonus_for = _mod(carac_vals.get("FOR", 10))
+    bonus_dex = _mod(carac_vals.get("DEX", 10))
+
+    # ---- Résolution classe + PV / BBA / CA ----
+    classe = classe or ""
+    classe_low = classe.lower()
+
+    # Dés de vie par classe (D&D 3.5)
+    dv_par_classe = {
+        "guerrier": 10, "barbare": 12, "paladin": 10, "ranger": 8,
+        "voleur": 6, "barde": 6, "moine": 8,
+        "clerc": 8, "druide": 8,
+        "magicien": 4, "sorcier": 4,
+        "alchimiste": 8, "artificier": 6,
+    }
+    # BBA par classe (niveau 1)
+    bba_par_classe = {
+        "guerrier": 1, "barbare": 1, "paladin": 1, "ranger": 1,
+        "voleur": 0, "barde": 0, "moine": 0,
+        "clerc": 0, "druide": 0,
+        "magicien": 0, "sorcier": 0,
+    }
+    # Saves de base (Vigueur, Réflexes, Volonté) — (bon, bon, mauvais)
+    saves_par_classe = {
+        "guerrier": (2, 0, 0), "barbare": (2, 0, 0),
+        "paladin": (2, 0, 0), "ranger": (1, 1, 0),
+        "voleur": (0, 2, 0), "barde": (0, 2, 0),
+        "moine": (2, 2, 2),
+        "clerc": (0, 0, 2), "druide": (0, 0, 2),
+        "magicien": (0, 0, 2), "sorcier": (0, 0, 2),
+    }
+
+    dv = 10
+    for key, val in dv_par_classe.items():
+        if key in classe_low:
+            dv = val
+            break
+
+    pv_roll = _rnd.randint(1, dv)
+    pv_val = pv_roll + bonus_con
+    pv_val = max(pv_val, 1)
+    if not pv_max or pv_max < 1:
+        pv_max = pv_val
+
+    bab_val = bab
+    for key, val in bba_par_classe.items():
+        if key in classe_low:
+            bab_val = val
+            break
+
+    # CA = 10 + mod DEX + armure (10 par défaut si pas d'équipement)
+    ca_val = ca
+    if ca <= 10:
+        ca_val = 10 + bonus_dex
+
+    # Sauvegardes
+    sauvegardes_base = (0, 0, 0)
+    for key, val in saves_par_classe.items():
+        if key in classe_low:
+            sauvegardes_base = val
+            break
+
+    vig = sauvegardes_base[0] + bonus_con
+    ref = sauvegardes_base[1] + bonus_dex
+    vol = sauvegardes_base[2] + _mod(carac_vals.get("SAG", 10))
+
+    # ---- Charger fiche existante ----
     etat_pj = {}
     try:
         import json as _json
-        etat_path = (
-            _fiches_dir(ctx).rsplit("fiches", 1)[0]
-            + f"partie_{ctx.partie_id}.json"
-        )
-        with open(etat_path, "r", encoding="utf-8") as f:
-            ep = _json.load(f)
+        from ..game.state import PartyState as _PS
+        _ps = _PS(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+        ep = _ps.load()
         pj_list = ep.get("pj") or []
         for p in pj_list:
             if str(p.get("nom", "")).lower() == nom.lower():
                 etat_pj = p
                 break
-    except (OSError, _json.JSONDecodeError, Exception):
+    except Exception:
         pass
 
-    # Valeurs résolues : priorité args explicites > etat_partie > défauts.
+    # Valeurs résolues : priorité args explicites > etat_partie > auto
     def _pick(key: str, raw: Any, default: Any) -> Any:
         if raw:
             return raw
@@ -299,15 +381,11 @@ async def fiche_perso_creer_rapide(
 
     race = _pick("race", race, "(non précisée)")
     classe = _pick("classe", classe, "(non précisée)")
-    niveau = _pick("niveau", niveau, 1)
-    pv = _pick("pv", pv, int(etat_pj.get("pv", 0)) or 10)
-    pv_max = _pick("pv_max", pv_max, int(etat_pj.get("pv_max", pv)) or pv)
-    ca = _pick("ca", ca, int(etat_pj.get("ca", 10)) or 10)
-    bab = _pick("bab", bab, int(etat_pj.get("bab", 0)) or 0)
-    alignement = _pick("alignement", alignement,
-                       etat_pj.get("alignement", ""))
-    carac = carac_texte or etat_pj.get("carac", "")
-    sauv = sauvegardes_texte or etat_pj.get("sauvegardes", "")
+    pv = _pick("pv", pv, pv_val)
+    pv_max = _pick("pv_max", pv_max, pv_val)
+    ca = _pick("ca", ca, ca_val)
+    bab = _pick("bab", bab, bab_val)
+    alignement = _pick("alignement", alignement, etat_pj.get("alignement", ""))
     equip = equipement_texte or etat_pj.get("equipement", "")
 
     fiche = {
@@ -316,15 +394,15 @@ async def fiche_perso_creer_rapide(
         "race": race,
         "classe": classe,
         "niveau": int(niveau),
-        "carac": carac,
+        "carac": carac_vals,
         "pv": int(pv),
         "pv_max": int(pv_max),
         "ca": int(ca),
-        "sauvegardes": sauv,
+        "sauvegardes": {"Vigueur": vig, "Reflexes": ref, "Volonte": vol},
         "bab": int(bab),
         "competences": {},
         "dons": [],
-        "equipement": equip,
+        "equipement": [],
         "or": 0,
         "alignement": alignement,
         "histoire": "",
@@ -334,6 +412,41 @@ async def fiche_perso_creer_rapide(
         path = _save_fiche(ctx, nom, fiche)
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
+
+    # Mettre à jour le tableau pj dans l'état partie
+    try:
+        from ..game.state import PartyState as _PS
+        _ps = _PS(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+        ep = _ps.load()
+        pj_list = ep.get("pj") or []
+        pj_entry = {
+            "nom": nom,
+            "race": race,
+            "classe": classe,
+            "niveau": int(niveau),
+            "pv": int(pv),
+            "pv_max": int(pv_max),
+            "ca": int(ca),
+            "carac": carac_texte_final,
+            "joueur": joueur,
+            "alignement": alignement,
+        }
+        replaced = False
+        for i, p in enumerate(pj_list):
+            if str(p.get("nom", "")).lower() == nom.lower():
+                pj_list[i] = pj_entry
+                replaced = True
+                break
+        if not replaced:
+            pj_list.append(pj_entry)
+        ep["pj"] = pj_list
+        ep["meta"]["date_maj"] = datetime.now().isoformat()
+        # Auto-transition : dès qu'un PJ existe, passer en opening_complete
+        if ep.get("phase") == "opening":
+            ep["phase"] = "opening_complete"
+        _ps.save(ep)
+    except Exception:
+        pass  # la fiche est déjà persistée, ce n'est pas critique
 
     # Portrait PJ en arrière-plan (ComfyUI). Fire-and-forget : la fiche est
     # déjà persitée, le portrait arrivera en cache sous
@@ -352,11 +465,13 @@ async def fiche_perso_creer_rapide(
             pass  # le portrait est bonus — pas critique
     asyncio.create_task(_gen_portrait())
 
+    carac_summary = ", ".join(f"{k} {v}" for k, v in carac_vals.items())
     return ToolResult(
         text=(
-            f"✅ Fiche persistante créée pour **{nom}** ({race} {classe} "
-            f"niv.{niveau}) — PV {pv}/{pv_max}, CA {ca}, BBA {bab:+}. "
-            f"Fichier : {path}"
+            f"✅ Fiche créée pour **{nom}** ({race} {classe} "
+            f"niv.{niveau}) — Carac : {carac_summary} — "
+            f"PV {pv}/{pv_max}, CA {ca}, BBA {bab:+d}, "
+            f"Sauvegardes : Vigueur {vig:+d}, Réflexes {ref:+d}, Volonté {vol:+d}."
         ),
         state_patch={"pj_updated": nom},
     )

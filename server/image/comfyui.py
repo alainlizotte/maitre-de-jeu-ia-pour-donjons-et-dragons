@@ -38,7 +38,7 @@ USAGES_VALIDES = {"monstre", "lieu", "portrait"}
 # Timeout par défaut : ComfyUI sur RTX 3060 Ti peut prendre 1-3 min pour une
 # génération 4-step Lightning; on met generreusement 5 min pour le PNG final.
 DEFAULT_TIMEOUT_TOTAL = 300
-POLL_INTERVAL = 1.5  # secondes entre deux interrogation /history
+POLL_INTERVAL = 3.0  # secondes entre deux interrogation /history
 
 
 class ComfyUIError(Exception):
@@ -50,8 +50,8 @@ class ComfyUIBackend:
     PNG final. Asynchrone (httpx), thread-safe derrière une seule instance.
     """
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8188"):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str = ""):
+        self.base_url = (base_url or os.environ.get("COMFYUI_BASE_URL", "http://127.0.0.1:8188")).rstrip("/")
         self._client = httpx.AsyncClient(base_url=self.base_url, timeout=60.0)
         self._workflows_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "workflows"

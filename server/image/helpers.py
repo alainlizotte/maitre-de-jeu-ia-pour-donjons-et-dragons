@@ -25,7 +25,7 @@ from .comfyui import ComfyUIBackend, USAGES_VALIDES
 _PENDING_EVENTS = {
     "monstre": "⏳ Génération de l'image du monstre en cours (jusqu'à 60s)...",
     "lieu": "⏳ Génération de l'illustration de la salle en cours (jusqu'à 60s)...",
-    "portrait": "⏳ Génération du portrait du personnage en cours (jusqu'à 60s)...",
+    "portrait": "⏳ Portrait du personnage en cours de génération — cela peut prendre 30 à 60 secondes. Vous pouvez continuer à jouer en attendant.",
 }
 
 

@@ -28,7 +28,7 @@ from typing import Any, Awaitable, Callable, Optional
 from ..tools.base import ToolContext, ToolResult, ToolSpec, invoke_tool
 from ..game.state import PartyState
 from ..tools.registry import tools_prompt_section, tools_schemas_all
-from .client import ChatResult, Message, OllamaClient
+from .client import ChatResult, Message, OllamaClient, _strip_thinking
 
 # Ensembles de tools par phase. Un modèle 12B ne gère fiablement que ~10
 # tools ; Gemma se perd au-delà de 30. On filtre dynamiquement selon la phase
@@ -37,11 +37,18 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
     "opening": (
         "etat_partie_get",
         "etat_partie_patch",
+        "fiche_perso_creer_rapide",
+        "fiche_perso_recuperer",
         "lancer_caracteristiques",
+        "lancer_d20",
+        "lancer_sauvegarde",
+        "lancer_des",
         "manuels_distribuer",
         "manuels_lister",
         "carte_joueurs_get",
         "carte_joueurs_position",
+        "ajouter_evenement_histoire",
+        "set_derniere_narration",
         "scenarios_laelith_lister",
         "scenarios_laelith_charger",
     ),
@@ -50,11 +57,17 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "etat_partie_patch",
         "fiche_perso_creer_rapide",
         "fiche_perso_recuperer",
+        "fiche_perso_mettre_a_jour",
         "lancer_caracteristiques",
+        "lancer_d20",
+        "lancer_sauvegarde",
+        "lancer_des",
         "manuels_lister",
         "monstre_consulter",
         "carte_joueurs_get",
         "carte_donjon_entrer",
+        "ajouter_evenement_histoire",
+        "set_derniere_narration",
         "scenarios_laelith_lister",
         "scenarios_laelith_charger",
     ),
@@ -71,6 +84,14 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "carte_joueurs_deplacer",
         "monstre_consulter",
         "lancer_d20",
+        "lancer_sauvegarde",
+        "lancer_des",
+        # Transition exploration → combat : le MJ qui déclenche une rencontre
+        # doit pouvoir enchaîner initiative + démarrage du combat immédiatement.
+        "calculer_initiative",
+        "demarrer_combat",
+        "ajouter_evenement_histoire",
+        "set_derniere_narration",
     ),
     "combat": (
         "etat_partie_get",
@@ -78,13 +99,17 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_attaque",
         "lancer_degats",
         "lancer_sauvegarde",
+        "lancer_des",
         "calculer_initiative",
         "demarrer_combat",
         "tour_suivant_combat",
         "finir_combat",
+        "fiche_perso_recuperer",
         "fiche_perso_infliger_degats",
         "fiche_perso_soigner",
         "monstre_consulter",
+        "ajouter_evenement_histoire",
+        "set_derniere_narration",
     ),
 }
 
@@ -106,6 +131,24 @@ _SIMULATION_PATTERNS = [
     # Variante sans astérisques : "(Simulation de l'appel ...)".
     re.compile(r"\(Simulation\s+de\s+l'appel[^*]*?\)", re.IGNORECASE),
     re.compile(r"\(Simulation\s+des\s+jets[^*]*?\)", re.IGNORECASE),
+    # Prose de jets improvisés (Gemma E4B sans balise tool) : le modèle écrit
+    # le résultat directement dans la narration au lieu d'appeler lancer_d20
+    # / lancer_attaque. Exemples ciblés :
+    #   "Jet d'attaque : 1d20+4 = 17"
+    #   "Jet de dégâts : 2d6+2 = 9"
+    #   "1d20+5 = 18, touché !"
+    # On capture le pattern `NdM+mod = résultat` et `Jet d'X : ... = N`.
+    re.compile(
+        r"\b(?:jet\s+(?:d['']attaque|de\s+d[ée]g[âa]ts|de\s+sauvegarde)\s*[:\-]\s*)?"
+        r"\d+d\d+(?:\s*[+\-]\s*\d+)?\s*[:=]\s*\d{1,3}\b",
+        re.IGNORECASE,
+    ),
+    # "Jet d'attaque : 17" (sans formule NdM, juste le résultat numérique après
+    # un label explicite — Survient quand le DM néglige d'appeler lancer_attaque).
+    re.compile(
+        r"\bjet\s+(?:d['']attaque|de\s+d[ée]g[âa]ts|de\s+sauvegarde)\s*[:\-]\s*\d{1,3}\b",
+        re.IGNORECASE,
+    ),
 ]
 
 
@@ -338,18 +381,90 @@ class Orchestrator:
 
             # --- D. Réponse finale (narration) ------------------------------
             # Aucun appel d'outil à effectuer ⇒ narration complète du MJ.
-            work.append(Message(role="assistant", content=chat.content))
-            # Stream propres deltas si callback fourni (sinon on envoie tout).
+            # On refait l'appel en streaming pour envoyer les tokens au fur
+            # et à mesure au client.
             if on_delta:
-                # Déjà poussé pendant stream ? Non : chat() est non-streaming.
-                # On simule le flux en envoyant le bloc entier en un token.
-                await on_delta(chat.content)
-            result.narration = chat.content
+                collected = ""
+                async for token in self.client.stream_chat(
+                    work, tools=tools_arg,
+                ):
+                    collected += token
+                    await on_delta(token)
+                narration = collected
+            else:
+                narration = chat.content
+            # Filet de sécurité : même en streaming, un bloc thinking peut
+            # fuiter (tags coupés entre chunks) — on re-nettoie la narration
+            # finale avant historique/broadcast.
+            narration = _strip_thinking(narration)
+
+            # --- D2. Rattrapage : contenu vide après stripping thinking -----
+            # Gemma 4 E4B renvoie parfois des réponses entièrement thinking
+            # (tout le texte est dans <|channel>thought...<channel|>), résultat
+            # visible = "" sans tool_calls. Sans intervention, on sortirait avec
+            # une narration vide. On injecte un correctif et on relance.
+            if not narration.strip():
+                if result.corrections < 3:
+                    result.corrections += 1
+                    _log.warning(
+                        "narration vide après stripping thinking (correction %d/3) — relance",
+                        result.corrections,
+                    )
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "Ta réponse précédente ne contenait aucun texte "
+                            "visible — tout était dans les balises thinking "
+                            "(réflexion interne). Le joueur ne voit que le "
+                            "texte en dehors de ces balises. RÉPONDS EN PROSE "
+                            "VISIBLE, directement, sans balises thinking. "
+                            "Raconte au joueur ce qui se passe et propose-lui "
+                            "des actions."
+                        ),
+                    ))
+                    continue
+                # 3 corrections déjà : on accepte ce qu'on a (best effort).
+                _log.warning("narration vide malgré 3 corrections — on accepte")
+
+            work.append(Message(role="assistant", content=narration))
+            result.narration = narration
             break
 
         else:
-            # Boucle épuisée sans final : on renvoie ce qu'on a.
-            result.narration = result.narration or (
+            # Boucle épuisée sans narration finale. Le LLM reste coincé à
+            # appeler des tools sans produire de synthèse (souvent le modèle
+            # 12B sature num_ctx avec les messages tool successifs). On tente
+            # un dernier appel SANS tools pour forcer une narration clôturante,
+            # plutôt que de retourner une chaîne vide au client.
+            _log.warning(
+                "tool loop épuisé (iterations=%d, corrections=%d) — fallback narration",
+                result.iterations, result.corrections,
+            )
+            fallback_msg = Message(
+                role="system",
+                content=(
+                    "Tu as épuisé tes tours d'appels d'outils. Synthétise "
+                    "maintenant une réponse de narration complète au joueur "
+                    "en t'appuyant sur les résultats des tools ci-dessus. "
+                    "N'invoque plus aucun tool — raconte la suite au joueur."
+                ),
+            )
+            final_work = work + [fallback_msg]
+            try:
+                if on_delta:
+                    collected = ""
+                    async for token in self.client.stream_chat(final_work, tools=None):
+                        collected += token
+                        await on_delta(token)
+                    narration = collected
+                else:
+                    fb = await self.client.chat(final_work, tools=None)
+                    narration = fb.content
+                narration = _strip_thinking(narration).strip()
+            except Exception as e:
+                _log.warning("narration fallback échoué : %s", e)
+                narration = ""
+            result.narration = narration or (
                 work[-1].content if work and work[-1].role == "assistant" else ""
             )
 

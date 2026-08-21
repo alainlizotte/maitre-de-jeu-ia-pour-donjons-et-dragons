@@ -35,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
         sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status==200 else 1)"
 
 # Uvicorn direct : pas de --reload en prod. La config YAML pilote le host/port.
-CMD ["python", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--ws-ping-interval", "30", "--ws-ping-timeout", "60"]

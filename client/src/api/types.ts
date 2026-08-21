@@ -100,8 +100,8 @@ export interface PartiesList {
 
 export interface HealthStatus {
   ok: boolean;
-  ollama: boolean;
-  ollama_base: string;
+  backend: "ollama" | "llamacpp";
+  backend_url: string;
   model: string;
   model_available: boolean;
   tools: string[];

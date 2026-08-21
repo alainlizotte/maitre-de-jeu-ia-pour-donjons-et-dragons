@@ -44,7 +44,7 @@ export function PartyPage() {
     if (etat && !("_erreur" in etat)) setState(etat);
   }, [state.data, setState]);
 
-  const { sendSay } = useChatSocket(partie_id ?? null);
+  const { sendSay, sendTeamSay } = useChatSocket(partie_id ?? null);
 
   return (
     <div className="h-full flex flex-col">
@@ -52,7 +52,7 @@ export function PartyPage() {
       <div className="flex-1 min-h-0 flex">
         <StateSidebar />
         <ChatPanel sendSay={sendSay} />
-        <RightSidebar />
+        <RightSidebar sendTeamSay={sendTeamSay} />
       </div>
       <RessourcesBar partie_id={partie_id} />
     </div>

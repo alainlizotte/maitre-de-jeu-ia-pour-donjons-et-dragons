@@ -239,6 +239,11 @@ async def fiche_perso_creer_rapide(
     equipement_texte: str = "",
     alignement: str = "",
     joueur: str = "",
+    apparence: str = "",
+    sexe: str = "",
+    age: str = "",
+    taille_physique: str = "",
+    traitsdistinctifs: str = "",
 ) -> ToolResult:
     """
     Crée rapidement la fiche d'un personnage. **UN SEUL appel suffit** :
@@ -254,6 +259,11 @@ async def fiche_perso_creer_rapide(
     :param joueur (str): nom du joueur humain.
     :param alignement (str): ex. "Loyal Bon".
     :param equipement_texte (str): "Hache de guerre, armure de cuir, 50 pc".
+    :param apparence (str): description physique libre du personnage.
+    :param sexe (str): "M", "F", "Autre", ou vide.
+    :param age (str): ex. "32 ans", "Jeune adulte".
+    :param taille_physique (str): ex. "1,65 m, mince", "2,10 m, massif".
+    :param traitsdistinctifs (str): ex. "Cicatrice sur l'œil gauche, yeux verts".
     """
     import random as _rnd
 
@@ -407,6 +417,13 @@ async def fiche_perso_creer_rapide(
         "alignement": alignement,
         "histoire": "",
         "conditions": [],
+        "apparence": {
+            "description": apparence or "",
+            "sexe": sexe or "",
+            "age": age or "",
+            "taille_physique": taille_physique or "",
+            "traits_distinctifs": traitsdistinctifs or "",
+        },
     }
     try:
         path = _save_fiche(ctx, nom, fiche)
@@ -455,14 +472,16 @@ async def fiche_perso_creer_rapide(
     async def _gen_portrait():
         try:
             slug = _slug(nom)
+            # Inclure party_id pour unicité (même nom dans parties différentes).
+            portrait_name = f"{ctx.partie_id}_{slug}" if ctx.partie_id else slug
             cache_dir = os.path.join(ctx.data_dir, "portraits_cache")
             os.makedirs(cache_dir, exist_ok=True)
-            dest = os.path.join(cache_dir, f"{slug}.png")
+            dest = os.path.join(cache_dir, f"{portrait_name}.png")
             if not os.path.isfile(dest):
                 prompt = portrait_prompt(nom, race, classe)
                 await generer_averti(ctx, "portrait", prompt, dest)
         except Exception:
-            pass  # le portrait est bonus — pas critique
+            pass
     asyncio.create_task(_gen_portrait())
 
     carac_summary = ", ".join(f"{k} {v}" for k, v in carac_vals.items())

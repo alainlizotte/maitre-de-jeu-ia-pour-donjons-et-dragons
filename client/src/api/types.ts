@@ -77,16 +77,17 @@ export interface ChatMessage {
 //  WS payloads — discriminant `type`.
 // --------------------------------------------------------------------------- //
 export type WsMessage =
-  | { type: "sys"; event: "joined"; partie_id: string; participants: string[]; history: { role: string; content: string }[] }
+  | { type: "sys"; event: "joined"; partie_id: string; participants: string[]; history: { role: string; content: string }[]; team_history: { player: string; text: string }[] }
   | { type: "sys"; event: "participant_joined"; player: string }
-  | { type: "sys"; event: "auth_required"; partie_id?: string; detail: string }
+  | { type: "sys"; event: "auth_required"; detail?: string }
   | { type: "sys"; event: "auth_failed"; detail: string }
   | { type: "sys"; event: "error"; detail: string }
   | { type: "player"; player: string; text: string }
   | { type: "status"; description: string; done?: boolean }
   | { type: "delta"; text: string }
   | { type: "tool_event"; event: ToolEvent }
-  | { type: "dm"; text: string; tool_events?: ToolEvent[]; state_patches?: unknown[] };
+  | { type: "dm"; text: string; tool_events?: ToolEvent[]; state_patches?: unknown[] }
+  | { type: "team_msg"; player: string; text: string };
 
 // --------------------------------------------------------------------------- //
 //  REST DTOs.
@@ -123,7 +124,7 @@ export interface EncounterMonster {
 
 /** /api/ressources — liens permanents affichés dans la barre de ressources. */
 export interface Ressources {
-  manuels: { titre: string; description: string; url: string }[];
+  manuels: { titre: string; description: string; categorie: string; url: string }[];
   cartes: { titre: string; url: string }[];
   scenarios: { id: string; titre: string; niveau: string; url: string }[];
   donjon: string | null;

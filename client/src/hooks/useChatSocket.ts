@@ -19,6 +19,8 @@ export function useChatSocket(partie_id: string | null) {
   const setParticipants = useParty((s) => s.setParticipants);
   const addParticipant = useParty((s) => s.addParticipant);
   const addMonster = useParty((s) => s.addMonster);
+  const addTeamMessage = useParty((s) => s.addTeamMessage);
+  const setTeamMessages = useParty((s) => s.setTeamMessages);
   const player = useParty((s) => s.player);
   const lastJoinRef = useRef<string>("");
 
@@ -43,6 +45,10 @@ export function useChatSocket(partie_id: string | null) {
               }));
             replayed.forEach((m) => addMessage(m));
             setParticipants(msg.participants || []);
+            // Historique chat d'équipe.
+            if (msg.team_history && msg.team_history.length > 0) {
+              setTeamMessages(msg.team_history);
+            }
             // Dédup : ne pas re-joiner si le WS vient de ce client.
             if (lastJoinRef.current !== partie_id) {
               sock.join(player, useParty.getState().password);
@@ -106,7 +112,7 @@ export function useChatSocket(partie_id: string | null) {
             addMessage({
               id: uid(),
               role: "system",
-              content: ev.msg || ev.description || "(tool)",
+              content: String(ev.msg ?? ev.description ?? "(tool)"),
               image: ev.image,
               ts: Date.now(),
             });
@@ -143,6 +149,10 @@ export function useChatSocket(partie_id: string | null) {
           setThinking(false);
           break;
         }
+        case "team_msg": {
+          addTeamMessage(msg.player, msg.text);
+          break;
+        }
       }
     };
 
@@ -171,5 +181,10 @@ export function useChatSocket(partie_id: string | null) {
     sockRef.current.say(player, text);
   };
 
-  return { sendSay, socket: sockRef };
+  const sendTeamSay = (text: string) => {
+    if (!sockRef.current || !player) return;
+    sockRef.current.send({ type: "team_say", player, text });
+  };
+
+  return { sendSay, sendTeamSay, socket: sockRef };
 }

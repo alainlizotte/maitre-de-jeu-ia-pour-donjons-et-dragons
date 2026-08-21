@@ -2,6 +2,7 @@
 // littoral de l'Échine du Monde (nord) à la Calimshan (sud), mer des Épées,
 // fleuves Delimbiyr et Chionthar, régions et villes aux positions canoniques.
 
+import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
 
 interface Ville {
@@ -86,10 +87,35 @@ function Foret({ x, y, n = 18 }: { x: number; y: number; n?: number }) {
 export function WorldMap() {
   const state = useParty((s) => s.state);
   const lieu = state?.lieu;
+  const [zoom, setZoom] = useState(1);
 
   // Le MJ patche position_x/position_y sur 0–100 ; la carte est haute de 140.
   const mx = lieu?.position_x;
   const my = lieu?.position_y != null ? lieu.position_y * 1.4 : null;
+
+  const zoomIn = () => setZoom((z) => Math.min(z + 0.3, 3));
+  const zoomOut = () => setZoom((z) => Math.max(z - 0.3, 0.6));
+  const zoomReset = () => setZoom(1);
+
+  // Auto-centre sur le joueur à 2× quand la position change.
+  const prevPos = useRef<string>("");
+  useEffect(() => {
+    const key = `${mx ?? ""},${my ?? ""}`;
+    if (key !== prevPos.current && mx != null) {
+      prevPos.current = key;
+      setZoom(2);
+    }
+  }, [mx, my]);
+
+  // Calcul du viewBox centré sur le joueur si disponible, sinon centre carte.
+  const cx = mx ?? 50;
+  const cy = my ?? 70;
+  const baseW = 100;
+  const baseH = 140;
+  const vw = baseW / zoom;
+  const vh = baseH / zoom;
+  const vx = Math.max(0, Math.min(cx - vw / 2, baseW - vw));
+  const vy = Math.max(0, Math.min(cy - vh / 2, baseH - vh));
 
   return (
     <div>
@@ -102,8 +128,41 @@ export function WorldMap() {
           <div className="text-xs text-stone-400">{lieu.type}</div>
         </div>
       )}
+      {/* Contrôles zoom */}
+      <div className="flex justify-center gap-1 mb-2">
+        <button
+          onClick={zoomOut}
+          className="w-7 h-7 rounded bg-stone-700 hover:bg-stone-600 text-stone-200 font-bold text-sm leading-none"
+          title="Dézoomer"
+        >
+          −
+        </button>
+        <button
+          onClick={zoomReset}
+          className="px-2 h-7 rounded bg-stone-700 hover:bg-stone-600 text-stone-300 text-[10px]"
+          title="Réinitialiser"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          onClick={zoomIn}
+          className="w-7 h-7 rounded bg-stone-700 hover:bg-stone-600 text-stone-200 font-bold text-sm leading-none"
+          title="Zoomer"
+        >
+          +
+        </button>
+        {mx != null && (
+          <button
+            onClick={() => { setZoom(2); }}
+            className="px-2 h-7 rounded bg-amber-800 hover:bg-amber-700 text-stone-100 text-[10px] font-medium"
+            title="Centrer sur le groupe"
+          >
+            📍
+          </button>
+        )}
+      </div>
       <div className="relative bg-stone-800 rounded border border-stone-700 overflow-hidden" style={{ aspectRatio: "100/140" }}>
-        <svg viewBox="0 0 100 140" className="w-full h-full">
+        <svg viewBox={`${vx} ${vy} ${vw} ${vh}`} className="w-full h-full transition-all duration-300 ease-out">
           {/* Océan */}
           <rect width="100" height="140" fill="#16222e" />
           {/* Vagues discrètes */}

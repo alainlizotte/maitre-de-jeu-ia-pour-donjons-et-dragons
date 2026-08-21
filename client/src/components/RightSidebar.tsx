@@ -3,16 +3,22 @@ import { DiceRoller } from "./DiceRoller";
 import { DungeonView } from "./DungeonView";
 import { WorldMap } from "./WorldMap";
 import { Bestiary } from "./Bestiary";
+import { TeamChat } from "./TeamChat";
 import { useParty } from "../store";
 
-type Tab = "des" | "monde" | "donjon" | "bestiaire";
+type Tab = "des" | "equipe" | "monde" | "donjon" | "bestiaire";
 
 const TAB_LABELS: Record<Tab, string> = {
   des: "Dés",
+  equipe: "Équipe",
   monde: "Monde",
   donjon: "Donjon",
   bestiaire: "Bestiaire",
 };
+
+interface RightSidebarProps {
+  sendTeamSay?: (text: string) => void;
+}
 
 /** Moitié basse de la colonne : dernière image de monstre rencontrée + historique. */
 function EncounterGallery() {
@@ -74,8 +80,15 @@ function EncounterGallery() {
   );
 }
 
-export function RightSidebar() {
+export function RightSidebar({ sendTeamSay }: RightSidebarProps) {
   const [tab, setTab] = useState<Tab>("des");
+  const teamUnread = useParty((s) => s.teamUnread);
+  const resetTeamUnread = useParty((s) => s.resetTeamUnread);
+
+  const handleTabChange = (t: Tab) => {
+    setTab(t);
+    if (t === "equipe") resetTeamUnread();
+  };
 
   return (
     <aside className="w-80 shrink-0 border-l border-stone-800 bg-stone-900/50 flex flex-col">
@@ -83,20 +96,26 @@ export function RightSidebar() {
         {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => handleTabChange(t)}
             className={
-              "flex-1 px-1.5 py-2 " +
+              "flex-1 px-1.5 py-2 relative " +
               (tab === t
                 ? "bg-stone-800 text-amber-300 font-medium border-b-2 border-amber-400"
                 : "text-stone-400 hover:text-stone-200")
             }
           >
             {TAB_LABELS[t]}
+            {t === "equipe" && teamUnread > 0 && (
+              <span className="absolute top-1 right-0.5 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold animate-bounce">
+                {teamUnread > 9 ? "9+" : teamUnread}
+              </span>
+            )}
           </button>
         ))}
       </div>
       <div className="flex-1 min-h-0 overflow-auto p-3">
         {tab === "des" && <DiceRoller />}
+        {tab === "equipe" && <TeamChat sendTeamSay={sendTeamSay ?? (() => {})} />}
         {tab === "monde" && <WorldMap />}
         {tab === "donjon" && <DungeonView />}
         {tab === "bestiaire" && <Bestiary />}

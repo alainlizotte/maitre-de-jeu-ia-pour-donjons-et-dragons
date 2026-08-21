@@ -122,6 +122,16 @@ export interface EncounterMonster {
   nom: string;   // nom lisible dérivé du slug
 }
 
+/** Scénario disponible pour le sélecteur de quête. */
+export interface Scenario {
+  id: string;
+  titre: string;
+  niveau: string;
+  theme: string;
+  pitch: string;
+  source: string;
+}
+
 /** /api/ressources — liens permanents affichés dans la barre de ressources. */
 export interface Ressources {
   manuels: { titre: string; description: string; categorie: string; url: string }[];

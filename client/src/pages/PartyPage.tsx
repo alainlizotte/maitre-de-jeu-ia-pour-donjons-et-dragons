@@ -11,12 +11,14 @@ import { StateSidebar } from "../components/StateSidebar";
 import { ChatPanel } from "../components/ChatPanel";
 import { RightSidebar } from "../components/RightSidebar";
 import { RessourcesBar } from "../components/RessourcesBar";
+import { ScenarioPicker } from "../components/ScenarioPicker";
 
 export function PartyPage() {
   const { partie_id } = useParams<{ partie_id: string }>();
   const navigate = useNavigate();
   const setPartieId = useParty((s) => s.setPartieId);
   const setState = useParty((s) => s.setState);
+  const state = useParty((s) => s.state);
   const player = useParty((s) => s.player);
 
   // Persistence de l'id courant + sert de clé au hook WS.
@@ -30,28 +32,37 @@ export function PartyPage() {
   }, [player, navigate]);
 
   // Charge l'état persisté côté REST (validation initiale + sidebar droite).
-  const state = useQuery({
+  const partyQuery = useQuery({
     queryKey: ["party", partie_id],
     queryFn: () => api.getParty(partie_id!),
     enabled: !!partie_id,
-    refetchInterval: 15000, // rafraîchit les PJ/ lieu périodiquement
+    refetchInterval: 15000,
   });
 
   useEffect(() => {
-    // L'API renvoie {partie_id, etat} — le store veut l'état lui-même
-    // (l'enveloppe n'a ni meta, ni lieu, ni pj : la sidebar resterait vide).
-    const etat = state.data?.etat;
+    const etat = partyQuery.data?.etat;
     if (etat && !("_erreur" in etat)) setState(etat);
-  }, [state.data, setState]);
+  }, [partyQuery.data, setState]);
 
   const { sendSay, sendTeamSay } = useChatSocket(partie_id ?? null);
 
+  // Affiche le sélecteur de quête en phase "opening" sans quête définie.
+  const phase = (state?.phase ?? "").toLowerCase();
+  const hasQuest = Boolean(state?.quete?.titre);
+  const showPicker = (phase === "opening" || phase === "") && !hasQuest && partie_id;
+
   return (
     <div className="h-full flex flex-col">
-      {/* Barre de ressources permanente : manuels, cartes, scénarios PDF. */}
       <div className="flex-1 min-h-0 flex">
         <StateSidebar />
-        <ChatPanel sendSay={sendSay} />
+        <div className="flex-1 min-w-0 flex flex-col">
+          {showPicker && (
+            <div className="p-4 shrink-0">
+              <ScenarioPicker partieId={partie_id} />
+            </div>
+          )}
+          <ChatPanel sendSay={sendSay} />
+        </div>
         <RightSidebar sendTeamSay={sendTeamSay} />
       </div>
       <RessourcesBar partie_id={partie_id} />

@@ -54,6 +54,18 @@ export const api = {
       jq<{ fiche: Record<string, unknown>; portrait: string | null }>,
     ),
 
+  // -- Scénarios (sélecteur de quête) ------------------------------------ //
+  listScenarios: (partieId?: string) =>
+    fetch(`${API}/scenarios${partieId ? `?partie_id=${encodeURIComponent(partieId)}` : ""}`).then(
+      jq<{ id: string; titre: string; niveau: string; theme: string; pitch: string; source: string }[]>,
+    ),
+  setQuest: (partieId: string, quete: { titre: string; pitch: string; source: string }) =>
+    fetch(`${API}/parties/${partieId}/quest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(quete),
+    }).then(jq<{ ok: boolean; quete: { titre: string; pitch: string; source: string } }>),
+
   // -- Ressources (liens permanents : manuels, cartes, scénarios) ---------- //
   ressources: (partieId?: string) =>
     fetch(`${API}/ressources${partieId ? `?partie_id=${encodeURIComponent(partieId)}` : ""}`).then(

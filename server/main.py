@@ -450,6 +450,51 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+#  Scénarios — catalogue pour le sélecteur de quête côté frontend.
+# --------------------------------------------------------------------------- #
+@app.get("/api/scenarios")
+async def list_scenarios(partie_id: Optional[str] = None) -> list[dict[str, Any]]:
+    """Liste les scénarios disponibles (Laelith + PDF locaux) pour le sélecteur."""
+    from .tools.scenarios import _charger_catalogue
+    data_dir = cfg.abs(cfg.paths.data_dir)
+    ctx = ToolContext(
+        partie_id=partie_id or "_",
+        joueur="",
+        data_dir=str(data_dir),
+    )
+    cat = _charger_catalogue(ctx)
+    return [
+        {
+            "id": s.get("id", ""),
+            "titre": s.get("titre", "?"),
+            "niveau": s.get("niveau", "?"),
+            "theme": s.get("theme", ""),
+            "pitch": s.get("pitch", ""),
+            "source": s.get("source", ""),
+        }
+        for s in cat
+    ]
+
+
+@app.post("/api/parties/{partie_id}/quest")
+async def set_quest(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Définit la quête courante d'une partie (sélecteur de quête au démarrage)."""
+    titre = payload.get("titre", "")
+    pitch = payload.get("pitch", "")
+    source = payload.get("source", "")
+    state = PartyState(data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id)
+    etat = state.load()
+    if "_erreur" in etat:
+        raise HTTPException(status_code=404, detail="Partie introuvable.")
+    etat["quete"] = {"titre": titre, "pitch": pitch, "source": source}
+    etat["phase"] = "exploration"
+    err = state.save(etat)
+    if err:
+        raise HTTPException(status_code=500, detail=err)
+    return {"ok": True, "quete": etat["quete"]}
+
+
+# --------------------------------------------------------------------------- #
 #  Routes RAG (admin) — ingestion et stats du vector store ChromaDB.
 # --------------------------------------------------------------------------- #
 @app.get("/api/rag/stats")

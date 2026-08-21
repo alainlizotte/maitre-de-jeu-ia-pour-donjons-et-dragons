@@ -29,16 +29,14 @@ from ..llm.client import Message
 class PartySession:
     partie_id: str
     history: list[Message] = field(default_factory=list)
-    connections: set[Any] = field(default_factory=set)  # WebSocket Starlette
-    # Connexions ayant franchi le contrôle de mot de passe (parties protégées).
+    connections: set[Any] = field(default_factory=set)
     authenticated: set[Any] = field(default_factory=set)
     participants: list[str] = field(default_factory=list)
-    # Sérialise les tours du MJ : un seul `say` traité à la fois par partie
-    # (D&D est tour par tour — évite les courses sur l'état partagé).
     turn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    # Persistance conversationnelle (optionnelle mais recommandée en prod).
     data_dir: Optional[str] = None
     max_history_events: int = 50
+    # Chat d'équipe (joueurs ↔ joueurs, sans le MJ).
+    team_history: list[dict[str, str]] = field(default_factory=list)
 
     def add_participant(self, name: str) -> None:
         if name and name not in self.participants:
@@ -168,6 +166,53 @@ class PartySession:
         for ws in dead:
             self.connections.discard(ws)
 
+    async def broadcast_team(self, payload: dict[str, Any]) -> None:
+        """Envoie un payload aux connexions joueurs (exclut le MJ/DM si identifié).
+
+        Convention : le MJ est le premier participant ou celui qui a rejoint
+        en premier. On broadcast à tous les participants, le MJ verra les
+        messages mais ne les recevra pas en priorité (broadcast identique).
+        """
+        await self.broadcast(payload)
+
+    # ------------------------------------------------------------------ #
+    #  Chat d'équipe — persistance
+    # ------------------------------------------------------------------ #
+    @property
+    def _team_chat_path(self) -> Optional[Path]:
+        if not self.data_dir:
+            return None
+        return Path(self.data_dir) / f"team_chat_{self.partie_id}.json"
+
+    def remember_team_message(self, player: str, text: str) -> None:
+        self.team_history.append({"player": player, "text": text})
+        self._persist_team_history()
+
+    def _persist_team_history(self) -> None:
+        path = self._team_chat_path
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(
+                dir=str(path.parent), prefix=".team_chat_", suffix=".tmp"
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self.team_history[-200:], f, ensure_ascii=False, indent=2)
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
+    def hydrate_team_history(self) -> None:
+        path = self._team_chat_path
+        if path is None or not path.is_file():
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                self.team_history = json.load(f)[-200:]
+        except (json.JSONDecodeError, OSError):
+            pass
+
 
 # --------------------------------------------------------------------------- #
 #  Registry global (singleton) — une session par partie_id
@@ -192,6 +237,7 @@ class SessionRegistry:
                 max_history_events=self._max_history_events,
             )
             sess.hydrate_history()
+            sess.hydrate_team_history()
             self._sessions[partie_id] = sess
         return self._sessions[partie_id]
 

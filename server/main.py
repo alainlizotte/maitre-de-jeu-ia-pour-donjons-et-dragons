@@ -359,7 +359,7 @@ async def set_model(payload: dict[str, Any]) -> dict[str, Any]:
 #  Fiches personnages — consultation par le frontend (modal fiche PJ).
 # --------------------------------------------------------------------------- #
 @app.get("/api/fiches/{nom}")
-async def get_fiche(nom: str) -> dict[str, Any]:
+async def get_fiche(nom: str, partie_id: Optional[str] = None) -> dict[str, Any]:
     """Renvoie la fiche persistante d'un personnage (data/fiches/)."""
     from .tools.fiches import _slug
     fiches_dir = cfg.abs(cfg.paths.data_dir) / "fiches"
@@ -371,9 +371,16 @@ async def get_fiche(nom: str) -> dict[str, Any]:
     except (json.JSONDecodeError, OSError) as e:
         raise HTTPException(status_code=500, detail=f"Fiche illisible : {e}")
     portrait = None
-    png = cfg.abs(cfg.paths.data_dir) / "portraits_cache" / f"{_slug(nom)}.png"
-    if png.is_file():
-        portrait = f"/data/portraits_cache/{_slug(nom)}.png"
+    portraits_dir = cfg.abs(cfg.paths.data_dir) / "portraits_cache"
+    # Cherche d'abord le portrait party_id-specific, puis le fallback generic.
+    candidates = [f"{_slug(nom)}.png"]
+    if partie_id:
+        candidates.insert(0, f"{partie_id}_{_slug(nom)}.png")
+    for candidate in candidates:
+        png = portraits_dir / candidate
+        if png.is_file():
+            portrait = f"/data/portraits_cache/{candidate}"
+            break
     return {"fiche": fiche, "portrait": portrait}
 
 
@@ -407,6 +414,7 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
         {
             "titre": f["titre"],
             "description": f["description"],
+            "categorie": f.get("categorie", "Autre"),
             "url": url_manuel(ctx, f["public_name"]),
         }
         for f in FICHIERS_DEFAUT
@@ -492,6 +500,7 @@ async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> 
         "partie_id": partie_id,
         "participants": session.participants,
         "history": history_payload,
+        "team_history": session.team_history[-100:],
     })
 
 
@@ -561,6 +570,26 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                     })
                     continue
                 await _handle_say(ws, session, partie_id, player, msg.get("text", ""))
+                continue
+
+            if mtype == "team_say":
+                if pw_hash is not None and ws not in session.authenticated:
+                    await ws.send_json({
+                        "type": "sys",
+                        "event": "auth_required",
+                        "detail": "Partie protégée.",
+                    })
+                    continue
+                team_text = msg.get("text", "").strip()
+                if not team_text:
+                    continue
+                session.remember_team_message(player, team_text)
+                # Renvoie à tous les joueurs connectés (y compris l'auteur).
+                await session.broadcast({
+                    "type": "team_msg",
+                    "player": player,
+                    "text": team_text,
+                })
                 continue
 
             await ws.send_json({"type": "sys", "event": "error",

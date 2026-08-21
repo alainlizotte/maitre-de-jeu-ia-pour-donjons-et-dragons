@@ -55,6 +55,14 @@ interface PartyStore {
   setThinking: (v: boolean) => void;
   setParticipants: (p: string[]) => void;
   addParticipant: (p: string) => void;
+
+  // -- Chat d'équipe (joueurs ↔ joueurs, sans IA) ----------------------- //
+  teamMessages: { player: string; text: string; ts: number }[];
+  addTeamMessage: (player: string, text: string) => void;
+  setTeamMessages: (msgs: { player: string; text: string }[]) => void;
+  teamUnread: number;
+  resetTeamUnread: () => void;
+
   reset: () => void;
 }
 
@@ -129,8 +137,22 @@ export const useParty = create<PartyStore>((set) => ({
         : { participants: [...st.participants, p] },
     ),
 
+  // Chat d'équipe
+  teamMessages: [],
+  addTeamMessage: (player, text) =>
+    set((st) => ({
+      teamMessages: [...st.teamMessages, { player, text, ts: Date.now() }],
+      teamUnread: st.teamUnread + 1,
+    })),
+  setTeamMessages: (msgs) =>
+    set({
+      teamMessages: msgs.map((m) => ({ ...m, ts: 0 })),
+    }),
+  teamUnread: 0,
+  resetTeamUnread: () => set({ teamUnread: 0 }),
+
   // Conserve player/password : ce sont des choix de session, pas de la partie.
-  reset: () => set({ messages: [], state: null, thinking: false, participants: [] }),
+  reset: () => set({ messages: [], state: null, thinking: false, participants: [], teamMessages: [], teamUnread: 0 }),
 }));
 
 export { uid };

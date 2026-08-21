@@ -30,6 +30,7 @@ services:
       - "${DND35_PORT:-8123}:8000"
     environment:
       DND35_CONFIG: /app/config/config.yaml
+      COMFYUI_BASE_URL: "http://host.docker.internal:8188"
     volumes:
       # Configuration (écrasée par l'utilisateur, pas dans l'image).
       - ./config:/app/config:ro
@@ -37,6 +38,96 @@ services:
       - ./server/data:/app/server/data
       # Corpus source RAG (knowledge_import du projet Dongeon dragon).
       - ../Dongeon dragon/projet_DnD35/knowledge_import:/app/data/knowledge_import:ro
+    restart: unless-stopped
+    depends_on:
+      llamacpp:
+        condition: service_healthy
+      llamaembed:
+        condition: service_healthy
+    networks:
+      - openwebui-net
+
+  # ── llama.cpp (alternative à Ollama) ──────────────────────────────
+  # Pour activer : mettre `llm.backend: "llamacpp"` dans config/config.yaml
+  # et lancer : docker compose up -d llamacpp
+  #
+  # Prérequis :
+  #   1. Télécharger les modèles dans ./models/ (voir scripts/download_model.ps1)
+  #   2. Installer NVIDIA Container Toolkit (nvidia-container-toolkit)
+  #   3. Avoir Docker Desktop avec support GPU (WSL2)
+  #
+  # Flags :
+  #   -ngl all           : toutes les couches sur GPU
+  #   -c 4096            : taille du contexte (adapté 8 Go VRAM)
+  #   -ctk q8_0          : KV cache K en 8-bit
+  #   -ctv q8_0          : KV cache V en 8-bit
+  #   --jinja            : template Jinja natif Gemma 4
+  #   --flash-attn on    : Flash Attention (réduit VRAM KV cache)
+  #   --sleep-idle-seconds 300 : unload après 5 min d'inactivité
+  #   --spec-type draft-mtp --spec-draft-n-max 4 : MTP (speculative decoding, ~1.6-2x plus rapide)
+  #
+  # VRAM estimée (Q4_0 + Q8 KV 4096 ctx) : ~7.5 Go / 8 Go disponible.
+  llamacpp:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llamacpp
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/models
+    command: >
+      --host 0.0.0.0
+      --port 8080
+      --models-dir /models
+      --models-max 1
+      -ngl 32
+      -c 16384
+      -ctk q8_0
+      -ctv q8_0
+      --jinja
+      --flash-attn on
+      --reasoning-format none
+      --sleep-idle-seconds 300
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - openwebui-net
+
+  # ── llama.cpp embeddings (RAG) ─────────────────────────────────────
+  # Conteneur CPU dédié aux embeddings du RAG (modèle embeddinggemma-300M
+  # QAT Q4_0, ~265 Mo). Ne consomme AUCUNE VRAM et ne concurrence donc ni
+  # gemma ni ComfyUI. Le RAG (server/rag/) l'interroge via /v1/embeddings.
+  #
+  # Flags :
+  #   --embedding       : active l'endpoint /v1/embeddings (OpenAI-compatible)
+  #   (pas de --pooling) : pooling lu depuis les métadonnées GGUF gemma-embedding
+  #   -c 4096 -np 1 -ub 4096 : 1 slot plein contexte (défaut: 4 slots de c/4),
+  #                       ubatch ≥ taille des chunks RAG (jusqu'à ~2500 tokens)
+  #   --alias           : nom exposé dans l'API (doit matcher rag.embedding_model)
+  llamaembed:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llamaembed
+    ports:
+      # Port interne 8080 (exigé par le HEALTHCHECK de l'image), publié en
+      # 8081 côté hôte pour ne pas collider avec le chat llamacpp.
+      - "8081:8080"
+    volumes:
+      - ./models-embed:/models
+    command: >
+      -m /models/embeddinggemma-300M-qat-Q4_0.gguf
+      --host 0.0.0.0
+      --port 8080
+      --embedding
+      -c 4096
+      -np 1
+      -b 4096
+      -ub 4096
+      --alias embeddinggemma
     restart: unless-stopped
     networks:
       - openwebui-net

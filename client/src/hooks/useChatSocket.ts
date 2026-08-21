@@ -100,11 +100,13 @@ export function useChatSocket(partie_id: string | null) {
           if (ev.image && ev.image.includes("/bestiaire_cache/")) {
             addMonster(encounterFromUrl(ev.image));
           }
-          if (streamId.current) {
+          // Affiche les messages d'info (image_pending, etc.) même hors streaming
+          // pour que le joueur voie le délai de génération d'image.
+          if (ev.msg || ev.description || ev.image) {
             addMessage({
               id: uid(),
               role: "system",
-              content: ev.description || "(tool)",
+              content: ev.msg || ev.description || "(tool)",
               image: ev.image,
               ts: Date.now(),
             });

@@ -104,7 +104,8 @@ async def lifespan(app: FastAPI):
             if dims is None:
                 print(
                     f"[dnd35] ⚠️ Embedding '{cfg.rag.embedding_model}' inaccessible "
-                    f"via Ollama — RAG désactivé. (`ollama pull {cfg.rag.embedding_model}`)"
+                    f"sur '{cfg.rag.embedding_base_url or cfg.llm.base_url}' — RAG "
+                    f"désactivé. (Vérifiez que le serveur d'embeddings tourne.)"
                 )
                 await rag_store.embedder.aclose()
                 rag_store = None
@@ -192,11 +193,12 @@ def _orchestrator(app: FastAPI) -> Orchestrator:
 # --------------------------------------------------------------------------- #
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
+    backend = cfg.llm.backend  # "ollama" | "llamacpp"
     try:
         models = await app.state.client.list_models()
     except Exception as e:
         return JSONResponse(
-            {"ok": False, "ollama": False, "error": str(e)}, status_code=503
+            {"ok": False, "backend": backend, "error": str(e)}, status_code=503
         )
     # Section RAG — opaque tant que le store est inactive (embeddings absents
     # ou base vide). Le frontend s'en sert pour afficher le badge RAG dans le bandeau.
@@ -211,10 +213,13 @@ async def health() -> dict[str, Any]:
         rag_info = {"enabled": False, "collections": {}}
     return {
         "ok": True,
-        "ollama": True,
-        "ollama_base": cfg.llm.base_url,
+        "backend": backend,
+        "backend_url": cfg.llm.base_url,
         "model": cfg.llm.model,
-        "model_available": any(m.get("id") == cfg.llm.model for m in models),
+        "model_available": any(
+            cfg.llm.model in m.get("id", "") or m.get("id", "").endswith(cfg.llm.model)
+            for m in models
+        ),
         "tools": sorted(app.state.tools.keys()),
         "tool_mode": cfg.llm.tool_mode,
         "rag": rag_info,
@@ -378,11 +383,17 @@ async def get_fiche(nom: str) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 @app.get("/api/ressources")
 async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
-    """Liste les ressources consultables : manuels externes, cartes du monde,
-    scénarios PDF locaux (+ carte du donjon de la partie si `partie_id`)."""
-    from .tools import manuels as M
+    """Liste les ressources consultables : manuels, cartes du monde,
+    scénarios PDF locaux (+ carte du donjon de la partie si `partie_id`).
+    Les manuels et cartes pointent vers le serveur du projet quand les
+    fichiers sont présents sous data/manuels/ (repli externe sinon)."""
     from .tools import scenarios as S
-    from .tools.manuels import _safe_url
+    from .tools.manuels import (
+        FICHIERS_DEFAUT,
+        url_carte_hires,
+        url_carte_lowres,
+        url_manuel,
+    )
     from urllib.parse import quote
 
     data_dir = cfg.abs(cfg.paths.data_dir)
@@ -396,15 +407,15 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
         {
             "titre": f["titre"],
             "description": f["description"],
-            "url": _safe_url(M.MANUELS_WEB_BASE_URL, f["public_name"]),
+            "url": url_manuel(ctx, f["public_name"]),
         }
-        for f in M.FICHIERS_DEFAUT
+        for f in FICHIERS_DEFAUT
     ]
     cartes = [
         {"titre": "Carte de la Côte des Épées (basse résolution)",
-         "url": M.WORLD_MAP_LOWRES_URL},
+         "url": url_carte_lowres(ctx)},
         {"titre": "Carte de la Côte des Épées (haute résolution)",
-         "url": M.WORLD_MAP_HIGHRES_URL},
+         "url": url_carte_hires(ctx)},
     ]
     scenarios = [
         {
@@ -561,6 +572,27 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
         session.authenticated.discard(ws)
 
 
+# Compteur global de tours MJ actifs (toutes parties confondues) : le déchargement
+# du modèle LLM ne doit survenir que lorsque PLUS AUCUN tour n'est en cours —
+# sinon un tour concurrent verrait le modèle disparaître sous ses pieds (HTTP 500).
+_active_turns: int = 0
+_turns_guard: asyncio.Lock = asyncio.Lock()
+
+
+async def _turn_begin() -> None:
+    global _active_turns
+    async with _turns_guard:
+        _active_turns += 1
+
+
+async def _turn_end() -> bool:
+    """Décrémente le compteur de tours ; True s'il ne reste aucun tour actif."""
+    global _active_turns
+    async with _turns_guard:
+        _active_turns = max(0, _active_turns - 1)
+        return _active_turns == 0
+
+
 async def _handle_say(
     initiator: WebSocket,
     session: PartySession,
@@ -583,56 +615,82 @@ async def _handle_say(
     # 2. Statut "thinking" aux clients connectés.
     await session.broadcast({"type": "status", "description": "Le MJ réfléchit..."})
 
-    # 3. Construit le message système (system prompt + récap + sections + RAG).
-    rag_context = ""
-    rag_store: Optional[RagStore] = getattr(app.state, "rag_store", None)
-    if rag_store is not None:
-        try:
-            rag_context = await rag_store.render_for_prompt(text)
-        except Exception as e:                                   # noqa: BLE001
-            # Le RAG ne doit jamais bloquer une narration ; on log et on continue.
-            print(f"[dnd35] RAG requête échouée (ignoré) : {e}")
+    # 3→6. Tour du MJ — sérialisé par partie (un seul MJ à la fois) et compté
+    # globalement (le unload n'a lieu que quand plus aucun tour n'est actif).
+    await _turn_begin()
+    try:
+        async with session.turn_lock:
+            # 3. Construit le message système (system prompt + récap + sections + RAG).
             rag_context = ""
-    system_text, etat = app.state.prompt_builder.build_system_message(
-        partie_id, rag_context=rag_context
-    )
-    # On re-construit la conversation à partir de l'historique (système en tête).
-    messages = [__import__("server.llm.client", fromlist=["Message"]).Message(
-        role="system", content=system_text
-    )] + list(session.history)
+            rag_store: Optional[RagStore] = getattr(app.state, "rag_store", None)
+            if rag_store is not None:
+                try:
+                    rag_context = await rag_store.render_for_prompt(text)
+                except Exception as e:                               # noqa: BLE001
+                    # Le RAG ne doit jamais bloquer une narration ; on log et on continue.
+                    print(f"[dnd35] RAG requête échouée (ignoré) : {e}")
+                    rag_context = ""
+            system_text, etat = app.state.prompt_builder.build_system_message(
+                partie_id, rag_context=rag_context
+            )
+            # On re-construit la conversation à partir de l'historique (système en tête).
+            messages = [__import__("server.llm.client", fromlist=["Message"]).Message(
+                role="system", content=system_text
+            )] + list(session.history)
 
-    # 4. Boucle d'orchestration : LLM ↔ tools → narration + events + patches.
-    ctx = _ctx(partie_id, player)
+            # 4. Boucle d'orchestration : LLM ↔ tools → narration + events + patches.
+            ctx = _ctx(partie_id, player)
 
-    async def on_event(ev: dict[str, Any]) -> None:
-        await session.broadcast({"type": "tool_event", "event": ev})
+            async def on_event(ev: dict[str, Any]) -> None:
+                await session.broadcast({"type": "tool_event", "event": ev})
 
-    async def on_delta(token: str) -> None:
-        # Stream des tokens de narration vers tous les clients connectés.
-        if cfg.game.stream_to_clients:
-            await session.broadcast({"type": "delta", "text": token})
+            async def on_delta(token: str) -> None:
+                # Stream des tokens de narration vers tous les clients connectés.
+                if cfg.game.stream_to_clients:
+                    await session.broadcast({"type": "delta", "text": token})
 
-    orch = _orchestrator(app)
-    result = await orch.run(messages, ctx, on_event=on_event, on_delta=on_delta)
+            orch = _orchestrator(app)
+            result = await orch.run(messages, ctx, on_event=on_event, on_delta=on_delta)
 
-    # 5. On ajoute la narration finale à l'historique de la session.
-    if result.narration:
-        session.remember_assistant(result.narration)
+            # 5. On ajoute la narration finale à l'historique de la session.
+            if result.narration:
+                session.remember_assistant(result.narration)
 
-    # 6. Broadcast final (= complet, même en streaming : permet le rendu MD).
-    await session.broadcast({
-        "type": "dm",
-        "text": result.narration,
-        "iterations": result.iterations,
-        "corrections": result.corrections,
-        "simulation_attempted": result.simulation_attempted,
-        "tool_events": result.tool_events,
-        "state_patches": result.state_patches,
-        "tool_calls_trace": result.tool_calls_trace,
-    })
+            # 6. Broadcast final (= complet, même en streaming : permet le rendu MD).
+            await session.broadcast({
+                "type": "dm",
+                "text": result.narration,
+                "iterations": result.iterations,
+                "corrections": result.corrections,
+                "simulation_attempted": result.simulation_attempted,
+                "tool_events": result.tool_events,
+                "state_patches": result.state_patches,
+                "tool_calls_trace": result.tool_calls_trace,
+            })
+    except Exception as e:                                           # noqa: BLE001
+        # Le tour a crashé (LLM injoignable, timeout…) : on prévient la table
+        # plutôt que de laisser les clients attendre indéfiniment.
+        print(f"[dnd35] Tour MJ échoué ({partie_id}/{player}) : {e}")
+        await session.broadcast({
+            "type": "dm",
+            "text": "⚠️ Le MJ a rencontré un problème technique. "
+                    "Réessayez dans un instant.",
+        })
+    finally:
+        last_turn = await _turn_end()
 
     # 7. Patches d'état → re-synchronise l'UI avec l'état persistant final.
     await session.broadcast({"type": "status", "description": "", "done": True})
+
+    # 8. Décharge le modèle LLM de la VRAM pour libérer la place à ComfyUI —
+    #    uniquement si plus AUCUN tour n'est actif (sinon un tour concurrent
+    #    perdrait le modèle en cours de route). Le prochain message joueur
+    #    rechargera le modèle automatiquement.
+    if last_turn:
+        try:
+            await app.state.client.unload_model()
+        except Exception:
+            pass
 
 
 # --------------------------------------------------------------------------- #

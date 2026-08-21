@@ -220,7 +220,7 @@ async def lancer_sauvegarde(
     label = aliases.get(t, t.capitalize())
     jet = random.randint(1, 20)
     total = jet + modificateur
-    ok = total >= difficulte or jet == 20
+    ok = (total >= difficulte or jet == 20) and jet != 1
     lignes = [
         f"🛡️ **Sauvegarde** ({label}) — {nom_personnage} vs {source} (DD {difficulte})",
         f"- Jet brut : {jet}",

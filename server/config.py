@@ -12,6 +12,7 @@ import yaml
 
 @dataclass
 class LLMConfig:
+    backend: str = "ollama"          # "ollama" | "llamacpp"
     base_url: str = "http://localhost:11434/v1"
     api_key: str = "ollama"
     model: str = "gemma4:12b"
@@ -21,6 +22,7 @@ class LLMConfig:
     tool_mode: str = "prompt"        # "native" | "prompt" | "auto"
     detect_simulation: bool = True
     max_tool_iterations: int = 6
+    think: bool = False              # désactive le thinking/réflexion (Gemma 4, Qwen3…)
     # Options natives transmises à Ollama via le champ `options` du payload
     # OpenAI-compatible (ex: num_ctx, top_k, seed, …). Calibré par l'utilisateur
     # pour Gemma 4 12B : {num_ctx: 60000, top_k: 64}.
@@ -57,7 +59,10 @@ class RagConfig:
     enabled: bool = False
     source_dir: str = "../Dongeon dragon/projet_DnD35/knowledge_import"
     persist_dir: str = "./server/data/chroma"
-    embedding_model: str = "nomic-embed-text"
+    embedding_model: str = "nomic-embed-text-v1.5"
+    # Serveur d'embeddings dédié (llama.cpp `--embedding`). Vide → retombe sur
+    # `llm.base_url` (comportement historique Ollama, embeddings via le LLM).
+    embedding_base_url: str = ""
     chunk_size: int = 1500
     chunk_overlap: int = 200
     top_k: int = 5

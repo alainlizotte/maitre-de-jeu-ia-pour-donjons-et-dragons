@@ -33,7 +33,9 @@ class PartySession:
     # Connexions ayant franchi le contrôle de mot de passe (parties protégées).
     authenticated: set[Any] = field(default_factory=set)
     participants: list[str] = field(default_factory=list)
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Sérialise les tours du MJ : un seul `say` traité à la fois par partie
+    # (D&D est tour par tour — évite les courses sur l'état partagé).
+    turn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Persistance conversationnelle (optionnelle mais recommandée en prod).
     data_dir: Optional[str] = None
     max_history_events: int = 50
@@ -54,16 +56,18 @@ class PartySession:
         else:
             wrapped = stripped
         msg = Message(role="user", content=wrapped)
-        self._append_persisting(msg)
+        self.history.append(msg)
+        self._truncate_and_persist()
         return msg
 
     def remember_assistant(self, content: str, tool_calls: Optional[list[dict]] = None) -> None:
-        self._append_persisting(
+        self.history.append(
             Message(role="assistant", content=content, tool_calls=tool_calls)
         )
+        self._truncate_and_persist()
 
     def remember_tool(self, name: str, tool_call_id: str, content: str) -> None:
-        self._append_persisting(
+        self.history.append(
             Message(
                 role="tool",
                 name=name,
@@ -71,16 +75,11 @@ class PartySession:
                 content=content,
             )
         )
+        self._truncate_and_persist()
 
-    def _append_persisting(self, msg: Message) -> None:
-        """Append + tronque à max + persiste atomiquement (best-effort)."""
-        self.history.append(msg)
-        # On borne l'historique récent pour ne pas exploser la fenêtre LLM
-        # ni le fichier persistant. On garde le prefix stable.
+    def _truncate_and_persist(self) -> None:
+        """Tronque l'historique et persiste (appelé après chaque append)."""
         if len(self.history) > self.max_history_events:
-            # Garde les derniers max_history_events ; le contexte système
-            # (récap + sections) est reconstruit à chaque tour de toutes
-            # façons, donc on ne perd pas la continuité narrative.
             self.history = self.history[-self.max_history_events :]
         self._persist_history()
 

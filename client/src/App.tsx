@@ -99,7 +99,8 @@ function ModelSelector() {
 
 export default function App() {
   const { data } = useQuery({ queryKey: ["health"], queryFn: api.health });
-  const ollamaOk = !!data?.ollama && !!data?.model_available;
+  const backendOk = !!data?.ok && !!data?.model_available;
+  const backendLabel = data?.backend === "llamacpp" ? "llama.cpp" : "Ollama";
   return (
     <div className="h-full flex flex-col">
       <header className="border-b border-stone-800 bg-stone-950/80 px-4 py-2 flex items-center gap-3">
@@ -107,8 +108,8 @@ export default function App() {
           🎲 D&D 3.5 — Maître du Jeu
         </Link>
         <span className="ml-auto text-xs text-stone-400 flex items-center gap-3">
-          <span className={ollamaOk ? "text-emerald-400" : "text-rose-400"}>
-            ● Ollama {ollamaOk ? "ok" : "down"}
+          <span className={backendOk ? "text-emerald-400" : "text-rose-400"}>
+            ● {backendLabel} {backendOk ? "ok" : "down"}
           </span>
           <span className="flex items-center gap-1">
             modèle: <ModelSelector />

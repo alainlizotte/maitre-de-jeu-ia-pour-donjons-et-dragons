@@ -14,13 +14,22 @@ client/.vite/
 # Config locale (utiliser config.example.yaml comme modèle)
 config/config.yaml
 
+# Modèles LLM (trop volumineux pour git)
+models/
+models-embed/
+
 # Données générées au runtime
 server/data/chroma/
+server/data/manuels/
 server/data/bestiaire_cache/
 server/data/portraits_cache/
 server/data/partie_*.json
 server/data/chat_*.json
 server/data/cartes/
+server/data/parties/
+server/data/fiches/
+server/data/images_salles/
+server/data/model_choice.json
 
 # Outils / OS
 .zcode/

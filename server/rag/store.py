@@ -55,7 +55,7 @@ class RagStore:
     def __init__(self, cfg: AppConfig, embedder: Optional[Embedder] = None):
         self.cfg = cfg
         self.embedder = embedder or Embedder(
-            base_url=cfg.llm.base_url,
+            base_url=cfg.rag.embedding_base_url or cfg.llm.base_url,
             api_key=cfg.llm.api_key,
             model=cfg.rag.embedding_model,
         )

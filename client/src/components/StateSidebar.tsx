@@ -3,7 +3,7 @@
 // clic sur le nom ou le portrait → fiche complète : caractéristiques,
 // inventaire, sorts, etc.).
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/rest";
 import { useParty } from "../store";
@@ -37,9 +37,34 @@ function PhaseBadge({ phase }: { phase: string }) {
 // --------------------------------------------------------------------------- //
 function Portrait({ nom, size = "h-20" }: { nom: string; size?: string }) {
   const [failed, setFailed] = useState(false);
+  const [retries, setRetries] = useState(0);
   const slug = slugify(nom);
   const url = `/data/portraits_cache/${slug}.png`;
+  const maxRetries = 5;
+
+  // Retry loading the portrait image after a delay (in case ComfyUI is still generating)
+  useEffect(() => {
+    if (!failed || retries >= maxRetries) return;
+    const delay = Math.min(2000 * Math.pow(2, retries - 1), 30000); // 2s, 4s, 8s, 16s, 30s
+    const timer = setTimeout(() => setFailed(false), delay);
+    return () => clearTimeout(timer);
+  }, [failed, retries, maxRetries]);
+
   if (failed) {
+    // Retry by forcing the <img> to re-mount with a cache-busting query param.
+    // After maxRetries, show the monogram permanently.
+    if (retries < maxRetries) {
+      return (
+        <img
+          key={`${slug}-${retries}`}
+          src={`${url}?t=${Date.now()}`}
+          alt={nom}
+          className={`${size} w-full object-cover rounded border border-stone-700 opacity-50`}
+          onError={() => setRetries((r) => r + 1)}
+          onLoad={() => setFailed(false)}
+        />
+      );
+    }
     // Pas de portrait généré : monogramme stylé dérivé du nom.
     const initiales = nom
       .split(/\s+/)
@@ -59,7 +84,10 @@ function Portrait({ nom, size = "h-20" }: { nom: string; size?: string }) {
       src={url}
       alt={nom}
       className={`${size} w-full object-cover rounded border border-stone-700`}
-      onError={() => setFailed(true)}
+      onError={() => {
+        setFailed(true);
+        setRetries(1);
+      }}
     />
   );
 }

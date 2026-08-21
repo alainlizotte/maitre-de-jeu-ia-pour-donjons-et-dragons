@@ -11,7 +11,7 @@ html, body, #root {
 
 /* Rendu Markdown narration — styles appliqués dans un conteneur .prose-chat. */
 .prose-chat h1, .prose-chat h2, .prose-chat h3 {
-  @apply font-serif font-bold mt-3 mb-1 text-amber-200;
+  @apply font-serif font-bold mt-3 mb-1 text-orange-500;
 }
 .prose-chat h1 { @apply text-xl; }
 .prose-chat h2 { @apply text-lg; }
@@ -19,7 +19,7 @@ html, body, #root {
 .prose-chat p { @apply my-1.5 leading-relaxed; }
 .prose-chat ul { @apply list-disc pl-5 my-1.5; }
 .prose-chat ol { @apply list-decimal pl-5 my-1.5; }
-.prose-chat strong { @apply text-amber-100; }
+.prose-chat strong { @apply text-orange-600 font-semibold; }
 .prose-chat code { @apply bg-stone-800 px-1 rounded text-sm; }
 .prose-chat hr { @apply my-3 border-stone-700; }
 

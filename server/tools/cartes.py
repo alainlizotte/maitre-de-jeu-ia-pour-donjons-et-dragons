@@ -20,12 +20,12 @@ Spécificité de l'app standalone :
 
 from __future__ import annotations
 
-import json
 import os
 import random
 from typing import Any, Optional
 
 from .base import ToolContext, ToolResult, tool
+from ..game.state import PartyState
 
 
 # --------------------------------------------------------------------------- #
@@ -66,42 +66,18 @@ WORLD_MAP_URL = (
 # --------------------------------------------------------------------------- #
 #  Utilitaires
 # --------------------------------------------------------------------------- #
-def _etat_path(ctx: ToolContext) -> str:
-    return os.path.join(ctx.data_dir, "parties", f"{ctx.partie_id}.json")
+def _party_state(ctx: ToolContext) -> PartyState:
+    return PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
 
 
 def _charger_etat(ctx: ToolContext) -> dict[str, Any]:
-    """Charge l'état de partie — gère les deux layouts possibles (sous
-    `parties/` ou `data/partie_<id>.json`, comme PartyState)."""
-    for path in (
-        _etat_path(ctx),
-        os.path.join(ctx.data_dir, f"partie_{ctx.partie_id}.json"),
-    ):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            continue
-    return {}
+    """Charge l'état via PartyState (écritures atomiques, chemin canonique)."""
+    return _party_state(ctx).load()
 
 
 def _sauver_etat(ctx: ToolContext, etat: dict[str, Any]) -> Optional[str]:
-    for path in (
-        _etat_path(ctx),
-        os.path.join(ctx.data_dir, f"partie_{ctx.partie_id}.json"),
-    ):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                # Confirme que le fichier existe (write-back).
-                pass
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(etat, f, ensure_ascii=False, indent=2)
-            return None
-        except FileNotFoundError:
-            continue
-        except OSError as e:
-            return str(e)
-    return "Partie introuvable (aucun fichier d'état)."
+    """Sauvegarde l'état via PartyState (écriture atomique tempfile+replace)."""
+    return _party_state(ctx).save(etat)
 
 
 def _normalise_dir(d: str) -> str:
@@ -364,6 +340,22 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     :param donjon_id (str): identifiant libre ("Donjon de Khundrukar", etc.).
     """
     etat = _charger_etat(ctx)
+    # Garde-fou : si un donjon est déjà ouvert avec le même id, on refuse
+    # poliment de l'écraser — le MJ doit utiliser `carte_donjon_explorer`
+    # pour avancer, pas `carte_donjon_entrer` (qui ré-initialiserait la
+    # grille et annulerait toute l'exploration déjà faite).
+    donjon_existant = etat.get("donjon") or {}
+    if donjon_existant and donjon_existant.get("id") == donjon_id:
+        pos = donjon_existant.get("courant", [0, 0])
+        x, y = (pos[0], pos[1]) if len(pos) >= 2 else (0, 0)
+        url = _url_for(_svg_path(ctx, "donjon"), ctx.data_dir)
+        return ToolResult(
+            text=(
+                f"ℹ️ Vous êtes déjà dans **{donjon_id}** (salle actuelle : "
+                f"({x},{y})). Pour avancer, utilise `carte_donjon_explorer` "
+                f"avec une direction (nord/sud/est/ouest).\n\n🖼️ Carte : {url}"
+            ),
+        )
     entree = {
         "x": 0, "y": 0, "type": "entrée",
         "description": "L'entrée du donjon. Une lourde porte de bois noir se dresse devant vous.",
@@ -542,11 +534,11 @@ async def carte_donjon_sortir(ctx: ToolContext) -> ToolResult:
     """
     etat = _charger_etat(ctx)
     etat["donjon"] = {"id": None, "salles_visitees": [], "portes_bloquees": [], "grille": []}
-    etat["phase"] = "opening_complete"
+    etat["phase"] = "exploration"
     err = _sauver_etat(ctx, etat)
     if err:
         return ToolResult(text=f"❌ {err}")
     return ToolResult(
         text="🚪 Vous quittez le donjon. Retour à la carte du monde.",
-        state_patch={"phase": "opening_complete", "quitte_donjon": True},
+        state_patch={"phase": "exploration", "quitte_donjon": True},
     )

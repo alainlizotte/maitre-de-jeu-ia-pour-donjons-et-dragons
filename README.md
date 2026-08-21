@@ -152,11 +152,20 @@ fiablement que ~10 tools visibles à la fois).
   déplacement), donjon (exploration salle/cellule, portes bloquées, rendu SVG),
   distribution aux joueurs.
 - **Manuels & scénarios** (`manuels.py` 2, `scenarios.py` 2) — distribution
-  des manuels D&D 3.5 ; catalogue de scénarios unifié : univers Laelith
-  **+ 9 scénarios PDF locaux** (`data/scenarios/`, catalogue
-  `data/scenarios.json`). Au chargement d'un scénario PDF, le texte intégral
-  est extrait via PyMuPDF (plafonné) pour que le MJ puisse le mener, et le
-  PDF reste consultable par les joueurs via `/data/scenarios/…`.
+  des manuels D&D 3.5 **servis par le serveur du projet** et catalogue de
+  scénarios unifié : univers Laelith **+ 9 scénarios PDF locaux**
+  (`data/scenarios/`, catalogue `data/scenarios.json`). Au chargement d'un
+  scénario PDF, le texte intégral est extrait via PyMuPDF (plafonné) pour que
+  le MJ puisse le mener, et le PDF reste consultable par les joueurs via
+  `/data/scenarios/…`.
+
+Manuels locaux : déposez les PDF (noms URL-safe) dans `server/data/manuels/`
+pour qu'ils soient servis par le serveur du projet (`/data/manuels/…`) :
+`manuel_joueur_3.5.pdf`, `guide_maitre_3.5.pdf`, `manuel_monstres_3.5.pdf`,
+`errata_3.5.pdf`, `faq_3.5.pdf`, `aide_choix_personnage.pdf`, plus les cartes
+`cote_epees_lowres.jpg` et `cote_epees_hires.jpg`. Sans ces fichiers, les
+liens rebasculent sur l'hébergement web externe historique. Ce dossier est
+volontairement gitignoré (livres protégés par le droit d'auteur).
 
 ## Images générées (ComfyUI)
 

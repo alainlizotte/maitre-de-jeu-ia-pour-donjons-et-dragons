@@ -1,26 +1,25 @@
 """Outil Distribution manuels — adapté de `Outil_FichiersDepart.py`.
 
 Fournit `distribuer_manuels_carte()` à appeler en début de partie. Émet dans
-le chat des liens Markdown vers des manuels PDF hébergés sur un serveur web
-public (URL de base configurable via `MANUELS_WEB_BASE_URL` ci-dessous).
+le chat des liens Markdown vers les manuels D&D 3.5 et la carte du monde.
 
 Spécificité de l'app standalone :
-- Mode serveur web uniquement (`web_base_url`). Pas de mode upload
-  OpenWebUI (l'app n'est pas OpenWebUI).
-- `MANUELS_WEB_BASE_URL` et l'éventuelle URL de carte sont récupérés depuis
-  `config/config.yaml` si disponible, sinon depuis l'environnement.
+- **Service local d'abord** : si le fichier existe sous `data/manuels/`
+  (noms URL-safe : manuel_joueur_3.5.pdf, cote_epees_lowres.jpg, …), le lien
+  pointe vers le serveur du projet (`/data/manuels/…`). Sinon, repli sur
+  l'hébergement web externe historique (MANUELS_WEB_BASE_URL).
 - On persiste le fait que la distribution a été faite (`etat.distribution`)
- pour éviter la redistribuer à chaque message.
+  pour éviter la redistribuer à chaque message.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any, Optional
 from urllib.parse import quote
 
 from .base import ToolContext, ToolResult, tool
+from ..game.state import PartyState
 
 
 # --------------------------------------------------------------------------- #
@@ -30,6 +29,9 @@ MANUELS_WEB_BASE_URL = os.environ.get(
     "DND35_MANUELS_URL",
     "https://ateliersynthetique.ca/d&d/manuels",
 )
+# Noms de fichiers locaux (data/manuels/) pour la carte de la Côte des Épées.
+FICHIER_CARTE_LOWRES = "cote_epees_lowres.jpg"
+FICHIER_CARTE_HIRES = "cote_epees_hires.jpg"
 WORLD_MAP_LOWRES_URL = os.environ.get(
     "DND35_MAP_LOW_URL",
     "https://ateliersynthetique.ca/d&d/manuels/cote_epees_lowres.jpg",
@@ -76,41 +78,46 @@ FICHIERS_DEFAUT = [
 
 
 def _safe_url(base: str, name: str) -> str:
-    """Construit une URL en encodant tout composant (le `&` des `d&d`)."""
-    # On encode le base_dir entier, puis on encode le nom (séparateur `/`).
+    """Construit une URL externe en encodant tout composant (le `&` des `d&d`)."""
     base_enc = quote(base, safe="/:#")
     name_enc = quote(name, safe="")
     return f"{base_enc.rstrip('/')}/{name_enc}"
 
 
-def _etat_path(ctx: ToolContext) -> str:
-    # Privilégie `parties/<id>.json` puis `partie_<id>.json` au racine.
-    for path in (
-        os.path.join(ctx.data_dir, "parties", f"{ctx.partie_id}.json"),
-        os.path.join(ctx.data_dir, f"partie_{ctx.partie_id}.json"),
-    ):
-        if os.path.isfile(path):
-            return path
-    return os.path.join(ctx.data_dir, "parties", f"{ctx.partie_id}.json")
+def _url_locale(ctx: ToolContext, nom_fichier: str) -> Optional[str]:
+    """URL servie par le serveur du projet si le fichier existe sous
+    data/manuels/, sinon None (→ repli externe)."""
+    chemin = os.path.join(ctx.data_dir, "manuels", nom_fichier)
+    if os.path.isfile(chemin):
+        return "/data/manuels/" + quote(nom_fichier, safe="")
+    return None
+
+
+def url_manuel(ctx: ToolContext, public_name: str) -> str:
+    """URL d'un manuel : locale (/data/manuels/…) si dispo, sinon externe."""
+    return _url_locale(ctx, public_name) or _safe_url(MANUELS_WEB_BASE_URL, public_name)
+
+
+def url_carte_lowres(ctx: ToolContext) -> str:
+    return _url_locale(ctx, FICHIER_CARTE_LOWRES) or WORLD_MAP_LOWRES_URL
+
+
+def url_carte_hires(ctx: ToolContext) -> str:
+    return _url_locale(ctx, FICHIER_CARTE_HIRES) or WORLD_MAP_HIGHRES_URL
+
+
+def _party_state(ctx: ToolContext) -> PartyState:
+    return PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
 
 
 def _charger_etat(ctx: ToolContext) -> dict[str, Any]:
-    try:
-        with open(_etat_path(ctx), "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+    """Charge l'état via PartyState (écritures atomiques, chemin canonique)."""
+    return _party_state(ctx).load()
 
 
 def _sauver_etat(ctx: ToolContext, etat: dict[str, Any]) -> Optional[str]:
-    path = _etat_path(ctx)
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(etat, f, ensure_ascii=False, indent=2)
-        return None
-    except OSError as e:
-        return str(e)
+    """Sauvegarde l'état via PartyState (écriture atomique tempfile+replace)."""
+    return _party_state(ctx).save(etat)
 
 
 # --------------------------------------------------------------------------- #
@@ -137,21 +144,21 @@ async def manuels_distribuer(ctx: ToolContext) -> ToolResult:
         )
 
     lignes = [
-        "📚 **Manuels D&D 3.5 — warmly téléchargeables** :\n",
+        "📚 **Manuels D&D 3.5 — téléchargeables** :\n",
     ]
     for f in FICHIERS_DEFAUT:
-        url = _safe_url(MANUELS_WEB_BASE_URL, f["public_name"])
+        url = url_manuel(ctx, f["public_name"])
         lignes.append(
             f"- **{f['titre']}** — {f['description']} → [{f['public_name']}]({url})"
         )
     lignes.append("")
     lignes.append(
         f"🗺️ **Carte de la Côte des Épées (LowRes)** : "
-        f"![carte]({WORLD_MAP_LOWRES_URL})"
+        f"![carte]({url_carte_lowres(ctx)})"
     )
     lignes.append(
         f"🗺️ **Carte HighRes** : "
-        f"[Sword-Coast-Map_HighRes.jpg]({WORLD_MAP_HIGHRES_URL})"
+        f"[Cote des Epees HighRes]({url_carte_hires(ctx)})"
     )
 
     # Marque la distribution comme faite
@@ -171,12 +178,13 @@ async def manuels_distribuer(ctx: ToolContext) -> ToolResult:
 @tool
 async def manuels_lister(ctx: ToolContext) -> ToolResult:
     """
-    Liste les manuels disponibles (avec leurs URLs d'hébergement) sans les
+    Liste les manuels disponibles (avec leurs URLs — servies par le serveur
+    du projet si les fichiers sont présents sous data/manuels/) sans les
     distribuer formellement dans le chat. Utile si le MJ veut rappeler un
     lien précis au cours de la partie. Aucun argument.
     """
     lignes = ["📚 Manuels disponibles :"]
     for f in FICHIERS_DEFAUT:
-        url = _safe_url(MANUELS_WEB_BASE_URL, f["public_name"])
+        url = url_manuel(ctx, f["public_name"])
         lignes.append(f"- **{f['titre']}** → {url}")
     return ToolResult(text="\n".join(lignes))

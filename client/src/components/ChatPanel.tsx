@@ -86,14 +86,14 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
   };
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col bg-stone-950">
-      <div className="border-b border-stone-800 px-4 py-2 text-xs text-stone-400">
+    <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden bg-stone-950">
+      <div className="shrink-0 border-b border-stone-800 px-4 py-2 text-xs text-stone-400">
         {participants.length > 0
           ? `Connectés : ${participants.join(", ")}`
           : "Personne d'autre connecté."}
       </div>
 
-      <div className="flex-1 overflow-auto chat-scroll p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden chat-scroll p-4">
         {messages.map((m) => (
           <MessageView key={m.id} m={m} />
         ))}
@@ -105,7 +105,7 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={submit} className="border-t border-stone-800 p-3 flex gap-2">
+      <form onSubmit={submit} className="shrink-0 border-t border-stone-800 p-3 flex gap-2">
         <input
           className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400"
           value={text}

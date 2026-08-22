@@ -19,6 +19,7 @@ const TAB_LABELS: Record<Tab, string> = {
 interface RightSidebarProps {
   sendSay?: (text: string) => void;
   sendTeamSay?: (text: string) => void;
+  socket?: React.RefObject<{ send: (payload: Record<string, unknown>) => void } | null>;
 }
 
 /** Moitié basse de la colonne : dernière image de monstre rencontrée + historique. */
@@ -81,7 +82,7 @@ function EncounterGallery() {
   );
 }
 
-export function RightSidebar({ sendSay, sendTeamSay }: RightSidebarProps) {
+export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps) {
   const [tab, setTab] = useState<Tab>("des");
   const teamUnread = useParty((s) => s.teamUnread);
   const resetTeamUnread = useParty((s) => s.resetTeamUnread);
@@ -92,7 +93,7 @@ export function RightSidebar({ sendSay, sendTeamSay }: RightSidebarProps) {
   };
 
   return (
-    <aside className="w-80 shrink-0 border-l border-stone-800 bg-stone-900/50 flex flex-col">
+    <aside className="w-80 shrink-0 min-h-0 border-l border-stone-800 bg-stone-900/50 flex flex-col overflow-hidden">
       <div className="flex border-b border-stone-800 text-xs shrink-0">
         {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
           <button
@@ -116,7 +117,7 @@ export function RightSidebar({ sendSay, sendTeamSay }: RightSidebarProps) {
       </div>
       <div className="flex-1 min-h-0 overflow-auto p-3">
         {tab === "des" && <DiceRoller />}
-        {tab === "equipe" && <TeamChat sendTeamSay={sendTeamSay ?? (() => {})} />}
+        {tab === "equipe" && <TeamChat sendTeamSay={sendTeamSay ?? (() => {})} socket={socket} />}
         {tab === "monde" && <WorldMap />}
         {tab === "donjon" && <DungeonView sendSay={sendSay} />}
         {tab === "bestiaire" && <Bestiary />}

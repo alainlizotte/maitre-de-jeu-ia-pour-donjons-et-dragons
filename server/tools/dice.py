@@ -9,6 +9,7 @@ Différences vs la version OpenWebUI :
 
 from __future__ import annotations
 
+import json
 import random
 from typing import Optional
 
@@ -121,18 +122,56 @@ async def lancer_attaque(
     Renvoie jet brut, total, et résultat (toucher / critique / maladresse / raté).
     Gère le 20 naturel (critique à confirmer) et le 1 naturel (maladresse).
 
-    :param bonus_attaque (int): bonus total (BBA + carac + magie + divers).
+    :param bonus_attaque (int): bonus total = BBA + mod. FOR (mêlée) ou
+        mod. DEX (distance), lus sur la fiche du personnage — ne jamais
+        inventer de bonus. Un recoupement automatique avec la fiche borne
+        les valeurs manifestement erronées.
     :param ca_cible (int): Classe d'Armure de la cible.
     :param nom_attaquant (str): nom du personnage qui attaque.
     :param arme (str): nom de l'arme utilisée.
     :param nom_cible (str): nom de la cible.
     """
+    # --- Recoupement fiche (conformité 3.5) --------------------------------
+    # bonus_attaque = BBA + mod FOR (mêlée) / mod DEX (distance) + bonus
+    # divers (arme magique, focus...). Un petit LLM invente parfois des bonus
+    # absurdes (+8 au niveau 1) : on borne au bonus plausible lu sur la fiche,
+    # avec une marge de +3 pour les bonus magiques temporaires.
+    bonus_final = bonus_attaque
+    note_bonus = ""
+    try:
+        from .fiches import _chemin  # pylint: disable=import-outside-toplevel
+        import os as _os                             # noqa: I001
+        path = _chemin(ctx, nom_attaquant)
+        if _os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                fiche = json.load(f)
+            caracs = fiche.get("carac") or {}
+            bab = int(fiche.get("bab") or 0)
+            arme_l = (arme or "").lower()
+            a_distance = any(
+                m in arme_l for m in
+                ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard", "sarbacane")
+            )
+            cle_car = "DEX" if a_distance else "FOR"
+            val_car = int(caracs.get(cle_car, 10) or 10)
+            mod_car = (val_car - 10) // 2
+            plausible = bab + mod_car + 3
+            if bonus_attaque > plausible:
+                bonus_final = plausible
+                note_bonus = (
+                    f"\n- ⚠️ Bonus ajusté {bonus_attaque:+d} → {bonus_final:+d} "
+                    f"(fiche de {nom_attaquant} : BBA {bab:+d}, {cle_car} "
+                    f"{val_car} ({mod_car:+d}) + marge +3 max pour bonus divers)."
+                )
+    except Exception:                                           # noqa: BLE001
+        pass  # fiche absente (monstre ?) → on trust le bonus fourni
+
     jet = random.randint(1, 20)
-    total = jet + bonus_attaque
+    total = jet + bonus_final
     lignes = [
         f"⚔️ **Attaque** : {nom_attaquant} [{arme}] vs {nom_cible} (CA {ca_cible})",
         f"- Jet brut d'attaque : {jet}",
-        f"- Bonus total : {bonus_attaque:+d}",
+        f"- Bonus total : {bonus_final:+d}" + note_bonus,
         f"- **Total attaque : {total}**",
     ]
     if jet == 20:

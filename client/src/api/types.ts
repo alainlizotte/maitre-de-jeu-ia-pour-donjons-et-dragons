@@ -90,7 +90,8 @@ export type WsMessage =
   | { type: "delta"; text: string }
   | { type: "tool_event"; event: ToolEvent }
   | { type: "dm"; text: string; tool_events?: ToolEvent[]; state_patches?: unknown[] }
-  | { type: "team_msg"; player: string; text: string };
+  | { type: "team_msg"; player: string; text: string }
+  | { type: "audio_signal"; player: string; signal: Record<string, unknown> };
 
 // --------------------------------------------------------------------------- //
 //  REST DTOs.

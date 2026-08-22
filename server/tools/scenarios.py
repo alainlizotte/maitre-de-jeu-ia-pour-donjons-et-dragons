@@ -248,4 +248,20 @@ async def scenarios_laelith_charger(
         champs.append(f"\n=== TEXTE DU SCÉNARIO (extrait) ===\n{texte}")
     elif s.get("full"):
         champs.append(f"\n[JSON complet]\n{json.dumps(s, ensure_ascii=False, indent=2)}")
-    return ToolResult(text="\n".join(champs))
+
+    # Auto-patch de la quête dans l'état partie : le MJ n'a plus besoin de le
+    # faire manuellement via etat_partie_patch (souvent oublié par le LLM).
+    quete = {
+        "titre": str(s.get("titre", "")),
+        "pitch": str(s.get("pitch", "")),
+        "source": f"[{s.get('id','')}] " + str(s.get("fichier") or s.get("source") or ""),
+    }
+    try:
+        if ctx.partie_id:
+            from ..game.state import PartyState  # pylint: disable=import-outside-toplevel
+            PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id).patch(
+                "quete", json.dumps(quete, ensure_ascii=False)
+            )
+    except Exception:                                           # noqa: BLE001
+        pass  # hors partie ou état indisponible — le catalogue reste consultable
+    return ToolResult(text="\n".join(champs), state_patch={"quete": quete})

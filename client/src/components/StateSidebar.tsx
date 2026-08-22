@@ -297,14 +297,14 @@ export function StateSidebar() {
 
   if (!state) {
     return (
-      <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-auto">
+      <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
         <p className="text-stone-500 text-sm italic">Chargement de l'état…</p>
       </aside>
     );
   }
   if ("_erreur" in state) {
     return (
-      <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-auto">
+      <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
         <p className="text-rose-400 text-sm">⚠️ {state._erreur}</p>
       </aside>
     );
@@ -321,7 +321,7 @@ export function StateSidebar() {
   );
 
   return (
-    <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-auto">
+    <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
       <div className="mb-3">
         <h2 className="font-serif text-amber-200 text-sm uppercase tracking-wide">
           {state.meta?.titre || "(sans titre)"}

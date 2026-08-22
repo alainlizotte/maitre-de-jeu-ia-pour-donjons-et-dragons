@@ -34,6 +34,81 @@ def _slug(texte: str) -> str:
     return ascii_only[:60].strip("_").lower() or "perso"
 
 
+# --------------------------------------------------------------------------- #
+#  Tables de règles D&D 3.5 (Manuel du Joueur)
+# --------------------------------------------------------------------------- #
+
+def _norm_key(s: str) -> str:
+    """Normalise une chaîne pour lookup : minuscule, sans accent, tirets → espaces."""
+    s = unicodedata.normalize("NFKD", (s or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s.replace("-", " ").replace("'", " ").strip()
+
+
+# Alias de races (FR/EN) → race canonique PHB 3.5
+_RACE_ALIAS = {
+    "humain": "Humain", "human": "Humain",
+    "elfe": "Elfe", "elf": "Elfe", "haut elfe": "Elfe", "haut elf": "Elfe",
+    "nain": "Nain", "dwarf": "Nain",
+    "halfeling": "Halfeling", "halfling": "Halfeling", "semi homme": "Halfeling",
+    "hobbit": "Halfeling", "kender": "Halfeling",
+    "gnome": "Gnome",
+    "demi elfe": "Demi-elfe", "half elf": "Demi-elfe", "halfelf": "Demi-elfe",
+    "demi orc": "Demi-orc", "half orc": "Demi-orc", "halforc": "Demi-orc", "orc": "Demi-orc",
+}
+
+# Ajustements raciaux officiels 3.5 (PHB p.12-19) — appliqués au tirage auto.
+_RACE_MODS = {
+    "Elfe": {"DEX": 2, "CON": -2},
+    "Nain": {"CON": 2, "CHA": -2},
+    "Halfeling": {"DEX": 2, "FOR": -2},
+    "Gnome": {"CON": 2, "FOR": -2},
+    "Demi-orc": {"FOR": 2, "INT": -2, "CHA": -2},
+}
+
+# Alias de classes (FR/EN, masc./fém.) → classe canonique
+_CLASSE_ALIAS = {
+    "guerrier": "guerrier", "guerriere": "guerrier", "fighter": "guerrier", "warrior": "guerrier",
+    "barbare": "barbare", "barbarian": "barbare",
+    "paladin": "paladin",
+    "ranger": "ranger", "rodeur": "ranger",
+    "voleur": "voleur", "voleuse": "voleur", "roublard": "voleur", "roublarde": "voleur",
+    "thief": "voleur", "rogue": "voleur",
+    "barde": "barde", "bard": "barde",
+    "moine": "moine", "monk": "moine",
+    "clerc": "clerc", "pretre": "clerc", "priest": "clerc", "cleric": "clerc",
+    "druide": "druide", "druid": "druide",
+    "magicien": "magicien", "magicienne": "magicien", "mage": "magicien",
+    "wizard": "magicien", "necromancien": "magicien",
+    "sorcier": "sorcier", "sorciiere": "sorcier", "ensorcelleur": "sorcier",
+    "sorcerer": "sorcier",
+    "warlock": "warlock", "demoniste": "warlock",
+    "assassin": "assassin",
+    "artificier": "artificier",
+    "alchimiste": "alchimiste",
+}
+
+# Classe canonique → (dé de vie, BBA niv.1, saves de base niv.1 (vig, ref, vol))
+# Saves "bons" = +2 au niveau 1, "mauvais" = +0 (PHB 3.5).
+_CLASSES_35 = {
+    "guerrier": (10, 1, (2, 0, 0)),
+    "barbare": (12, 1, (2, 0, 0)),
+    "paladin": (10, 1, (2, 0, 0)),
+    "ranger": (8, 1, (2, 2, 0)),
+    "voleur": (6, 0, (0, 2, 0)),
+    "barde": (6, 0, (0, 2, 2)),
+    "moine": (8, 0, (2, 2, 2)),
+    "clerc": (8, 0, (0, 0, 2)),
+    "druide": (8, 0, (2, 0, 2)),
+    "magicien": (4, 0, (0, 0, 2)),
+    "sorcier": (4, 0, (0, 0, 2)),
+    "warlock": (6, 0, (0, 0, 2)),
+    "assassin": (6, 0, (0, 2, 0)),
+    "artificier": (6, 0, (0, 2, 2)),
+    "alchimiste": (8, 0, (0, 0, 2)),
+}
+
+
 def _fiches_dir(ctx: ToolContext) -> str:
     """Renvoie le dossier des fiches pour le contexte courant.
     On garde le même sous-dossier que l'original (`data/fiches`) pour pouvoir
@@ -232,7 +307,7 @@ async def fiche_perso_creer_rapide(
     niveau: int = 1,
     pv: int = 0,
     pv_max: int = 0,
-    ca: int = 10,
+    ca: int = 0,
     bab: int = 0,
     carac_texte: str = "",
     sauvegardes_texte: str = "",
@@ -285,86 +360,66 @@ async def fiche_perso_creer_rapide(
             elif current_key and token.isdigit():
                 carac_vals[current_key] = int(token)
                 current_key = ""
+        caracs_explicites = True
     else:
         # Tirage 4d6 garder les 3 meilleurs × 6
         for nom_c in noms_carac:
             quatre = [_rnd.randint(1, 6) for _ in range(4)]
             trois = sorted(quatre, reverse=True)[:3]
             carac_vals[nom_c] = sum(trois)
+        caracs_explicites = False
+
+    # ---- Résolution race (alias FR/EN) + ajustements raciaux 3.5 ----
+    race = race or ""
+    race_key = _norm_key(race)
+    race_norm = _RACE_ALIAS.get(race_key)
+    if not race_norm:
+        for alias, canon_r in _RACE_ALIAS.items():
+            if alias in race_key or race_key in alias:
+                race_norm = canon_r
+                break
+    if race_norm:
+        race = race_norm
+
+    mods_raciaux_txt = ""
+    if not caracs_explicites:
+        mods = _RACE_MODS.get(race_norm or "", {})
+        if mods:
+            for k, v in mods.items():
+                carac_vals[k] = max(1, carac_vals.get(k, 10) + v)
+            mods_raciaux_txt = " (ajustements raciaux inclus : " + \
+                ", ".join(f"{k} {v:+d}" for k, v in mods.items()) + ")"
 
     carac_texte_final = ", ".join(
         f"{k} {v} (mod {_mod(v):+d})" for k, v in carac_vals.items()
     )
 
-    # ---- Résolution race ----
-    race = race or ""
-    race_low = race.lower()
     bonus_con = _mod(carac_vals.get("CON", 10))
     bonus_for = _mod(carac_vals.get("FOR", 10))
     bonus_dex = _mod(carac_vals.get("DEX", 10))
 
-    # ---- Résolution classe + PV / BBA / CA ----
+    # ---- Résolution classe (alias FR/EN) + dé de vie / BBA / saves ----
     classe = classe or ""
-    classe_low = classe.lower()
+    classe_key = _norm_key(classe)
+    canon = _CLASSE_ALIAS.get(classe_key)
+    if not canon:
+        for alias, c in _CLASSE_ALIAS.items():
+            if alias in classe_key or classe_key in alias:
+                canon = c
+                break
+    dv, bab_val, sauvegardes_base = _CLASSES_35.get(canon or "", (10, 0, (0, 0, 0)))
 
-    # Dés de vie par classe (D&D 3.5)
-    dv_par_classe = {
-        "guerrier": 10, "barbare": 12, "paladin": 10, "ranger": 8,
-        "voleur": 6, "barde": 6, "moine": 8,
-        "clerc": 8, "druide": 8,
-        "magicien": 4, "sorcier": 4,
-        "alchimiste": 8, "artificier": 6,
-        "assassin": 6, "necromancien": 4, "ensorcelleur": 4,
-        "harbinger": 4, "fey" : 6, "warlock": 6,
-    }
-    # BBA par classe (niveau 1) — 3/4 BBA = 0, 1/2 BBA = 0 au niv.1
-    bba_par_classe = {
-        "guerrier": 1, "barbare": 1, "paladin": 1, "ranger": 1,
-        "voleur": 0, "barde": 0, "moine": 1,
-        "clerc": 0, "druide": 0,
-        "magicien": 0, "sorcier": 0,
-        "assassin": 0, "warlock": 0,
-    }
-    # Saves de base (Vigueur, Réflexes, Volonté) — (bon, bon, mauvais)
-    saves_par_classe = {
-        "guerrier": (2, 0, 0), "barbare": (2, 0, 0),
-        "paladin": (2, 0, 0), "ranger": (1, 1, 0),
-        "voleur": (0, 2, 0), "barde": (0, 2, 0),
-        "moine": (2, 2, 2),
-        "clerc": (0, 0, 2), "druide": (0, 0, 2),
-        "magicien": (0, 0, 2), "sorcier": (0, 0, 2),
-        "assassin": (0, 2, 0), "warlock": (0, 0, 2),
-    }
-
-    dv = 10
-    for key, val in dv_par_classe.items():
-        if key in classe_low:
-            dv = val
-            break
-
-    pv_roll = _rnd.randint(1, dv)
-    pv_val = pv_roll + bonus_con
-    pv_val = max(pv_val, 1)
+    # PV — PHB 3.5 p.22 : au niveau 1, PV = maximum du dé de vie + mod CON
+    if int(niveau) == 1:
+        pv_roll = dv
+    else:
+        pv_roll = _rnd.randint(1, dv)
+    pv_val = max(pv_roll + bonus_con, 1)
     if not pv_max or pv_max < 1:
         pv_max = pv_val
 
-    bab_val = bab
-    for key, val in bba_par_classe.items():
-        if key in classe_low:
-            bab_val = val
-            break
-
-    # CA = 10 + mod DEX + armure (10 par défaut si pas d'équipement)
-    ca_val = ca
-    if ca <= 10:
-        ca_val = 10 + bonus_dex
-
-    # Sauvegardes
-    sauvegardes_base = (0, 0, 0)
-    for key, val in saves_par_classe.items():
-        if key in classe_low:
-            sauvegardes_base = val
-            break
+    # CA = 10 + mod DEX (sans armure ; l'équipement n'est pas structuré)
+    ca_val = ca if ca > 10 else 10 + bonus_dex
 
     vig = sauvegardes_base[0] + bonus_con
     ref = sauvegardes_base[1] + bonus_dex
@@ -492,7 +547,7 @@ async def fiche_perso_creer_rapide(
     return ToolResult(
         text=(
             f"✅ Fiche créée pour **{nom}** ({race} {classe} "
-            f"niv.{niveau}) — Carac : {carac_summary} — "
+            f"niv.{niveau}) — Carac : {carac_summary}{mods_raciaux_txt} — "
             f"PV {pv}/{pv_max}, CA {ca}, BBA {bab:+d}, "
             f"Sauvegardes : Vigueur {vig:+d}, Réflexes {ref:+d}, Volonté {vol:+d}."
         ),

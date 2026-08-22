@@ -21,17 +21,14 @@ export function PartyPage() {
   const state = useParty((s) => s.state);
   const player = useParty((s) => s.player);
 
-  // Persistence de l'id courant + sert de clé au hook WS.
   useEffect(() => {
     if (partie_id) setPartieId(partie_id);
   }, [partie_id, setPartieId]);
 
-  // Re-bascule à l'accueil si pas de pseudo (nécessaire pour le join).
   useEffect(() => {
     if (!player) navigate("/");
   }, [player, navigate]);
 
-  // Charge l'état persisté côté REST (validation initiale + sidebar droite).
   const partyQuery = useQuery({
     queryKey: ["party", partie_id],
     queryFn: () => api.getParty(partie_id!),
@@ -44,18 +41,17 @@ export function PartyPage() {
     if (etat && !("_erreur" in etat)) setState(etat);
   }, [partyQuery.data, setState]);
 
-  const { sendSay, sendTeamSay } = useChatSocket(partie_id ?? null);
+  const { sendSay, sendTeamSay, socket } = useChatSocket(partie_id ?? null);
 
-  // Affiche le sélecteur de quête en phase "opening" sans quête définie.
   const phase = (state?.phase ?? "").toLowerCase();
   const hasQuest = Boolean(state?.quete?.titre);
   const showPicker = (phase === "opening" || phase === "") && !hasQuest && partie_id;
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 min-h-0 flex">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         <StateSidebar />
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           {showPicker && (
             <div className="p-4 shrink-0">
               <ScenarioPicker partieId={partie_id} />
@@ -63,7 +59,7 @@ export function PartyPage() {
           )}
           <ChatPanel sendSay={sendSay} />
         </div>
-          <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} />
+        <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} socket={socket} />
       </div>
       <RessourcesBar partie_id={partie_id} />
     </div>

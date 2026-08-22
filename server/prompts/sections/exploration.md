@@ -27,6 +27,12 @@ Consignes pour les phases hors combat.
 - **Interpellation** : un seul joueur à la fois, nominativement
   (« ***Alain***, que fais-tu ? »). Veille à la rotation des participants.
 
-- **Transition vers combat** : dès qu'une créature intervient, passe à
-  `demarrer_combat` (phase=combat). La section combats sera injectée au tour
-  suivant.
+- **Transition vers combat** : dès qu'une créature hostile intervient ou qu'un
+  joueur déclare une attaque, appelle `calculer_initiative` puis
+  `demarrer_combat` AVANT de narrer le moindre échange de coups. La section
+  combats sera injectée au tour suivant.
+
+- **Règle absolue des dégâts** : aucun jet d'attaque, de dégâts ou perte de PV
+  ne se narre à la main. Toujours `lancer_attaque` (toucher), `lancer_degats`
+  (dégâts), puis `fiche_perso_infliger_degats` (décrémenter les PV de la cible,
+  PJ ou PNJ). Même pour une escarmouche rapide sans `demarrer_combat`.

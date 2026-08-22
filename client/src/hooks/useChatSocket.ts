@@ -43,6 +43,11 @@ export function useChatSocket(partie_id: string | null) {
   useEffect(() => {
     if (!partie_id || !player) return;
 
+    // Registre global pour les handlers audio WebRTC (relayés via WS).
+    if (!(window as unknown as Record<string, unknown>).__audioHandlers) {
+      (window as unknown as Record<string, unknown>).__audioHandlers = new Map();
+    }
+
     const sock = new ChatSocket(partie_id);
     sockRef.current = sock;
 
@@ -168,7 +173,20 @@ export function useChatSocket(partie_id: string | null) {
         }
         case "team_msg": {
           addTeamMessage(msg.player, msg.text);
-          beep(660, 100);
+          // Son distinctif chat joueurs : double bip aigu
+          beep(880, 80);
+          setTimeout(() => beep(1100, 80), 100);
+          break;
+        }
+        case "audio_signal": {
+          // Signaux WebRTC relayés via le WS serveur (relay simple).
+          const audioHandlers = (window as unknown as Record<string, unknown>).__audioHandlers as
+            | Map<string, (signal: Record<string, unknown>, from: string) => void>
+            | undefined;
+          if (audioHandlers) {
+            const handler = audioHandlers.get("signal");
+            if (handler) handler(msg.signal as Record<string, unknown>, (msg as Record<string, unknown>).player as string);
+          }
           break;
         }
       }

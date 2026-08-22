@@ -62,6 +62,12 @@ interface PartyStore {
   setTeamMessages: (msgs: { player: string; text: string }[]) => void;
   teamUnread: number;
   resetTeamUnread: () => void;
+  // Panneau chat joueurs (basculent avec chat principal)
+  showPlayerChat: boolean;
+  togglePlayerChat: () => void;
+  // Chat audio (WebRTC)
+  audioEnabled: boolean;
+  setAudioEnabled: (v: boolean) => void;
 
   reset: () => void;
 }
@@ -151,8 +157,16 @@ export const useParty = create<PartyStore>((set) => ({
   teamUnread: 0,
   resetTeamUnread: () => set({ teamUnread: 0 }),
 
+  // Panneau chat joueurs
+  showPlayerChat: false,
+  togglePlayerChat: () =>
+    set((st) => ({ showPlayerChat: !st.showPlayerChat, teamUnread: st.showPlayerChat ? st.teamUnread : 0 })),
+  // Chat audio
+  audioEnabled: false,
+  setAudioEnabled: (v) => set({ audioEnabled: v }),
+
   // Conserve player/password : ce sont des choix de session, pas de la partie.
-  reset: () => set({ messages: [], state: null, thinking: false, participants: [], teamMessages: [], teamUnread: 0 }),
+  reset: () => set({ messages: [], state: null, thinking: false, participants: [], teamMessages: [], teamUnread: 0, showPlayerChat: false, audioEnabled: false }),
 }));
 
 export { uid };

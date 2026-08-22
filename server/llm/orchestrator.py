@@ -88,8 +88,15 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_des",
         # Transition exploration → combat : le MJ qui déclenche une rencontre
         # doit pouvoir enchaîner initiative + démarrage du combat immédiatement.
+        # Les tools d'attaque restent aussi exposés en exploration : un petit
+        # modèle oublie souvent `demarrer_combat` — il doit quand même disposer
+        # des VRAIS tools de résolution plutôt que narrer les dégâts à la main.
         "calculer_initiative",
         "demarrer_combat",
+        "lancer_attaque",
+        "lancer_degats",
+        "fiche_perso_infliger_degats",
+        "fiche_perso_soigner",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
     ),
@@ -120,6 +127,13 @@ _log = logging.getLogger("dnd35.orchestrator")
 # --------------------------------------------------------------------------- #
 #  Patterns de « simulation » (à détecter et corriger)
 # --------------------------------------------------------------------------- #
+# Tools de résolution — si l'un a déjà tourné dans le tour, la reformulation
+# prose de son résultat ne compte plus comme simulation.
+_DICE_TOOL_NAMES = {
+    "lancer_d20", "lancer_attaque", "lancer_degats", "lancer_sauvegarde",
+    "lancer_des", "calculer_initiative",
+}
+
 _SIMULATION_PATTERNS = [
     # `[^*]*?` accepte toute parenthèse interne (le text a souvent `())*`).
     re.compile(r"\*\(Simulation\s+de\s+l'appel[^*]*?\)\*", re.IGNORECASE),
@@ -151,12 +165,32 @@ _SIMULATION_PATTERNS = [
     ),
 ]
 
+# Dégâts narrés en prose ("inflige 12 points de dégâts", "subit 5 dégâts") sans
+# appel de lancer_degats. Séparé de _SIMULATION_PATTERNS car la reformulation
+# d'un résultat de tool LÉGITIME utilise la même tournure : on ne l'active que
+# si aucun tool de dés n'a encore été appelé dans le tour (cf. run()).
+_DAMAGE_PROSE_PATTERNS = [
+    # "inflige/infligeant/subit ... 12 (points de) dégâts" — résultat chiffré.
+    # Les descriptions d'armes ("inflige 1d8 dégâts") ne matchent pas : le
+    # nombre doit être immédiatement suivi de "dégâts".
+    re.compile(
+        r"\b(?:inflig\w*|subit|subissent|encourt)\s+(?:\*\*)?\d{1,3}(?:\*\*)?"
+        r"\s*(?:points\s+de\s+)?d[ée]g[âa]ts",
+        re.IGNORECASE,
+    ),
+]
 
-def looks_like_simulation(text: str) -> Optional[str]:
-    """Renvoie le fragment de simulation trouvé, ou None."""
+
+def looks_like_simulation(text: str, include_damage: bool = True) -> Optional[str]:
+    """Renvoie le fragment de simulation trouvé, ou None.
+
+    `include_damage=False` désactive les patterns de dégâts en prose — utilisé
+    quand un tool de dés a déjà tourné dans le tour : la reformulation du
+    résultat ("La créature subit 7 dégâts") est alors légitime.
+    """
     if not text:
         return None
-    for pat in _SIMULATION_PATTERNS:
+    for pat in _SIMULATION_PATTERNS + (_DAMAGE_PROSE_PATTERNS if include_damage else []):
         m = pat.search(text)
         if m:
             return m.group(0)
@@ -234,7 +268,7 @@ class Orchestrator:
         tools: dict[str, ToolSpec],
         tool_mode: str = "prompt",   # "native" | "prompt" | "auto"
         detect_simulation: bool = True,
-        max_iterations: int = 6,
+        max_iterations: int = 10,
     ):
         self.client = client
         self.tools = tools
@@ -325,7 +359,14 @@ class Orchestrator:
 
             # --- A. Détection de simulation textuelle ----------------------
             if self.detect_simulation:
-                sim = looks_like_simulation(chat.content)
+                # Si un tool de dés a déjà tourné dans CE tour, la reformulation
+                # du résultat ("il subit 7 dégâts") est légitime : on désactive
+                # les patterns de dégâts en prose pour éviter un faux positif.
+                dice_used = any(
+                    tc.get("name") in _DICE_TOOL_NAMES
+                    for tc in result.tool_calls_trace
+                )
+                sim = looks_like_simulation(chat.content, include_damage=not dice_used)
                 if sim:
                     result.simulation_attempted = True
                     if result.corrections < 2:
@@ -394,9 +435,42 @@ class Orchestrator:
             else:
                 narration = chat.content
             # Filet de sécurité : même en streaming, un bloc thinking peut
-            # fuiter (tags coupés entre chunks) — on re-nettoie la narration
+            # fuir (tags coupés entre chunks) — on re-nettoie la narration
             # finale avant historique/broadcast.
             narration = _strip_thinking(narration)
+
+            # --- D1bis. Simulation dans la narration FINALE (streamée) ------
+            # Le check A porte sur le premier échantillon (chat non streamé) ;
+            # la narration vient d'un second appel en streaming qui peut encore
+            # contenir des jets simulés. On re-vérifie ici : les deltas déjà
+            # poussés au client seront remplacés par le dm final corrigé.
+            if self.detect_simulation and narration.strip() and result.corrections < 3:
+                dice_used = any(
+                    tc.get("name") in _DICE_TOOL_NAMES
+                    for tc in result.tool_calls_trace
+                )
+                sim_final = looks_like_simulation(narration, include_damage=not dice_used)
+                if sim_final:
+                    result.simulation_attempted = True
+                    result.corrections += 1
+                    _log.warning(
+                        "simulation dans narration streamée (« %s », correction %d) — relance",
+                        sim_final, result.corrections,
+                    )
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "⚠️ CORRECTION : ta narration contient "
+                            f"« {sim_final} » — un résultat de jet écrit à la main. "
+                            "C'est interdit : chaque jet (attaque, dégâts, sauvegarde, "
+                            "compétence) DOIT passer par l'appel réel de l'outil "
+                            "(lancer_attaque, lancer_degats, lancer_sauvegarde, "
+                            "lancer_d20...). Recommence ce tour : appelle l'outil, "
+                            "attends son résultat, puis narre l'issue en reprenant "
+                            "le chiffre donné par l'outil."
+                        ),
+                    ))
+                    continue
 
             # --- D2. Rattrapage : contenu vide après stripping thinking -----
             # Gemma 4 E4B renvoie parfois des réponses entièrement thinking
@@ -440,35 +514,53 @@ class Orchestrator:
                 "tool loop épuisé (iterations=%d, corrections=%d) — fallback narration",
                 result.iterations, result.corrections,
             )
-            fallback_msg = Message(
-                role="system",
-                content=(
-                    "Tu as épuisé tes tours d'appels d'outils. Synthétise "
-                    "maintenant une réponse de narration complète au joueur "
-                    "en t'appuyant sur les résultats des tools ci-dessus. "
-                    "N'invoque plus aucun tool — raconte la suite au joueur."
-                ),
-            )
-            final_work = work + [fallback_msg]
-            try:
-                if on_delta:
-                    collected = ""
-                    async for token in self.client.stream_chat(final_work, tools=None):
-                        collected += token
-                        await on_delta(token)
-                    narration = collected
-                else:
-                    fb = await self.client.chat(final_work, tools=None)
-                    narration = fb.content
-                narration = _strip_thinking(narration).strip()
-            except Exception as e:
-                _log.warning("narration fallback échoué : %s", e)
-                narration = ""
+            narration = await self._force_final_narration(work, on_delta)
             result.narration = narration or (
                 work[-1].content if work and work[-1].role == "assistant" else ""
             )
 
+        # Filet ultime : narration vide après break (ex. Gemma en thinking pur
+        # malgré 3 corrections) → un dernier appel sans tools, jamais un dm vide.
+        if not result.narration.strip():
+            _log.warning("narration finale vide — fallback sans tools")
+            narration = await self._force_final_narration(work, on_delta)
+            result.narration = narration or (
+                "(Le Maître du Jeu marque une pause… Reformulez votre action.)"
+            )
+
         return result
+
+    # ------------------------------------------------------------------ #
+    async def _force_final_narration(
+        self,
+        work: list[Message],
+        on_delta: Optional[Callable[[str], Awaitable[None]]],
+    ) -> str:
+        """Dernier appel SANS tools pour forcer une narration clôturante."""
+        fallback_msg = Message(
+            role="system",
+            content=(
+                "Tu as épuisé tes tours d'appels d'outils. Synthétise "
+                "maintenant une réponse de narration complète au joueur "
+                "en t'appuyant sur les résultats des tools ci-dessus. "
+                "N'invoque plus aucun tool — raconte la suite au joueur."
+            ),
+        )
+        final_work = work + [fallback_msg]
+        try:
+            if on_delta:
+                collected = ""
+                async for token in self.client.stream_chat(final_work, tools=None):
+                    collected += token
+                    await on_delta(token)
+                narration = collected
+            else:
+                fb = await self.client.chat(final_work, tools=None)
+                narration = fb.content
+            return _strip_thinking(narration).strip()
+        except Exception as e:                                   # noqa: BLE001
+            _log.warning("narration fallback échoué : %s", e)
+            return ""
 
     # ------------------------------------------------------------------ #
     async def _exec_tool_calls(
@@ -508,7 +600,7 @@ class Orchestrator:
                 role="tool",
                 name=name,
                 tool_call_id=call.get("id") or name,
-                content=tr.text,
+                content=self._cap_tool_text(tr.text),
             ))
 
     async def _exec_tool_calls_prompt(
@@ -538,8 +630,20 @@ class Orchestrator:
             work.append(Message(
                 role="tool",
                 name=name,
-                content=tr.text,
+                content=self._cap_tool_text(tr.text),
             ))
+
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _cap_tool_text(text: str, limit: int = 6000) -> str:
+        """Tronque un résultat de tool volumineux avant réinjection dans le
+        contexte LLM. Un texte intégral de PDF (24k chars ≈ 10k tokens) sature
+        num_ctx et fait échouer chat/completions (400 llama.cpp). Le LLM n'a
+        besoin que de l'essentiel pour agir ; la trace complète reste visible
+        dans les logs."""
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "\n…[résultat tronqué pour préserver le contexte]"
 
     # ------------------------------------------------------------------ #
     def _reply_tool_error(

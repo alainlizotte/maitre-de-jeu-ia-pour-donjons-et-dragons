@@ -21,7 +21,7 @@ class LLMConfig:
     max_context_tokens: int = 8192
     tool_mode: str = "prompt"        # "native" | "prompt" | "auto"
     detect_simulation: bool = True
-    max_tool_iterations: int = 6
+    max_tool_iterations: int = 10
     think: bool = False              # désactive le thinking/réflexion (Gemma 4, Qwen3…)
     # Options natives transmises à Ollama via le champ `options` du payload
     # OpenAI-compatible (ex: num_ctx, top_k, seed, …). Calibré par l'utilisateur

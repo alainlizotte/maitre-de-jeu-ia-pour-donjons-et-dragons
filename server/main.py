@@ -643,6 +643,21 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                 })
                 continue
 
+            if mtype == "audio_signal":
+                # Relay WebRTC : signal ICE/offer/answer vers tous les AUTRES joueurs.
+                signal_payload = msg.get("signal", {})
+                for conn in session.connections:
+                    if conn is not ws:
+                        try:
+                            await conn.send_json({
+                                "type": "audio_signal",
+                                "player": player,
+                                "signal": signal_payload,
+                            })
+                        except Exception:
+                            pass
+                continue
+
             await ws.send_json({"type": "sys", "event": "error",
                                 "detail": f"type inconnu: {mtype}"})
     except WebSocketDisconnect:

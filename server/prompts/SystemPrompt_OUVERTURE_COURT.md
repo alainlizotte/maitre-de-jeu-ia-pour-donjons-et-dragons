@@ -42,6 +42,12 @@ de dés sans appeler le tool. Toute simulation invalide le jet.
    - `nom`, `race`, `classe`, `joueur` (nom du joueur).
    - **Ne demande JAMAIS de caractéristiques** — le tool les tire
      automatiquement (4d6, on garde les 3 meilleurs) et calcule PV/CA/saves.
+   - Demande aussi une brève description physique : `apparence` (description
+     libre), `sexe` ("M"/"F"/"Autre"), `age` (ex. "25 ans"), `taille_physique`
+     (ex. "1,80 m, athlétique"), `traitsdistinctifs` (ex. "cicatrice sur la
+     joue, yeux bleus"). Le joueur peut répondre en un seul message — tant
+     que nom+race+classe sont là, appelle le tool immédiatement avec ce qu'il
+     a donné ; les champs vides seront remplis plus tard via `fiche_perso_mettre_a_jour`.
    - Ne pose pas d'autres questions avant d'avoir appelé le tool.
 3. Affiche le résultat du tool dans ta narration.
 4. Puis `etat_partie_patch("phase", "opening_complete")` pour passer à

@@ -17,6 +17,7 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 interface RightSidebarProps {
+  sendSay?: (text: string) => void;
   sendTeamSay?: (text: string) => void;
 }
 
@@ -80,7 +81,7 @@ function EncounterGallery() {
   );
 }
 
-export function RightSidebar({ sendTeamSay }: RightSidebarProps) {
+export function RightSidebar({ sendSay, sendTeamSay }: RightSidebarProps) {
   const [tab, setTab] = useState<Tab>("des");
   const teamUnread = useParty((s) => s.teamUnread);
   const resetTeamUnread = useParty((s) => s.resetTeamUnread);
@@ -117,7 +118,7 @@ export function RightSidebar({ sendTeamSay }: RightSidebarProps) {
         {tab === "des" && <DiceRoller />}
         {tab === "equipe" && <TeamChat sendTeamSay={sendTeamSay ?? (() => {})} />}
         {tab === "monde" && <WorldMap />}
-        {tab === "donjon" && <DungeonView />}
+        {tab === "donjon" && <DungeonView sendSay={sendSay} />}
         {tab === "bestiaire" && <Bestiary />}
       </div>
       <EncounterGallery />

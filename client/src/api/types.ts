@@ -35,7 +35,10 @@ export interface InitiativeEntry {
   nom: string;
   bonus?: number;
   jet?: number;
-  total: number;
+  init?: number;
+  total?: number;
+  jet_brut?: number;
+  mod?: number;
   type?: "pj" | "pnj" | "monstre";
 }
 
@@ -130,6 +133,7 @@ export interface Scenario {
   theme: string;
   pitch: string;
   source: string;
+  fichier?: string | null;
 }
 
 /** /api/ressources — liens permanents affichés dans la barre de ressources. */

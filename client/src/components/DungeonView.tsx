@@ -26,7 +26,11 @@ function cellColor(cell: DonjonCellule): string {
   return "bg-stone-800 border-stone-700";
 }
 
-export function DungeonView() {
+interface DungeonViewProps {
+  sendSay?: (text: string) => void;
+}
+
+export function DungeonView({ sendSay }: DungeonViewProps) {
   const state = useParty((s) => s.state);
   const donjon = state?.donjon as DonjonState | undefined;
   const grille = donjon?.grille as DonjonCellule[] | undefined;
@@ -62,12 +66,14 @@ export function DungeonView() {
   const cellsByPos = new Map<string, DonjonCellule>();
   let maxX = 0;
   let maxY = 0;
+  let courantCell: DonjonCellule | null = null;
   for (const cell of grille) {
     const x = cell.x ?? 0;
     const y = cell.y ?? 0;
     cellsByPos.set(`${x},${y}`, cell);
     if (x > maxX) maxX = x;
     if (y > maxY) maxY = y;
+    if (cell.courant) courantCell = cell;
   }
 
   const rows: (DonjonCellule | null)[][] = [];
@@ -78,6 +84,12 @@ export function DungeonView() {
     }
     rows.push(row);
   }
+
+  // Portes disponibles de la salle courante
+  const portes = courantCell?.portes ?? [];
+  const goDir = (dir: string) => {
+    if (sendSay) sendSay(`Je vais au ${dir}`);
+  };
 
   return (
     <div>
@@ -99,7 +111,7 @@ export function DungeonView() {
               <div
                 key={`${rx}-${ry}`}
                 className={`w-6 h-6 rounded-sm border flex items-center justify-center text-[8px] ${cell ? cellColor(cell) : "bg-transparent border-transparent"}`}
-                title={cell?.id ?? ""}
+                title={cell?.type ?? ""}
               >
                 {cell?.courant ? "◆" : cell?.visite ? "·" : ""}
               </div>
@@ -107,6 +119,54 @@ export function DungeonView() {
           )}
         </div>
       </div>
+
+      {/* Boutons directionnels */}
+      {sendSay && portes.length > 0 && (
+        <div className="flex flex-col items-center gap-1 mt-3">
+          <div className="flex gap-1">
+            {portes.includes("nord") && (
+              <button
+                onClick={() => goDir("nord")}
+                className="w-16 h-7 rounded bg-stone-700 hover:bg-amber-700 text-stone-200 text-xs font-medium transition-colors"
+              >
+                ↑ Nord
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {portes.includes("ouest") && (
+              <button
+                onClick={() => goDir("ouest")}
+                className="w-16 h-7 rounded bg-stone-700 hover:bg-amber-700 text-stone-200 text-xs font-medium transition-colors"
+              >
+                ← Ouest
+              </button>
+            )}
+            <div className="w-16 h-7 rounded bg-stone-800 border border-stone-600 flex items-center justify-center text-[10px] text-stone-500">
+              ◆ ici
+            </div>
+            {portes.includes("est") && (
+              <button
+                onClick={() => goDir("est")}
+                className="w-16 h-7 rounded bg-stone-700 hover:bg-amber-700 text-stone-200 text-xs font-medium transition-colors"
+              >
+                Est →
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {portes.includes("sud") && (
+              <button
+                onClick={() => goDir("sud")}
+                className="w-16 h-7 rounded bg-stone-700 hover:bg-amber-700 text-stone-200 text-xs font-medium transition-colors"
+              >
+                ↓ Sud
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="mt-2 text-xs text-stone-400 text-center">
         {visitees.length} salle{visitees.length !== 1 ? "s" : ""} visitée{visitees.length !== 1 ? "s" : ""}
         {" · "}

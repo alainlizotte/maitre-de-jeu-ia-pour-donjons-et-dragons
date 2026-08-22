@@ -75,11 +75,25 @@ export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
             <div className="flex items-baseline gap-2 mb-1">
               <span className="text-amber-400 font-mono text-[10px]">[{s.id}]</span>
               <span className="text-stone-100 text-sm font-medium">{s.titre}</span>
+              {s.fichier && (
+                <span className="text-emerald-400 text-[10px]" title="PDF complet disponible">📄</span>
+              )}
             </div>
             <div className="text-stone-500 text-[10px] mb-1">
               Niveaux {s.niveau} — {s.theme}
             </div>
             <div className="text-stone-300 text-xs line-clamp-2">{s.pitch}</div>
+            {s.fichier && (
+              <a
+                href={s.fichier}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-emerald-400 hover:text-emerald-300 text-[10px] mt-1 inline-block underline"
+              >
+                Consulter le PDF
+              </a>
+            )}
           </button>
         ))}
       </div>

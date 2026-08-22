@@ -1,0 +1,51 @@
+[
+  {
+    "id": "L1",
+    "titre": "La Voix sous les Pavés",
+    "niveau": "1–3",
+    "theme": "Enquête urbaine / politique",
+    "pitch": "Disparitions dans les bas-quartiers de Laelith ; une voix attire les âmes égarées dans les égouts."
+  },
+  {
+    "id": "L2",
+    "titre": "Les Échos de la Tour Brisée",
+    "niveau": "3–5",
+    "theme": "Donjon / magie ancienne",
+    "pitch": "Un arcane déchu a laissé une tour en ruines, lueurs nocturnes, bestioles mange-bétail."
+  },
+  {
+    "id": "L3",
+    "titre": "Le Sel Noir de la Côte",
+    "niveau": "2–4",
+    "theme": "Maritime / contrebande",
+    "pitch": "Brigands attaquant les convois de sel ; derrière eux une organisation plus large."
+  },
+  {
+    "id": "L4",
+    "titre": "La Complainte des Bois-Ombres",
+    "niveau": "4–6",
+    "theme": "Forêt maudite / fey",
+    "pitch": "Une forêt voisine se meurt ; les druides implorent les aventuriers."
+  },
+  {
+    "id": "L5",
+    "titre": "Le Trône de Cendre",
+    "niveau": "6–9",
+    "theme": "Politique de cour / trahison",
+    "pitch": "Mort suspecte d'un député de Laelith ; l'assassin doit être découvert avant qu'il ne frappe à nouveau."
+  },
+  {
+    "id": "L6",
+    "titre": "Le Tombeau de Selvar le Sombre",
+    "niveau": "5–7",
+    "theme": "Donjon funéraire / mort-vivant",
+    "pitch": "Le tombeau d'un ancien sorcier s'ouvre ; les pillards ne reviennent jamais."
+  },
+  {
+    "id": "L7",
+    "titre": "Le Marchand de Sable",
+    "niveau": "2–4",
+    "theme": "Voyage / commerce mystérieux",
+    "pitch": "Un marchand ambulant propose des objets magiques à prix ridicule. Que cache sa caravane ?"
+  }
+]

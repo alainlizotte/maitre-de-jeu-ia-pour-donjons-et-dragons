@@ -345,21 +345,35 @@ export function StateSidebar() {
 
       {state.initiative && state.initiative.length > 0 && (
         <div className="mb-4">
-          <h3 className="text-xs uppercase text-stone-500 mb-1">Initiative</h3>
+          <h3 className="text-xs uppercase text-stone-500 mb-1">
+            ⚔️ Initiative — Tour {state.tour}
+          </h3>
           <ul className="space-y-0.5 text-sm">
             {state.initiative.map((it, i) => (
               <li
                 key={i}
                 className={
-                  "flex justify-between px-2 py-0.5 rounded " +
-                  (state.courant_tour_pour === it.nom ? "bg-amber-900/50 text-amber-100" : "")
+                  "flex justify-between px-2 py-1 rounded " +
+                  (state.courant_tour_pour === it.nom
+                    ? "bg-amber-800/60 text-amber-100 font-medium border border-amber-600/40"
+                    : "text-stone-300")
                 }
               >
-                <span>{it.nom}</span>
-                <span className="text-stone-400 tabular-nums">{it.total}</span>
+                <span>
+                  {state.courant_tour_pour === it.nom && <span className="mr-1">▶</span>}
+                  {it.nom}
+                </span>
+                <span className="text-stone-400 tabular-nums text-xs">
+                  {it.init ?? it.total ?? "?"}
+                </span>
               </li>
             ))}
           </ul>
+          {state.courant_tour_pour && (
+            <div className="text-xs text-amber-400 mt-1 text-center italic">
+              C'est au tour de <strong>{state.courant_tour_pour}</strong>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 // Hook — branche une ChatSocket sur `/ws/{partie_id}` avec le store Zustand.
 // Gère le rejeu de l'historique au `joined` et l'accumulation des deltas.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { ChatSocket } from "../api/ws";
 import { encounterFromUrl } from "../api/rest";
 import type { ChatMessage, ToolEvent, WsMessage } from "../api/types";
@@ -23,6 +23,22 @@ export function useChatSocket(partie_id: string | null) {
   const setTeamMessages = useParty((s) => s.setTeamMessages);
   const player = useParty((s) => s.player);
   const lastJoinRef = useRef<string>("");
+
+  const beep = useCallback((freq = 800, duration = 120, vol = 0.15) => {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
+      osc.stop(ctx.currentTime + duration / 1000);
+      setTimeout(() => ctx.close(), duration + 100);
+    } catch { /* audio non disponible */ }
+  }, []);
 
   useEffect(() => {
     if (!partie_id || !player) return;
@@ -147,10 +163,12 @@ export function useChatSocket(partie_id: string | null) {
           }
           streamId.current = null;
           setThinking(false);
+          beep(520, 150);
           break;
         }
         case "team_msg": {
           addTeamMessage(msg.player, msg.text);
+          beep(660, 100);
           break;
         }
       }

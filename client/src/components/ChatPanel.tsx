@@ -25,7 +25,7 @@ function MessageView({ m }: { m: ChatMessage }) {
   }
   if (m.role === "system") {
     return (
-      <div className="my-2 text-center text-xs text-stone-500">
+      <div className="my-2 text-center text-xs text-stone-500 max-w-[90%] mx-auto">
         {m.image ? (
           <img
             src={m.image}
@@ -33,7 +33,11 @@ function MessageView({ m }: { m: ChatMessage }) {
             className="max-h-48 mx-auto rounded shadow mb-1"
           />
         ) : null}
-        {m.content}
+        <div
+          className="inline-block text-left bg-stone-800/50 rounded px-3 py-2 prose-chat text-stone-400"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
+        />
       </div>
     );
   }

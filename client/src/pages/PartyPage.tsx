@@ -63,7 +63,7 @@ export function PartyPage() {
           )}
           <ChatPanel sendSay={sendSay} />
         </div>
-        <RightSidebar sendTeamSay={sendTeamSay} />
+          <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} />
       </div>
       <RessourcesBar partie_id={partie_id} />
     </div>

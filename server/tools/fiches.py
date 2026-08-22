@@ -314,13 +314,16 @@ async def fiche_perso_creer_rapide(
         "clerc": 8, "druide": 8,
         "magicien": 4, "sorcier": 4,
         "alchimiste": 8, "artificier": 6,
+        "assassin": 6, "necromancien": 4, "ensorcelleur": 4,
+        "harbinger": 4, "fey" : 6, "warlock": 6,
     }
-    # BBA par classe (niveau 1)
+    # BBA par classe (niveau 1) — 3/4 BBA = 0, 1/2 BBA = 0 au niv.1
     bba_par_classe = {
         "guerrier": 1, "barbare": 1, "paladin": 1, "ranger": 1,
-        "voleur": 0, "barde": 0, "moine": 0,
+        "voleur": 0, "barde": 0, "moine": 1,
         "clerc": 0, "druide": 0,
         "magicien": 0, "sorcier": 0,
+        "assassin": 0, "warlock": 0,
     }
     # Saves de base (Vigueur, Réflexes, Volonté) — (bon, bon, mauvais)
     saves_par_classe = {
@@ -330,6 +333,7 @@ async def fiche_perso_creer_rapide(
         "moine": (2, 2, 2),
         "clerc": (0, 0, 2), "druide": (0, 0, 2),
         "magicien": (0, 0, 2), "sorcier": (0, 0, 2),
+        "assassin": (0, 2, 0), "warlock": (0, 0, 2),
     }
 
     dv = 10

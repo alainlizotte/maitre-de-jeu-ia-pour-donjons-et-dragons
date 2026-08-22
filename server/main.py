@@ -373,13 +373,18 @@ async def get_fiche(nom: str, partie_id: Optional[str] = None) -> dict[str, Any]
     portrait = None
     portraits_dir = cfg.abs(cfg.paths.data_dir) / "portraits_cache"
     # Cherche d'abord le portrait party_id-specific, puis le fallback generic.
-    candidates = [f"{_slug(nom)}.png"]
+    # Extensions : .png en priorité, puis .svg (placeholder).
+    base_slugs = [f"{_slug(nom)}"]
     if partie_id:
-        candidates.insert(0, f"{partie_id}_{_slug(nom)}.png")
-    for candidate in candidates:
-        png = portraits_dir / candidate
-        if png.is_file():
-            portrait = f"/data/portraits_cache/{candidate}"
+        base_slugs.insert(0, f"{partie_id}_{_slug(nom)}")
+    for base in base_slugs:
+        for ext in (".png", ".svg"):
+            candidate = f"{base}{ext}"
+            png = portraits_dir / candidate
+            if png.is_file():
+                portrait = f"/data/portraits_cache/{candidate}"
+                break
+        if portrait:
             break
     return {"fiche": fiche, "portrait": portrait}
 
@@ -471,6 +476,7 @@ async def list_scenarios(partie_id: Optional[str] = None) -> list[dict[str, Any]
             "theme": s.get("theme", ""),
             "pitch": s.get("pitch", ""),
             "source": s.get("source", ""),
+            "fichier": ("/data/" + s["fichier"]) if s.get("fichier") else None,
         }
         for s in cat
     ]

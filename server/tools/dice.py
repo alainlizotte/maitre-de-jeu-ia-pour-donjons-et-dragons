@@ -30,6 +30,8 @@ async def lancer_d20(
     modificateur: int,
     raison: str,
     difficulte: Optional[int] = None,
+    nom_personnage: str = "",
+    competence: str = "",
 ) -> ToolResult:
     """
     Lance un d20 et ajoute un modificateur. Renvoie formule, jet brut, total et
@@ -39,15 +41,64 @@ async def lancer_d20(
     :param modificateur (int): modificateur applicable (carac + rangs + divers).
     :param raison (str): brève description du jet (ex. "Escalade d'un mur de 6 m").
     :param difficulte (int): DD à atteindre pour réussir. Optionnel.
+    :param nom_personnage (str): nom du PJ qui tente le jet. Avec `competence`,
+        le modificateur est recalculé depuis sa fiche (rangs + mod. carac) —
+        à fournir systématiquement pour un jet de compétence.
+    :param competence (str): compétence concernée (ex. "Discrétion", "Fouille").
     """
+    # --- Recoupement fiche (conformité 3.5) --------------------------------
+    # Un petit LLM fournit souvent modificateur=0 en ignorant les rangs et le
+    # mod. de caractéristique. Si nom_personnage + competence sont donnés et
+    # que la fiche contient des rangs, on recalcule rangs + mod. carac.
+    mod_final = modificateur
+    note_mod = ""
+    if nom_personnage and competence:
+        try:
+            from .fiches import _chemin  # pylint: disable=import-outside-toplevel
+            import os as _os                             # noqa: I001
+            import unicodedata as _uni
+
+            def _norm(s: str) -> str:
+                nf = _uni.normalize("NFKD", (s or "").lower())
+                return "".join(c for c in nf if not _uni.combining(c)).strip()
+
+            path = _chemin(ctx, nom_personnage)
+            if _os.path.isfile(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    fiche = json.load(f)
+                comps = fiche.get("competences") or {}
+                rangs = 0
+                for nom_c, r in comps.items():
+                    if _norm(nom_c) == _norm(competence):
+                        rangs = int(r or 0)
+                        break
+                if rangs > 0:
+                    from ..catalogue import COMPETENCES  # pylint: disable=import-outside-toplevel
+                    cara_cle = next(
+                        (c["cara"] for c in COMPETENCES
+                         if _norm(c["nom"]) == _norm(competence)), "DEX",
+                    )
+                    val = int((fiche.get("carac") or {}).get(cara_cle, 10) or 10)
+                    calc = rangs + (val - 10) // 2
+                    if calc != modificateur:
+                        mod_final = calc
+                        note_mod = (
+                            f"\n- ⚠️ Modificateur recalculé {modificateur:+d} → "
+                            f"{calc:+d} (fiche de {nom_personnage} : "
+                            f"{competence} {rangs} rangs + "
+                            f"{cara_cle} {val} ({(val - 10) // 2:+d}))."
+                        )
+        except Exception:                                       # noqa: BLE001
+            pass  # fiche/compétence indisponible → modificateur fourni
+
     jet = random.randint(1, 20)
-    total = jet + modificateur
+    total = jet + mod_final
     critique = jet == 20
     fumble = jet == 1
     lignes = [
         f"🎯 **Jet de d20** — {raison}",
         f"- Jet brut : {jet}",
-        f"- Modificateur : {modificateur:+d}",
+        f"- Modificateur : {mod_final:+d}" + note_mod,
         f"- **Total : {total}**",
     ]
     if critique:

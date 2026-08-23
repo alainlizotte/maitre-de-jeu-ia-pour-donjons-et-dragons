@@ -1,14 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Analyseur de conformité D&D 3.5 — lit /tmp/sim_state.json + l'état de la partie
-et vérifie l'application des règles officielles."""
+"""Analyseur de conformité D&D 3.5 — lit un fichier d'état de simulation
+(sim_state.json ou form_state.json) + l'état de la partie et vérifie
+l'application des règles officielles.
+
+Usage: python check_rules.py [fichier_etat] [--armures]
+"""
 import json
 import re
 import sys
 import urllib.request
+from urllib.parse import quote
 
 BASE = "http://127.0.0.1:8000"
 DICE_TOOLS = {"lancer_attaque", "lancer_degats", "lancer_d20", "lancer_sauvegarde",
-              "calculer_initiative", "demarrer_combat", "fiche_perso_infliger_degats"}
+              "calculer_initiative", "demarrer_combat", "fiche_perso_infliger_degats",
+              "lancer_des"}
 
 issues = []
 oks = []
@@ -22,7 +28,8 @@ def check(cond, ok_msg, ko_msg):
 
 
 def main():
-    with open("/tmp/sim_state.json", encoding="utf-8") as f:
+    state_file = sys.argv[1] if len(sys.argv) > 1 else "/tmp/sim_state.json"
+    with open(state_file, encoding="utf-8") as f:
         st = json.load(f)
     pid = st["party_id"]
 
@@ -35,11 +42,16 @@ def main():
     print(f"PJ: {[(p['nom'], p['pv'], p['pv_max'], p['ca']) for p in etat['pj']]}")
     print(f"initiative: {len(etat.get('initiative') or [])} | histoire: {len(etat.get('histoire') or [])}")
 
-    # --- 2. Fiches : vérif règles de création ---
+    # --- 2. Fiches : vérif règles de création (CA armure via /api/fiches) ---
     print("\n--- FICHES (règles de création 3.5) ---")
+    ARMURES_35 = {  # (bonus, dex_max)
+        "Armure rembourrée": (1, 8), "Armure de cuir": (2, 6), "Cuir clouté": (3, 5),
+        "Chemise de mailles": (4, 4), "Cuir épais": (3, 4), "Armure d'écailles": (4, 3),
+        "Cotte de mailles": (5, 2), "Plastron": (5, 3), "Harnois complet": (8, 1),
+    }
+    BOUCLIERS_35 = {"Targe": 1, "Bouclier bois léger": 1, "Bouclier bois lourd": 2}
     for pj in etat["pj"]:
         nom = pj["nom"]
-        from urllib.parse import quote
         with urllib.request.urlopen(
             f"{BASE}/api/fiches/{quote(nom)}?partie_id={pid}"
         ) as r:
@@ -47,15 +59,19 @@ def main():
         f = fiche.get("fiche", fiche)
         caracs = f.get("carac") or {}
         mods = {k: (v - 10) // 2 for k, v in caracs.items()}
-        # CA = 10 + mod DEX (sans armure structurée)
-        ca_attendue = 10 + mods.get("DEX", 0)
-        check(pj["ca"] >= ca_attendue,
-              f"{nom}: CA {pj['ca']} >= 10+Dex({ca_attendue})",
-              f"{nom}: CA {pj['ca']} < minimum {ca_attendue} (mod Dex ignoré ?)")
+        equip_noms = [e.get("nom", "") for e in (f.get("equipement") or [])]
+        corps = [ARMURES_35[n] for n in equip_noms if n in ARMURES_35]
+        bouclier = max((BOUCLIERS_35[n] for n in equip_noms if n in BOUCLIERS_35), default=0)
+        b_ca, dex_max = max(corps, key=lambda x: x[0]) if corps else (0, 99)
+        ca_attendue = 10 + b_ca + bouclier + min(mods.get("DEX", 0), dex_max)
+        check(pj["ca"] == ca_attendue,
+              f"{nom}: CA {pj['ca']} = 10+armure({b_ca})+bouclier({bouclier})+Dex plafonnée",
+              f"{nom}: CA {pj['ca']} ≠ attendue {ca_attendue} (armure ignorée ?)")
         # PV niveau 1 = max dé vie + mod CON
-        dv = {"Guerrier": 10, "Magicien": 4, "Voleur": 6, "Roublard": 6, "Rogue": 6,
-              "Clerc": 8, "Druide": 8, "Barde": 6, "Paladin": 10, "Ranger": 8,
-              "Moine": 8, "Sorcier": 4, "Barbare": 12}.get(str(pj.get("classe", "")), None)
+        dv = {"Guerrier": 10, "Magicien": 4, "Voleur": 6, "Rogue": 6,
+              "Clerc": 8, "Druide": 8, "Barde": 6, "Paladin": 10, "Rodeur": 8,
+              "Ranger": 8, "Moine": 8, "Sorcier": 4, "Barbare": 12}.get(
+                  str(pj.get("classe", "")), None)
         if dv:
             pv_attendus = dv + mods.get("CON", 0)
             check(pj["pv_max"] == pv_attendus,
@@ -93,6 +109,10 @@ def main():
                 n_degats += 1
             elif n == "lancer_d20":
                 n_d20 += 1
+                # Recoupement fiche actif sur les jets de compétence
+                if args.get("nom_personnage") and args.get("competence"):
+                    n_skill_fiche = getattr(main, "_n_skill_fiche", 0)
+                    main._n_skill_fiche = n_skill_fiche + 1
             elif n == "demarrer_combat":
                 check(True, "demarrer_combat appelé", "")
         # dégâts narrés sans tool dans le tour
@@ -100,7 +120,8 @@ def main():
             if not has_dice:
                 simu_en_prose.append((e["label"], m.group(0)))
 
-    print(f"lancer_attaque: {n_attack} | lancer_degats: {n_degats} | lancer_d20: {n_d20}")
+    print(f"lancer_attaque: {n_attack} | lancer_degats: {n_degats} | lancer_d20: {n_d20}"
+          f" | dont jets compétence avec fiche: {getattr(main, '_n_skill_fiche', 0)}")
     if simu_en_prose:
         for lbl, s in simu_en_prose[:10]:
             issues.append(f"dégâts narrés sans tool ({lbl}): …{s}…")

@@ -52,10 +52,13 @@ export class ChatSocket {
     }
   }
 
-  join(player: string, password?: string): void {
+  join(player: string, password?: string, personnage?: string): void {
     const payload: Record<string, unknown> = { type: "join", player };
     // Mot de passe requis pour les parties protégées (sinon ignoré côté serveur).
     if (password) payload.password = password;
+    // Personnage choisi dans le menu déroulant de l'accueil — le serveur
+    // enregistre le PJ dans l'état de la partie.
+    if (personnage) payload.personnage = personnage;
     this.send(payload);
   }
 

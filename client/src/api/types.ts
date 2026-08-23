@@ -81,7 +81,7 @@ export interface ChatMessage {
 // --------------------------------------------------------------------------- //
 export type WsMessage =
   | { type: "sys"; event: "joined"; partie_id: string; participants: string[]; history: { role: string; content: string }[]; team_history: { player: string; text: string }[] }
-  | { type: "sys"; event: "participant_joined"; player: string }
+  | { type: "sys"; event: "participant_joined"; player: string; personnage?: string | null }
   | { type: "sys"; event: "auth_required"; detail?: string }
   | { type: "sys"; event: "auth_failed"; detail: string }
   | { type: "sys"; event: "error"; detail: string }
@@ -143,4 +143,143 @@ export interface Ressources {
   cartes: { titre: string; url: string }[];
   scenarios: { id: string; titre: string; niveau: string; url: string }[];
   donjon: string | null;
+}
+
+// --------------------------------------------------------------------------- //
+//  Authentification (comptes locaux) — /api/auth/*
+// --------------------------------------------------------------------------- //
+export interface AuthResponse {
+  token: string;
+  utilisateur: string;
+}
+
+// --------------------------------------------------------------------------- //
+//  Personnages joueurs — « Mes personnages » (/api/persos/*)
+// --------------------------------------------------------------------------- //
+export type CaracCle = "FOR" | "DEX" | "CON" | "INT" | "SAG" | "CHA";
+export type CaracMap = Record<CaracCle, number>;
+
+export interface Apparence {
+  sexe?: string;
+  age?: string;
+  taille_physique?: string;
+  poids?: string;
+  yeux?: string;
+  cheveux?: string;
+  peau?: string;
+  description?: string;
+}
+
+/** Fiche personnage complète — miroir de server/persos.py. */
+export interface FichePerso {
+  nom: string;
+  joueur?: string;
+  proprietaire?: string;
+  race: string;
+  classe: string;
+  niveau: number;
+  carac: CaracMap;
+  pv: number;
+  pv_max: number;
+  ca: number;
+  sauvegardes: { Vigueur: number; Reflexes: number; Volonte: number };
+  bab: number;
+  initiative?: number;
+  competences?: Record<string, number>;
+  dons?: string[];
+  equipement?: { nom: string; qte: number }[];
+  or?: number;
+  alignement?: string;
+  dieu?: string;
+  histoire?: string;
+  conditions?: string[];
+  apparence?: Apparence;
+  portrait?: string | null;
+}
+
+export interface RaceModele {
+  nom: string;
+  mods: Partial<Record<string, number>>;
+  taille: string;
+  vitesse: number;
+}
+
+export interface ClasseModele {
+  nom: string;
+  de_vie: number;
+  bab: "bon" | "moyen" | "mauvais";
+  sauves_bonnes: ("Vigueur" | "Reflexes" | "Volonte")[];
+}
+
+export interface DieuModele {
+  nom: string;
+  titre: string;
+  alignement: string;
+  /** Races servies ([] = ouvert à toutes). */
+  races: string[];
+  /** Classes servies ([] = ouvertes à toutes). */
+  classes: string[];
+  /** true = serviteurs maléfiques uniquement. */
+  mal: boolean;
+}
+
+export interface ArmeModele {
+  nom: string;
+  groupe: "simple" | "martiale";
+  distance: boolean;
+  degats: string;
+  cout: number;
+}
+
+export interface ArmureModele {
+  nom: string;
+  categorie: "Legere" | "Moyenne" | "Lourde" | "Bouclier";
+  ca: number;
+  dex_max: number | null;
+  malus: number;
+  cout: number;
+}
+
+export interface ObjetModele {
+  nom: string;
+  cout: number;
+}
+
+export interface DonModele {
+  nom: string;
+  condition: string;
+  prereq: Partial<Record<"for" | "dex" | "int" | "sag" | "bab", number>>;
+}
+
+export interface CompetenceModele {
+  nom: string;
+  cara: string;
+}
+
+export interface ProficiencesClasse {
+  armures: ("Legere" | "Moyenne" | "Lourde")[];
+  boucliers: boolean;
+  groupes: ("simple" | "martiale")[];
+  specifiques: string[];
+}
+
+export interface OrDepartFormule {
+  des: string;
+  mult: number;
+}
+
+export interface ModelePerso {
+  races: RaceModele[];
+  classes: ClasseModele[];
+  alignements: string[];
+  dieux: DieuModele[];
+  proficiences: Record<string, ProficiencesClasse>;
+  armes: ArmeModele[];
+  armures: ArmureModele[];
+  equipement_aventurier: ObjetModele[];
+  dons: DonModele[];
+  competences: CompetenceModele[];
+  competences_classe: Record<string, string[]>;
+  points_competence: Record<string, number>;
+  or_depart: Record<string, OrDepartFormule>;
 }

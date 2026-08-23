@@ -35,7 +35,7 @@ function PhaseBadge({ phase }: { phase: string }) {
 // --------------------------------------------------------------------------- //
 //  Portrait + carte joueur
 // --------------------------------------------------------------------------- //
-function Portrait({ nom, size = "h-20" }: { nom: string; size?: string }) {
+function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
   const [failed, setFailed] = useState(false);
   const [retries, setRetries] = useState(0);
   const slug = slugify(nom);
@@ -59,7 +59,7 @@ function Portrait({ nom, size = "h-20" }: { nom: string; size?: string }) {
           key={`${slug}-${retries}`}
           src={`${url}?t=${Date.now()}`}
           alt={nom}
-          className={`${size} w-full object-cover rounded border border-stone-700 opacity-50`}
+          className={`${size} w-full object-contain rounded border border-stone-700 opacity-50`}
           onError={() => setRetries((r) => r + 1)}
           onLoad={() => setFailed(false)}
         />
@@ -83,7 +83,7 @@ function Portrait({ nom, size = "h-20" }: { nom: string; size?: string }) {
     <img
       src={url}
       alt={nom}
-      className={`${size} w-full object-cover rounded border border-stone-700`}
+      className={`${size} w-full object-contain rounded border border-stone-700`}
       onError={() => {
         setFailed(true);
         setRetries(1);
@@ -144,7 +144,7 @@ function ParticipantCard({ nom }: { nom: string }) {
   return (
     <div className="bg-stone-800/20 rounded p-2 opacity-70">
       <div className="text-center text-xs text-stone-400 truncate mb-1">👤 {nom}</div>
-      <div className="h-20 w-full rounded border border-dashed border-stone-700 bg-stone-900/50 flex items-center justify-center text-stone-600 text-xs italic">
+      <div className="h-40 w-full rounded border border-dashed border-stone-700 bg-stone-900/50 flex items-center justify-center text-stone-600 text-xs italic">
         perso à venir
       </div>
     </div>

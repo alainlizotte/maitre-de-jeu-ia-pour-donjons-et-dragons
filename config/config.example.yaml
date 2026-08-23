@@ -28,6 +28,16 @@ llm:
   detect_simulation: true
   max_tool_iterations: 6      # borne la boucle tool-call / responde
 
+  # Déchargement du modèle après le tour du MJ :
+  #   true  = comportement historique : la VRAM est libérée dès la fin du
+  #           dernier tour (partage du GPU avec ComfyUI).
+  #   false = le modèle reste chargé, puis est déchargé après
+  #           `unload_delay_minutes` minutes d'inactivité. Pratique si de la
+  #           RAM est ajoutée ou un meilleur GPU acheté : les tours
+  #           consécutifs n'ont plus à recharger le modèle.
+  unload_after_turn: true
+  unload_delay_minutes: 5
+
 server:
   host: "127.0.0.1"
   port: 8000

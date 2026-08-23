@@ -1015,11 +1015,24 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
 # sinon un tour concurrent verrait le modèle disparaître sous ses pieds (HTTP 500).
 _active_turns: int = 0
 _turns_guard: asyncio.Lock = asyncio.Lock()
+# Unload différé (llm.unload_after_turn = false) : tâche en attente, annulée si
+# un nouveau tour démarre avant l'expiration du délai.
+_pending_unload: Optional[asyncio.Task] = None
+
+
+def _cancel_pending_unload() -> None:
+    """Annule un unload différé en attente (un tour reprend la main)."""
+    global _pending_unload
+    if _pending_unload is not None and not _pending_unload.done():
+        _pending_unload.cancel()
+    _pending_unload = None
 
 
 async def _turn_begin() -> None:
     global _active_turns
     async with _turns_guard:
+        # Un nouveau tour démarre : le modèle doit rester en VRAM.
+        _cancel_pending_unload()
         _active_turns += 1
 
 
@@ -1029,6 +1042,28 @@ async def _turn_end() -> bool:
     async with _turns_guard:
         _active_turns = max(0, _active_turns - 1)
         return _active_turns == 0
+
+
+async def _delayed_unload_task(app: FastAPI, delay_s: float) -> None:
+    """Décharge le modèle après `delay_s` secondes d'inactivité.
+
+    Le garde `_turns_guard` est conservé pendant l'appel réseau d'unload :
+    un tour qui démarre pendant l'unload attend sa fin (≈1 s) au lieu de
+    perdre le modèle en cours de route. La tâche est annulée par
+    `_cancel_pending_unload` si un tour reprend avant l'expiration du délai.
+    """
+    global _pending_unload
+    try:
+        await asyncio.sleep(delay_s)
+        async with _turns_guard:
+            if _active_turns > 0:
+                return  # un tour a repris — il reprogrammera l'unload
+            _pending_unload = None
+            await app.state.client.unload_model()
+    except asyncio.CancelledError:
+        pass
+    except Exception:                                               # noqa: BLE001
+        pass
 
 
 async def _handle_say(
@@ -1124,11 +1159,22 @@ async def _handle_say(
     #    uniquement si plus AUCUN tour n'est actif (sinon un tour concurrent
     #    perdrait le modèle en cours de route). Le prochain message joueur
     #    rechargera le modèle automatiquement.
+    #    - llm.unload_after_turn = true  → immédiat (historique, partage GPU).
+    #    - llm.unload_after_turn = false → après llm.unload_delay_minutes
+    #      d'inactivité (annulé si un tour reprend ; pratique avec plus de
+    #      RAM/VRAM : les tours consécutifs n'ont plus à recharger le modèle).
     if last_turn:
-        try:
-            await app.state.client.unload_model()
-        except Exception:
-            pass
+        global _pending_unload
+        if cfg.llm.unload_after_turn:
+            try:
+                await app.state.client.unload_model()
+            except Exception:
+                pass
+        else:
+            _cancel_pending_unload()
+            _pending_unload = asyncio.create_task(
+                _delayed_unload_task(app, cfg.llm.unload_delay_minutes * 60)
+            )
 
 
 # --------------------------------------------------------------------------- #

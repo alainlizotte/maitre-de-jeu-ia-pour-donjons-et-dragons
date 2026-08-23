@@ -23,6 +23,15 @@ class LLMConfig:
     detect_simulation: bool = True
     max_tool_iterations: int = 10
     think: bool = False              # désactive le thinking/réflexion (Gemma 4, Qwen3…)
+    # Déchargement du modèle après le tour du MJ :
+    # - True  : comportement historique — la VRAM est libérée dès la fin du
+    #           dernier tour actif (partage du GPU avec ComfyUI).
+    # - False : le modèle reste chargé et n'est déchargé qu'après
+    #           `unload_delay_minutes` minutes d'inactivité — utile avec plus
+    #           de RAM/VRAM : les tours consécutifs évitent de recharger le
+    #           modèle (gain de plusieurs secondes par tour).
+    unload_after_turn: bool = True
+    unload_delay_minutes: float = 5.0
     # Options natives transmises à Ollama via le champ `options` du payload
     # OpenAI-compatible (ex: num_ctx, top_k, seed, …). Calibré par l'utilisateur
     # pour Gemma 4 12B : {num_ctx: 60000, top_k: 64}.

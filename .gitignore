@@ -35,3 +35,6 @@ server/data/model_choice.json
 .zcode/
 .DS_Store
 Thumbs.db
+
+server/data/auth_secret.txt
+server/data/utilisateurs.json

@@ -72,7 +72,7 @@ export function useChatSocket(partie_id: string | null) {
             }
             // Dédup : ne pas re-joiner si le WS vient de ce client.
             if (lastJoinRef.current !== partie_id) {
-              sock.join(player, useParty.getState().password);
+              sock.join(player, useParty.getState().password, useParty.getState().personnage);
               lastJoinRef.current = partie_id;
             }
           } else if (msg.event === "participant_joined") {
@@ -81,7 +81,7 @@ export function useChatSocket(partie_id: string | null) {
             // Partie protégée : le serveur attend le join avec mot de passe.
             // Marque lastJoinRef pour ne pas re-joiner au `joined` qui suivra.
             if (lastJoinRef.current !== partie_id) {
-              sock.join(player, useParty.getState().password);
+              sock.join(player, useParty.getState().password, useParty.getState().personnage);
               lastJoinRef.current = partie_id;
             }
           } else if (msg.event === "auth_failed") {

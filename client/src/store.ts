@@ -6,6 +6,8 @@ import type { ChatMessage, EncounterMonster, PartyState, ToolEvent } from "./api
 
 const LAST_PLAYER_KEY = "dnd35.lastPlayer";
 const PASSWORD_KEY = "dnd35.password";
+const USER_KEY = "dnd35.utilisateur";
+const PERSO_KEY = "dnd35.personnage";
 
 /** Dernier pseudo saisi (persisté) ; « joueur 1 » à la première visite. */
 function initialPlayer(): string {
@@ -13,6 +15,24 @@ function initialPlayer(): string {
     return localStorage.getItem(LAST_PLAYER_KEY) || "joueur 1";
   } catch {
     return "joueur 1";
+  }
+}
+
+/** Compte connecté (persisté — survit au rechargement). */
+function initialUtilisateur(): string {
+  try {
+    return localStorage.getItem(USER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+/** Personnage choisi pour la partie courante (sessionStorage). */
+function initialPersonnage(): string {
+  try {
+    return sessionStorage.getItem(PERSO_KEY) || "";
+  } catch {
+    return "";
   }
 }
 
@@ -27,6 +47,10 @@ function initialPassword(): string {
 }
 
 interface PartyStore {
+  // -- Compte connecté ----------------------------------------------------- //
+  utilisateur: string;
+  setUtilisateur: (u: string) => void;
+
   // -- Infos partie ------------------------------------------------------- //
   partie_id: string | null;
   player: string;
@@ -35,6 +59,9 @@ interface PartyStore {
   // Mot de passe de la partie rejointe/créée (transmis au join WS).
   password: string;
   setPassword: (p: string) => void;
+  // Personnage choisi pour la prochaine partie (menu déroulant accueil).
+  personnage: string;
+  setPersonnage: (p: string) => void;
 
   // -- État persistant (mirroir PartyState côté backend) ----------------- //
   state: PartyState | null;
@@ -78,6 +105,17 @@ const uid = () =>
     : Math.random().toString(36).slice(2);
 
 export const useParty = create<PartyStore>((set) => ({
+  utilisateur: initialUtilisateur(),
+  setUtilisateur: (u) => {
+    set({ utilisateur: u });
+    try {
+      if (u) localStorage.setItem(USER_KEY, u);
+      else localStorage.removeItem(USER_KEY);
+    } catch {
+      /* localStorage indisponible */
+    }
+  },
+
   partie_id: null,
   player: initialPlayer(),
   setPlayer: (p) => {
@@ -96,6 +134,16 @@ export const useParty = create<PartyStore>((set) => ({
     try {
       if (p) sessionStorage.setItem(PASSWORD_KEY, p);
       else sessionStorage.removeItem(PASSWORD_KEY);
+    } catch {
+      /* sessionStorage indisponible */
+    }
+  },
+  personnage: initialPersonnage(),
+  setPersonnage: (p) => {
+    set({ personnage: p });
+    try {
+      if (p) sessionStorage.setItem(PERSO_KEY, p);
+      else sessionStorage.removeItem(PERSO_KEY);
     } catch {
       /* sessionStorage indisponible */
     }

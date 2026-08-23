@@ -1,13 +1,53 @@
-// Client REST minimal pour /api/* (parties, health, tools, rag, modèles, fiches).
-// Pas d'auth — app locale mono-utilisateur. fetch relatif (proxy Vite ou même origine).
+// Client REST minimal pour /api/* (parties, health, auth, persos, tools, rag,
+// modèles, fiches). fetch relatif (proxy Vite ou même origine).
 
-import type { EncounterMonster, HealthStatus, ModelsList, PartiesList, PartyState, Ressources, Scenario } from "./types";
+import type {
+  EncounterMonster,
+  FichePerso,
+  HealthStatus,
+  ModelePerso,
+  ModelsList,
+  PartiesList,
+  PartyState,
+  Ressources,
+  Scenario,
+} from "./types";
 
 const API = "/api";
 
+// --------------------------------------------------------------------------- //
+//  Auth — token Bearer mémorisé (localStorage), injecté dans chaque requête.
+// --------------------------------------------------------------------------- //
+const TOKEN_KEY = "dnd35.token";
+let surNonAuthentifie: (() => void) | null = null;
+
+export function getToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+export function setToken(token: string): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* localStorage indisponible */
+  }
+}
+/** Callback invoqué sur 401 (déconnexion forcée côté UI). */
+export function onNonAuthentifie(cb: () => void): void {
+  surNonAuthentifie = cb;
+}
+
 async function jq<T>(resp: Response): Promise<T> {
   if (!resp.ok) {
-    // Le serveur renvoie {"detail": "..."} sur les erreurs HTTPException.
+    // Session expirée → déconnexion propre (sauf sur les routes auth elles-mêmes).
+    if (resp.status === 401 && !resp.url.includes("/api/auth/")) {
+      setToken("");
+      surNonAuthentifie?.();
+    }
     let detail = `${resp.status} ${resp.statusText}`;
     try {
       const body = (await resp.json()) as { detail?: string };
@@ -20,9 +60,55 @@ async function jq<T>(resp: Response): Promise<T> {
   return (await resp.json()) as T;
 }
 
+function entetes(extra?: Record<string, string>): Record<string, string> {
+  const h: Record<string, string> = { ...(extra ?? {}) };
+  const token = getToken();
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  return h;
+}
+
+function post<T>(url: string, corps?: unknown): Promise<T> {
+  return fetch(url, {
+    method: "POST",
+    headers: entetes({ "Content-Type": "application/json" }),
+    body: JSON.stringify(corps ?? {}),
+  }).then(jq<T>);
+}
+
 export const api = {
   // -- Health ------------------------------------------------------------- //
   health: () => fetch(`${API}/health`).then(jq<HealthStatus>),
+
+  // -- Auth --------------------------------------------------------------- //
+  inscription: (nom: string, motDePasse: string) =>
+    fetch(`${API}/auth/inscription`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nom, mot_de_passe: motDePasse }),
+    }).then(jq<{ token: string; utilisateur: string }>),
+  connexion: (nom: string, motDePasse: string) =>
+    fetch(`${API}/auth/connexion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nom, mot_de_passe: motDePasse }),
+    }).then(jq<{ token: string; utilisateur: string }>),
+  moi: () => fetch(`${API}/auth/moi`, { headers: entetes() }).then(jq<{ utilisateur: string }>),
+
+  // -- Personnages (« Mes personnages ») ----------------------------------- //
+  modelePerso: () => fetch(`${API}/persos/modele`).then(jq<ModelePerso>),
+  statsAleatoires: () =>
+    post<{ carac: Record<string, number>; methode: string }>(`${API}/persos/stats-aleatoires`),
+  orDepart: (classe: string, mode: "tirage" | "moyenne" = "tirage") =>
+    post<{ or: number; formule: string }>(`${API}/persos/or-depart`, { classe, mode }),
+  listPersos: () => fetch(`${API}/persos`, { headers: entetes() }).then(jq<FichePerso[]>),
+  getPerso: (slug: string) =>
+    fetch(`${API}/persos/${encodeURIComponent(slug)}`, { headers: entetes() }).then(jq<FichePerso>),
+  savePerso: (payload: Partial<FichePerso>) => post<{ ok: boolean; fiche: FichePerso }>(`${API}/persos`, payload),
+  deletePerso: (slug: string) =>
+    fetch(`${API}/persos/${encodeURIComponent(slug)}`, {
+      method: "DELETE",
+      headers: entetes(),
+    }).then(jq<{ ok: boolean }>),
 
   // -- Parties ------------------------------------------------------------ //
   // /api/parties renvoie { active:[ids], persisted:[ids] } — IDs seuls.

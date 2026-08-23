@@ -1,4 +1,4 @@
-"""Point d'entrée FastAPI de l'application D&D 3.5 — Maître du Jeu.
+﻿"""Point d'entrée FastAPI de l'application D&D 3.5 — Maître du Jeu.
 
 Endpoints :
 - GET  /                  → frontend statique (chat multijoueur)
@@ -26,11 +26,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import auth as auth_mod
+from . import catalogue as catalogue_mod
+from . import persos as persos_mod
 from .config import AppConfig, get_config, set_config
 from .game.session import PartySession, registry as sessions
 from .game.state import PartyState, SCHEMA_PARTIE
@@ -356,6 +359,335 @@ async def set_model(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+#  Authentification — comptes locaux + tokens Bearer
+# --------------------------------------------------------------------------- #
+def _dossier_donnees() -> str:
+    return str(cfg.abs(cfg.paths.data_dir))
+
+
+async def utilisateur_courant(
+    authorization: str = Header(default=""),
+) -> str:
+    """Dépendance FastAPI : renvoie le nom d'utilisateur authentifié ou 401."""
+    nom = auth_mod.utilisateur_depuis_header(_dossier_donnees(), authorization)
+    if not nom:
+        raise HTTPException(status_code=401, detail="Non authentifié.")
+    return nom
+
+
+@app.post("/api/auth/inscription")
+async def auth_inscription(payload: dict[str, Any]) -> dict[str, Any]:
+    """Crée un compte {nom, mot_de_passe} et renvoie directement un token."""
+    nom = (payload.get("nom") or "").strip()
+    mdp = payload.get("mot_de_passe") or ""
+    ok, message = auth_mod.creer_utilisateur(_dossier_donnees(), nom, mdp)
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return {
+        "token": auth_mod.generer_token(_dossier_donnees(), nom),
+        "utilisateur": nom,
+    }
+
+
+@app.post("/api/auth/connexion")
+async def auth_connexion(payload: dict[str, Any]) -> dict[str, Any]:
+    """Connecte un compte existant → token Bearer."""
+    nom = (payload.get("nom") or "").strip()
+    mdp = payload.get("mot_de_passe") or ""
+    if not auth_mod.verifier_identifiants(_dossier_donnees(), nom, mdp):
+        raise HTTPException(status_code=401, detail="Identifiants incorrects.")
+    return {
+        "token": auth_mod.generer_token(_dossier_donnees(), nom),
+        "utilisateur": nom,
+    }
+
+
+@app.get("/api/auth/moi")
+async def auth_moi(utilisateur: str = Depends(utilisateur_courant)) -> dict[str, Any]:
+    return {"utilisateur": utilisateur}
+
+
+# --------------------------------------------------------------------------- #
+#  Personnages joueurs — « Mes personnages » du frontend (auth requis).
+# --------------------------------------------------------------------------- #
+@app.get("/api/persos/modele")
+async def persos_modele() -> dict[str, Any]:
+    """Catalogues pour le formulaire : races, classes, alignements, dieux."""
+    return {
+        "races": [
+            {"nom": nom, "mods": r["mods"], "taille": r["taille"], "vitesse": r["vitesse"]}
+            for nom, r in persos_mod.RACES.items()
+        ],
+        "classes": [
+            {
+                "nom": nom,
+                "de_vie": c["de_vie"],
+                "bab": c["bab"],
+                "sauves_bonnes": c["sauves_bonnes"],
+            }
+            for nom, c in persos_mod.CLASSES.items()
+        ],
+        "alignements": persos_mod.ALIGNEMENTS,
+        "dieux": [
+            {
+                "nom": d["nom"],
+                "titre": d["titre"],
+                "alignement": d["alignement"],
+                "races": d["races"],
+                "classes": d["classes"],
+                "mal": d["mal"],
+            }
+            for d in persos_mod.DIEUX
+        ],
+        # Catalogues d'équipement + maîtrises (le front grise l'indisponible).
+        "proficiences": catalogue_mod.PROFICIENCES,
+        "armes": catalogue_mod.ARMES,
+        "armures": catalogue_mod.ARMURES,
+        "equipement_aventurier": catalogue_mod.EQUIPEMENT,
+        "dons": [
+            {"nom": d["nom"], "condition": d["condition"], "prereq": d["prereq"]}
+            for d in catalogue_mod.DONS
+        ],
+        "competences": catalogue_mod.COMPETENCES,
+        "competences_classe": catalogue_mod.COMPETENCES_CLASSE,
+        "points_competence": catalogue_mod.POINTS_COMPETENCE,
+        "or_depart": catalogue_mod.OR_DEPART,
+    }
+
+
+@app.post("/api/persos/stats-aleatoires")
+async def persos_stats_aleatoires(
+    utilisateur: str = Depends(utilisateur_courant),
+) -> dict[str, Any]:
+    """Tirage 4d6 (on retire le plus faible) ×6 — méthode classique PHB."""
+    return {"carac": persos_mod.tirage_4d6(), "methode": "4d6 garder les 3 meilleurs"}
+
+
+@app.post("/api/persos/or-depart")
+async def persos_or_depart(
+    payload: dict[str, Any],
+    utilisateur: str = Depends(utilisateur_courant),
+) -> dict[str, Any]:
+    """Or de départ PHB 3.5 pour la classe donnée.
+
+    mode="tirage" (défaut) : lance les dés de la classe.
+    mode="moyenne"         : valeur moyenne officielle (ex. guerrier 150 po).
+    """
+    classe = (payload.get("classe") or "").strip()
+    classe_c = persos_mod.resoudre_classe(classe)
+    if not classe_c or classe_c not in catalogue_mod.OR_DEPART:
+        raise HTTPException(status_code=400, detail=f"Classe inconnue : « {classe} ».")
+    mode = payload.get("mode") or "tirage"
+    return {
+        "or": catalogue_mod.tirer_or_depart(classe_c, mode),
+        "formule": catalogue_mod.formule_or_depart(classe_c),
+    }
+
+
+@app.get("/api/persos")
+async def persos_liste(utilisateur: str = Depends(utilisateur_courant)) -> list[dict[str, Any]]:
+    """Liste les personnages du compte connecté (+ URL de portrait)."""
+    data_dir = _dossier_donnees()
+    resultats = []
+    for fiche in persos_mod.lister_fiches(data_dir, proprietaire=utilisateur):
+        resultats.append({
+            **fiche,
+            "portrait": persos_mod.url_portrait(data_dir, str(fiche.get("nom", "")), utilisateur),
+        })
+    return resultats
+
+
+@app.get("/api/persos/{slug}")
+async def persos_detail(slug: str, utilisateur: str = Depends(utilisateur_courant)) -> dict[str, Any]:
+    """Fiche d'un personnage du compte connecté (par slug de nom)."""
+    from .tools.fiches import _slug as _slug_fn
+    for fiche in persos_mod.lister_fiches(_dossier_donnees(), proprietaire=utilisateur):
+        if _slug_fn(str(fiche.get("nom", ""))) == slug:
+            return {
+                **fiche,
+                "portrait": persos_mod.url_portrait(
+                    _dossier_donnees(), str(fiche.get("nom", "")), utilisateur
+                ),
+            }
+    raise HTTPException(status_code=404, detail="Personnage introuvable.")
+
+
+def _normaliser_equipement(brut: Any) -> list[dict[str, Any]]:
+    """Accepte une chaîne multiligne ou une liste (chaînes « Nom x2 » / dicts)."""
+    if isinstance(brut, str):
+        lignes: list[Any] = brut.splitlines()
+    elif isinstance(brut, list):
+        lignes = brut
+    else:
+        return []
+    resultat: list[dict[str, Any]] = []
+    for item in lignes:
+        if isinstance(item, dict) and str(item.get("nom", "")).strip():
+            try:
+                qte = max(1, int(item.get("qte", 1)))
+            except (TypeError, ValueError):
+                qte = 1
+            resultat.append({"nom": str(item["nom"]).strip(), "qte": qte})
+            continue
+        s = str(item).strip()
+        if not s:
+            continue
+        parts = s.rsplit(None, 1)
+        if len(parts) == 2 and parts[1][:1].lower() == "x" and parts[1][1:].isdigit():
+            resultat.append({"nom": parts[0].strip(), "qte": max(1, int(parts[1][1:]))})
+        else:
+            resultat.append({"nom": s, "qte": 1})
+    return resultat
+
+
+@app.post("/api/persos")
+async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(utilisateur_courant)) -> dict[str, Any]:
+    """Crée ou met à jour un personnage du compte connecté.
+
+    Les valeurs dérivées (PV, CA, BBA, sauvegardes…) sont TOUJOURS recalculées
+    côté serveur d'après race/classe/niveau/caractéristiques. Le portrait est
+    régénéré en arrière-plan à chaque enregistrement.
+    """
+    data_dir = _dossier_donnees()
+    nom = (payload.get("nom") or "").strip()
+    if not nom:
+        raise HTTPException(status_code=400, detail="Le nom du personnage est requis.")
+
+    # Collision inter-comptes : le fichier est global (fiche_<slug>.json).
+    existante = persos_mod.charger_fiche(data_dir, nom)
+    if existante and str(existante.get("proprietaire", "")) != utilisateur:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Un personnage nommé « {nom} » existe déjà (autre compte). "
+                   "Choisissez un autre nom.",
+        )
+
+    carac_saisi = payload.get("carac") or {}
+    carac: dict[str, int] = {}
+    for c in persos_mod.CARACS:
+        try:
+            carac[c] = int(carac_saisi.get(c, 10))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Caractéristique {c} invalide.")
+
+    race = (payload.get("race") or "").strip()
+    classe = (payload.get("classe") or "").strip()
+    niveau = max(1, int(payload.get("niveau") or 1))
+    equipement = _normaliser_equipement(payload.get("equipement"))
+    # Armures/boucliers portés (présents au catalogue) → comptés dans la CA
+    # (10 + armure + bouclier + Dex plafonnée par l'armure, règles PHB 3.5).
+    noms_armures_catalogue = {a["nom"] for a in catalogue_mod.ARMURES}
+    armures_portees = [e["nom"] for e in equipement if e["nom"] in noms_armures_catalogue]
+    calculs = persos_mod.calculer_derivees(carac, race, classe, niveau, armures=armures_portees)
+
+    # Dieu : s'il correspond à une divinité du panthéon, elle doit accepter le
+    # personnage comme serviteur. Un nom libre (ancienne fiche…) est conservé.
+    dieu = (payload.get("dieu") or "").strip()
+    if dieu:
+        connu = any(
+            persos_mod._normaliser(d["nom"]) == persos_mod._normaliser(dieu)
+            for d in persos_mod.DIEUX
+        )
+        if connu:
+            eligibles = persos_mod.dieux_disponibles(
+                race, classe, payload.get("alignement") or ""
+            )
+            if not any(
+                persos_mod._normaliser(d["nom"]) == persos_mod._normaliser(dieu)
+                for d in eligibles
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"« {dieu} » n'accepte pas ce personnage comme serviteur "
+                           "(race / classe / alignement incompatibles).",
+                )
+
+    apparence_in = payload.get("apparence") or {}
+    dons = payload.get("dons") or []
+    if isinstance(dons, str):
+        dons = [ligne.strip() for ligne in dons.splitlines() if ligne.strip()]
+    competences = payload.get("competences") or {}
+
+    fiche = {
+        "nom": nom,
+        "joueur": utilisateur,
+        "proprietaire": utilisateur,
+        "race": persos_mod.resoudre_race(race) or race,
+        "classe": persos_mod.resoudre_classe(classe) or classe,
+        "niveau": niveau,
+        "carac": calculs["carac_final"],
+        "pv": calculs["pv"],
+        "pv_max": calculs["pv_max"],
+        "ca": calculs["ca"],
+        "sauvegardes": calculs["sauvegardes"],
+        "bab": calculs["bab"],
+        "initiative": calculs["initiative"],
+        "competences": competences,
+        "dons": dons,
+        "equipement": equipement,
+        "or": int(payload.get("or") or 0),
+        "alignement": payload.get("alignement") or "",
+        "dieu": dieu,
+        "histoire": payload.get("histoire") or "",
+        "conditions": [],
+        "apparence": {
+            "sexe": apparence_in.get("sexe") or "",
+            "age": apparence_in.get("age") or "",
+            "taille_physique": apparence_in.get("taille") or "",
+            "poids": apparence_in.get("poids") or "",
+            "yeux": apparence_in.get("yeux") or "",
+            "cheveux": apparence_in.get("cheveux") or "",
+            "peau": apparence_in.get("peau") or "",
+            "description": apparence_in.get("description") or "",
+        },
+    }
+
+    chemin = persos_mod.chemin_fiche(data_dir, nom)
+    try:
+        with open(chemin, "w", encoding="utf-8") as f:
+            json.dump(fiche, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Écriture impossible : {e}")
+
+    # Portrait généré d'après la fiche enregistrée + traits de la race.
+    persos_mod.lancer_portrait_background(data_dir, fiche)
+
+    return {"ok": True, "fiche": fiche, "calculs": calculs}
+
+
+@app.delete("/api/persos/{slug}")
+async def persos_supprimer(slug: str, utilisateur: str = Depends(utilisateur_courant)) -> dict[str, Any]:
+    """Supprime un personnage du compte connecté (+ portraits en cache)."""
+    from .tools.fiches import _slug as _slug_fn
+    data_dir = _dossier_donnees()
+    cible = None
+    for fiche in persos_mod.lister_fiches(data_dir, proprietaire=utilisateur):
+        if _slug_fn(str(fiche.get("nom", ""))) == slug:
+            cible = fiche
+            break
+    if cible is None:
+        raise HTTPException(status_code=404, detail="Personnage introuvable.")
+    try:
+        os.remove(persos_mod.chemin_fiche(data_dir, str(cible.get("nom"))))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    # Portraits best-effort (perso_<user>_<slug> + slug nu si présent).
+    cache = os.path.join(data_dir, "portraits_cache")
+    for base in (
+        f"perso_{_slug_fn(utilisateur)}_{slug}",
+        slug,
+    ):
+        for ext in (".png", ".svg"):
+            p = os.path.join(cache, base + ext)
+            try:
+                if os.path.isfile(p):
+                    os.remove(p)
+            except OSError:
+                pass
+    return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
 #  Fiches personnages — consultation par le frontend (modal fiche PJ).
 # --------------------------------------------------------------------------- #
 @app.get("/api/fiches/{nom}")
@@ -601,6 +933,14 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                     session.authenticated.add(ws)
                     session.connections.add(ws)
                 session.add_participant(player)
+                # Rattachement du personnage choisi (menu déroulant côté
+                # client) → le PJ rejoint l'état de partie (liste pj).
+                personnage = (msg.get("personnage") or "").strip()
+                fiche_enregistree = None
+                if personnage:
+                    fiche_enregistree = persos_mod.enregistrer_personnage_partie(
+                        _dossier_donnees(), partie_id, personnage, player
+                    )
                 # Pour une partie protégée, l'historique n'arrive qu'ici.
                 if pw_hash is not None:
                     await _send_joined(ws, session, partie_id)
@@ -609,6 +949,9 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                     "event": "participant_joined",
                     "player": player,
                     "participants": session.participants,
+                    "personnage": (
+                        fiche_enregistree.get("nom") if fiche_enregistree else None
+                    ),
                 })
                 continue
 

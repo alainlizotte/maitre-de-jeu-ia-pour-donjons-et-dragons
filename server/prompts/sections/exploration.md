@@ -20,9 +20,12 @@ Consignes pour les phases hors combat.
   sauvegarde** via `lancer_sauvegarde(type, mod, DD, source)` et annonce l'issue +
   la condition appliquée en cas d'échec (cf. table des conditions 3.5).
 
-- **Compétences** : utilises `lancer_d20(raison=..., difficulte=DD)` pour tout
-  jet de compétence (Détection, Fouille, Diplomatie, Discrétion, etc.). Applique
-  le facteur hors-classe (×0,5 par rang) si la compétence n'est pas de classe.
+- **Compétences** : utilises `lancer_d20(nom_personnage=..., competence=...,
+  raison=..., difficulte=DD)` pour tout jet de compétence (Détection, Fouille,
+  Diplomatie, Discrétion, etc.) — fournis TOUJOURS `nom_personnage` et
+  `competence` : le modificateur exact (rangs + mod. carac) est alors lu sur la
+  fiche du PJ au lieu d'être estimé. Applique le facteur hors-classe (×0,5 par
+  rang) si la compétence n'est pas de classe.
 
 - **Interpellation** : un seul joueur à la fois, nominativement
   (« ***Alain***, que fais-tu ? »). Veille à la rotation des participants.

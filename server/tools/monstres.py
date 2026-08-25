@@ -14,6 +14,7 @@ Spécificité de l'app standalone (vs OpenWebUI) :
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -69,6 +70,109 @@ def _load_bestiaire(ctx: ToolContext) -> dict[str, Any]:
     return _BESTIAIRE_CACHE  # type: ignore[return-value]
 
 
+# Prompts « génériques » écrits par les scripts d'import (enrichir_bestiaire,
+# import_bestiaire_drs) : ils ne contiennent que le nom, aucune info visuelle.
+_GENERIC_PROMPT_RE = re.compile(
+    r"^fantasy\s+.+\bcreature\b,\s*D&D 3\.5( manual)? illustration",
+    re.IGNORECASE,
+)
+
+# Traduction FR→EN des types du bestiaire — le générateur d'images (Qwen-Image)
+# réagit bien mieux aux mots-clés anglais (« undead », « giant »…).
+_TYPES_EN: list[tuple[str, str]] = [
+    ("mort-vivant", "undead creature, rotting gray flesh"),
+    ("extérieur", "outsider"),
+    ("exterieur", "outsider"),
+    ("élémentaire", "elemental"),
+    ("elementaire", "elemental"),
+    ("créature magique", "magical beast"),
+    ("creature magique", "magical beast"),
+    ("créature monstrueuse", "monstrous beast"),
+    ("créature artificielle", "construct"),
+    ("créature feérique", "fey creature"),
+    ("créature aberrante", "aberration"),
+    ("monstre aberrant", "aberration"),
+    ("humanoïde", "humanoid"),
+    ("humanoide", "humanoid"),
+    ("aberration", "aberration"),
+    ("animal", "animal"),
+    ("bête", "beast"),
+    ("dragon", "dragon"),
+    ("fée", "fey"),
+    ("géant", "giant"),
+    ("construct", "construct"),
+    ("vase", "ooze"),
+    ("ver", "vermin creature"),
+    ("plante", "plant creature"),
+]
+
+
+def _type_en(type_fr: str) -> str:
+    """Traduit un type de monstre FR (« Mort-vivant ») en mot-clé EN."""
+    t = type_fr.strip().lower()
+    for fr, en in _TYPES_EN:
+        if t.startswith(fr):
+            return en
+    return ""
+
+
+def _desc_locale(m: Optional[dict[str, Any]]) -> str:
+    """Description visuelle d'un monstre depuis le bestiaire local.
+
+    - `prompt_image` riche (ex. goule : « ghoul undead creature, gaunt
+      human, elongated claws... ») → utilisé tel quel ;
+    - sinon on retombe sur le type traduit en anglais (donne déjà
+      « undead creature » à Qwen-Image au lieu de rien du tout).
+    Renvoie "" si le monstre est absent ou sans information exploitable.
+    """
+    if m is None:
+        return ""
+    pi = str(m.get("prompt_image") or "").strip()
+    if pi and not _GENERIC_PROMPT_RE.match(pi):
+        return pi
+    return _type_en(str(m.get("type", "")))
+
+
+async def _desc_via_rag(nom: str) -> str:
+    """Cherche la description physique du monstre dans la KB RAG.
+
+    Le Manuel des Monstres 3.5 (ingéré dans le vector store) commence chaque
+    entrée par un portrait : « Ce mort-vivant ressemble à un humain émacié,
+    à la chair grise et décomposée... ». C'est la meilleure source quand le
+    bestiaire local n'a pas de prompt visuel exploitable. Fail-safe : toute
+    erreur (embedding server down, chroma absente...) renvoie "".
+    """
+    try:
+        from ..config import get_config
+        from ..rag.store import get_store
+
+        store = get_store(get_config())
+        hits = await store.query(
+            f"{nom} description physique apparence aspect du monstre",
+            top_k=8,
+        )
+    except Exception:                                        # noqa: BLE001
+        return ""
+    n = _normalise_nom(nom)
+    morceaux: list[str] = []
+    total = 0
+    for h in hits:
+        # On ne garde que les extraits qui parlent bien DE ce monstre.
+        hay = _normalise_nom(h.title + " " + h.text[:300])
+        if n not in hay and not any(p in hay for p in n.split("_") if len(p) >= 4):
+            continue
+        extrait = h.text.strip()
+        if total + len(extrait) > 900:
+            extrait = extrait[: max(0, 900 - total)]
+        if not extrait:
+            break
+        morceaux.append(extrait)
+        total += len(extrait)
+        if total >= 900:
+            break
+    return "\n".join(morceaux)
+
+
 def _cache_dir(ctx: ToolContext) -> str:
     path = os.path.join(ctx.data_dir, "bestiaire_cache")
     try:
@@ -84,20 +188,198 @@ def _normalise_nom(nom: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", "".join(c for c in nf if not unicodedata.combining(c)))
 
 
+# Le MJ (LLM) nomme souvent les monstres en anglais (« Ghoul », « Goblin »…)
+# alors que le bestiaire local est en français (« Goule », « Gobelin »).
+# Sans ce pont, la fiche est introuvable ET le prompt d'image part vide →
+# le générateur invente un monstre quelconque.
+_ALIAS_EN_FR: dict[str, str] = {
+    "ghoul": "goule",
+    "ghast": "goule",
+    "skeleton": "squelette",
+    "zombie": "zombie",
+    "goblin": "gobelin",
+    "hobgoblin": "hobgobelin",
+    "bugbear": "gobelours",
+    "orc": "orque",
+    "ogre": "ogre",
+    "ogre_mage": "ogre-mage",
+    "troll": "troll",
+    "gnoll": "gnoll",
+    "minotaur": "minotaure",
+    "gargoyle": "gargouille",
+    "basilisk": "basilic",
+    "chimera": "chimere",
+    "cockatrice": "cocatrix",
+    "djinni": "djinn",
+    "efreeti": "efrit",
+    "ettin": "ettin",
+    "griffin": "griffon",
+    "griffon": "griffon",
+    "harpy": "harpie",
+    "hippogriff": "hippogriffe",
+    "manticore": "manticore",
+    "medusa": "meduse",
+    "mimic": "mimique",
+    "mummy": "momie",
+    "unicorn": "licorne",
+    "vampire": "vampire",
+    "wyvern": "wyverne",
+    "succubus": "succube",
+    "pixie": "pixie",
+    "nymph": "nymphe",
+    "pegasus": "pegase",
+    "satyr": "satyre",
+    "centaur": "centaure",
+    "werewolf": "loup_garou",
+    "wolf": "loup",
+    "dire_wolf": "loup_terrible",
+    "worg": "worg",
+    "owlbear": "ours_hibou",
+    "shadow": "ombre",
+    "wraith": "spectre",
+    "spectre": "spectre",
+    "green_hag": "guenaude_verte",
+    "sea_hag": "guenaude_marine",
+    "purple_worm": "ver_pourpre",
+    "flesh_golem": "golem_de_chair",
+    "clay_golem": "golem_d_argile",
+    "iron_golem": "golem_de_fer",
+    "stone_golem": "golem_de_pierre",
+    "kraken": "kraken",
+    "lamia": "lamie",
+    "rakshasa": "rakshasa",
+    "tarasque": "tarasque",
+    "tarrasque": "tarasque",
+    "hydra": "hydre_5_tetes",
+    "sahuagin": "sahuagin",
+    "locathah": "locathah",
+    "troglodyte": "troglodyte",
+    "ettercap": "ettercap",
+    "otyugh": "otyugh",
+    "remorhaz": "remorhaz",
+}
+
+# Traduction mot à mot (secours pour les noms composés non listés ci-dessus :
+# « young_red_dragon » → « jeune_rouge_dragon » ≈ inclusion dans
+# `dragon_rouge_jeune` grâce à la recherche par inclusion).
+_MOTS_EN_FR: dict[str, str] = {
+    "red": "rouge", "black": "noir", "blue": "bleu", "green": "vert",
+    "white": "blanc", "brass": "laiton", "bronze": "bronze",
+    "copper": "cuivre", "gold": "or", "silver": "argent",
+    "young": "jeune", "adult": "adulte", "old": "vieux",
+    "ancient": "ancien", "elder": "ancien",
+    "giant": "geant", "dire": "terrible", "great": "grand",
+    "hill": "collines", "frost": "givre", "fire": "feu",
+    "cloud": "nuages", "stone": "pierres", "storm": "tempetes",
+    "bear": "ours", "spider": "araignee", "bat": "chauve_souris",
+    "rat": "rat", "scorpion": "scorpion", "crocodile": "crocodile",
+    "octopus": "pieuvre", "squid": "calmar", "snake": "serpent",
+    "constrictor": "constricteur", "bee": "abeille", "wasp": "guepe",
+    "beetle": "scarabee", "ant": "fourmi", "eagle": "aigle",
+    "lion": "lion", "tiger": "tigre", "hyena": "hyene",
+    "dragon": "dragon", "dragonne": "dragonne",
+}
+
+
+def _candidats_noms(nom: str) -> list[str]:
+    """Noms candidats pour la recherche : original + alias EN→FR + traduction
+    mot à mot (dédupe en conservant l'ordre)."""
+    n = _normalise_nom(nom)
+    cands = [nom, n]
+    alias = _ALIAS_EN_FR.get(n)
+    if alias:
+        cands.append(alias)
+        cands.append(_normalise_nom(alias))
+    trad = "_".join(_MOTS_EN_FR.get(w, w) for w in n.split("_"))
+    if trad != n:
+        cands.append(trad)
+    return list(dict.fromkeys(cands))
+
+
 def _find_monstre(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
-    """Cherche un monstre par nom (insensible à la casse/accents)."""
+    """Cherche un monstre par nom FR ou EN (insensible casse/accents/alias,
+    y compris noms composés réordonnés : « Young Red Dragon » →
+    « dragon_rouge_jeune » via sous-ensemble de mots traduits)."""
     best = _load_bestiaire(ctx)
     monstres: dict[str, Any] = best.get("monstres", {})
-    n = _normalise_nom(nom)
-    # 1. clé exacte (slugifiée)
+    cands = _candidats_noms(nom)
+    # 1. clé exacte (slugifiée) — sur chaque candidat (alias inclus)
+    for cand in cands:
+        n = _normalise_nom(cand)
+        for k, m in monstres.items():
+            if _normalise_nom(k) == n or _normalise_nom(m.get("nom", "")) == n:
+                return m
+    # 2. inclusion (« dragon rouge » → « dragon_rouge_jeune »)
+    for cand in cands:
+        n = _normalise_nom(cand)
+        if len(n) < 4:
+            continue
+        for k, m in monstres.items():
+            if n in _normalise_nom(k) or n in _normalise_nom(m.get("nom", "")):
+                return m
+    # 3. sous-ensemble de mots traduits — gère les ordres différents
+    #    ({jeune,rouge,dragon} ⊆ {dragon,rouge,jeune}) ; la clé la plus
+    #    longue gagne.
+    meilleur: Optional[tuple[int, dict[str, Any]]] = None
+    for cand in cands:
+        mots = [
+            w for w in _normalise_nom(cand).split("_")
+            if len(w) >= 3 and w != "monstre"
+        ]
+        if not mots:
+            continue
+        for k, m in monstres.items():
+            nk = _normalise_nom(k)
+            if all(w in nk for w in mots):
+                if meilleur is None or len(nk) > meilleur[0]:
+                    meilleur = (len(nk), m)
+    if meilleur:
+        return meilleur[1]
+    # 4. mot-clé partagé : UN mot significatif de la requête correspond à un
+    #    MOT ENTIER de la clé (« squelette armé d'une hache » → « squelette »,
+    #    « goule des cryptes » → « goule »). Meilleur recouvrement d'abord,
+    #    clé la plus longue pour départager. Singulier/pluriel naïf.
+    def _sing(w: str) -> str:
+        return w[:-1] if w.endswith("s") and len(w) > 3 else w
+
+    meilleur4: Optional[tuple[int, int, dict[str, Any]]] = None
     for k, m in monstres.items():
-        if _normalise_nom(k) == n or _normalise_nom(m.get("nom", "")) == n:
-            return m
-    # 2. inclusion (ex. "dragon rouge jeune" → "dragon_rouge_jeune")
-    for k, m in monstres.items():
-        if n in _normalise_nom(k) or n in _normalise_nom(m.get("nom", "")):
-            return m
-    return None
+        nk_tokens = {_sing(w) for w in _normalise_nom(k).split("_")}
+        if not nk_tokens:
+            continue
+        score = 0
+        for cand in cands:
+            qwords = [w for w in _normalise_nom(cand).split("_") if len(w) >= 4]
+            score += sum(1 for w in qwords if _sing(w) in nk_tokens)
+        # on ne garde que les recouvrements réels (au moins un mot entier)
+        if score == 0:
+            continue
+        # à recouvrement égal : la clé la plus COURTE gagne (nom canonique
+        # simple « Squelette » plutôt que « … hommes d'armes de niveau 1 »)
+        if meilleur4 is None or (score, -len(k)) > (meilleur4[0], -meilleur4[1]):
+            meilleur4 = (score, len(k), m)
+    return meilleur4[2] if meilleur4 else None
+
+
+def _suggestions(monstres: dict[str, Any], cands: list[str],
+                 limite: int = 3) -> list[str]:
+    """Noms du bestiaire les plus proches d'une requête non résolue
+    (recouvrement de mots entiers, puis longueur)."""
+    def _sing(w: str) -> str:
+        return w[:-1] if w.endswith("s") and len(w) > 3 else w
+
+    scores: list[tuple[int, int, str]] = []
+    for k in monstres:
+        nk_tokens = {_sing(w) for w in _normalise_nom(k).split("_")}
+        score = 0
+        for cand in cands:
+            qwords = [w for w in _normalise_nom(cand).split("_")
+                      if len(w) >= 4]
+            score += sum(1 for w in qwords if _sing(w) in nk_tokens)
+        if score:
+            scores.append((-score, len(k), k))
+    scores.sort()
+    return [k for _, _, k in scores[:limite]]
 
 
 def _find_image(ctx: ToolContext, nom: str) -> Optional[str]:
@@ -192,59 +474,198 @@ def _format_fiche(m: dict[str, Any]) -> str:
 
 
 # --------------------------------------------------------------------------- #
+#  Description + invalidation du cache d'images
+# --------------------------------------------------------------------------- #
+async def _description_monstre(m: Optional[dict[str, Any]], nom: str) -> str:
+    """Meilleure description visuelle disponible : prompt du bestiaire local,
+    sinon portrait du Manuel des Monstres via la KB RAG (requête avec le nom
+    canonique FR — les manuels ingérés sont en VF)."""
+    description = _desc_locale(m)
+    if description:
+        return description
+    return await _desc_via_rag(str((m or {}).get("nom") or nom))
+
+
+def _hash_desc(description: str) -> str:
+    """Hash court de la description (invalidation du cache d'images)."""
+    return (
+        hashlib.sha1(description.encode("utf-8")).hexdigest()[:12]
+        if description else ""
+    )
+
+
+def _meta_path_for(ctx: ToolContext, slug: str) -> str:
+    return os.path.join(_cache_dir(ctx), f"{slug}.meta.json")
+
+
+def _read_desc_hash(meta_path: str) -> Optional[str]:
+    """Lit le hash de la description stocké (`desc_hash_v2`).
+
+    La clé en v2 invalide tous les métadonnées anciennes (v1) : les images
+    générées avec l'ancien template de prompt — souvent ornées d'écritures —
+    sont ainsi régénérées automatiquement.
+    """
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            return json.load(f).get("desc_hash_v2")
+    except (OSError, ValueError):
+        return None
+
+
+def _write_desc_hash(meta_path: str, h: str, nom: str) -> None:
+    try:
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump({"desc_hash_v2": h, "nom": nom}, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
+    """Renvoie l'URL de l'illustration du monstre `nom`, en la générant au
+    besoin via ComfyUI (cache prioritaire ; régénération si la fiche du
+    bestiaire a été enrichie ou si le PNG date de l'ancien template).
+
+    Utilisé par le hook post-tour de `main.py` : quand un monstre entre en
+    jeu sans que le MJ ait appelé `monstre_consulter`, la table voit quand
+    même son portrait. Renvoie toujours une URL (placeholder SVG en dernier
+    recours), None seulement si même le placeholder est impossible.
+    """
+    m = _find_monstre(ctx, nom)
+    slug = _slug(nom)
+    dest = os.path.join(_cache_dir(ctx), f"{slug}.png")
+    meta_path = _meta_path_for(ctx, slug)
+    img_path = _find_image(ctx, nom)
+    description = ""
+    if img_path is not None:
+        meta_hash = _read_desc_hash(meta_path)
+        hash_local = _hash_desc(_desc_locale(m))
+        if meta_hash is not None and meta_hash == hash_local and hash_local:
+            return _url_for(img_path, ctx.data_dir)
+        description = await _description_monstre(m, nom)
+        if meta_hash is not None and _hash_desc(description) == meta_hash:
+            return _url_for(img_path, ctx.data_dir)
+        # Image périmée → on supprime le fichier AVANT l'appel, sinon
+        # generer_averti le voit déjà présent et court-circuite (cache hit)
+        # sans rien régénérer.
+        try:
+            os.remove(img_path)
+        except OSError:
+            pass
+    else:
+        description = await _description_monstre(m, nom)
+    nom_canonique = str((m or {}).get("nom") or nom)
+    prompt_text = monstre_prompt(nom_canonique, description)
+    try:
+        r = await generer_averti(ctx, "monstre", prompt_text, dest)
+    except Exception:
+        r = None
+    if r is not None and os.path.isfile(r):
+        _write_desc_hash(meta_path, _hash_desc(description), nom_canonique)
+        return _url_for(r, ctx.data_dir)
+    img_path = _find_image(ctx, nom) or _write_placeholder(ctx, nom)
+    return _url_for(img_path, ctx.data_dir)
+
+
+# --------------------------------------------------------------------------- #
 #  Tools
 # --------------------------------------------------------------------------- #
 @tool
 async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     """
     Renvoie la fiche complète (statistiques D&D 3.5) + l'URL d'une image d'un
-    monstre. Cherche d'abord dans le bestiaire local (`data/bestiaire.json`).
+    monstre. Cherche dans le bestiaire local (`data/bestiaire.json`) en
+    acceptant les noms français OU anglais (alias : « Ghoul » → « Goule »).
     Si le monstre n'est pas trouvé localement, retourne un message invitant à
     interroger la base de connaissances RAG « D&D 3.5 — Manuels » et
-    génère quand même un placeholder SVG.
+    génère quand même un placeholder SVG. L'image est régénérée
+    automatiquement si la fiche du bestiaire a été enrichie depuis.
 
-    :param nom (str): nom du monstre (ex. "Gobelin", "Dragon rouge jeune").
+    :param nom (str): nom du monstre, FR ou EN (ex. "Gobelin"/"Goblin",
+        "Goule"/"Ghoul", "Dragon rouge jeune").
     """
     m = _find_monstre(ctx, nom)
-    # Image : priorité PNG local. Sinon tentative ComfyUI (vraie image).
-    # En dernier recours SVG placeholder.
+    # Image : priorité PNG en cache à jour, sinon génération ComfyUI, sinon
+    # placeholder SVG. « À jour » = le hash de la description stocké dans
+    # <slug>.meta.json correspond à la description courante — un vieux PNG
+    # généré sans description (monstre inventé par l'IA) est régénéré dès
+    # qu'une vraie fiche est disponible.
+    slug = _slug(nom)
+    cache_dir = _cache_dir(ctx)
+    dest = os.path.join(cache_dir, f"{slug}.png")
+    meta_path = _meta_path_for(ctx, slug)
+
     img_path = _find_image(ctx, nom)
     src = "locale"
+    description = ""
+    if img_path is not None:
+        meta_hash = _read_desc_hash(meta_path)
+        # 1er test rapide avec la seule description locale (évite un appel
+        # RAG systématique quand le bestiaire suffit).
+        hash_local = _hash_desc(_desc_locale(m))
+        if meta_hash is not None and meta_hash == hash_local and hash_local:
+            src = "cache"
+        else:
+            # Description complète (locale ou portrait RAG du Manuel des
+            # Monstres, requête avec le nom canonique FR).
+            description = await _description_monstre(m, nom)
+            if meta_hash is not None and _hash_desc(description) == meta_hash:
+                src = "cache"
+            else:
+                # Image périmée → suppression AVANT régénération, sinon
+                # generer_averti court-circuite sur le fichier existant.
+                try:
+                    os.remove(img_path)
+                except OSError:
+                    pass
+                img_path = None  # image périmée → régénération
     if img_path is None:
         gen_ok = False
         try:
-            slug = _slug(nom)
-            cache_dir = os.path.join(ctx.data_dir, "bestiaire_cache")
-            os.makedirs(cache_dir, exist_ok=True)
-            dest = os.path.join(cache_dir, f"{slug}.png")
-            prompt_text = monstre_prompt(nom)
+            nom_canonique = str((m or {}).get("nom") or nom)
+            if not description:
+                description = await _description_monstre(m, nom)
+            prompt_text = monstre_prompt(nom_canonique, description)
             r = await generer_averti(ctx, "monstre", prompt_text, dest)
             if r is not None and os.path.isfile(r):
                 img_path = r
                 src = "comfyui"
                 gen_ok = True
+                _write_desc_hash(meta_path, _hash_desc(description), nom_canonique)
         except Exception as e:
             # On ne casse pas le tour si ComfyUI échoue — fallback SVG.
             src = f"comfyui_echec({type(e).__name__})"
         if not gen_ok:
-            img_path = _write_placeholder(ctx, nom)
-            src = "placeholder" if "comfyui" not in src else src
+            if img_path is None:
+                img_path = _find_image(ctx, nom)
+            if img_path is None:
+                img_path = _write_placeholder(ctx, nom)
+                if "comfyui" not in src:
+                    src = "placeholder"
     url = _url_for(img_path, ctx.data_dir)
     if m is None:
-        return ToolResult(
-            text=(
-                f"❓ Monstre **{nom}** absent du bestiaire local. "
-                f"Pour les stats, interrogez la KB « D&D 3.5 — Manuels » "
-                f"(RAG activé). "
-                f"Image ({src}) : {url}"
-            ),
-            state_patch={"image_monstre": url},
+        sugg = _suggestions(monstres, _candidats_noms(nom))
+        texte = (
+            f"❓ Monstre **{nom}** absent du bestiaire local. "
+            f"Pour les stats, interrogez la KB « D&D 3.5 — Manuels » "
+            f"(RAG activé). "
+            f"Image ({src}) : {url}"
         )
+        if sugg:
+            texte += f"\n🔎 Noms proches dans le bestiaire : {', '.join(sugg)}."
+        texte += (
+            "\n⚔️ Ce monstre engage le groupe ? Appelle "
+            "`calculer_initiative` puis `demarrer_combat` AVANT toute "
+            "attaque ou action de combat."
+        )
+        return ToolResult(text=texte, state_patch={"image_monstre": url})
     fiche = _format_fiche(m)
     return ToolResult(
         text=(
             f"{fiche}\n\n🖼️ Image ({src}) : {url}\n"
             f"\n[JSON complet]\n" + json.dumps(m, ensure_ascii=False, indent=2)
+            + "\n⚔️ Ce monstre engage le groupe ? Appelle "
+              "`calculer_initiative` puis `demarrer_combat` AVANT toute "
+              "attaque ou action de combat."
         ),
         state_patch={"image_monstre": url},
     )

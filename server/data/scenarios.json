@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Catalogue de scénarios locaux (PDF servis sous /data/scenarios/). Le MJ les charge via scenarios_laelith_charger : le texte du PDF est extrait à la demande (PyMuPDF) et le fichier reste consultable par les joueurs via son URL.",
-    "source": "Dongeon dragon/documentation/scénarios"
+    "source": "documentation/scénarios (PDF locaux)"
   },
   "scenarios": [
     {

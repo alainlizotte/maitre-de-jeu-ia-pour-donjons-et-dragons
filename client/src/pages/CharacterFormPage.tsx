@@ -44,6 +44,24 @@ const saveBase = (bonne: boolean, niv: number) => (bonne ? 2 + Math.floor(niv / 
 
 const fmtBonus = (n: number) => (n > 0 ? `+${n}` : String(n));
 
+/** Miroir de persos.charge_maximale() : capacité de charge PHB 3.5 p.162
+ *  (livres convertis en kg) pondérée par la catégorie de taille. */
+const CHARGE_MAX_LB: Record<number, number> = {
+  1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90,
+  10: 100, 11: 115, 12: 130, 13: 150, 14: 175, 15: 200, 16: 230,
+  17: 266, 18: 306, 19: 346, 20: 400, 21: 460, 22: 520, 23: 600,
+  24: 700, 25: 800, 26: 900, 27: 1040, 28: 1180, 29: 1320,
+};
+const CHARGE_MULT_TAILLE: Record<string, number> = { P: 0.75, M: 1, G: 2, T: 4, C: 8 };
+
+function chargeMaximale(forValeur: number, taille = "M"): number {
+  const f = Math.max(1, Math.floor(forValeur || 1));
+  const lb =
+    f <= 29 ? (CHARGE_MAX_LB[f] ?? 0) : (CHARGE_MAX_LB[29] ?? 0) * Math.pow(4, Math.floor((f - 29 + 9) / 10));
+  const mult = CHARGE_MULT_TAILLE[(taille || "M").toUpperCase()] ?? 1;
+  return Math.round(lb * 0.4536 * mult);
+}
+
 /** Miroir de persos.dieux_disponibles() : un dieu accepte le perso si sa race
  *  ou sa classe figure parmi ses serviteurs (listes vides = ouvertes), et les
  *  dieux « mal » exigent un alignement mauvais. */
@@ -126,7 +144,7 @@ const FORM_VIDE: FormState = {
   niveau: 1,
   alignement: "",
   dieu: "",
-  carac: { FOR: 10, DEX: 10, CON: 10, INT: 10, SAG: 10, CHA: 10 },
+  carac: { FOR: 0, DEX: 0, CON: 0, INT: 0, SAG: 0, CHA: 0 },
   or: 0,
   armesChoisies: [],
   armuresChoisies: [],
@@ -355,6 +373,7 @@ export function CharacterFormPage() {
       bab: babParNiveau(classeModele?.bab ?? "moyen", form.niveau),
       sauves,
       initiative: mods.DEX,
+      chargeMax: chargeMaximale(final.FOR, raceModele?.taille ?? "M"),
       complet: Boolean(raceModele && classeModele),
     };
   }, [raceModele, classeModele, form.carac, form.niveau, form.armuresChoisies, modele.data]);
@@ -409,6 +428,20 @@ export function CharacterFormPage() {
     return total;
   }, [modele.data, form.classe, form.race, form.niveau, calc.mods.INT]);
 
+  // Budget de dons (règles 3.5) : 1 au niveau 1, puis 1 don supplémentaire
+  // aux niveaux 3, 6, 9… ; les humains gagnent 1 don en plus. Les dons
+  // libres (zone de texte) consomment le même budget.
+  const budgetDons = useMemo(
+    () => 1 + Math.floor(form.niveau / 3) + (form.race === "Humain" ? 1 : 0),
+    [form.niveau, form.race],
+  );
+  const donsLibresUtilises = useMemo(
+    () => form.donsLibre.split("\n").map((l) => l.trim()).filter(Boolean).length,
+    [form.donsLibre],
+  );
+  const donsTotal = form.donsChoisis.length + donsLibresUtilises;
+  const donsPlein = donsTotal >= budgetDons;
+
   const toggleListe = (
     cle: "armesChoisies" | "armuresChoisies" | "equipChoisi" | "donsChoisis",
     valeur: string,
@@ -429,10 +462,15 @@ export function CharacterFormPage() {
     });
 
   const setRangCompetence = (nom: string, rang: number) =>
-    setForm((f) => ({
-      ...f,
-      competencesRangs: { ...f.competencesRangs, [nom]: Math.max(0, rang) },
-    }));
+    setForm((f) => {
+      const autres = Object.entries(f.competencesRangs).reduce(
+        (s, [n, r]) => (n === nom ? s : s + (r || 0)),
+        0,
+      );
+      const maxPossible = Math.max(0, budgetRangs - autres);
+      const v = Math.min(Math.max(0, rang), maxPossible);
+      return { ...f, competencesRangs: { ...f.competencesRangs, [nom]: v } };
+    });
 
   // ----------------------------- Mutations -------------------------------- //
   const tirageAleatoire = useMutation({
@@ -448,6 +486,17 @@ export function CharacterFormPage() {
     mutationFn: (v: { classe: string; mode: "tirage" | "moyenne" }) =>
       api.orDepart(v.classe, v.mode),
     onSuccess: (d) => set("or", d.or),
+  });
+
+  // Tirage officiel âge/taille/poids (tables DRS : race × classe × sexe).
+  const apparenceAleatoire = useMutation({
+    mutationFn: () =>
+      api.apparenceAleatoire(form.race, form.classe, form.sexe === "F" ? "F" : "M"),
+    onSuccess: (d) => {
+      set("age", d.age);
+      set("taille", d.taille);
+      set("poids", d.poids);
+    },
   });
 
   // Changement de classe → tirage automatique de l'or de départ (table PHB),
@@ -528,12 +577,38 @@ export function CharacterFormPage() {
       setErreur("Choisissez une race et une classe.");
       return;
     }
+    // Caractéristiques : uniquement via le tirage aux dés (pas de saisie).
     for (const c of CARACS) {
       const v = form.carac[c];
       if (!Number.isFinite(v) || v < 1 || v > 25) {
-        setErreur(`Valeur invalide pour ${LIBELLES_CARACS[c]} (1 à 25).`);
+        setErreur(
+          `Caractéristiques non tirées — utilisez « 🎲 Tirage aléatoire (4d6) » (${LIBELLES_CARACS[c]} manquante).`,
+        );
         return;
       }
+    }
+    // Âge / taille / poids : uniquement via le tirage aux tables officielles.
+    if (!form.age.trim() || !form.taille.trim() || !form.poids.trim()) {
+      setErreur(
+        "Âge, taille et poids doivent être tirés — cliquez sur « 🎲 Tirer âge / taille / poids ».",
+      );
+      return;
+    }
+    // Dons : nombre limité selon le niveau (+1 si humain).
+    if (donsTotal > budgetDons) {
+      setErreur(
+        `Trop de dons (${donsTotal}) : maximum ${budgetDons} au niveau ${form.niveau}` +
+          (form.race === "Humain" ? ", bonus humain inclus" : "") +
+          ".",
+      );
+      return;
+    }
+    // Compétences : impossible de dépasser le budget de points.
+    if (rangsUtilises > budgetRangs) {
+      setErreur(
+        `Trop de rangs de compétence (${rangsUtilises}) : maximum ${budgetRangs} au niveau ${form.niveau}.`,
+      );
+      return;
     }
     enregistrer.mutate();
   };
@@ -569,55 +644,6 @@ export function CharacterFormPage() {
                 <div className="col-span-2">
                   {champClasse("Nom du personnage *", form.nom, (v) => set("nom", v), "ex : Elara des Bois")}
                 </div>
-                <label className="block">
-                  <span className="text-stone-400 text-xs">
-                    Dieu / Divinité
-                    {form.race || form.classe
-                      ? " (selon vos serviteurs)"
-                      : " — choisissez d'abord race et classe"}
-                  </span>
-                  <select
-                    className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400 disabled:opacity-60"
-                    value={form.dieu}
-                    onChange={(e) => set("dieu", e.target.value)}
-                  >
-                    <option value="">— Aucun —</option>
-                    {/* Valeur libre héritée d'une ancienne fiche : conservée affichable. */}
-                    {form.dieu &&
-                      !dieuxEligibles.some(
-                        (d) => d.nom.toLowerCase() === form.dieu.toLowerCase(),
-                      ) && (
-                        <option value={form.dieu}>« {form.dieu} » (actuel)</option>
-                      )}
-                    {dieuxEligibles.map((d) => (
-                      <option key={d.nom} value={d.nom}>
-                        {d.nom}{d.titre ? `, ${d.titre}` : ""} — {d.alignement}
-                        {d.mal ? " (maléfiques)" : ""}
-                      </option>
-                    ))}
-                    {modele.data &&
-                      dieuxEligibles.length === 0 &&
-                      !form.dieu && (
-                        <option value="" disabled>
-                          Aucun dieu ne sert cette race/classe/alignement
-                        </option>
-                      )}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-stone-400 text-xs">Alignement</span>
-                  <select
-                    className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
-                    value={form.alignement}
-                    onChange={(e) => set("alignement", e.target.value)}
-                  >
-                    <option value="">— Choisir —</option>
-                    {(modele.data?.alignements ?? []).map((a) => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </select>
-                </label>
-
                 <label className="block">
                   <span className="text-stone-400 text-xs">Race *</span>
                   <select
@@ -661,6 +687,56 @@ export function CharacterFormPage() {
                     onChange={(e) => set("niveau", Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
                   />
                 </label>
+                <label className="block">
+                  <span className="text-stone-400 text-xs">Alignement</span>
+                  <select
+                    className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
+                    value={form.alignement}
+                    onChange={(e) => set("alignement", e.target.value)}
+                  >
+                    <option value="">— Choisir —</option>
+                    {(modele.data?.alignements ?? []).map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="col-span-2">
+                  <label className="block">
+                    <span className="text-stone-400 text-xs">
+                      Dieu / Divinité
+                      {form.race || form.classe
+                        ? " (selon ses serviteurs)"
+                        : " — choisissez d'abord race et classe"}
+                    </span>
+                    <select
+                      className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400 disabled:opacity-60"
+                      value={form.dieu}
+                      onChange={(e) => set("dieu", e.target.value)}
+                    >
+                      <option value="">— Aucun —</option>
+                      {/* Valeur libre héritée d'une ancienne fiche : conservée affichable. */}
+                      {form.dieu &&
+                        !dieuxEligibles.some(
+                          (d) => d.nom.toLowerCase() === form.dieu.toLowerCase(),
+                        ) && (
+                          <option value={form.dieu}>« {form.dieu} » (actuel)</option>
+                        )}
+                      {dieuxEligibles.map((d) => (
+                        <option key={d.nom} value={d.nom}>
+                          {d.nom}{d.titre ? `, ${d.titre}` : ""} — {d.alignement}
+                          {d.mal ? " (maléfiques)" : ""}
+                        </option>
+                      ))}
+                      {modele.data &&
+                        dieuxEligibles.length === 0 &&
+                        !form.dieu && (
+                          <option value="" disabled>
+                            Aucun dieu ne sert cette race/classe/alignement
+                          </option>
+                        )}
+                    </select>
+                  </label>
+                </div>
               </div>
             </section>
 
@@ -668,6 +744,7 @@ export function CharacterFormPage() {
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-3">
                 <h2 className="font-serif text-lg text-amber-200">Caractéristiques</h2>
+                <span className="text-xs text-stone-500 italic">aux dés uniquement</span>
                 <button
                   type="button"
                   onClick={() => tirageAleatoire.mutate()}
@@ -679,24 +756,29 @@ export function CharacterFormPage() {
                 </button>
               </div>
               {tirageAleatoire.isSuccess && (
-                <p className="text-xs text-emerald-400 mb-2">
-                  {tirageAleatoire.data.methode} — ajustez librement si besoin.
-                </p>
+                <p className="text-xs text-emerald-400 mb-2">{tirageAleatoire.data.methode}</p>
               )}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 {CARACS.map((c) => {
                   const racial = calc.modsRace[c];
+                  const nonTire = !form.carac[c];
                   return (
-                    <div key={c} className="bg-stone-900/60 border border-stone-700 rounded p-2 text-center">
+                    <div
+                      key={c}
+                      className={`bg-stone-900/60 border rounded p-2 text-center ${
+                        nonTire ? "border-stone-800" : "border-stone-700"
+                      }`}
+                    >
                       <div className="text-xs text-stone-400 mb-1">{LIBELLES_CARACS[c]}</div>
-                      <input
-                        type="number"
-                        min={1}
-                        max={25}
-                        className="w-full bg-stone-800 border border-stone-700 rounded px-2 py-1 text-lg tabular-nums text-center focus:outline-none focus:border-amber-400"
-                        value={form.carac[c]}
-                        onChange={(e) => setCarac(c, parseInt(e.target.value) || 0)}
-                      />
+                      {/* Lecture seule : la valeur ne peut venir que des dés. */}
+                      <div
+                        className={`w-full bg-stone-800 border border-stone-700/50 rounded px-2 py-1 text-lg tabular-nums text-center ${
+                          nonTire ? "text-stone-600" : "text-stone-100"
+                        }`}
+                        title={nonTire ? "Lancez le tirage aux dés" : undefined}
+                      >
+                        {nonTire ? "?" : form.carac[c]}
+                      </div>
                       <div className="text-[11px] mt-1 space-y-0.5">
                         {racial !== undefined && (
                           <div className={racial > 0 ? "text-emerald-400" : "text-rose-400"}>
@@ -722,7 +804,7 @@ export function CharacterFormPage() {
                 Selon les règles D&amp;D 3.5 : dé de vie de la classe, ajustements raciaux,
                 modificateurs de caractéristiques.
               </p>
-              <div className="grid grid-cols-3 md:grid-cols-7 gap-2 text-center">
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-2 text-center">
                 {[
                   { label: "Points de vie", valeur: calc.pvMax },
                   { label: "CA", valeur: calc.ca },
@@ -731,6 +813,10 @@ export function CharacterFormPage() {
                   { label: "Vigueur", valeur: fmtBonus(calc.sauves.Vigueur) },
                   { label: "Réflexes", valeur: fmtBonus(calc.sauves.Reflexes) },
                   { label: "Volonté", valeur: fmtBonus(calc.sauves.Volonte) },
+                  {
+                    label: `Charge max (${raceModele?.taille ?? "M"})`,
+                    valeur: calc.complet ? `${calc.chargeMax} kg` : "—",
+                  },
                 ].map(({ label, valeur }) => (
                   <div key={label} className="bg-stone-900/60 border border-stone-700 rounded p-2">
                     <div className="text-xl text-amber-300 tabular-nums">{valeur}</div>
@@ -747,9 +833,33 @@ export function CharacterFormPage() {
 
             {/* ------------------------- Apparence ------------------------- */}
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4">
-              <h2 className="font-serif text-lg text-amber-200 mb-1">Apparence</h2>
+              <div className="flex flex-wrap items-center gap-3 mb-1">
+                <h2 className="font-serif text-lg text-amber-200">Apparence</h2>
+                <button
+                  type="button"
+                  onClick={() => apparenceAleatoire.mutate()}
+                  disabled={
+                    apparenceAleatoire.isPending || !form.race || !form.classe
+                  }
+                  title={
+                    form.race && form.classe
+                      ? "Tables officielles : âge (race × classe), taille et poids (race × sexe)"
+                      : "Choisissez d'abord une race et une classe"
+                  }
+                  className="ml-auto px-3 py-1.5 bg-violet-700 hover:bg-violet-600 disabled:opacity-40 rounded text-sm font-medium"
+                >
+                  🎲 Tirer âge / taille / poids
+                </button>
+              </div>
+              {apparenceAleatoire.isSuccess && (
+                <p className="text-xs text-emerald-400 mb-2">
+                  Tirage officiel — âge selon la classe ({apparenceAleatoire.data.formule_age}).
+                </p>
+              )}
               <p className="text-xs text-stone-500 mb-3">
-                Ces éléments alimentent la génération automatique du portrait.
+                Âge, taille et poids proviennent exclusivement du tirage aux
+                tables officielles. Ces éléments alimentent la génération
+                automatique du portrait.
               </p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <label className="block">
@@ -765,9 +875,27 @@ export function CharacterFormPage() {
                     <option value="Autre">Autre</option>
                   </select>
                 </label>
-                {champClasse("Âge", form.age, (v) => set("age", v), "ex : 87 ans")}
-                {champClasse("Taille / corpulence", form.taille, (v) => set("taille", v), "ex : 1,65 m, mince")}
-                {champClasse("Poids", form.poids, (v) => set("poids", v), "ex : 52 kg")}
+                {(
+                  [
+                    ["Âge", form.age],
+                    ["Taille / corpulence", form.taille],
+                    ["Poids", form.poids],
+                  ] as const
+                ).map(([libelle, valeur]) => (
+                  <div key={libelle}>
+                    <span className="text-stone-400 text-xs">{libelle}</span>
+                    <div
+                      className={`mt-0.5 w-full bg-stone-900 border rounded px-2.5 py-1.5 text-sm ${
+                        valeur
+                          ? "border-stone-700 text-amber-100"
+                          : "border-dashed border-stone-600 text-stone-500 italic"
+                      }`}
+                      title="Tiré uniquement aux tables officielles (bouton 🎲)"
+                    >
+                      {valeur || "à tirer…"}
+                    </div>
+                  </div>
+                ))}
                 {champClasse("Yeux", form.yeux, (v) => set("yeux", v), "ex : verts")}
                 {champClasse("Cheveux", form.cheveux, (v) => set("cheveux", v), "ex : blanc argenté")}
                 {champClasse("Peau", form.peau, (v) => set("peau", v), "ex : hâlée")}
@@ -791,19 +919,15 @@ export function CharacterFormPage() {
             {/* -------------- Équipement, armes, armures, or --------------- */}
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4 space-y-5">
               <div className="flex flex-wrap items-end gap-3">
-                <label className="block">
+                <div>
                   <span className="text-stone-400 text-xs">Or de départ (po)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    className="mt-0.5 w-36 bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
-                    value={form.or}
-                    onChange={(e) => {
-                      setOrModifie(true);
-                      set("or", parseInt(e.target.value) || 0);
-                    }}
-                  />
-                </label>
+                  <div
+                    className="mt-0.5 w-36 bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm text-amber-100"
+                    title="Déterminé uniquement par tirage (table PHB)"
+                  >
+                    {form.or ? `${form.or} po` : "à tirer…"}
+                  </div>
+                </div>
                 <button
                   type="button"
                   disabled={!form.classe || orDepart.isPending}
@@ -811,14 +935,6 @@ export function CharacterFormPage() {
                   className="px-3 py-1.5 bg-stone-700 hover:bg-stone-600 disabled:opacity-40 border border-stone-600 rounded text-sm text-stone-200"
                 >
                   🎲 Tirer
-                </button>
-                <button
-                  type="button"
-                  disabled={!form.classe}
-                  onClick={() => orDepart.mutate({ classe: form.classe, mode: "moyenne" })}
-                  className="px-3 py-1.5 bg-stone-700 hover:bg-stone-600 disabled:opacity-40 border border-stone-600 rounded text-sm text-stone-200"
-                >
-                  = Moyenne
                 </button>
                 <span
                   className={`text-sm font-medium pb-1.5 ${
@@ -952,8 +1068,13 @@ export function CharacterFormPage() {
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4 space-y-3">
               <h2 className="font-serif text-lg text-amber-200">
                 Dons
-                <span className="text-xs text-stone-500 font-sans ml-2">
-                  (grisés si les prérequis ne sont pas remplis — niveau 1 : 1 don)
+                <span
+                  className={`text-xs font-sans ml-2 ${
+                    donsTotal > budgetDons ? "text-rose-400" : "text-stone-500"
+                  }`}
+                >
+                  ({donsTotal} / {budgetDons} autorisés — 1 au niv. 1 puis 1 tous
+                  les 3 niveaux ; humain : +1)
                 </span>
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1">
@@ -965,13 +1086,13 @@ export function CharacterFormPage() {
                     <label
                       key={d.nom}
                       className={`flex items-start gap-2 text-xs rounded px-1 py-0.5 ${
-                        ok ? "" : "opacity-40 cursor-not-allowed"
+                        ok && (!donsPlein || coche) ? "" : "opacity-40 cursor-not-allowed"
                       }`}
                     >
                       <input
                         type="checkbox"
                         className="accent-amber-500 mt-0.5"
-                        disabled={!ok}
+                        disabled={!ok || (!coche && donsPlein)}
                         checked={coche}
                         onChange={() => toggleListe("donsChoisis", d.nom)}
                       />
@@ -985,8 +1106,16 @@ export function CharacterFormPage() {
                   );
                 })}
               </div>
+              {donsTotal > budgetDons && (
+                <p className="text-rose-400 text-xs">
+                  Trop de dons ({donsTotal}) pour le niveau {form.niveau} —
+                  maximum : {budgetDons}. Retirez-en avant d'enregistrer.
+                </p>
+              )}
               <label className="block">
-                <span className="text-stone-400 text-xs">Dons supplémentaires (un par ligne)</span>
+                <span className="text-stone-400 text-xs">
+                  Dons supplémentaires (un par ligne — consomment le même budget)
+                </span>
                 <textarea
                   rows={2}
                   className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
@@ -1000,12 +1129,22 @@ export function CharacterFormPage() {
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4 space-y-3">
               <h2 className="font-serif text-lg text-amber-200">
                 Compétences
-                <span className="text-xs text-stone-500 font-sans ml-2">
+                <span
+                  className={`text-xs font-sans ml-2 ${
+                    rangsUtilises > budgetRangs ? "text-rose-400" : "text-stone-500"
+                  }`}
+                >
                   rangs utilisés : {rangsUtilises}
                   {budgetRangs > 0 && ` / budget ≈ ${budgetRangs}`}
                   {" — "}hors classe grisées (×2 en règles complètes)
                 </span>
               </h2>
+              {rangsUtilises > budgetRangs && (
+                <p className="text-rose-400 text-xs">
+                  Trop de rangs dépensés ({rangsUtilises}) pour un budget de{" "}
+                  {budgetRangs}. Réduisez avant d'enregistrer.
+                </p>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1">
                 {(modele.data?.competences ?? []).map((c) => {
                   const active = c.nom in form.competencesRangs;

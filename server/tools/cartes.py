@@ -2,9 +2,10 @@
 
 Gère deux choses :
 
-1. **Position du groupe sur la carte du monde** (Côte des Épées / Faerûn) —
-   coordonnées relativistes 0–100, stockées dans l'état persistant
-   (`etat_partie.lieu.position_x/y`).
+1. **Position du groupe sur la carte du monde** (nord de Faerûn) —
+    coordonnées en pourcentage 0–100 de l'image `cartes/faerun_nord.png`,
+    stockées dans l'état persistant (`etat_partie.lieu.position_x/y`) et
+    affichées en direct par l'onglet « Monde » du panneau droit.
 2. **Donjon progressif** : dès que le groupe entre dans un donjon, on
    initialise une grille de salles connectées (procédurale simple). À chaque
    choix de direction, une salle se dévoile. La carte est rendue en SVG et
@@ -45,22 +46,40 @@ DIRECTIONS = {
 }
 _OPP = {"nord": "sud", "sud": "nord", "est": "ouest", "ouest": "est"}
 
-# Villes repères de la Côte des Épées (coordonnées relativistes 0-100).
+# Villes repères du nord de Faerûn — coordonnées en POURCENTAGE de la carte
+# `cartes/faerun_nord.png` servie au front (/data/cartes/faerun_nord.png) :
+# x = 0 % bord ouest (océan) → 100 % bord est, y = 0 % bord nord → 100 % sud.
+# Positions approximatives (carte canonique) — ajuster ici si besoin, le
+# marqueur joueur et ces repères partagent la même grille.
 VILLES_REPERES = {
-    "Waterdeep":      (35, 30),
-    "Neverwinter":    (28, 22),
-    "Port Last":      (20, 18),
-    "Luskan":          (15, 14),
-    "Baldur's Gate":  (50, 55),
-    "Elturel":        (60, 50),
-    "Triboar":        (40, 40),
-    "Phandalin":      (45, 35),
-    "Mirabar":        (10, 10),
+    "Mirabar":        (13, 9),
+    "Luskan":         (24, 13),
+    "Neverwinter":    (21, 19),
+    "Waterdeep":      (27, 30),
+    "Daggerford":     (30, 32),
+    "Triboar":        (38, 29),
+    "Phandalin":      (37, 34),
+    "Everlund":       (49, 26),
+    "Silverymoon":    (54, 23),
+    "Mithral Hall":   (57, 17),
+    "Evereska":       (36, 39),
+    "Secomber":       (33, 40),
+    "Scornubel":      (33, 46),
+    "Elturel":        (37, 50),
+    "Baldur's Gate":  (28, 54),
+    "Athkatla":       (26, 61),
+    "Suzail":         (66, 55),
 }
-WORLD_MAP_URL = (
-    "https://media.wizards.com/2015/images/dnd/"
-    "resources/Sword-Coast-Map_HighRes.jpg"
-)
+# Nom de la carte affichée dans l'onglet « Monde » du panneau droit.
+CARTE_MONDE_FICHIER = "faerun_nord.png"
+
+
+def _normaliser_nom(nom: str) -> str:
+    """Minuscules + sans accents, pour rapprocher « Baldur's gate »/« baldurs gate »."""
+    import unicodedata
+    nf = unicodedata.normalize("NFKD", (nom or "").lower())
+    ascii_ = "".join(c for c in nf if not unicodedata.combining(c))
+    return " ".join(ascii_.replace("'", " ").split())
 
 
 # --------------------------------------------------------------------------- #
@@ -134,9 +153,39 @@ def _url_for(path: str, data_dir: str) -> str:
 # --------------------------------------------------------------------------- #
 #  Rendu SVG
 # --------------------------------------------------------------------------- #
+def _lignes_label(texte: str, max_car: int = 12, max_lignes: int = 2) -> list[str]:
+    """Découpe un libellé de salle en courtes lignes pour tenir dans la case."""
+    mots = str(texte or "?").split()
+    lignes: list[str] = []
+    cour = ""
+    for m in mots:
+        essai = f"{cour} {m}".strip()
+        if len(essai) > max_car and cour:
+            lignes.append(cour)
+            cour = m
+        else:
+            cour = essai
+    if cour:
+        lignes.append(cour)
+    if len(lignes) > max_lignes:
+        lignes = lignes[:max_lignes]
+        lignes[-1] = (lignes[-1][:max_car - 1]).rstrip() + "…"
+    return lignes or ["?"]
+
+
 def _rendre_svg_donjon(donjon: dict[str, Any], taille_cell: int = 64) -> str:
     """Restitue la carte du donjon en SVG — salles visitées en clair,
-    portes ouvertes tracer en traits, salle courante mise en évidence.
+    passages/portes connus BIEN VISIBLES (barreaux dorés sur les murs),
+    salle courante avec marqueur central.
+
+    Ordre des calques (important pour la lisibilité) :
+    1. fond ;
+    2. rectangles des salles ;
+    3. passages & portes PAR-DESSUS les salles (un barreau doré au milieu
+       de chaque mur ouvert ; tirets si le passage mène vers l'inconnu) ;
+    4. libellés PAR-DESSUS, avec halo sombre (paint-order=stroke) ;
+    5. marqueur de la salle courante AU CENTRE (anneau + point rouge) ;
+       le libellé de cette salle est remonté pour ne pas chevaucher.
     """
     salles = _grille_vers_dict(donjon.get("grille", []))
     courant = tuple(donjon.get("courant", [0, 0]))
@@ -155,11 +204,20 @@ def _rendre_svg_donjon(donjon: dict[str, Any], taille_cell: int = 64) -> str:
         f'aria-label="Carte du donjon">',
         f'<rect width="{w+2*pad}" height="{h+2*pad}" fill="#0e0e14" />',
     ]
-    for (x, y), s in salles.items():
-        if not s.get("visitee", True):
-            continue
-        cx = (x - x_min) * taille_cell + pad
-        cy = (y - y_min) * taille_cell + pad
+
+    def _coords(x: int, y: int) -> tuple[int, int]:
+        return (
+            (x - x_min) * taille_cell + pad,
+            (y - y_min) * taille_cell + pad,
+        )
+
+    visites = [(xy, s) for xy, s in salles.items() if s.get("visitee", True)]
+    visites_set = {xy for xy, _ in visites}
+    mid = taille_cell / 2
+
+    # --- Calque 1 : rectangles des salles ---------------------------------- #
+    for (x, y), s in visites:
+        cx, cy = _coords(x, y)
         is_cur = (x, y) == courant
         fill = "#3a2e1a" if is_cur else "#1f1f28"
         border = "#c4a96a" if is_cur else "#6a5a3a"
@@ -168,34 +226,92 @@ def _rendre_svg_donjon(donjon: dict[str, Any], taille_cell: int = 64) -> str:
             f'height="{taille_cell-2}" fill="{fill}" stroke="{border}" '
             f'stroke-width="2" rx="6" ry="6" />'
         )
-        # label
-        parts.append(
-            f'<text x="{cx+taille_cell/2}" y="{cy+taille_cell/2+5}" '
-            f'text-anchor="middle" font-family="Georgia, serif" '
-            f'font-size="10" fill="#d4c4a4">{s.get("type","?")}</text>'
-        )
-        # Portes : traits depuis le centre vers l'extérieur.
-        mid = taille_cell / 2
+
+    # --- Calque 2 : passages & portes connus (PAR-DESSUS les salles) ------- #
+    # Un mur partagé ne doit être marqué qu'une fois : clé canonique =
+    # paire triée des coordonnées des deux salles voisines.
+    murs_deja_dessines: set[frozenset[tuple[int, int]]] = set()
+    for (x, y), s in visites:
+        cx, cy = _coords(x, y)
         portes = s.get("portes", {})
-        for d, vec in DIRECTIONS.items():
-            if d not in ("nord", "sud", "est", "ouest"):
+        for d in ("nord", "sud", "est", "ouest"):
+            if not portes.get(d):
                 continue
-            if portes.get(d):
-                dx, dy = vec
-                x1 = cx + mid
-                y1 = cy + mid
-                x2 = x1 + dx * mid
-                y2 = y1 + dy * mid
+            dx, dy = DIRECTIONS[d]
+            voisin = (x + dx, y + dy)
+            cle_mur = frozenset({(x, y), voisin})
+            if cle_mur in murs_deja_dessines:
+                continue
+            murs_deja_dessines.add(cle_mur)
+            # Point milieu du mur ouvert.
+            mx = cx + mid + dx * mid
+            my = cy + mid + dy * mid
+            horizontal = d in ("nord", "sud")
+            # Barreau de porte doré, bien visible sur le mur.
+            if horizontal:
+                bx, by, bw, bh = mx - 11, my - 3, 22, 6
+            else:
+                bx, by, bw, bh = mx - 3, my - 11, 6, 22
+            parts.append(
+                f'<rect x="{bx}" y="{by}" width="{bw}" height="{bh}" '
+                f'fill="#e8c56a" stroke="#0e0e14" stroke-width="1.5" rx="2" />'
+            )
+            # Passage connu menant hors des zones explorées : trait en
+            # tirets qui prolonge la porte vers l'inconnu.
+            if voisin not in visites_set:
+                sx2 = mx + dx * 15
+                sy2 = my + dy * 15
                 parts.append(
-                    f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
-                    f'stroke="#c4a96a" stroke-width="3" />'
+                    f'<line x1="{mx}" y1="{my}" x2="{sx2}" y2="{sy2}" '
+                    f'stroke="#e8c56a" stroke-width="4" '
+                    f'stroke-dasharray="4,3" stroke-linecap="round" />'
                 )
-    # marqueur salle courante
+
+    # --- Calque 3 : libellés, PAR-DESSUS les dessins ----------------------- #
+    for (x, y), s in visites:
+        cx, cy = _coords(x, y)
+        lignes = _lignes_label(s.get("type", "?"))
+        is_cur = (x, y) == courant
+        # Salle courante : libellé remonté pour laisser place au marqueur
+        # central (anneau + point rouge au centre exact).
+        decal = -13 if is_cur else 0
+        if len(lignes) == 1:
+            tx, ty, fs = cx + mid, cy + mid + 4 + decal, 10
+            parts.append(
+                f'<text x="{tx}" y="{ty}" text-anchor="middle" '
+                f'font-family="Georgia, serif" font-size="{fs}" '
+                f'fill="#e8dcc0" stroke="#0e0e14" stroke-width="3" '
+                f'paint-order="stroke" stroke-linejoin="round">'
+                f"{lignes[0]}</text>"
+            )
+        else:
+            ty1, ty2 = cy + mid - 1 + decal, cy + mid + 10 + decal
+            for i, ligne in enumerate(lignes):
+                ty = ty1 if i == 0 else ty2
+                parts.append(
+                    f'<text x="{cx + mid}" y="{ty}" text-anchor="middle" '
+                    f'font-family="Georgia, serif" font-size="9" '
+                    f'fill="#e8dcc0" stroke="#0e0e14" stroke-width="3" '
+                    f'paint-order="stroke" stroke-linejoin="round">'
+                    f"{ligne}</text>"
+                )
+
+    # --- Calque 4 : marqueur de la salle courante, AU CENTRE --------------- #
     if courant in salles:
-        cx = (courant[0] - x_min) * taille_cell + pad + taille_cell / 2
-        cy = (courant[1] - y_min) * taille_cell + pad + taille_cell / 2
+        cx, cy = _coords(*courant)
+        px, py = cx + mid, cy + mid
+        # Halo pulsé (anneau translucide) puis point plein centré.
         parts.append(
-            f'<circle cx="{cx}" cy="{cy}" r="8" fill="#ff5252" />'
+            f'<circle cx="{px}" cy="{py}" r="9" fill="none" '
+            f'stroke="#ff5252" stroke-opacity="0.45" stroke-width="2.5" />'
+        )
+        parts.append(
+            f'<circle cx="{px}" cy="{py}" r="4.5" fill="#ff5252" '
+            f'stroke="#0e0e14" stroke-width="1.5" />'
+        )
+        parts.append(
+            f'<circle cx="{px - 1.5}" cy="{py - 1.5}" r="1.2" '
+            f'fill="#ffd9d9" fill-opacity="0.9" />'
         )
     parts.append("</svg>")
     return "\n".join(parts)
@@ -211,7 +327,7 @@ def _rendre_svg_monde(positions: dict[str, tuple[float, float]]) -> str:
         f'<rect x="4" y="4" width="{w-8}" height="{h-8}" fill="none" '
         f'stroke="#3a5a4a" rx="8" ry="8" />',
         f'<text x="20" y="32" font-family="Georgia, serif" font-size="14" '
-        f'fill="#7ab08a" font-style="italic">Côte des Épées (placeholder)</text>',
+        f'fill="#7ab08a" font-style="italic">Nord de Faerûn (aperçu)</text>',
     ]
     # villes repères
     for nom, (x, y) in VILLES_REPERES.items():
@@ -243,13 +359,15 @@ async def carte_joueurs_position(
 ) -> ToolResult:
     """
     Place / met à jour la position d'un personnage (ou du groupe) sur la carte
-    du monde. Coordonnées relativistes 0-100 (longitude/latitude entre
-    Waterdeep et Luskan). La position est persistée dans l'état de la partie
-    sous `lieu.position_x/y` (valeur moyenne si plusieurs PJ).
+    du monde (nord de Faerûn). Coordonnées en POURCENTAGE de la carte : x = 0
+    (bord ouest/océan) → 100 (est), y = 0 (nord) → 100 (sud). La position est
+    persistée dans l'état de la partie sous `lieu.position_x/y` et affichée en
+    direct par le marqueur doré de l'onglet « Monde ». Utiliser de préférence
+    `carte_joueurs_placer_ville` quand la destination est une ville connue.
 
     :param nom_perso (str): nom du personnage ou "groupe".
-    :param x (float): longitude 0-100.
-    :param y (float): latitude 0-100.
+    :param x (float): pourcentage horizontal 0-100 (ouest → est).
+    :param y (float): pourcentage vertical 0-100 (nord → sud).
     """
     if not (0 <= float(x) <= 100 and 0 <= float(y) <= 100):
         return ToolResult(text=f"❌ Coordonnées hors bornes (0-100) : x={x}, y={y}")
@@ -266,6 +384,59 @@ async def carte_joueurs_position(
     return ToolResult(
         text=f"📍 {nom_perso} placé en ({x:.1f}, {y:.1f}).",
         state_patch={"lieu.position_x": float(x), "lieu.position_y": float(y)},
+    )
+
+
+@tool
+async def carte_joueurs_placer_ville(
+    ctx: ToolContext, ville: str, nom_perso: str = "groupe"
+) -> ToolResult:
+    """
+    Place un personnage (par défaut le groupe entier) sur une ville connue de
+    la carte du monde (nord de Faerûn). À appeler dès que le groupe arrive
+    quelque part, voyage ou demande « où sommes-nous ? » — le marqueur doré de
+    l'onglet « Monde » se met à jour en direct. Met aussi à jour `lieu.nom`
+    avec la ville trouvée.
+
+    :param ville (str): nom de la ville (ex : "Waterdeep", "Phandalin"…).
+    :param nom_perso (str): nom du personnage, ou "groupe" (défaut).
+    """
+    cible = _normaliser_nom(ville)
+    if not cible:
+        return ToolResult(text="❌ Nom de ville vide.")
+    trouve = None
+    for nom, (x, y) in VILLES_REPERES.items():
+        if _normaliser_nom(nom) == cible or cible in _normaliser_nom(nom):
+            trouve = (nom, x, y)
+            break
+    if trouve is None:
+        return ToolResult(
+            text=(
+                f"❌ Ville « {ville} » inconnue de la carte. Villes repères : "
+                + ", ".join(VILLES_REPERES.keys())
+            )
+        )
+    nom_v, x, y = trouve
+    etat = _charger_etat(ctx)
+    etat.setdefault("lieu", {})
+    etat["lieu"]["position_x"] = float(x)
+    etat["lieu"]["position_y"] = float(y)
+    # Met aussi à jour le nom du lieu : c'est l'étiquette affichée sous le
+    # marqueur dans l'onglet « Monde » (le MJ peut la préciser ensuite via
+    # etat_partie_patch, ex : « Auberge du Drakkar, Waterdeep »).
+    etat["lieu"]["nom"] = nom_v
+    etat.setdefault("positions_joueurs", {})
+    etat["positions_joueurs"][nom_perso] = [float(x), float(y)]
+    err = _sauver_etat(ctx, etat)
+    if err:
+        return ToolResult(text=f"❌ {err}")
+    return ToolResult(
+        text=f"📍 {nom_perso} placé à {nom_v} ({x}, {y}).",
+        state_patch={
+            "lieu.nom": nom_v,
+            "lieu.position_x": float(x),
+            "lieu.position_y": float(y),
+        },
     )
 
 
@@ -297,9 +468,9 @@ async def carte_joueurs_deplacer(
 @tool
 async def carte_joueurs_get(ctx: ToolContext) -> ToolResult:
     """
-    Renvoie les positions actuelles de tous les personnages enregistrés et
-    émet une carte du monde SVG (placeholder avec villes repères). Aucun
-    argument.
+    Renvoie les positions actuelles de tous les personnages enregistrés.
+    Le marqueur correspondant est visible dans l'onglet « Monde » du panneau
+    droit des joueurs. Aucun argument.
     """
     etat = _charger_etat(ctx)
     pos_raw = etat.get("positions_joueurs", {})
@@ -307,8 +478,9 @@ async def carte_joueurs_get(ctx: ToolContext) -> ToolResult:
     if not positions:
         return ToolResult(
             text=(
-                "ℹ️ Aucune position enregistrée. Définissez d'abord via "
-                "`carte_joueurs_position`.Villes repères disponibles : "
+                "ℹ️ Aucune position enregistrée. Placez d'abord le groupe via "
+                "`carte_joueurs_placer_ville` ou `carte_joueurs_position`. "
+                "Villes repères disponibles : "
                 + ", ".join(VILLES_REPERES.keys())
             )
         )
@@ -477,6 +649,19 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
             donjon["grille"] = _dict_vers_grille(salles)
             etat["donjon"] = donjon
             _sauver_etat(ctx, etat)
+            # Événement temps réel → la galerie « Scènes » du front affiche
+            # l'illustration dès qu'elle est prête (ou sortie du cache).
+            cb = getattr(ctx, "on_event", None)
+            if cb is not None:
+                try:
+                    await cb({
+                        "type": "image",
+                        "usage": "lieu",
+                        "image": salle["image_url"],
+                        "msg": f"🖼️ Illustration : salle ({nx},{ny}).",
+                    })
+                except Exception:
+                    pass
     except Exception:
         pass
     img_line = ""
@@ -541,4 +726,65 @@ async def carte_donjon_sortir(ctx: ToolContext) -> ToolResult:
     return ToolResult(
         text="🚪 Vous quittez le donjon. Retour à la carte du monde.",
         state_patch={"phase": "exploration", "quitte_donjon": True},
+    )
+
+
+def _slug_image(texte: str) -> str:
+    """Slug court pour nommer un fichier image de scène."""
+    import re as _re
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", (texte or "").lower())
+    ascii_only = "".join(c for c in nf if not _ud.combining(c))
+    slug = _re.sub(r"[^a-z0-9]+", "_", ascii_only).strip("_")[:50]
+    return slug or "scene"
+
+
+@tool
+async def illustration_scene(ctx: ToolContext, description: str, titre: str = "") -> ToolResult:
+    """
+    Illustre une scène importante de l'aventure (combat héroïque, révélation
+    dramatique, découverte majestueuse, trahison…) par une image générée.
+    L'image apparaît dans la galerie « Scènes » du panneau droit des joueurs.
+    À utiliser avec parcimonie, pour les moments marquants uniquement.
+
+    :param description (str): ce que montre la scène — lieu, protagonistes,
+        action, ambiance (ex : « le héros affronte un dragon noir dans une
+        caverne inondée, éclair par un éclair »).
+    :param titre (str): titre court optionnel de la scène (ex :
+        « L'autel maudit ») ; sert d'étiquette et de nom de fichier.
+    """
+    description = (description or "").strip()
+    if not description:
+        return ToolResult(text="❌ Décris la scène à illustrer.")
+    titre = (titre or "").strip()
+    cache_dir = os.path.join(ctx.data_dir, "images_scenes")
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+    except OSError as e:
+        return ToolResult(text=f"❌ Dossier images inaccessible : {e}")
+    dest = os.path.join(cache_dir, f"{_slug_image(titre or description)}.png")
+    url = _url_for(dest, ctx.data_dir)
+
+    from ..image.helpers import generer_averti, scene_prompt
+    r = await generer_averti(ctx, "lieu", scene_prompt(description), dest)
+    if not r:
+        return ToolResult(
+            text="❌ Générateur d'images indisponible — scène non illustrée."
+        )
+    libelle = titre or (description[:60] + ("…" if len(description) > 60 else ""))
+    # Événement temps réel → bascule la galerie du front sur l'onglet Scènes.
+    cb = getattr(ctx, "on_event", None)
+    if cb is not None:
+        try:
+            await cb({
+                "type": "image",
+                "usage": "lieu",
+                "image": url,
+                "msg": f"🖼️ Scène illustrée : {libelle}",
+            })
+        except Exception:
+            pass
+    return ToolResult(
+        text=f"🖼️ Scène illustrée (« {libelle} ») : {url}",
+        state_patch={"image_scene": url},
     )

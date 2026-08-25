@@ -38,3 +38,8 @@ Thumbs.db
 
 server/data/auth_secret.txt
 server/data/utilisateurs.json
+
+# Corpus RAG local (textes OCR de manuels — droit d'auteur)
+knowledge_import/
+documentation/
+server/data/*.bak

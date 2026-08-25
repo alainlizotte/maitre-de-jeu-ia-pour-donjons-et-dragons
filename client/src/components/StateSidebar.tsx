@@ -154,14 +154,41 @@ function ParticipantCard({ nom }: { nom: string }) {
 // --------------------------------------------------------------------------- //
 //  Modal fiche personnage
 // --------------------------------------------------------------------------- //
+
+/** Formate n'importe quelle valeur de fiche en texte lisible :
+ *  - tableau d'objets {nom, qte} (équipement…) → « Corde ×2, Torche » ;
+ *  - tableau de scalaires (dons, conditions…) → « A, B, C » ;
+ *  - objet plat (carac, sauvegardes…) → « FOR 14, DEX 12 » ;
+ *  - autres structures → JSON compact (jamais « [object Object] »). */
+function fieldText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          const o = item as Record<string, unknown>;
+          const nom = o.nom ?? o.name ?? "";
+          const qte = o.qte ?? o.quantite ?? o.quantity;
+          return qte != null && Number(qte) !== 1 ? `${String(nom)} ×${qte}` : String(nom);
+        }
+        return String(item);
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.every(([, v]) => typeof v !== "object")) {
+      return entries.map(([k, v]) => `${k} ${v}`).join(", ");
+    }
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
 function Field({ label, value }: { label: string; value: unknown }) {
   if (value === undefined || value === null || value === "" || value === "—") return null;
-  const text =
-    typeof value === "object"
-      ? Object.entries(value as Record<string, unknown>)
-          .map(([k, v]) => `${k} ${v}`)
-          .join(", ")
-      : String(value);
+  const text = fieldText(value);
   if (!text.trim()) return null;
   return (
     <div className="mb-1.5">
@@ -171,7 +198,7 @@ function Field({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
+export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
   const ficheQuery = useQuery({
     queryKey: ["fiche", nom],
     queryFn: () => api.getFiche(nom),
@@ -181,6 +208,15 @@ function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
   // Repli : l'état de partie connaît déjà nom/race/classe/PV/CA même sans fiche.
   const pj = useParty((s) => s.state)?.pj?.find((p) => p.nom === nom);
   const f = (ficheQuery.data?.fiche ?? {}) as Record<string, unknown>;
+
+  // Fermeture au clavier (Échap), cohérent avec les autres modales.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
 
   const identite = {
     nom: (f.nom as string) ?? nom,
@@ -193,13 +229,14 @@ function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
   const pv = (f.pv as number) ?? pj?.pv;
   const pvMax = (f.pv_max as number) ?? pj?.pv_max;
   const ca = (f.ca as number) ?? pj?.ca;
+  const chargeMax = f.charge_max;
   const portraitUrl = ficheQuery.data?.portrait;
   const sorts = f.sorts ?? f.sorts_connus;
   // Champs non rendus explicitement ci-dessous (extension libre de la fiche).
   const connus = new Set([
     "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
     "ca", "carac", "sauvegardes", "bab", "competences", "dons", "equipement",
-    "or", "histoire", "conditions", "sorts", "sorts_connus",
+    "or", "histoire", "conditions", "sorts", "sorts_connus", "charge_max",
   ]);
   const extras = Object.entries(f).filter(([k]) => !connus.has(k));
 
@@ -235,7 +272,7 @@ function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
           />
         )}
 
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className={`grid gap-2 mb-3 ${chargeMax != null ? "grid-cols-4" : "grid-cols-3"}`}>
           <div className="bg-stone-800/60 rounded p-2 text-center">
             <div className="text-lg text-rose-300 tabular-nums">{pv ?? "?"}<span className="text-xs text-stone-500">/{pvMax ?? "?"}</span></div>
             <div className="text-xs text-stone-500">PV</div>
@@ -250,6 +287,12 @@ function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
             </div>
             <div className="text-xs text-stone-500">BBA</div>
           </div>
+          {chargeMax != null && (
+            <div className="bg-stone-800/60 rounded p-2 text-center">
+              <div className="text-lg text-emerald-300 tabular-nums">{String(chargeMax)}<span className="text-xs text-stone-500"> kg</span></div>
+              <div className="text-xs text-stone-500">Charge max</div>
+            </div>
+          )}
         </div>
 
         {ficheQuery.isLoading && <p className="text-stone-500 text-xs italic mb-2">Chargement de la fiche…</p>}

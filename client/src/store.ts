@@ -66,6 +66,10 @@ interface PartyStore {
   // -- État persistant (mirroir PartyState côté backend) ----------------- //
   state: PartyState | null;
   setState: (s: PartyState) => void;
+  /** Fusionne des patches à chemins pointés ("lieu.position_x"…) reçus
+   *  en direct via WS — évite d'attendre le polling REST (15 s) pour
+   *  voir bouger le marqueur de carte, les PV, la phase, etc. */
+  applyPatches: (patches: Record<string, unknown>[]) => void;
 
   // -- Fil de discussion -------------------------------------------------- //
   messages: ChatMessage[];
@@ -75,6 +79,10 @@ interface PartyStore {
   // -- Monstres rencontrés (galerie bas de colonne droite) --------------- //
   monsters: EncounterMonster[];
   addMonster: (m: EncounterMonster) => void;
+
+  // -- Scènes illustrées (salles de donjon + moments clés) ---------------- //
+  scenes: EncounterMonster[];
+  addScene: (s: EncounterMonster) => void;
 
   addMessage: (m: ChatMessage) => void;
   appendDelta: (streamId: string, text: string) => void;
@@ -152,6 +160,38 @@ export const useParty = create<PartyStore>((set) => ({
   state: null,
   setState: (s) => set({ state: s }),
 
+  applyPatches: (patches) =>
+    set((st) => {
+      if (!st.state || !patches.length) return st;
+      // Copie profonde simple (état 100 % JSON) puis merge par chemin.
+      let next: Record<string, unknown>;
+      try {
+        next = JSON.parse(JSON.stringify(st.state));
+      } catch {
+        return st;
+      }
+      for (const p of patches) {
+        if (!p) continue;
+        for (const [chemin, val] of Object.entries(p)) {
+          const parts = chemin.split(".");
+          let obj: Record<string, unknown> = next;
+          for (let i = 0; i < parts.length - 1; i++) {
+            const k = parts[i];
+            const enfant: unknown = obj[k];
+            if (enfant == null || typeof enfant !== "object") {
+              // Index numérique au niveau suivant → tableau, sinon objet.
+              obj[k] = /^\d+$/.test(parts[i + 1]) ? [] : {};
+            }
+            const cible: unknown = obj[k];
+            if (cible == null || typeof cible !== "object") break;
+            obj = cible as Record<string, unknown>;
+          }
+          obj[parts[parts.length - 1]] = val;
+        }
+      }
+      return { state: next as unknown as PartyState };
+    }),
+
   messages: [],
   thinking: false,
   participants: [],
@@ -162,6 +202,14 @@ export const useParty = create<PartyStore>((set) => ({
       st.monsters.some((x) => x.url === m.url)
         ? { monsters: [m, ...st.monsters.filter((x) => x.url !== m.url)] }
         : { monsters: [m, ...st.monsters].slice(0, 12) },
+    ),
+
+  scenes: [],
+  addScene: (sc) =>
+    set((st) =>
+      st.scenes.some((x) => x.url === sc.url)
+        ? { scenes: [sc, ...st.scenes.filter((x) => x.url !== sc.url)] }
+        : { scenes: [sc, ...st.scenes].slice(0, 20) },
     ),
 
   addMessage: (m) => set((st) => ({ messages: [...st.messages, m] })),
@@ -214,7 +262,7 @@ export const useParty = create<PartyStore>((set) => ({
   setAudioEnabled: (v) => set({ audioEnabled: v }),
 
   // Conserve player/password : ce sont des choix de session, pas de la partie.
-  reset: () => set({ messages: [], state: null, thinking: false, participants: [], teamMessages: [], teamUnread: 0, showPlayerChat: false, audioEnabled: false }),
+  reset: () => set({ messages: [], state: null, thinking: false, participants: [], teamMessages: [], teamUnread: 0, showPlayerChat: false, audioEnabled: false, monsters: [], scenes: [] }),
 }));
 
 export { uid };

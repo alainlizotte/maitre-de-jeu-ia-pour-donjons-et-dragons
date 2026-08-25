@@ -100,6 +100,12 @@ export const api = {
     post<{ carac: Record<string, number>; methode: string }>(`${API}/persos/stats-aleatoires`),
   orDepart: (classe: string, mode: "tirage" | "moyenne" = "tirage") =>
     post<{ or: number; formule: string }>(`${API}/persos/or-depart`, { classe, mode }),
+  /** Tirage officiel âge/taille/poids selon race + classe + sexe (DRS). */
+  apparenceAleatoire: (race: string, classe: string, sexe: string) =>
+    post<{
+      age_ans: number; taille_cm: number; poids_kg: number;
+      age: string; taille: string; poids: string; race: string; formule_age: string;
+    }>(`${API}/persos/apparence-aleatoire`, { race, classe, sexe }),
   listPersos: () => fetch(`${API}/persos`, { headers: entetes() }).then(jq<FichePerso[]>),
   getPerso: (slug: string) =>
     fetch(`${API}/persos/${encodeURIComponent(slug)}`, { headers: entetes() }).then(jq<FichePerso>),
@@ -124,6 +130,11 @@ export const api = {
     fetch(`${API}/parties/${id}`).then(
       jq<{ partie_id: string; etat: PartyState | { _erreur: string } }>,
     ),
+  deleteParty: (id: string) =>
+    fetch(`${API}/parties/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: entetes(),
+    }).then(jq<{ ok: boolean; partie_id: string; supprimes: string[] }>),
 
   // -- Modèle IA (sélection à chaud) -------------------------------------- //
   listModels: () => fetch(`${API}/models`).then(jq<ModelsList>),

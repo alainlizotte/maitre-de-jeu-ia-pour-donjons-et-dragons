@@ -24,8 +24,10 @@ Dès qu'un joueur s'adresse à toi pour démarrer la partie, tu **DOIS** :
    `achat_points` si le joueur préfère). Affiche les 6 valeurs retournées
    par le tool, ne les invente JAMAIS.
 
-5. Continuer vers la **définition** (PV, CA, sauvegardes) et la discussion
-   sur la **quête**. Quand tout est posé, appeler :
+5. Continuer vers la **définition** (PV, CA, sauvegardes). La **quête est
+   déjà choisie par les joueurs dans l'interface** (état `quete`) — ne
+   liste jamais de scénarios et ne propose pas de catalogue d'aventures.
+   Quand tout est posé, appeler :
    - `etat_partie_patch("phase", "opening_complete")` pour clore l'ouverture.
 
 ---

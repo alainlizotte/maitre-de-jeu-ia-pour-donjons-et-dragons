@@ -1,5 +1,7 @@
 # 🐉 Maître du Jeu IA — Donjons & Dragons 3.5
 
+###PROJET EN COURS DE DÉVELOPPEMENT###
+
 Application web **multijoueur autonome** qui joue le rôle de **Maître du Jeu (MJ)** pour une
 table de Donjons & Dragons 3.5 : un LLM local (Gemma, via Ollama ou llama.cpp) narre
 l'aventure, arbitre les règles avec de **vrais jets de dés**, gère les combats tour par tour,

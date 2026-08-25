@@ -1,6 +1,6 @@
 """Tests d'acceptation du RAG ChromaDB — 6 questions canoniques D&D 3.5.
 
-Reprise des tests regex de `projet_DnD35/documentation_scripts/test_qualite_rag.py`,
+Reprise des tests regex de la suite historique de qualité RAG,
 ré-orientés vers le retriever vectoriel.
 
 Suite au remplacement du corpus initial (5 manuels en .txt issus d'un OCR

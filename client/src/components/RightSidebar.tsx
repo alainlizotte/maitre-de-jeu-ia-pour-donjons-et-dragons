@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DiceRoller } from "./DiceRoller";
 import { DungeonView } from "./DungeonView";
 import { WorldMap } from "./WorldMap";
-import { Bestiary } from "./Bestiary";
+import { Bestiary, MonsterSheetModal } from "./Bestiary";
 import { TeamChat } from "./TeamChat";
 import { useParty } from "../store";
+import type { EncounterMonster } from "../api/types";
 
 type Tab = "des" | "equipe" | "monde" | "donjon" | "bestiaire";
 
@@ -22,25 +23,105 @@ interface RightSidebarProps {
   socket?: React.RefObject<{ send: (payload: Record<string, unknown>) => void } | null>;
 }
 
-/** Moitié basse de la colonne : dernière image de monstre rencontrée + historique. */
+/** Moitié basse de la colonne : galerie à onglets — monstres rencontrés et
+ *  scènes illustrées (salles de donjon + moments clés générés par le MJ).
+ *  L'onglet Scènes s'active tout seul quand une nouvelle image arrive. */
 function EncounterGallery() {
   const monsters = useParty((s) => s.monsters);
-  const [selected, setSelected] = useState(0);
-  // L'index pointe la vignette affichée en grand (les plus récentes en tête).
-  const idx = Math.min(selected, Math.max(0, monsters.length - 1));
-  const current = monsters[idx];
+  const scenes = useParty((s) => s.scenes);
+  const [onglet, setOnglet] = useState<"monstres" | "scenes">("monstres");
+  const [selectedM, setSelectedM] = useState(0);
+  const [selectedS, setSelectedS] = useState(0);
+  // Repli de la galerie → toute la hauteur pour les onglets du haut.
+  const [replie, setReplie] = useState(false);
+  // Fiche détaillée ouverte (popup) — monstre cliqué dans la galerie.
+  const [sheet, setSheet] = useState<EncounterMonster | null>(null);
+  // Agrandissement plein écran d'une scène.
+  const [zoom, setZoom] = useState<EncounterMonster | null>(null);
+
+  // Une nouvelle scène arrive → on bascule dessus automatiquement.
+  const prevScenes = useRef(scenes.length);
+  useEffect(() => {
+    if (scenes.length > prevScenes.current) {
+      setOnglet("scenes");
+      setSelectedS(0);
+      setReplie(false);
+    }
+    prevScenes.current = scenes.length;
+  }, [scenes.length]);
+
+  // Fermeture de l'agrandissement au clavier.
+  useEffect(() => {
+    if (!zoom) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoom(null);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [zoom]);
+
+  const items = onglet === "monstres" ? monsters : scenes;
+  const brutIdx = onglet === "monstres" ? selectedM : selectedS;
+  const idx = Math.min(brutIdx, Math.max(0, items.length - 1));
+  const current = items[idx];
+  const selectItem = (i: number) =>
+    onglet === "monstres" ? setSelectedM(i) : setSelectedS(i);
 
   return (
-    <div className="h-1/2 min-h-0 border-t border-stone-800 bg-stone-900/70 flex flex-col p-2">
-      <h3 className="text-xs uppercase text-stone-500 mb-1.5 shrink-0">
-        Monstres rencontrés {monsters.length > 0 && <span className="text-amber-400">({monsters.length})</span>}
-      </h3>
-      {!current && (
+    <div
+      className={
+        (replie ? "h-auto" : "h-1/2 min-h-0") +
+        " border-t border-stone-800 bg-stone-900/70 flex flex-col p-2"
+      }
+    >
+      <div className="flex items-center gap-2 mb-1.5 shrink-0">
+        <button
+          onClick={() => setReplie((r) => !r)}
+          className="text-stone-500 hover:text-amber-300 text-xs w-4"
+          title={replie ? "Déplier la galerie" : "Replier la galerie"}
+        >
+          {replie ? "▸" : "▾"}
+        </button>
+        <h3 className="text-xs uppercase text-stone-500 truncate">
+          {onglet === "monstres" ? (
+            <>Monstres rencontrés {monsters.length > 0 && <span className="text-amber-400">({monsters.length})</span>}</>
+          ) : (
+            <>Scènes {scenes.length > 0 && <span className="text-amber-400">({scenes.length})</span>}</>
+          )}
+        </h3>
+        <div className="ml-auto flex rounded overflow-hidden border border-stone-700 text-[10px] shrink-0">
+          <button
+            onClick={() => setOnglet("monstres")}
+            className={
+              "px-2 py-1 " +
+              (onglet === "monstres"
+                ? "bg-stone-700 text-amber-300 font-medium"
+                : "bg-stone-900 text-stone-400 hover:text-stone-200")
+            }
+          >
+            Monstres
+          </button>
+          <button
+            onClick={() => setOnglet("scenes")}
+            className={
+              "px-2 py-1 relative " +
+              (onglet === "scenes"
+                ? "bg-stone-700 text-amber-300 font-medium"
+                : "bg-stone-900 text-stone-400 hover:text-stone-200")
+            }
+          >
+            Scènes
+          </button>
+        </div>
+      </div>
+      {!replie && !current && (
         <div className="flex-1 flex items-center justify-center text-center text-stone-600 text-xs italic px-4">
-          Les images des monstres croisés en jeu s'afficheront ici.
+          {onglet === "monstres"
+            ? "Les images des monstres croisés en jeu s'afficheront ici."
+            : "Les illustrations des salles explorées et des scènes marquantes s'afficheront ici."}
         </div>
       )}
-      {current && (
+      {!replie && current && (
         <>
           <div className="text-center text-stone-200 text-sm font-medium mb-1 shrink-0 truncate" title={current.nom}>
             {current.nom}
@@ -49,7 +130,9 @@ function EncounterGallery() {
             <img
               src={current.url}
               alt={current.nom}
-              className="max-w-full max-h-full object-contain"
+              title={onglet === "monstres" ? `Voir la fiche de ${current.nom}` : "Agrandir"}
+              onClick={() => (onglet === "monstres" ? setSheet(current) : setZoom(current))}
+              className="max-w-full max-h-full object-contain cursor-zoom-in"
               onError={(e) => {
                 // PNG manquant → placeholder SVG du même slug.
                 const el = e.target as HTMLImageElement;
@@ -59,12 +142,15 @@ function EncounterGallery() {
               }}
             />
           </div>
-          {monsters.length > 1 && (
+          {items.length > 1 && (
             <div className="flex gap-1.5 mt-1.5 overflow-x-auto shrink-0">
-              {monsters.map((m, i) => (
+              {items.map((m, i) => (
                 <button
                   key={m.url}
-                  onClick={() => setSelected(i)}
+                  onClick={() => selectItem(i)}
+                  onDoubleClick={() =>
+                    onglet === "monstres" ? setSheet(m) : setZoom(m)
+                  }
                   title={m.nom}
                   className={
                     "shrink-0 w-10 h-10 rounded border overflow-hidden bg-stone-950 " +
@@ -77,6 +163,38 @@ function EncounterGallery() {
             </div>
           )}
         </>
+      )}
+      {sheet && (
+        <MonsterSheetModal
+          nom={sheet.nom}
+          url={sheet.url}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {zoom && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6"
+          onClick={() => setZoom(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={zoom.url}
+              alt={zoom.nom}
+              className="max-w-full max-h-[80vh] object-contain rounded border border-stone-700 shadow-2xl"
+            />
+            <div className="text-stone-200 text-sm mt-2 font-serif">{zoom.nom}</div>
+            <button
+              onClick={() => setZoom(null)}
+              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-stone-800 border border-stone-600 text-stone-300 hover:text-white"
+              title="Fermer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -116,7 +234,7 @@ export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps
         ))}
       </div>
       <div className="flex-1 min-h-0 overflow-auto p-3">
-        {tab === "des" && <DiceRoller />}
+        {tab === "des" && <DiceRoller sendSay={sendSay} />}
         {tab === "equipe" && <TeamChat sendTeamSay={sendTeamSay ?? (() => {})} socket={socket} />}
         {tab === "monde" && <WorldMap />}
         {tab === "donjon" && <DungeonView sendSay={sendSay} />}

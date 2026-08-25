@@ -21,6 +21,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,7 +29,7 @@ from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import auth as auth_mod
@@ -42,6 +43,7 @@ from .llm.orchestrator import EventCallback, Orchestrator
 from .llm.prompt_builder import PromptBuilder
 from .rag.store import RagStore
 from .tools.base import ToolContext
+from .tools.monstres import image_pour
 from .tools.registry import discover_tools
 
 
@@ -306,6 +308,76 @@ async def get_party(partie_id: str) -> dict[str, Any]:
     return {"partie_id": partie_id, "etat": etat}
 
 
+@app.delete("/api/parties/{partie_id}")
+async def delete_party(partie_id: str) -> dict[str, Any]:
+    """Supprime définitivement une partie : état persistant, historiques de
+    chat (MJ + équipe), cartes SVG liées (donjon…) et session en mémoire.
+    Les WebSockets encore connectés sont fermés — les joueurs voient la
+    partie disparaître."""
+    import re
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", partie_id):
+        raise HTTPException(status_code=400, detail="Identifiant de partie invalide.")
+
+    data_dir = cfg.abs(cfg.paths.data_dir)
+
+    # Session en mémoire : fermeture propre des WebSockets puis retrait.
+    sess = sessions.pop(partie_id)
+    if sess is not None:
+        for ws in list(sess.connections):
+            try:
+                await ws.close(code=1001, reason="Partie supprimée")
+            except Exception:                                    # noqa: BLE001
+                pass
+        sess.connections.clear()
+
+    # Fichiers sur disque (best-effort, on liste ce qui est réellement effacé).
+    cibles = [
+        data_dir / f"partie_{partie_id}.json",
+        data_dir / f"chat_{partie_id}.json",
+        data_dir / f"team_chat_{partie_id}.json",
+        *list((data_dir / "cartes").glob(f"*_{partie_id}.svg")),
+    ]
+    supprimes = [c.name for c in cibles if c.is_file()]
+    for c in cibles:
+        try:
+            c.unlink(missing_ok=True)
+        except OSError as e:
+            raise HTTPException(
+                status_code=500, detail=f"Impossible de supprimer {c.name} : {e}"
+            )
+
+    if not supprimes and sess is None:
+        raise HTTPException(status_code=404, detail=f"Partie « {partie_id} » introuvable.")
+    return {"ok": True, "partie_id": partie_id, "supprimes": supprimes}
+
+
+@app.get("/api/parties/{partie_id}/carte-donjon.svg")
+async def get_carte_donjon_svg(partie_id: str) -> Response:
+    """Carte du donjon rendue À LA VOLÉE depuis l'état live de la partie.
+
+    Le fichier statique `/data/cartes/donjon_<partie>.svg` n'est réécrit que
+    lorsqu'un outil tourne — il peut donc être périmé. Cette route re-rend
+    le SVG depuis `etat["donjon"]` à chaque requête (style à jour garanti)
+    et interdit la mise en cache navigateur.
+    """
+    from .tools.cartes import _rendre_svg_donjon
+    state = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+        partie_id=partie_id,
+        max_history=cfg.game.max_history_events,
+    )
+    etat = state.load()
+    donjon = (etat or {}).get("donjon") or {}
+    if not donjon.get("id"):
+        raise HTTPException(status_code=404, detail="Aucun donjon actif")
+    return Response(
+        content=_rendre_svg_donjon(donjon),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/api/tools")
 async def list_tools() -> dict[str, Any]:
     """Introspection des tools (debug / doc frontend)."""
@@ -484,6 +556,23 @@ async def persos_or_depart(
     }
 
 
+@app.post("/api/persos/apparence-aleatoire")
+async def persos_apparence_aleatoire(
+    payload: dict[str, Any],
+    utilisateur: str = Depends(utilisateur_courant),
+) -> dict[str, Any]:
+    """Tirage âge/taille/poids selon les tables officielles 3.5 (DRS).
+
+    L'âge dépend de la race ET du groupe de classe ; taille/poids de la race
+    et du sexe. Renvoie valeurs brutes + chaînes formatées pour le formulaire.
+    """
+    return persos_mod.tirer_apparence(
+        race=(payload.get("race") or "").strip(),
+        classe=(payload.get("classe") or "").strip(),
+        sexe=(payload.get("sexe") or "").strip(),
+    )
+
+
 @app.get("/api/persos")
 async def persos_liste(utilisateur: str = Depends(utilisateur_courant)) -> list[dict[str, Any]]:
     """Liste les personnages du compte connecté (+ URL de portrait)."""
@@ -606,7 +695,41 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
     dons = payload.get("dons") or []
     if isinstance(dons, str):
         dons = [ligne.strip() for ligne in dons.splitlines() if ligne.strip()]
+    # Budget de dons (règles 3.5) : 1 au niveau 1 puis 1 supplémentaire aux
+    # niveaux 3, 6, 9… ; les humains gagnent +1 don.
+    max_dons = 1 + max(0, niveau // 3) + (
+        1 if (persos_mod.resoudre_race(race) or race) == "Humain" else 0
+    )
+    if len(dons) > max_dons:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Trop de dons ({len(dons)}) : maximum {max_dons} au niveau "
+                   f"{niveau} (bonus humain inclus le cas échéant).",
+        )
     competences = payload.get("competences") or {}
+    # Budget de points de compétence (même formule que le client) :
+    # par_niveau = max(1, base_classe + mod_INT) ; total = par_niveau × (niveau+3)
+    # (+niveau si humain). Les rangs saisis ne peuvent pas dépasser ce budget.
+    if isinstance(competences, dict) and competences:
+        base_pts = catalogue_mod.POINTS_COMPETENCE.get(
+            persos_mod.resoudre_classe(classe) or classe, 0
+        )
+        mod_int = (int(calculs["carac_final"]["INT"]) - 10) // 2
+        budget_comp = max(1, base_pts + mod_int) * (3 + niveau)
+        if (persos_mod.resoudre_race(race) or race) == "Humain":
+            budget_comp += niveau
+        try:
+            rangs_total = sum(max(0, int(v or 0)) for v in competences.values())
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400, detail="Rangs de compétence invalides."
+            )
+        if rangs_total > budget_comp:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Trop de rangs de compétence ({rangs_total}) : maximum "
+                       f"{budget_comp} au niveau {niveau}.",
+            )
 
     fiche = {
         "nom": nom,
@@ -622,6 +745,7 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         "sauvegardes": calculs["sauvegardes"],
         "bab": calculs["bab"],
         "initiative": calculs["initiative"],
+        "charge_max": calculs["charge_max"],
         "competences": competences,
         "dons": dons,
         "equipement": equipement,
@@ -727,15 +851,15 @@ async def get_fiche(nom: str, partie_id: Optional[str] = None) -> dict[str, Any]
 # --------------------------------------------------------------------------- #
 @app.get("/api/ressources")
 async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
-    """Liste les ressources consultables : manuels, cartes du monde,
-    scénarios PDF locaux (+ carte du donjon de la partie si `partie_id`).
-    Les manuels et cartes pointent vers le serveur du projet quand les
-    fichiers sont présents sous data/manuels/ (repli externe sinon)."""
+    """Liste les ressources consultables : manuels, cartes de référence
+    (Faerûn, nord de Faerûn, Outreterre, Toril), scénarios PDF locaux
+    (+ carte du donjon de la partie si `partie_id`). Les manuels pointent
+    vers le serveur du projet quand les fichiers sont présents sous
+    data/manuels/ (repli externe sinon)."""
     from .tools import scenarios as S
     from .tools.manuels import (
+        CARTES_REFERENCE,
         FICHIERS_DEFAUT,
-        url_carte_hires,
-        url_carte_lowres,
         url_manuel,
     )
     from urllib.parse import quote
@@ -756,12 +880,23 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
         }
         for f in FICHIERS_DEFAUT
     ]
+
+    # Cartes de référence — fichiers PNG du dossier projet `cartes/`, copiés
+    # au démarrage vers data/cartes/ et servis sous /data/cartes/…
     cartes = [
-        {"titre": "Carte de la Côte des Épées (basse résolution)",
-         "url": url_carte_lowres(ctx)},
-        {"titre": "Carte de la Côte des Épées (haute résolution)",
-         "url": url_carte_hires(ctx)},
+        {"titre": _titre, "libelle": _libelle, "url": f"/data/cartes/{quote(_f)}"}
+        for _f, _titre, _libelle in CARTES_REFERENCE
+        if (data_dir / "cartes" / _f).is_file()
     ]
+    # Atlas externe — carte interactive de Faerûn hébergée par AideDD
+    # (lien internet, nouvel onglet ; complète les PNG hors-ligne ci-dessus).
+    cartes.append(
+        {
+            "titre": "Faerûn — Atlas interactif (AideDD, internet)",
+            "libelle": "Atlas AideDD",
+            "url": "https://www.aidedd.org/atlas/fr/faerun",
+        }
+    )
     scenarios = [
         {
             "id": s.get("id", ""),
@@ -820,6 +955,10 @@ async def set_quest(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     titre = payload.get("titre", "")
     pitch = payload.get("pitch", "")
     source = payload.get("source", "")
+    # Aventure libre (aucun scénario) : marquer la quête comme choisie pour
+    # que le sélecteur de scénario ne réapparaisse pas.
+    if not str(titre).strip() and not str(source).strip():
+        source = "libre"
     state = PartyState(data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id)
     etat = state.load()
     if "_erreur" in etat:
@@ -921,6 +1060,19 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
             player = (msg.get("player") or "Joueur").strip()
 
             if mtype == "join":
+                # Un personnage sélectionné est OBLIGATOIRE pour rejoindre :
+                # pas de participant « fantôme » sans fiche rattachée.
+                personnage = (msg.get("personnage") or "").strip()
+                if not personnage:
+                    await ws.send_json({
+                        "type": "sys",
+                        "event": "join_refused",
+                        "detail": (
+                            "Sélectionnez un personnage sur la page d'accueil "
+                            "avant de rejoindre la partie."
+                        ),
+                    })
+                    continue
                 if pw_hash is not None:
                     mdp = msg.get("password") or ""
                     if _hash_mot_de_passe(mdp) != pw_hash:
@@ -932,15 +1084,24 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                         continue
                     session.authenticated.add(ws)
                     session.connections.add(ws)
-                session.add_participant(player)
                 # Rattachement du personnage choisi (menu déroulant côté
                 # client) → le PJ rejoint l'état de partie (liste pj).
-                personnage = (msg.get("personnage") or "").strip()
-                fiche_enregistree = None
-                if personnage:
-                    fiche_enregistree = persos_mod.enregistrer_personnage_partie(
-                        _dossier_donnees(), partie_id, personnage, player
-                    )
+                fiche_enregistree = persos_mod.enregistrer_personnage_partie(
+                    _dossier_donnees(), partie_id, personnage, player
+                )
+                if fiche_enregistree is None:
+                    # Fiche inexistante ou n'appartenant pas au joueur : on
+                    # refuse AVANT d'inscrire le participant.
+                    await ws.send_json({
+                        "type": "sys",
+                        "event": "join_refused",
+                        "detail": (
+                            f"Personnage « {personnage} » introuvable ou non "
+                            "rattache a votre compte. Choisissez-en un autre."
+                        ),
+                    })
+                    continue
+                session.add_participant(player)
                 # Pour une partie protégée, l'historique n'arrive qu'ici.
                 if pw_hash is not None:
                     await _send_joined(ws, session, partie_id)
@@ -1085,6 +1246,35 @@ async def _handle_say(
         "text": text,
     })
 
+    # 1bis. ⚔️ Application MÉCANIQUE du tour de jeu (D&D 3.5) : en phase de
+    # combat, seul le joueur dont c'est le tour peut déclencher le MJ. Les
+    # messages des autres joueurs sont diffusés mais n'invoquent PAS le LLM.
+    etat_avant = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    actif_avant = str(etat_avant.get("courant_tour_pour") or "")
+    if etat_avant.get("phase") == "combat":
+        actif = actif_avant
+        pj_actif = next(
+            (p for p in (etat_avant.get("pj") or []) if p.get("nom") == actif),
+            None,
+        )
+        if pj_actif is not None:
+            joueur_actif = str(pj_actif.get("joueur") or "").strip().lower()
+            if joueur_actif and player.strip().lower() != joueur_actif:
+                await session.broadcast({
+                    "type": "sys",
+                    "event": "turn_blocked",
+                    "detail": (
+                        f"⏳ {player} doit attendre : en combat, c'est le tour "
+                        f"de {actif} (joué par {pj_actif.get('joueur')}) — "
+                        f"round {etat_avant.get('tour', 1)}."
+                    ),
+                })
+                return
+        # Si l'actif est un PNJ/monstre : le message passe, la bannière de tour
+        # injectée plus bas force le MJ à jouer le monstre puis avancer.
+
     # 2. Statut "thinking" aux clients connectés.
     await session.broadcast({"type": "status", "description": "Le MJ réfléchit..."})
 
@@ -1106,10 +1296,73 @@ async def _handle_say(
             system_text, etat = app.state.prompt_builder.build_system_message(
                 partie_id, rag_context=rag_context
             )
-            # On re-construit la conversation à partir de l'historique (système en tête).
+
+            # 3bis. ⚔️ Bannière de tour : rappel mécanique du combat en cours,
+            # injecté dans le message système à chaque invocation du MJ.
+            if etat.get("phase") == "combat":
+                actif = str(etat.get("courant_tour_pour") or "?")
+                ordre = ", ".join(
+                    f"{e.get('nom')} ({e.get('init', '?')})"
+                    for e in (etat.get("initiative") or [])
+                ) or "?"
+                pj_actif = next(
+                    (p for p in (etat.get("pj") or []) if p.get("nom") == actif),
+                    None,
+                )
+                if pj_actif is not None:
+                    qui = (
+                        f"{actif} — JOUEUR {pj_actif.get('joueur')}. "
+                        "Résous UNIQUEMENT les actions de CE personnage "
+                        "(ne fais agir aucun autre PJ), puis appelle "
+                        "OBLIGATOIREMENT tour_suivant_combat."
+                    )
+                else:
+                    qui = (
+                        f"{actif} (MONSTRE/PNJ). C'est TOI, le MJ, qui "
+                        "décides et joues ses actions toi-même — n'attends "
+                        "AUCUNE instruction des joueurs et ne leur demande "
+                        "JAMAIS ce que fait le monstre. Ne t'adresse JAMAIS "
+                        f"au monstre (« {actif}, que faites-vous ? » est "
+                        "INTERDIT) : résous ses actions avec les tools puis "
+                        "raconte-les à la 3ᵉ personne. Son tour est un VRAI "
+                        "tour : aucune action résumée entre parenthèses — il "
+                        "attaque (lancer_attaque), se déplace ou agit "
+                        "clairement. Tactique simple : il attaque le héros "
+                        "le plus proche/mençant. Les dés et les règles "
+                        f"décident du résultat : lancer_attaque(attaquant="
+                        f"\"{actif}\", cible=<nom du PJ visé>) → "
+                        "lancer_degats → infliger_degats(nom=<PJ>, "
+                        "degats=N) si touché ; si le jet rate, narre "
+                        "l'échec. Puis appelle tour_suivant_combat."
+                    )
+                system_text += (
+                    f"\n\n⚔️ **TOUR EN COURS** — round {etat.get('tour', 1)}. "
+                    f"Ordre d'initiative : {ordre}. C'est AU TOUR DE {qui} "
+                    "Économie d'actions D&D 3.5 : max 1 action standard + 1 "
+                    "action de mouvement (+ actions libres) par round. Toute "
+                    "attaque passe par lancer_attaque, toute sauvegarde par "
+                    "lancer_sauvegarde, tout dégât appliqué par infliger_degats."
+                )
+            # On re-construit la conversation à partir de l'historique (système
+            # en tête), avec un budget en caractères : le message système et
+            # les schémas de tools consomment déjà ~6 k tokens, un historique
+            # non borné saturerait le contexte sur les longues campagnes.
+            budget_hist = cfg.game.max_history_chars
+            hist = list(session.history)
+            total = 0
+            debut = len(hist)
+            for i in range(len(hist) - 1, -1, -1):
+                total += len(getattr(hist[i], "content", "") or "")
+                if total > budget_hist:
+                    debut = i + 1
+                    break
+                debut = i
+            if debut < len(hist) - 1:  # garde au moins le dernier message
+                print(f"[dnd35] Historique tronqué : {len(hist) - debut} messages "
+                      f"anciens omis (budget {budget_hist} chars).")
             messages = [__import__("server.llm.client", fromlist=["Message"]).Message(
                 role="system", content=system_text
-            )] + list(session.history)
+            )] + hist[debut:]
 
             # 4. Boucle d'orchestration : LLM ↔ tools → narration + events + patches.
             ctx = _ctx(partie_id, player)
@@ -1124,6 +1377,111 @@ async def _handle_say(
 
             orch = _orchestrator(app)
             result = await orch.run(messages, ctx, on_event=on_event, on_delta=on_delta)
+
+            # 5bis. ⚔️ Comptabilité de tour : un petit LLM oublie souvent
+            # `tour_suivant_combat` après avoir résolu l'action de l'actif.
+            # Règle D&D : une réponse du MJ = un tour de table consommé. Si la
+            # phase est toujours combat ET l'actif inchangé (et que le combat
+            # était déjà en cours AVANT ce message), on avance mécaniquement.
+            try:
+                apres = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                if (
+                    etat_avant.get("phase") == "combat"
+                    and apres.get("phase") == "combat"
+                    and str(apres.get("courant_tour_pour") or "")
+                    == actif_avant
+                    and actif_avant
+                ):
+                    ordre = apres.get("initiative") or []
+                    idx = next(
+                        (i for i, e2 in enumerate(ordre)
+                         if e2.get("nom") == actif_avant),
+                        -1,
+                    )
+                    if idx >= 0 and ordre:
+                        idx += 1
+                        if idx >= len(ordre):
+                            idx = 0
+                            apres["tour"] = (apres.get("tour", 1) or 1) + 1
+                        nouveau = ordre[idx].get("nom", "")
+                        apres["courant_tour_pour"] = nouveau
+                        PartyState(
+                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                            partie_id=partie_id,
+                        ).save(apres)
+                        result.state_patches.append({
+                            "tour": apres.get("tour"),
+                            "courant_tour_pour": nouveau,
+                        })
+                        result.narration += (
+                            f"\n\n➡️ _Fin du tour de {actif_avant} — "
+                            f"au tour de **{nouveau}** "
+                            f"(round {apres.get('tour', 1)})._"
+                        )
+                        print(f"[dnd35] Tour avancé automatiquement : "
+                              f"{actif_avant} → {nouveau}")
+
+                # 5ter. Clôture automatique : quand tous les monstres suivis
+                # par engager_combat sont détruits, le combat se termine
+                # mécaniquement (le modèle oublie souvent finir_combat).
+                if apres.get("phase") == "combat":
+                    mons = apres.get("monstres_combat") or []
+                    if mons and all(
+                        "Détruit" in (m2.get("conditions") or [])
+                        for m2 in mons
+                    ):
+                        apres["phase"] = "exploration"
+                        apres["initiative"] = []
+                        apres["courant_tour_pour"] = None
+                        apres["tour"] = 0
+                        apres["monstres_combat"] = []
+                        PartyState(
+                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                            partie_id=partie_id,
+                        ).save(apres)
+                        result.state_patches.append({
+                            "phase": "exploration",
+                            "tour": 0,
+                            "courant_tour_pour": None,
+                            "initiative": [],
+                            "monstres_combat": [],
+                        })
+                        result.narration += (
+                            "\n\n⚔️ _Tous les ennemis sont à terre — "
+                            "le combat est terminé !_"
+                        )
+                        print("[dnd35] Combat clôturé automatiquement "
+                              "(tous les monstres détruits).")
+
+                # 5quater. 🖼️ Illustrations des monstres en jeu : le modèle
+                # oublie souvent d'appeler monstre_consulter à l'annonce d'une
+                # rencontre ; on garantit ici le portrait de chaque monstre
+                # nouveau (cache instantané s'il existe déjà, budget temps
+                # sinon pour ne pas bloquer la table).
+                _t0 = time.time()
+                _vus: set[str] = set()
+                for mo in apres.get("monstres_combat") or []:
+                    nom_mo = str((mo or {}).get("nom") or "").strip()
+                    cle_mo = nom_mo.lower()
+                    if not nom_mo or cle_mo in _vus:
+                        continue
+                    _vus.add(cle_mo)
+                    if time.time() - _t0 > 100:
+                        print("[dnd35] Budget images monstres atteint — "
+                              "le reste sera généré au tour suivant.")
+                        break
+                    try:
+                        url_img = await image_pour(ctx, nom_mo)
+                    except Exception as e:                           # noqa: BLE001
+                        print(f"[dnd35] Image {nom_mo} échouée (ignoré) : {e}")
+                        continue
+                    if url_img:
+                        result.state_patches.append({"image_monstre": url_img})
+            except Exception as e:                                   # noqa: BLE001
+                print(f"[dnd35] Avancement de tour auto échoué (ignoré) : {e}")
 
             # 5. On ajoute la narration finale à l'historique de la session.
             if result.narration:
@@ -1188,6 +1546,19 @@ if _static.is_dir():
 _data_dir = cfg.abs(cfg.paths.data_dir)
 if _data_dir.is_dir():
     app.mount("/data", StaticFiles(directory=str(_data_dir)), name="data")
+
+# Cartes de référence du projet (Faerûn, nord de Faerûn, Outreterre, Toril) :
+# copiées au démarrage de `cartes/` (dépôt) vers `data/cartes/` (servi sous
+# /data/cartes/…). Idempotent — les fichiers existants ne sont pas écrasés.
+_cartes_src = cfg.project_root / "cartes"
+if _cartes_src.is_dir() and _data_dir.is_dir():
+    _cartes_dst = _data_dir / "cartes"
+    _cartes_dst.mkdir(parents=True, exist_ok=True)
+    for _f in sorted(_cartes_src.glob("*.png")):
+        _dest = _cartes_dst / _f.name
+        if not _dest.is_file():
+            import shutil as _shutil
+            _shutil.copy2(_f, _dest)
 
 
 @app.get("/")

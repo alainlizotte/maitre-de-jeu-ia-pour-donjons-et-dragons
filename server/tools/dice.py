@@ -21,14 +21,60 @@ def _mod(c: int) -> int:
     return (c - 10) // 2
 
 
+def _fiche_pj(ctx: ToolContext, nom: str) -> Optional[dict]:
+    """Charge la fiche d'un PJ si elle existe (sinon None)."""
+    try:
+        from .fiches import _chemin  # pylint: disable=import-outside-toplevel
+        import os as _os                             # noqa: I001
+        path = _chemin(ctx, nom)
+        if _os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:                                        # noqa: BLE001
+        pass
+    return None
+
+
+def _ca_officielle(ctx: ToolContext, nom_cible: str) -> tuple[Optional[int], str]:
+    """CA canonique d'une cible : fiche du PJ si joueur, sinon bestiaire local.
+
+    Renvoie `(ca, source)` — ca=None si la cible est inconnue des deux sources.
+    Évite que le LLM invente une CA trop basse pour toucher facilement.
+    """
+    fiche = _fiche_pj(ctx, nom_cible)
+    if fiche is not None and fiche.get("ca") is not None:
+        try:
+            return int(fiche["ca"]), f"fiche de {nom_cible}"
+        except (TypeError, ValueError):
+            pass
+    try:
+        from .monstres import _find_monstre   # lazy : évite les imports circulaires
+        m = _find_monstre(ctx, nom_cible)
+        if m is not None and m.get("ca") is not None:
+            return int(m["ca"]), (
+                f"bestiaire ({m.get('nom', nom_cible)}, FP {m.get('fp', '?')})"
+            )
+    except Exception:                                    # noqa: BLE001
+        pass
+    return None, ""
+
+
+def _as_int(v: Any, defaut: int = 0) -> int:
+    """Coerce un argument numérique du LLM (peut manquer ou arriver en str)."""
+    try:
+        return int(str(v).strip() or defaut)
+    except (TypeError, ValueError):
+        return defaut
+
+
 # --------------------------------------------------------------------------- #
 #  Tools
 # --------------------------------------------------------------------------- #
 @tool
 async def lancer_d20(
     ctx: ToolContext,
-    modificateur: int,
-    raison: str,
+    modificateur: Any = 0,
+    raison: str = "",
     difficulte: Optional[int] = None,
     nom_personnage: str = "",
     competence: str = "",
@@ -50,6 +96,7 @@ async def lancer_d20(
     # Un petit LLM fournit souvent modificateur=0 en ignorant les rangs et le
     # mod. de caractéristique. Si nom_personnage + competence sont donnés et
     # que la fiche contient des rangs, on recalcule rangs + mod. carac.
+    modificateur = _as_int(modificateur)
     mod_final = modificateur
     note_mod = ""
     if nom_personnage and competence:
@@ -162,11 +209,11 @@ async def calculer_initiative(ctx: ToolContext, participants: str) -> ToolResult
 @tool
 async def lancer_attaque(
     ctx: ToolContext,
-    bonus_attaque: int,
-    ca_cible: int,
-    nom_attaquant: str,
-    arme: str,
-    nom_cible: str,
+    bonus_attaque: Any = 0,
+    ca_cible: Any = 10,
+    nom_attaquant: str = "",
+    arme: str = "",
+    nom_cible: str = "",
 ) -> ToolResult:
     """
     Effectue un jet d'attaque D&D 3.5 contre une Classe d'Armure (CA) cible.
@@ -177,11 +224,33 @@ async def lancer_attaque(
         mod. DEX (distance), lus sur la fiche du personnage — ne jamais
         inventer de bonus. Un recoupement automatique avec la fiche borne
         les valeurs manifestement erronées.
-    :param ca_cible (int): Classe d'Armure de la cible.
+    :param ca_cible (int): Classe d'Armure de la cible. Recoupée
+        automatiquement avec la fiche du PJ ou le bestiaire local — la valeur
+        officielle prime toujours sur celle fournie.
     :param nom_attaquant (str): nom du personnage qui attaque.
     :param arme (str): nom de l'arme utilisée.
     :param nom_cible (str): nom de la cible.
     """
+    # --- CA officielle de la cible ------------------------------------------
+    # Un petit LLM « arrange » parfois la CA pour faire toucher. On impose la
+    # valeur des données officielles quand la cible est connue.
+    # Arguments numériques blindés (le LLM peut omettre ou envoyer "12").
+    bonus_attaque = _as_int(bonus_attaque)
+    ca_cible = _as_int(ca_cible, 10)
+
+    # --- CA officielle de la cible ------------------------------------------
+    # Un petit LLM « arrange » parfois la CA pour faire toucher. On impose la
+    # valeur des données officielles quand la cible est connue.
+    ca_off, src_ca = _ca_officielle(ctx, nom_cible)
+    note_ca = ""
+    if ca_off is not None:
+        if ca_off != ca_cible:
+            note_ca = (
+                f"\n- ⚠️ CA imposée par les règles : {ca_cible} → {ca_off} "
+                f"(source : {src_ca})."
+            )
+            ca_cible = ca_off
+
     # --- Recoupement fiche (conformité 3.5) --------------------------------
     # bonus_attaque = BBA + mod FOR (mêlée) / mod DEX (distance) + bonus
     # divers (arme magique, focus...). Un petit LLM invente parfois des bonus
@@ -222,7 +291,7 @@ async def lancer_attaque(
     lignes = [
         f"⚔️ **Attaque** : {nom_attaquant} [{arme}] vs {nom_cible} (CA {ca_cible})",
         f"- Jet brut d'attaque : {jet}",
-        f"- Bonus total : {bonus_final:+d}" + note_bonus,
+        f"- Bonus total : {bonus_final:+d}" + note_bonus + note_ca,
         f"- **Total attaque : {total}**",
     ]
     if jet == 20:
@@ -263,8 +332,9 @@ async def lancer_degats(
     :param arme_ou_sort (str): nom de l'arme ou du sort.
     :param cible (str): nom de la cible.
     """
-    if nb_des < 1:
-        return ToolResult(text="⚠️ nb_des doit être ≥ 1.")
+    nb_des = max(1, _as_int(nb_des, 1))
+    faces = _as_int(faces, 6)
+    bonus = _as_int(bonus)
     if faces not in (2, 3, 4, 6, 8, 10, 12, 20, 100):
         return ToolResult(text=f"⚠️ Type de dé {faces} non standard en D&D 3.5.")
     jets = [random.randint(1, faces) for _ in range(nb_des)]
@@ -294,11 +364,12 @@ async def lancer_sauvegarde(
 
     :param type_sauvegarde (str): "Vigueur", "Réflexes" ou "Volonté".
     :param modificateur (int): total du jet de sauvegarde de base + carac.
+        Recoupé avec la fiche du PJ si elle existe (la valeur officielle prime).
     :param difficulte (int): DD à atteindre (souvent 10 + ½ niveau + mod carac).
     :param nom_personnage (str): nom du personnage qui sauvegarde.
     :param source (str): source du danger (sort, piège, poison…).
     """
-    t = type_sauvegarde.lower().strip()
+    t = str(type_sauvegarde or "").lower().strip()
     if t not in ("vigueur", "réflexes", "reflexes", "volonté", "volonte"):
         return ToolResult(
             text=(
@@ -306,15 +377,41 @@ async def lancer_sauvegarde(
                 "Attendu : Vigueur, Réflexes ou Volonté."
             )
         )
-    aliases = {"reflexes": "Réflexes", "volonte": "Volonté"}
-    label = aliases.get(t, t.capitalize())
+    aliases = {"reflexes": "Reflexes", "volonte": "Volonte"}
+    cle = aliases.get(t, t.capitalize())
+    label = {"Vigueur": "Vigueur", "Reflexes": "Réflexes", "Volonte": "Volonté"}.get(cle, cle)
+    modificateur = _as_int(modificateur)
+    difficulte = _as_int(difficulte, 10)
+
+    # --- Recoupement fiche PJ ----------------------------------------------
+    # La fiche stocke les totaux officiels (base de classe + mod. carac) :
+    # on les utilise plutôt que le chiffre approximatif du LLM.
+    mod_final = int(modificateur)
+    note_mod = ""
+    fiche = _fiche_pj(ctx, nom_personnage)
+    if fiche is not None:
+        sauv = fiche.get("sauvegardes") or {}
+        for k, v in sauv.items():
+            if str(k).strip().lower().rstrip("s") == cle.strip().lower().rstrip("s"):
+                try:
+                    off = int(v)
+                    if off != mod_final:
+                        note_mod = (
+                            f"\n- ⚠️ Modificateur recalculé {modificateur:+d} → "
+                            f"{off:+d} (fiche de {nom_personnage} : {label} {off:+d})."
+                        )
+                        mod_final = off
+                    break
+                except (TypeError, ValueError):
+                    break
+
     jet = random.randint(1, 20)
-    total = jet + modificateur
+    total = jet + mod_final
     ok = (total >= difficulte or jet == 20) and jet != 1
     lignes = [
         f"🛡️ **Sauvegarde** ({label}) — {nom_personnage} vs {source} (DD {difficulte})",
         f"- Jet brut : {jet}",
-        f"- Modificateur : {modificateur:+d}",
+        f"- Modificateur : {mod_final:+d}" + note_mod,
         f"- **Total : {total}**",
     ]
     if jet == 20:

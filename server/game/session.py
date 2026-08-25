@@ -244,6 +244,12 @@ class SessionRegistry:
     def all_ids(self) -> list[str]:
         return list(self._sessions.keys())
 
+    def pop(self, partie_id: str) -> Optional[PartySession]:
+        """Retire et renvoie la session en mémoire (suppression de partie).
+
+        Renvoie None si la partie n'avait pas de session active."""
+        return self._sessions.pop(partie_id, None)
+
 
 # Singleton
 registry = SessionRegistry()

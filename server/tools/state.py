@@ -108,6 +108,166 @@ async def set_derniere_narration(ctx: ToolContext, narration: str) -> ToolResult
     return ToolResult(text=_party(ctx).set_derniere_narration(narration))
 
 
+def _noms_uniques(noms: list[str]) -> list[str]:
+    """Désambiguïse les homonymes : « Naga mineur, Naga mineur » devient
+    « Naga mineur », « Naga mineur (2) ». Le suivi de tour ET des PV repose
+    sur le nom (courant_tour_pour, initiative, monstres_combat) : sans cela,
+    la deuxième créature homonyme ne reçoit jamais de vrai tour (l'index
+    retombe toujours sur la première occurrence)."""
+    vus: dict[str, int] = {}
+    out: list[str] = []
+    for n in noms:
+        cle = str(n).strip().lower()
+        c = vus.get(cle, 0) + 1
+        vus[cle] = c
+        out.append(str(n) if c == 1 else f"{n} ({c})")
+    return out
+
+
+@tool
+async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
+    """
+    Engage un combat contre un ou plusieurs monstres EN UN SEUL APPEL :
+    résout chaque monstre du bestiaire, lance l'initiative officielle
+    (1d20 + mod DEX pour les PJ, champ `init` du bestiaire pour les
+    monstres), passe la partie en phase "combat" (tour 1) et désigne le
+    premier actif. À utiliser dès qu'un monstre surgit ou attaque.
+
+    :param monstres (str): noms de monstres séparés par des virgules
+        (ex. "Squelette" ou "Gobelin, Gobelin").
+    """
+    import random
+
+    from .monstres import _find_monstre
+
+    noms = [n.strip() for n in monstres.split(",") if n.strip()]
+    if not noms:
+        return ToolResult(text="❌ Donne au moins un nom de monstre.")
+
+    state = _party(ctx)
+    etat = state.load()
+    participants: list[dict] = []
+    monstres_combat: list[dict] = []
+    lignes: list[str] = ["🎲 **Initiative du combat**"]
+
+    # Monstres (init officielle du bestiaire, mod 0 si inconnu).
+    # Les homonymes sont d'abord désambiguïsés : le suivi de tour/PV est
+    # basé sur le nom, deux créatures identiques doivent rester distinctes.
+    labels_resolus = []
+    for nom in noms:
+        m0 = _find_monstre(ctx, nom)
+        labels_resolus.append(str((m0 or {}).get("nom") or nom))
+    labels_uniques = _noms_uniques(labels_resolus)
+
+    for i, nom in enumerate(noms):
+        m = _find_monstre(ctx, nom)
+        label = labels_uniques[i]
+        if m:
+            try:
+                mod = int(str(m.get("init", "0")).replace("+", "").strip())
+            except ValueError:
+                mod = 0
+            try:
+                pv_m = int(str(m.get("pv", "0")).strip().split("(")[0])
+            except ValueError:
+                pv_m = 0
+            try:
+                ca_m = int(str(m.get("ca", "0")).strip())
+            except ValueError:
+                ca_m = 0
+            # Suivi mécanique des PV du monstre pendant le combat.
+            monstres_combat.append({
+                "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
+                "fp": str(m.get("fp", "?")), "conditions": [],
+            })
+        else:
+            mod = 0
+            # Stats inconnues : suivi conservatif (pas de clôture auto tant
+            # que ce monstre n'a pas été consulté/détruit).
+            monstres_combat.append({
+                "nom": label, "pv": -1, "pv_max": -1, "ca": None,
+                "fp": "?", "conditions": [], "inconnu": True,
+            })
+        jet = random.randint(1, 20)
+        participants.append({"nom": label, "init": jet + mod,
+                             "jet_brut": jet, "mod": mod})
+        src = "" if m else " (stats inconnues : mod +0)"
+        lignes.append(
+            f"- **{label}** — initiative {jet + mod} "
+            f"(d20={jet}, mod={mod:+d}){src}"
+        )
+
+    # PJ vivants (1d20 + mod DEX depuis la fiche)
+    for p in etat.get("pj", []):
+        conds = [str(c).lower() for c in (p.get("conditions") or [])]
+        if p.get("pv", 0) <= -10 or "mort" in conds:
+            continue
+        # carac est normalement un dict FOR/DEX/… ; par prudence, accepte
+        # aussi une chaîne JSON ou un texte « For 16, Dex 12 » (fiches
+        # créées par d'anciennes versions de fiche_perso_creer_rapide).
+        caracs = p.get("carac") or {}
+        if isinstance(caracs, str):
+            try:
+                parse = json.loads(caracs)
+                if isinstance(parse, dict):
+                    caracs = parse
+                else:
+                    raise ValueError
+            except ValueError:
+                import re as _re
+                m = _re.search(r"(?:DEX|Dex)\D{0,3}(\d{1,2})", caracs)
+                dex = int(m.group(1)) if m else 10
+                mod = (dex - 10) // 2
+                jet = random.randint(1, 20)
+                participants.append({"nom": p["nom"], "init": jet + mod,
+                                     "jet_brut": jet, "mod": mod})
+                lignes.append(
+                    f"- **{p['nom']}** — initiative {jet + mod} "
+                    f"(d20={jet}, mod DEX {mod:+d})"
+                )
+                continue
+        dex = ((caracs.get("DEX") if isinstance(caracs, dict) else None) or 10)
+        mod = (int(dex) - 10) // 2
+        jet = random.randint(1, 20)
+        participants.append({"nom": p["nom"], "init": jet + mod,
+                             "jet_brut": jet, "mod": mod})
+        lignes.append(
+            f"- **{p['nom']}** — initiative {jet + mod} "
+            f"(d20={jet}, mod DEX {mod:+d})"
+        )
+
+    participants.sort(key=lambda x: x["init"], reverse=True)
+
+    etat["phase"] = "combat"
+    etat["tour"] = 1
+    etat["initiative"] = participants
+    etat["courant_tour_pour"] = participants[0]["nom"]
+    etat["monstres_combat"] = monstres_combat
+    err = state.save(etat)
+    if err:
+        return ToolResult(text=err)
+
+    premier = participants[0]
+    pj_map = {p["nom"]: p.get("joueur", "?") for p in etat.get("pj", [])}
+    qui = f"{premier['nom']} (joueur : {pj_map.get(premier['nom'], 'PNJ/monstre')})"
+    lignes += [
+        "",
+        f"⚔️ **Combat engagé ! Tour 1 — c'est au tour de {qui}.**",
+        "Ordre : " + " → ".join(p["nom"] for p in participants),
+        "_Au tour de chaque actif : lancer_attaque / lancer_degats / "
+        "lancer_sauvegarde selon ses actions, puis tour_suivant_combat._",
+    ]
+    return ToolResult(
+        text="\n".join(lignes),
+        state_patch={
+            "phase": "combat",
+            "tour": 1,
+            "initiative": participants,
+            "courant_tour_pour": etat["courant_tour_pour"],
+        },
+    )
+
+
 @tool
 async def demarrer_combat(ctx: ToolContext, initiative_liste: str) -> ToolResult:
     """
@@ -124,6 +284,11 @@ async def demarrer_combat(ctx: ToolContext, initiative_liste: str) -> ToolResult
         return ToolResult(text=f"❌ JSON invalide : {e}")
     if not isinstance(data, list) or not data:
         return ToolResult(text="❌ Attendu une liste non vide.")
+
+    # Homonymes désambiguïsés (même raison que dans engager_combat).
+    noms_l = _noms_uniques([str(e.get("nom", "?")) for e in data])
+    for e, n in zip(data, noms_l):
+        e["nom"] = n
 
     etat = state.load()
     etat["phase"] = "combat"
@@ -203,6 +368,7 @@ async def finir_combat(ctx: ToolContext) -> ToolResult:
     etat["initiative"] = []
     etat["courant_tour_pour"] = None
     etat["tour"] = 0
+    etat["monstres_combat"] = []
     err = state.save(etat)
     if err:
         return ToolResult(text=err)
@@ -213,6 +379,7 @@ async def finir_combat(ctx: ToolContext) -> ToolResult:
             "tour": 0,
             "courant_tour_pour": None,
             "initiative": [],
+            "monstres_combat": [],
         },
     )
 

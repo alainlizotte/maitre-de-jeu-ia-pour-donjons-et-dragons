@@ -44,7 +44,7 @@ server:
   cors_origins: ["http://localhost:5173", "http://127.0.0.1:8000"]
 
 paths:
-  # Racine des données — hérite du projet Dongeon dragon/projet_DnD35/data/
+  # Racine des données runtime (parties, fiches, caches, ChromaDB).
   data_dir: "./server/data"
   prompts_dir: "./server/prompts"
   sections_dir: "./server/prompts/sections"
@@ -60,8 +60,9 @@ rag:
   # Base de connaissances RAG (Phase 2). Désactivé par défaut ; passez à
   # `true` après avoir exécuté `py -m server.rag --ingest` une fois.
   enabled: false
-  # Dossier racine du corpus à ingérer (projet source OpenWebUI).
-  source_dir: "../Dongeon dragon/projet_DnD35/knowledge_import"
+  # Dossier racine du corpus à ingérer (.txt/.md OCR — déposez vos fichiers
+  # dans knowledge_import/ à la racine du projet).
+  source_dir: "./knowledge_import"
   # Persistance du vector store ChromaDB embarqué.
   persist_dir: "./server/data/chroma"
   embedding_model: "nomic-embed-text"   # doit être `ollama pull` au préalable

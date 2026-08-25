@@ -1,263 +1,148 @@
-# D&D 3.5 — Maître du Jeu (application web autonome)
+# 🐉 Maître du Jeu IA — Donjons & Dragons 3.5
 
-Application web **fullstack** qui remplace OpenWebUI comme interface pour le
-Maître du Jeu D&D 3.5. Le backend FastAPI orchestre les tools Python et un
-LLM local via Ollama, sans dépendre des réglages fragiles de tool-calling
-d'OpenWebUI. Le frontend est servi à `/`.
+Application web **multijoueur autonome** qui joue le rôle de **Maître du Jeu (MJ)** pour une
+table de Donjons & Dragons 3.5 : un LLM local (Gemma, via Ollama ou llama.cpp) narre
+l'aventure, arbitre les règles avec de **vrais jets de dés**, gère les combats tour par tour,
+et **génère les images** des monstres rencontrés et des portraits de personnages via ComfyUI.
 
-## Pourquoi cette app (vs OpenWebUI)
-- **Function-calling fiable** : le backend pilote la boucle LLM ↔ tools
-  (mode natif OpenAI /mode prompt-based adapté à Gemma + détection des
-  simulations textuelles). Plus de `*(Simulation de l'appel ...)*`.
-- **Déploiement en une commande** : `uvicorn server.main:app --reload`.
-- **Réutilise le projet Dongeon dragon** : prompts, sections dynamiques,
-  bestiaire, fiches, schéma d'état JSON — tout est porté tel quel.
-- **Backend LLM interchangeable** : Ollama (Gemma 4 12B par défaut), mais
-  basculable vers OpenAI / Anthropic via `config.yaml` en changeant `base_url`
-  et `model`.
+Aucun service externe ni compte requis : tout tourne en local (Docker), les joueurs se
+connectent depuis leur navigateur sur le réseau local.
 
-# Démarrage rapide (Docker — recommandé, arrière-plan)
+| | |
+|---|---|
+| **Backend** | FastAPI + WebSocket, ~40 tools Python (function-calling) |
+| **Frontend** | React 18 + TypeScript + Vite + Tailwind |
+| **LLM** | Ollama / llama.cpp (OpenAI-compatible) — Gemma 4 par défaut |
+| **Règles** | RAG ChromaDB sur les manuels 3.5 (ingestion locale) |
+| **Images** | ComfyUI (monstres, portraits PJ, cartes de donjon) |
+
+## ✨ Fonctionnalités
+
+### Table multijoueur temps réel
+- **Salon de jeu en ligne** : création/rejoindre une partie, optionnellement protégée par mot
+  de passe ; chat partagé avec narration du MJ en streaming token par token.
+- **Fiches de personnages complètes** : création guidée (caractéristiques, race, classe,
+  compétences plafonnées selon INT/niveau, dons limités selon niveau) puis consultation et
+  modification à tout moment — PV, conditions, sorts, équipement.
+- **Jets de dés réels** : attaque, dégâts, sauvegardes, initiative… toujours résolus par des
+  tools Python (jamais « simulés » par le LLM).
+
+### Exploration & combat
+- **Combat tour par tour** suivi mécaniquement : ordre d'initiative, PV des monstres,
+  auto-avance quand un joueur passe son tour, clôture automatique quand tous les monstres
+  sont à terre.
+- **Carte du monde interactive** (Côte des Épées / Faerûn) et **donjon procédural** rendu en
+  SVG : pièces explorées, portes, déplacements suivis par le MJ.
+- **Bestiaire intégré** (~65 monstres) consultable, avec fiche détaillée et image générée.
+
+### IA générative (ComfyUI)
+- **Images de monstres générées automatiquement** dès leur apparition dans la narration
+  (cache par description : l'image ne change pas tant que la fiche ne change pas).
+- **Portraits de personnages** générés à la création.
+- **Illustrations de scènes et lieux** à la demande.
+
+### Base de connaissances (RAG)
+- Les manuels D&D 3.5 (dépôt local `knowledge_import/`, textes OCR fournis par vos soins)
+  sont vectorisés dans ChromaDB ; chaque message joueur injecte les extraits de règles
+  pertinents dans le contexte du MJ → réponses fidèles aux règles (modificateurs de carac,
+  sauvegardes, états flat-footed…).
+- Ingestion incrémentale : `docker compose exec dnd35 python -m server.rag --ingest`.
+
+## 📸 Captures d'écran
+
+| | |
+|---|---|
+| ![Menu](screenshots/menu.png) ![Connexion](screenshots/connexion.png) | |
+| ![Choix quête](screenshots/choix%20qu%C3%AAte.png) | ![Chat équipe](screenshots/chat%20%C3%A9quipe.png) |
+| ![Création personnage 1](screenshots/cr%C3%A9ation%20personnage%201.png) | ![Création personnage 2](screenshots/cr%C3%A9ation%20personnage%202.png) |
+| ![Création personnage 3](screenshots/cr%C3%A9ation%20personnage%203.png) | ![Sélection personnage](screenshots/s%C3%A9lection%20personnage%20et%20g%C3%A9n%C3%A9ration%20portrait.png) |
+| ![Fiche personnage](screenshots/fiche%20personnage.png) | ![Fiche monstre](screenshots/fiche%20monstre.png) |
+| ![Combat](screenshots/combat.png) | ![Bestiaire](screenshots/bestiaire.png) |
+| ![Carte interactive](screenshots/carte%20interactive.png) | ![Carte donjon](screenshots/carte%20donjon.png) |
+
+## 🚀 Démarrage rapide (Docker)
+
+Prérequis : Docker Desktop, [Ollama](https://ollama.com) (ou llama.cpp) avec un modèle de chat,
+et idéalement [ComfyUI](http://comfyui.com) pour les images.
 
 ```bash
-# 1. Copier la config puis ajuster (model, RAG, …)
-copy config\config.example.yaml config\config.yaml    # Windows
+# 1. Config : copier l'exemple puis ajuster (backend LLM, modèle, ports)
+cp config/config.example.yaml config/config.yaml     # Windows: copy
 
-# 2. Démarrer en arrière-plan : aucune fenêtre de terminal ouverte, le
-#    conteneur redémarre automatiquement avec Docker.
-docker compose up -d --build        # ou scripts\demarrer-serveur.bat
-#    → http://localhost:8123       (port hôte 8123, conteneur 8000)
-
-# 3. (Première fois) Peupler le RAG
+# 2. Corpus RAG (optionnel) : déposer vos textes OCR dans knowledge_import/
+#    puis peupler la base :
 docker compose exec dnd35 python -m server.rag --ingest
 
+# 3. Démarrer (arrière-plan, redémarrage automatique)
+docker compose up -d --build        # → http://localhost:8123
+
 # Arrêt / journaux
-docker compose down                 # ou scripts\arreter-serveur.bat
+docker compose down
 docker compose logs -f dnd35
 ```
 
-**Port** : l'hôte écoute sur **8123** par défaut. Pour le changer :
-`set DND35_PORT=9000 && docker compose up -d` (ou fichier `.env` avec
-`DND35_PORT=9000`).
+Port modifiable : `set DND35_PORT=9000` (ou `.env`). Accès hors réseau local : redirection de
+port sur votre box ou reverse proxy HTTPS devant le port 8123.
 
-**Accès public** : le port est publié sur toutes les interfaces. Pour jouer
-hors du réseau local, redirigez le port 8123 de votre box vers cette machine,
-ou placez un reverse proxy HTTPS (Caddy/Nginx) devant. Les parties peuvent
-être **protégées par mot de passe** à la création — les joueurs doivent le
-connaître pour rejoindre (vérifié côté serveur sur le WebSocket).
-
-# Démarrage rapide (local, sans Docker)
+### Sans Docker
 
 ```bash
-# 1. Dépendances Python
 py -m pip install -r requirements.txt
-
-# 2. (Option) Copier la config
-copy config\config.example.yaml config\config.yaml   # Windows
-# cp config/config.example.yaml config/config.yaml   # Unix
-
-# 3. Lancer Ollama avec Gemma 4 12B (autre terminal)
-ollama pull igorls/gemma-4-12B-it-qat-q4_0-unquantized-heretic:latest
-ollama pull nomic-embed-text           # embeddings pour le RAG
-ollama serve
-
-# 4. (Recommandé) Pré-ingérer la base de connaissances RAG (ChromaDB)
-#    La première ingestion dure ~10-20 min (16 fichiers, 2 M mots) via Ollama.
-py -m server.rag --ingest
-# Vérifier : py -m server.rag --stats
-
-# 5. Démarrer le serveur
-py -m uvicorn server.main:app --reload --port 8000
-
-# 6. Ouvrir le chat
-#    http://127.0.0.1:8000
+cd client && npm install && npm run build && cd ..   # frontend → server/static/
+py -m uvicorn server.main:app --port 8000            # → http://127.0.0.1:8000
 ```
 
-Cliquez sur **« Nouvelle partie »** puis **« Rejoindre »**, saisissez votre
-pseudo (« joueur 1 » par défaut — le dernier pseudo utilisé est mémorisé), et
-écrivez « Bonjour, on commence une partie ». Le modèle IA se change à chaud
-depuis le bandeau (menu déroulant + saisie libre). Le MJ doit déclencher
-de **vrais** jets de dés (pas de `*(Simulation...)*`) et s'appuie sur la base
-de connaissances RAG pour les règles (mod carac 17 → +3, sauvegardes, etc.).
+## ⚙️ Configuration (`config/config.yaml`)
 
-## Configuration (`config/config.yaml`)
-| Clé | Defaut | Rôle |
+| Clé | Défaut | Rôle |
 |---|---|---|
-| `llm.base_url` | `http://localhost:11434/v1` | Endpoint Ollama OpenAI-compat. |
-| `llm.model` | `gemma4:12b` | Modèle. (`qwen2.5:9b` et autres supportés) |
-| `llm.tool_mode` | `prompt` | `native` (tool_calls OpenAI) / `prompt` (balises `<tool ...>`) / `auto` |
-| `llm.detect_simulation` | `true` | Détecte et corrige les simulations textuelles |
-| `llm.options.num_ctx` | `60000` | Fenêtre de contexte Ollama (tokens) — calibré Gemma 4 12B |
-| `llm.options.top_k` | `64` | Sampling diversifié Ollama — calibré Gemma 4 12B |
-| `rag.enabled` | `true` | Active la Knowledge Base vectorielle (ChromaDB) |
-| `rag.source_dir` | `../Dongeon dragon/…/knowledge_import` | Corpus `.txt` à ingérer (KB1/KB2/KB4) |
-| `rag.embedding_model` | `nomic-embed-text` | Modèle d'embeddings (`ollama pull` requis) |
-| `rag.chunk_size` | `1500` | Taille de chunk en tokens (cf. MANIFESTE_KNOWLEDGE_BASE) |
-| `rag.top_k` | `5` | Nombre d'extraits récupérés par requête |
-| `paths.data_dir` | `./server/data` | État persistant + bestiaire + fiches + ChromaDB |
-| `paths.prompts_dir` | `./server/prompts` | SystemPrompt + sections dynamiques |
+| `llm.backend` | `ollama` | `ollama` ou `llamacpp` (endpoint OpenAI-compatible) |
+| `llm.base_url` | `http://localhost:11434/v1` | Endpoint du backend LLM |
+| `llm.model` | `gemma4:12b` | Modèle de chat (Qwen, Mistral… supportés) |
+| `llm.tool_mode` | `auto` | `native` / `prompt` (balises `<tool>`) / `auto` |
+| `llm.detect_simulation` | `true` | Corrige les « simulations » textuelles d'outils |
+| `rag.enabled` | `true` | Knowledge base ChromaDB (règles D&D 3.5) |
+| `rag.source_dir` | `./knowledge_import` | Corpus `.txt/.md` à ingérer |
+| `rag.embedding_model` | `embeddinggemma` | Modèle d'embeddings dédié (llama.cpp CPU) |
+| `paths.data_dir` | `./server/data` | Parties, fiches, caches d'images, ChromaDB |
 
-## API
-| Méthode | Route | Rôle |
-|---|---|---|
-| GET  | `/api/health` | Statut serveur + Ollama + tools |
-| GET  | `/api/parties` | Liste parties actives + persistées (+ 🔒 protégées) |
-| POST | `/api/parties` | Crée une partie (`mot_de_passe` optionnel → hash SHA-256) |
-| GET  | `/api/parties/{id}` | État persistant d'une partie |
-| GET  | `/api/models` | Modèles disponibles + modèle courant |
-| POST | `/api/model` | Change le modèle du MJ à chaud (persisté) |
-| GET  | `/api/fiches/{nom}` | Fiche personnage persistante (+ portrait) |
-| GET  | `/api/ressources` | Liens permanents : manuels, cartes, scénarios PDF, donjon (`?partie_id=`) |
-| GET  | `/api/tools` | Introspection des tools (schéma JSON) |
-| GET  | `/api/rag/stats` | Nombre de chunks par collection ChromaDB |
-| POST | `/api/rag/ingest` | Déclenche l'ingestion du corpus (admin, long) |
-| WS   | `/ws/{partie_id}` | Canal chat multijoueur temps réel (join avec `password` si partie protégée) |
+Variables d'environnement : `DND35_CONFIG` (chemin config), `COMFYUI_BASE_URL`
+(`http://host.docker.internal:8188` par défaut).
 
-## Cycle d'un message joueur (pipeline)
-1. WebSocket `/ws/{partie_id}` reçoit `{"type":"say","player":"Alain","text":"..."}`.
-2. Le serveur préfixe le commentaire joueur (`**[Alain]** : ...`) et l'ajoute à
-   l'historique de la session.
-3. `PromptBuilder.build_system_message` construit le message système
-   (SystemPrompt allégé + récap d'état + sections dynamiques selon `phase`
-   **+ contexte RAG** : `RagStore.query(question)` récupère les `top_k=5`
-   extraits pertinents de la Knowledge Base et les injecte dans le bloc
-   `=== CONTEXTE RÈGLES ===`).
-4. `Orchestrator.run` boucle :
-   - appel LLM (Ollama via API OpenAI-compatible),
-   - détection de simulation textuelle → corrective system-message + retry,
-   - extraction des tool_calls (natif ou balises `<tool ...>`),
-   - exécution des tools Python (qui touchent l'état persistant, génèrent
-     des images monstres / cartes, etc.),
-   - renvoi du résultat en message `role=tool` au LLM,
-   - boucle jusqu'à une réponse narration finale.
-5. Le narration finale est broadcastée en WebSocket à tous les joueurs
-   connectés à la partie (avec événements d'outils le cas échéant).
+## 🧠 Comment ça marche
 
-## Tools disponibles (~40 outils)
+1. Le joueur écrit dans le chat → WebSocket `/ws/{partie_id}`.
+2. Le **PromptBuilder** assemble le system prompt : instructions MJ + état de partie
+   (phase, combat, quête) + sections dynamiques + extraits RAG.
+3. L'**Orchestrator** boucle function-calling : le LLM choisit parmi ~40 tools Python
+   (`lancer_attaque`, `engager_combat`, `perso_creer`, `carte_deplacer`,
+   `monstre_consulter`, …) filtrés par phase de jeu.
+4. Chaque tool touche l'état persistant JSON (partie, fiches, bestiaire) ; les patches
+   résultants sont broadcastés à tous les clients (PV mis à jour en direct, etc.).
+5. La narration finale est streamée à toute la table ; les hooks post-tour génèrent
+   les images manquantes et font avancer les tours automatiquement.
 
-Outils routés par phase dans `orchestrator._PHASE_TOOLS` (un modèle 12B ne gère
-fiablement que ~10 tools visibles à la fois).
-
-- **Dés** (`dice.py`) — `lancer_d20`, `lancer_attaque`, `lancer_degats`,
-  `lancer_sauvegarde`, `lancer_caracteristiques`, `calculer_initiative`, `lancer_des`.
-- **État** (`state.py`) — `etat_partie_get/save/patch`, `demarrer_combat`,
-  `tour_suivant_combat`, `finir_combat`, `ajouter_evenement_histoire`,
-  `set_derniere_narration`, `reset_partie`.
-- **Fiches personnages** (`fiches.py`, 9 outils) — création complète / rapide,
-  modification de champ, dégâts / soins, conditions, consultation, liste.
-  Validation JSON Schema draft-07 (`data/fiches/schema_fiche.json`) à chaque
-  écriture ; portraits PJ générés en arrière-plan via ComfyUI.
-- **Monstres** (`monstres.py`, 3 outils) — lister / consulter le bestiaire
-  JSON + génération d'image (ComfyUI workflow « monstre »).
-- **Cartes** (`cartes.py`, 7 outils) — carte du monde (consultation,
-  déplacement), donjon (exploration salle/cellule, portes bloquées, rendu SVG),
-  distribution aux joueurs.
-- **Manuels & scénarios** (`manuels.py` 2, `scenarios.py` 2) — distribution
-  des manuels D&D 3.5 **servis par le serveur du projet** et catalogue de
-  scénarios unifié : univers Laelith **+ 9 scénarios PDF locaux**
-  (`data/scenarios/`, catalogue `data/scenarios.json`). Au chargement d'un
-  scénario PDF, le texte intégral est extrait via PyMuPDF (plafonné) pour que
-  le MJ puisse le mener, et le PDF reste consultable par les joueurs via
-  `/data/scenarios/…`.
-
-Manuels locaux : déposez les PDF (noms URL-safe) dans `server/data/manuels/`
-pour qu'ils soient servis par le serveur du projet (`/data/manuels/…`) :
-`manuel_joueur_3.5.pdf`, `guide_maitre_3.5.pdf`, `manuel_monstres_3.5.pdf`,
-`errata_3.5.pdf`, `faq_3.5.pdf`, `aide_choix_personnage.pdf`, plus les cartes
-`cote_epees_lowres.jpg` et `cote_epees_hires.jpg`. Sans ces fichiers, les
-liens rebasculent sur l'hébergement web externe historique. Ce dossier est
-volontairement gitignoré (livres protégés par le droit d'auteur).
-
-## Images générées (ComfyUI)
-
-`server/image/` embarque les workflows ComfyUI (monstre, portrait, carte de
-salle) et les helpers `generer_averti`. Les images sont écrites sous
-`data/<sous-dossier>/` et servies sur la route **`/data/`** (mount StaticFiles).
-Les tools `_url_for(path, data_dir)` rendent le chemin relatif et préfixent
-par `/data/`.
-
-## Base de connaissances RAG (ChromaDB)
-
-`server/rag/` — vector store embarqué ChromaDB, 3 collections (KB1 Manuels,
-KB2 Aide perso, KB4 DRS corpus). Corpus source : `knowledge_import/` du projet
-OpenWebUI (16 fichiers `.txt`, ~2 M mots).
-
-- **Ingestion** : `py -m server.rag --ingest` (incrémental via manifeste de
-  fingerprints ; `--force` pour ré-embedding complet).
-- **Requête runtime** : à chaque message joueur, `_handle_say` rappelle
-  `RagStore.render_for_prompt(text)` et injecte le bloc `=== CONTEXTE RÈGLES ===`
-  dans le system prompt.
-- **Embeddings** : `nomic-embed-text` via Ollama (endpoint `/embeddings`),
-  chunk_size 1500 tokens, overlap 200, Top K 5 — paramètres calqués sur
-  `MANIFESTE_KNOWLEDGE_BASE.md` du projet source.
-- **Tests d'acceptation** : `py -m pytest tests/test_rag_qualite.py -v`
-  (6 questions canoniques : mod carac 17, sauvegardes magicien niv.1, rang
-  hors-classe, Massive Damage DD 15, flat-footed, achat de points).
-
-## Structure
+## 📁 Structure
 
 ```
-d&d app/
-├── config/                 ← config.example.yaml + config.yaml (gitignored)
-├── requirements.txt
-├── pytest.ini              ← tests (asyncio_mode=auto)
-├── tests/
-│   ├── test_rag_qualite.py ← 6 questions canoniques RAG
-│   └── e2e_gemma.py        ← scénario E2E via WebSocket
-├── client/                 ← (Phase 2 — frontend React riche, Vite/TS)
-│   ├── src/                  ← composants, pages, hooks API/WS
-│   └── vite.config.ts        ← dev port 5173 + proxy /api + /ws → 8000
-└── server/
-    ├── main.py             ← FastAPI + WS + routes REST (+ /data + /api/rag/*)
-    ├── config.py           ← chargement YAML (sections llm/server/paths/game/rag)
-    ├── tools/
-    │   ├── base.py         ← @tool, ToolContext, ToolResult
-    │   ├── registry.py     ← auto-discovery + schéma JSON + section prompt
-    │   ├── dice.py         ← 7 outils de jets de dés
-    │   ├── state.py        ← mémoire de partie persistante
-    │   ├── fiches.py       ← 9 outils fiches (validation JSON Schema)
-    │   ├── monstres.py     ← 3 outils bestiaire + image ComfyUI
-    │   ├── cartes.py       ← 7 outils carte monde + donjon SVG
-    │   ├── manuels.py      ← 2 outils distribution manuels
-    │   └── scenarios.py    ← 2 outils scénario Laelith
-    ├── llm/
-    │   ├── client.py       ← client Ollama OpenAI-compatible (stream/non-stream
-    │   │                     + options num_ctx/top_k passées au runtime)
-    │   ├── orchestrator.py ← boucle function-calling + détection simulation
-    │   │                     + filtre tools par phase (workaround Gemma 12B)
-    │   └── prompt_builder.py ← SystemPrompt + sections + récap + RAG context
-    ├── game/
-    │   ├── state.py        ← PartyState (JSON persistant atomique)
-    │   └── session.py      ← sessions WS + persistance history (chat_<id>.json)
-    ├── rag/
-    │   ├── chunker.py      ← découpage .txt respecte séparateurs page DRS
-    │   ├── embeddings.py   ← wrapper Ollama /embeddings (nomic-embed-text)
-    │   ├── store.py        ← ChromaDB persistant + 3 collections + render_context
-    │   └── __main__.py     ← CLI ingestion/query/stats
-    ├── image/              ← workflows ComfyUI + helpers generer_averti
-    ├── prompts/            ← SystemPrompt + sections/ (copié du projet source)
-    ├── data/               ← bestiaire, fiches+(schema), parties, chroma/, caches
-    └── static/             ← frontend build React (prod) ou fallback chat vanilla
+├── client/                 ← React (pages accueil/partie/création perso)
+├── server/
+│   ├── main.py             ← FastAPI + WebSocket + routes REST
+│   ├── config.py           ← chargement config/config.yaml
+│   ├── llm/                ← client LLM, orchestrator (boucle tools), prompt_builder
+│   ├── game/               ← PartyState (JSON persistant), sessions WS
+│   ├── tools/              ← dés, état, fiches, monstres, cartes, manuels, scénarios
+│   ├── rag/                ← chunker, embeddings, ChromaDB store, CLI ingestion
+│   ├── image/              ← workflows ComfyUI + helpers génération
+│   └── prompts/            ← SystemPrompt MJ + sections dynamiques par phase
+├── cartes/                 ← cartes de référence servies aux joueurs
+├── config/                 ← config.example.yaml (+ config.yaml gitignored)
+├── knowledge_import/       ← corpus RAG local (gitignored, apportez vos textes)
+└── screenshots/            ← captures pour ce README
 ```
 
-## Frontend (React riche — Phase 2)
+## 🔒 Note juridique
 
-L'application React vit dans `client/` :
-
-```bash
-# Développement : proxy Vite /api + /ws vers http://127.0.0.1:8000
-cd client && npm install && npm run dev    # → http://localhost:5173
-
-# Production : build statique vers server/static/, servi par FastAPI à /
-cd client && npm run build                 # puis http://127.0.0.1:8000
-```
-
-Stack : Vite + React 18 + TypeScript + Tailwind + react-router + zustand +
-`@tanstack/react-query` + `marked` (rendu Markdown narration). Pages : accueil
-(choix/création de partie + mot de passe optionnel, pseudo « joueur 1 » par
-défaut mémorisé), partie (colonne gauche : joueurs avec portraits et fiches
-complètes au clic ; chat/narration avec streaming `delta` + images `/data` ;
-colonne droite : dés visuels, carte du monde de Faerûn (Côte des Épées),
-donjon SVG, bestiaire de 65 monstres, et galerie des monstres rencontrés en
-bas de colonne). Le bandeau permet de changer de modèle IA à chaud, et une
-**barre de ressources permanente** en pied d'écran affiche les liens vers les
-manuels, les cartes (monde + donjon courant) et les scénarios PDF.
+Ce projet est un **outil de table** non officiel. Il ne distribue aucun contenu protégé :
+déposez vous-même vos textes de règles dans `knowledge_import/` et vos PDF dans
+`server/data/manuels/`. Donjons & Dragons est une marque de Wizards of the Coast.

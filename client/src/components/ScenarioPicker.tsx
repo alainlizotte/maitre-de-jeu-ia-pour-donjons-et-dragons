@@ -64,38 +64,42 @@ export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
       <p className="text-stone-400 text-xs mb-4">
         Sélectionnez un scénario pré-rédigé ou créez votre propre aventure.
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-        {items.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => handleChoose(s)}
-            disabled={setQuest.isPending}
-            className="text-left p-3 rounded-lg border border-stone-700 bg-stone-800/50 hover:bg-stone-800 hover:border-amber-600 transition-colors disabled:opacity-50"
-          >
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-amber-400 font-mono text-[10px]">[{s.id}]</span>
-              <span className="text-stone-100 text-sm font-medium">{s.titre}</span>
+      {/* Liste défilante : tous les scénarios restent accessibles même
+          quand ils sont nombreux (60 % de la hauteur d'écran max). */}
+      <div className="max-h-[60vh] overflow-y-auto pr-1 mb-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {items.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => handleChoose(s)}
+              disabled={setQuest.isPending}
+              className="text-left p-3 rounded-lg border border-stone-700 bg-stone-800/50 hover:bg-stone-800 hover:border-amber-600 transition-colors disabled:opacity-50"
+            >
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-amber-400 font-mono text-[10px]">[{s.id}]</span>
+                <span className="text-stone-100 text-sm font-medium">{s.titre}</span>
+                {s.fichier && (
+                  <span className="text-emerald-400 text-[10px]" title="PDF complet disponible">📄</span>
+                )}
+              </div>
+              <div className="text-stone-500 text-[10px] mb-1">
+                Niveaux {s.niveau} — {s.theme}
+              </div>
+              <div className="text-stone-300 text-xs line-clamp-2">{s.pitch}</div>
               {s.fichier && (
-                <span className="text-emerald-400 text-[10px]" title="PDF complet disponible">📄</span>
+                <a
+                  href={s.fichier}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-emerald-400 hover:text-emerald-300 text-[10px] mt-1 inline-block underline"
+                >
+                  Consulter le PDF
+                </a>
               )}
-            </div>
-            <div className="text-stone-500 text-[10px] mb-1">
-              Niveaux {s.niveau} — {s.theme}
-            </div>
-            <div className="text-stone-300 text-xs line-clamp-2">{s.pitch}</div>
-            {s.fichier && (
-              <a
-                href={s.fichier}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-emerald-400 hover:text-emerald-300 text-[10px] mt-1 inline-block underline"
-              >
-                Consulter le PDF
-              </a>
-            )}
-          </button>
-        ))}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="flex justify-between items-center pt-2 border-t border-stone-700">
         <button

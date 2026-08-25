@@ -47,10 +47,11 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "manuels_lister",
         "carte_joueurs_get",
         "carte_joueurs_position",
+        "carte_joueurs_placer_ville",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
-        "scenarios_laelith_lister",
-        "scenarios_laelith_charger",
+        # NB : plus de tools scénarios ici — la quête est choisie via
+        # l'interface (ScenarioPicker) à la création de la partie.
     ),
     "opening_complete": (
         "etat_partie_get",
@@ -65,11 +66,10 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "manuels_lister",
         "monstre_consulter",
         "carte_joueurs_get",
+        "carte_joueurs_placer_ville",
         "carte_donjon_entrer",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
-        "scenarios_laelith_lister",
-        "scenarios_laelith_charger",
     ),
     "exploration": (
         "etat_partie_get",
@@ -82,6 +82,10 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "carte_donjon_sortir",
         "carte_joueurs_get",
         "carte_joueurs_deplacer",
+        "carte_joueurs_placer_ville",
+        "carte_joueurs_position",
+        # Voyage hors donjon : durée réelle, rencontres, météo (jamais instantané).
+        "voyage_demarrer",
         "monstre_consulter",
         "lancer_d20",
         "lancer_sauvegarde",
@@ -91,6 +95,7 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         # Les tools d'attaque restent aussi exposés en exploration : un petit
         # modèle oublie souvent `demarrer_combat` — il doit quand même disposer
         # des VRAIS tools de résolution plutôt que narrer les dégâts à la main.
+        "engager_combat",
         "calculer_initiative",
         "demarrer_combat",
         "lancer_attaque",
@@ -108,6 +113,7 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_sauvegarde",
         "lancer_des",
         "calculer_initiative",
+        "engager_combat",
         "demarrer_combat",
         "tour_suivant_combat",
         "finir_combat",

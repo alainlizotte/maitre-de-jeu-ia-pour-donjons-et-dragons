@@ -19,8 +19,10 @@ export function useChatSocket(partie_id: string | null) {
   const setParticipants = useParty((s) => s.setParticipants);
   const addParticipant = useParty((s) => s.addParticipant);
   const addMonster = useParty((s) => s.addMonster);
+  const addScene = useParty((s) => s.addScene);
   const addTeamMessage = useParty((s) => s.addTeamMessage);
   const setTeamMessages = useParty((s) => s.setTeamMessages);
+  const applyPatches = useParty((s) => s.applyPatches);
   const player = useParty((s) => s.player);
   const lastJoinRef = useRef<string>("");
 
@@ -39,6 +41,32 @@ export function useChatSocket(partie_id: string | null) {
       setTimeout(() => ctx.close(), duration + 100);
     } catch { /* audio non disponible */ }
   }, []);
+
+  /** Route une URL d'image générée vers la bonne galerie :
+   *  - bestiaire_cache → monstres rencontrés ;
+   *  - images_salles / images_scenes → scènes illustrées.
+   *  Renvoie true si l'image a été classée (elle sera aussi affichée en chat). */
+  const classifyImage = useCallback(
+    (url: string): boolean => {
+      if (!url) return false;
+      if (url.includes("/bestiaire_cache/")) {
+        addMonster(encounterFromUrl(url));
+        return true;
+      }
+      if (url.includes("/images_salles/") || url.includes("/images_scenes/")) {
+        const fichier = decodeURIComponent(url.split("/").pop() ?? "");
+        const nom =
+          fichier
+            .replace(/\.(png|jpe?g|webp|svg)$/i, "")
+            .replace(/[_-]+/g, " ")
+            .trim() || "scène";
+        addScene({ nom, url });
+        return true;
+      }
+      return false;
+    },
+    [addMonster, addScene],
+  );
 
   useEffect(() => {
     if (!partie_id || !player) return;
@@ -91,6 +119,22 @@ export function useChatSocket(partie_id: string | null) {
               content: `⛔ ${msg.detail} Retournez à l'accueil et retapez le mot de passe de la partie.`,
               ts: Date.now(),
             });
+          } else if (msg.event === "join_refused") {
+            // Refus : aucun personnage sélectionné ou fiche inconnue.
+            addMessage({
+              id: uid(),
+              role: "system",
+              content: `⛔ ${msg.detail}`,
+              ts: Date.now(),
+            });
+          } else if (msg.event === "turn_blocked") {
+            // Hors-tour en combat : le serveur refuse d'invoquer le MJ.
+            addMessage({
+              id: uid(),
+              role: "system",
+              content: msg.detail,
+              ts: Date.now(),
+            });
           } else if (msg.event === "error") {
             addMessage({
               id: uid(),
@@ -122,11 +166,9 @@ export function useChatSocket(partie_id: string | null) {
           break;
         }
         case "tool_event": {
-          // Image de monstre en direct → galerie « monstres rencontrés ».
+          // Image générée en direct → galerie adaptée (monstres / scènes).
           const ev = msg.event as ToolEvent;
-          if (ev.image && ev.image.includes("/bestiaire_cache/")) {
-            addMonster(encounterFromUrl(ev.image));
-          }
+          classifyImage(String(ev.image ?? ""));
           // Affiche les messages d'info (image_pending, etc.) même hors streaming
           // pour que le joueur voie le délai de génération d'image.
           if (ev.msg || ev.description || ev.image) {
@@ -141,12 +183,16 @@ export function useChatSocket(partie_id: string | null) {
           break;
         }
         case "dm": {
-          // state_patches du tour : image_monstre → galerie de la colonne droite.
+          // state_patches du tour : images → galerie de la colonne droite,
+          // le reste (lieu.position_x/y, phase, pj.0.pv…) → état du store
+          // en direct (sans attendre le polling REST de 15 s).
           const patches = (msg.state_patches || []) as Record<string, unknown>[];
+          applyPatches(patches);
           for (const p of patches) {
-            const img = p && p.image_monstre;
-            if (typeof img === "string" && img.includes("/bestiaire_cache/")) {
-              addMonster(encounterFromUrl(img));
+            if (!p) continue;
+            for (const cle of ["image_monstre", "image_scene"]) {
+              const img = p[cle];
+              if (typeof img === "string") classifyImage(img);
             }
           }
           const sid = streamId.current || uid();

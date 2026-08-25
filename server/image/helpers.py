@@ -45,6 +45,16 @@ async def _notify_pending(ctx, usage: str) -> None:
         pass
 
 
+# Anti-texte partagé : les modèles de génération (Qwen-Image notamment)
+# adorent orner les illustrations d'écritures décoratives ; comme les
+# workflows Lightning tournent à cfg=1 (prompt négatif ignoré), ces
+# consignes passent obligatoirement par le prompt positif.
+_ANTI_TEXT = (
+    "textless image, no letters, no words, no inscriptions, no runes, "
+    "no watermark, no signature, no frame, no border, no ornamental writing"
+)
+
+
 def get_backend() -> Optional[ComfyUIBackend]:
     """Renvoie un backend ComfyUI prêt à l'emploi, ou None si injoignable.
 
@@ -96,11 +106,22 @@ async def generer_averti(ctx, usage: str, prompt: str, dest_path: str) -> Option
 
 
 # --- Helpers de prompts -------------------------------------------------- #
-def monstre_prompt(nom: str) -> str:
+def monstre_prompt(nom: str, description: str = "") -> str:
+    """Prompt pour un monstre.
+
+    `description` : apparence physique du monstre (extraite du bestiaire
+    local ou de la KB RAG — Manuel des Monstres). Sans elle, le générateur
+    ne connaît que le nom et invente une créature quelconque : une « Goule »
+    n'aurait rien d'un mort-vivant décharné. On évite la mention « D&D 3.5 »
+    qui poussait le modèle vers un style page de manuscrit encadré d'écritures.
+    """
+    desc = description.strip().strip(".").replace("\n", ", ")
+    suffixe = f", {desc}" if desc else ""
     return (
-        f"fantasy creature art of a {nom}, "
-        "D&D 3.5 style illustration, dramatic lighting, detailed "
-        "digital painting, no text, full body, centered, dark background"
+        f"dark fantasy illustration of a single {nom}{suffixe}, "
+        "tabletop RPG monster art, dramatic lighting, detailed digital "
+        "painting, full body, centered, plain dark background, "
+        + _ANTI_TEXT
     )
 
 
@@ -110,8 +131,23 @@ def lieu_prompt(salle_type: str, donjon_id: str = "dungeon") -> str:
     return (
         f"interior illustration of a {salle_type} in a {donjon_id}, "
         "dungeon fantasy concept art, atmospheric lighting, "
-        "detailed digital painting, no text, no characters, "
-        "video game environment"
+        "detailed digital painting, no characters, "
+        "video game environment, "
+        + _ANTI_TEXT
+    )
+
+
+def scene_prompt(description: str) -> str:
+    """Prompt pour une scène importante d'aventure (outil illustration_scene).
+
+    `description` : ce que montre la scène, en toutes lettres (le MJ résume
+    l'action : lieu, protagonistes, ambiance)."""
+    desc = description.strip().strip(".").replace("\n", ", ")
+    return (
+        f"epic fantasy scene illustration of {desc}, "
+        "tabletop RPG adventure art, dramatic cinematic lighting, "
+        "detailed digital painting, dynamic composition, "
+        + _ANTI_TEXT
     )
 
 
@@ -124,7 +160,8 @@ def portrait_prompt(nom: str, race: str = "", classe: str = "") -> str:
     sujet = ", ".join(elements)
     return (
         f"heroic portrait of {sujet}, "
-        "D&D fantasy character art, head and shoulders, "
+        "fantasy character art, head and shoulders, "
         "dramatic studio lighting, detailed digital painting, "
-        "warm colors, high resolution, no text"
+        "warm colors, high resolution, plain background, "
+        + _ANTI_TEXT
     )

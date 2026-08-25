@@ -84,6 +84,8 @@ export type WsMessage =
   | { type: "sys"; event: "participant_joined"; player: string; personnage?: string | null }
   | { type: "sys"; event: "auth_required"; detail?: string }
   | { type: "sys"; event: "auth_failed"; detail: string }
+  | { type: "sys"; event: "join_refused"; detail: string }
+  | { type: "sys"; event: "turn_blocked"; detail: string }
   | { type: "sys"; event: "error"; detail: string }
   | { type: "player"; player: string; text: string }
   | { type: "status"; description: string; done?: boolean }
@@ -140,7 +142,7 @@ export interface Scenario {
 /** /api/ressources — liens permanents affichés dans la barre de ressources. */
 export interface Ressources {
   manuels: { titre: string; description: string; categorie: string; url: string }[];
-  cartes: { titre: string; url: string }[];
+  cartes: { titre: string; url: string; libelle?: string }[];
   scenarios: { id: string; titre: string; niveau: string; url: string }[];
   donjon: string | null;
 }
@@ -185,6 +187,8 @@ export interface FichePerso {
   sauvegardes: { Vigueur: number; Reflexes: number; Volonte: number };
   bab: number;
   initiative?: number;
+  /** Charge maximale transportable en kg (Force × taille). */
+  charge_max?: number;
   competences?: Record<string, number>;
   dons?: string[];
   equipement?: { nom: string; qte: number }[];

@@ -122,7 +122,50 @@ def _fiches_dir(ctx: ToolContext) -> str:
     return path
 
 
+def _resoudre_nom(ctx: ToolContext, nom: str) -> str:
+    """Nom canonique du personnage à partir d'un nom OU d'un pseudo joueur.
+
+    Les messages arrivent signés du pseudo du joueur humain (« Alice ») mais
+    les fiches portent le nom du personnage (« Brunhild »). Un petit LLM
+    confond souvent les deux : on résout via l'état de partie (pj[].nom /
+    pj[].joueur), insensible à la casse et aux accents.
+    """
+    def _norm(s: Any) -> str:
+        s = unicodedata.normalize("NFKD", str(s or "").strip().lower())
+        return "".join(c for c in s if not unicodedata.combining(c))
+
+    cible = _norm(nom)
+    if not cible:
+        return nom
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        etat = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id
+        ).load()
+    except Exception:                                        # noqa: BLE001
+        return nom
+    # 1. nom de personnage exact (normalisé)
+    for p in etat.get("pj", []):
+        if _norm(p.get("nom")) == cible:
+            return p.get("nom") or nom
+    # 2. pseudo du joueur → son personnage
+    for p in etat.get("pj", []):
+        if _norm(p.get("joueur")) == cible and p.get("nom"):
+            return p["nom"]
+    # 3. préfixe (« brun » → « Brunhild »)
+    for p in etat.get("pj", []):
+        pn = _norm(p.get("nom"))
+        if len(cible) >= 4 and pn.startswith(cible):
+            return p.get("nom") or nom
+    for p in etat.get("pj", []):
+        jn = _norm(p.get("joueur"))
+        if p.get("nom") and len(cible) >= 4 and jn.startswith(cible):
+            return p["nom"]
+    return nom
+
+
 def _chemin(ctx: ToolContext, nom: str) -> str:
+    nom = _resoudre_nom(ctx, nom)
     return os.path.join(_fiches_dir(ctx), f"fiche_{_slug(nom)}.json")
 
 
@@ -207,6 +250,35 @@ def _save_fiche(ctx: ToolContext, nom: str, fiche: dict[str, Any]) -> str:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(fiche, f, ensure_ascii=False, indent=2)
     return path
+
+
+def _sync_pj(ctx: ToolContext, nom: str, champs: dict[str, Any]) -> None:
+    """Répercute des champs d'une fiche sur l'entrée PJ de l'état de partie.
+
+    Sans cette synchro, la fiche JSON évolue (PV après dégâts/soins,
+    conditions…) mais la liste `pj` de `partie_<id>.json` — celle que le
+    front affiche (barres de PV, cartes joueurs) — reste figée. Fail-safe :
+    toute erreur (partie absente du disque…) est ignorée.
+    """
+    try:
+        from ..game.state import PartyState   # import tardif (évite cycles)
+
+        state = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+        etat = state.load()
+        if "_erreur" in etat:
+            return
+        cible = None
+        for p in etat.get("pj") or []:
+            if str(p.get("nom", "")).lower() == str(nom).strip().lower():
+                cible = p
+                break
+        if cible is None:
+            return
+        cible.update(champs)
+        etat["pj"] = etat.get("pj") or []
+        state.save(etat)
+    except Exception:                                        # noqa: BLE001
+        pass
 
 
 # --------------------------------------------------------------------------- #
@@ -503,7 +575,10 @@ async def fiche_perso_creer_rapide(
             "pv": int(pv),
             "pv_max": int(pv_max),
             "ca": int(ca),
-            "carac": carac_texte_final,
+            # Dict FOR/DEX/… (et non le texte formaté) : engager_combat lit
+            # la DEX de ce dict pour l'initiative — une chaîne fait planter
+            # le calcul ((str).get n'existe pas).
+            "carac": dict(carac_vals),
             "joueur": joueur,
             "alignement": alignement,
         }
@@ -537,7 +612,14 @@ async def fiche_perso_creer_rapide(
             os.makedirs(cache_dir, exist_ok=True)
             dest = os.path.join(cache_dir, f"{portrait_name}.png")
             if not os.path.isfile(dest):
-                prompt = portrait_prompt(nom, race, classe)
+                # Prompt complet : race (+ traits visuels), classe (+ catégorie
+                # visuelle) et apparence de la fiche. Import tardif : persos
+                # importe déjà fiches au niveau module (cycle sinon).
+                try:
+                    from ..persos import construire_prompt_portrait
+                    prompt = construire_prompt_portrait(fiche)
+                except Exception:
+                    prompt = portrait_prompt(nom, race, classe)
                 await generer_averti(ctx, "portrait", prompt, dest)
         except Exception:
             pass
@@ -625,6 +707,10 @@ async def fiche_perso_mettre_a_jour(
         _save_fiche(ctx, nom, fiche)
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
+    # Si le champ touche l'entrée PJ affichée (pv, pv_max, ca…), on synchronise
+    # l'état de partie pour que le front voie la fiche évoluer en direct.
+    if keys[0] in ("pv", "pv_max", "ca", "conditions") and len(keys) == 1:
+        _sync_pj(ctx, nom, {keys[0]: v})
     return ToolResult(
         text=(
             f"✅ Fiche de {nom} mise à jour : {champ} = "
@@ -668,33 +754,130 @@ async def fiche_perso_lister(ctx: ToolContext) -> ToolResult:
     )
 
 
+def _norm_nom_simple(s: Any) -> str:
+    """Comparaison de noms insensible casse/accents (PJ ↔ monstres du combat)."""
+    s = unicodedata.normalize("NFKD", str(s or "").strip().lower())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def _infliger_degats_monstre(
+    ctx: ToolContext, nom: str, d: int
+) -> Optional[ToolResult]:
+    """Applique des dégâts à un MONSTRE suivi par `engager_combat`
+    (etat.monstres_combat). Renvoie None si `nom` ne correspond à aucun
+    monstre suivi — l'appelant retombe alors sur le message d'erreur PJ."""
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        st = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+        etat = st.load()
+    except Exception:                                        # noqa: BLE001
+        return None
+    mons = etat.get("monstres_combat") or []
+    cn = _norm_nom_simple(nom)
+    cible = None
+    for m in mons:
+        mn = _norm_nom_simple(m.get("nom"))
+        if (
+            mn == cn
+            or (len(cn) >= 4 and mn.startswith(cn))
+            or (len(mn) >= 4 and cn.startswith(mn))
+        ):
+            cible = m
+            break
+    if cible is None:
+        return None
+    if cible.get("inconnu"):
+        return ToolResult(
+            text=(
+                f"❓ PV de **{cible['nom']}** inconnus (absent du bestiaire). "
+                f"Consulte la KB « D&D 3.5 — Manuels » puis fixe ses PV via "
+                f"etat_partie_patch(monstres_combat, …) avant d'infliger des "
+                f"dégâts suivis."
+            )
+        )
+    nv = int(cible.get("pv", 0)) - d
+    cible["pv"] = nv
+    conds: list[str] = cible.setdefault("conditions", [])
+    note = ""
+    if nv <= 0 and "Détruit" not in conds:
+        conds.append("Détruit")
+        note = " — ☠️ **DÉTRUIT** (0 PV ou moins)."
+    elif "Détruit" in conds:
+        note = " — ☠️ déjà détruit."
+    err = st.save(etat)
+    if err:
+        return ToolResult(text=f"❌ {err}")
+    restants = ", ".join(
+        f"{m['nom']} {m['pv']}/{m['pv_max']}"
+        + (" ☠️" if "Détruit" in (m.get("conditions") or []) else "")
+        for m in mons
+    )
+    msg = (
+        f"💥 {cible['nom']} (monstre) subit {d} dégâts → "
+        f"PV {nv}/{cible.get('pv_max', '?')}{note}\n"
+        f"Ennemis : {restants}"
+    )
+    return ToolResult(text=msg, state_patch={"monstres_combat": mons})
+
+
 @tool
 async def fiche_perso_infliger_degats(
     ctx: ToolContext, nom: str, degats: int
 ) -> ToolResult:
     """
     Applique des dégâts à un personnage (réduit ses PV). Renvoie l'état après
-    coup, avec mention éventuelle de KO ou mort.
+    coup, avec mention éventuelle de KO ou mort. Fonctionne AUSSI pour les
+    monstres engagés via engager_combat (PV suivis mécaniquement).
 
-    :param nom (str): nom du personnage.
+    :param nom (str): nom du personnage ou du monstre.
     :param degats (int): nombre de points de dégâts (≥0).
     """
     fiche = _load_fiche(ctx, nom)
-    if fiche is None:
-        return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
     d = max(0, int(degats))
-    nv = max(0, int(fiche.get("pv", 0)) - d)
+    if fiche is None:
+        r = _infliger_degats_monstre(ctx, nom, d)
+        if r is not None:
+            return r
+        return ToolResult(
+            text=(
+                f"❌ Aucune fiche trouvée pour '{nom}' (ni monstre suivi par "
+                f"le combat en cours — engager_combat initialise les PV)."
+            )
+        )
+    # D&D 3.5 (Injury and Death) : les PV peuvent descendre sous 0 ;
+    # mort à -10 (ou gros dégâts d'un coup : mort si pv - d ≤ -10).
+    nv = int(fiche.get("pv", 0)) - d
+    if nv < -10:
+        nv = -10
     fiche["pv"] = nv
+    # Conditions d'état selon la barre de PV (règles officielles).
+    conds: list[str] = fiche.setdefault("conditions", [])
+    for c in ("Invalide", "Mourant", "Mort"):
+        if c in conds:
+            conds.remove(c)
+    etat_msg = ""
+    if nv <= -10:
+        conds.append("Mort")
+        etat_msg = " — ☠️ **MORT** (-10 PV ou moins)."
+    elif nv == 0:
+        conds.append("Invalide")
+        etat_msg = (
+            " — ⚠️ **Invalide** (0 PV) : actions limitées (mouvement ou "
+            "action standard), toute action vigoureuse → 1 PV de dégâts."
+        )
+    elif nv < 0:
+        conds.append("Mourant")
+        etat_msg = (
+            f" — ⚠️ **Mourant** ({nv} PV) : inconscient, jet de "
+            "stabilisation 1d20 ≥ 10 par round (1 naturel = -1 PV)."
+        )
     try:
         _save_fiche(ctx, nom, fiche)
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
-    msg = f"💥 {nom} subit {d} dégâts → PV {nv}/{fiche.get('pv_max','?')}"
-    if nv == 0:
-        msg += (
-            " — ⚠️ Le personnage est à 0 PV. Vérifier état (mourant/mort "
-            "selon D&D 3.5)."
-        )
+    # Synchro de l'entrée PJ de l'état de partie (barres PV du front).
+    _sync_pj(ctx, nom, {"pv": nv, "conditions": conds})
+    msg = f"💥 {nom} subit {d} dégâts → PV {nv}/{fiche.get('pv_max','?')}" + etat_msg
     return ToolResult(text=msg, state_patch={"pj_updated": nom})
 
 
@@ -715,14 +898,24 @@ async def fiche_perso_soigner(
     max_pv = int(fiche.get("pv_max", 0))
     nv = min(max_pv, int(fiche.get("pv", 0)) + s)
     fiche["pv"] = nv
+    # PV positifs → on lève les états liés aux blessures (règles 3.5).
+    conds: list[str] = fiche.setdefault("conditions", [])
+    nettoye = False
+    for c in ("Mourant", "Invalide"):
+        if c in conds and nv > 0:
+            conds.remove(c)
+            nettoye = True
     try:
         _save_fiche(ctx, nom, fiche)
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
+    # Synchro de l'entrée PJ de l'état de partie (barres PV du front).
+    _sync_pj(ctx, nom, {"pv": nv, "conditions": conds})
     return ToolResult(
         text=(
             f"✨ {nom} récupère {s} PV → PV {nv}/{max_pv}"
             + (" (maximum atteint)" if nv == max_pv else "")
+            + (" — conditions de blessure levées." if nettoye else "")
         ),
         state_patch={"pj_updated": nom},
     )
@@ -754,6 +947,8 @@ async def fiche_perso_condition(
         _save_fiche(ctx, nom, fiche)
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
+    # Synchro de l'entrée PJ de l'état de partie (conditions affichées).
+    _sync_pj(ctx, nom, {"conditions": conds})
     action = "affecté par" if appliquer else "n'est plus affecté par"
     return ToolResult(
         text=f"{nom} est {action} **{cond}**. Conditions actives : {conds}",

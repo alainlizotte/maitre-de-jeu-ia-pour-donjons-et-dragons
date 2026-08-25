@@ -36,6 +36,19 @@ _PHASE_SECTIONS: dict[str, list[str]] = {
     "bilan":             ["standard", "cloture"],
 }
 
+# Directive injectée dans le récap tant que la quête est choisie mais qu'aucun
+# événement d'histoire n'existe : force la scène d'ouverture narrative (décor
+# du pitch) et interdit rencontre/image de monstre au premier tour.
+_DEBUT_AVENTURE = (
+    "⚠️ DÉBUT DE L'AVENTURE — aucun événement d'histoire enregistré. Ce "
+    "tour-ci est la SCÈNE D'OUVERTURE : narre la mise en contexte complète "
+    "selon le pitch de la quête ci-dessus (décor, ambiance, PNJ présents, "
+    "objectif immédiat, situation de départ des héros), en 2-4 paragraphes, "
+    "puis invite les joueurs à agir. INTERDIT ce tour : engager un combat, "
+    "faire surgir un monstre, générer une image de monstre, lancer une "
+    "rencontre."
+)
+
 
 # --------------------------------------------------------------------------- #
 #  Extraction du SystemPrompt
@@ -158,8 +171,9 @@ class PromptBuilder:
                     "raconter un résultat de dés sans tool. Outils clés "
                     "exploration : monstre_consulter, carte_donjon_entrer / "
                     "_explorer / _get / _sortir, fiche_perso_creer / "
-                    "_recuperer, scenarios_laelith_lister / _charger, "
-                    "demarrer_combat / tour_suivant_combat / finir_combat. "
+                    "_recuperer, demarrer_combat / tour_suivant_combat / "
+                    "finir_combat. La quête est choisie dans l'interface — ne "
+                    "liste jamais de scénarios. "
                     "Sois bref : 2-4 paragraphes par tour, finis par une "
                     "invitation à agir."
                 )
@@ -229,12 +243,23 @@ class PromptBuilder:
                 else "=== ÉTAT DE LA PARTIE (PJ créé, suite de l'aventure) ===",
                 f"Partie : {titre or '(sans-titre)'} — phase : {phase or 'opening'} — {pjs_sum}",
                 f"Distribution manuels : {'FAITE (ne PAS redistribuer)' if distrib else 'PAS ENCORE FAITE'}.",
+            ]
+            # Quête choisie via l'interface — le MJ doit la connaître même en
+            # récap minimal, avec la directive de scène d'ouverture au besoin.
+            quete_min = etat.get("quete", {}) or {}
+            if (quete_min.get("titre") or "").strip():
+                lignes.append(
+                    f"Quête en cours : {quete_min.get('titre', '(sans titre)')} "
+                    f"— {quete_min.get('pitch', '')}"
+                )
+                if not (etat.get("histoire") or []):
+                    lignes.append(_DEBUT_AVENTURE)
+            lignes += [
                 "",
                 "Pour progresser maintenant : appelle les outils adéquats "
                 "(lancer_caracteristiques, fiche_perso_creer, etat_partie_patch, "
-                "monstre_consulter, carte_donjon_entrer, carte_donjon_explorer, "
-                "scenarios_laelith_lister…) — ne raconte pas simplement le "
-                "résultat et NE TE RE-PRÉSENTE PAS.",
+                "monstre_consulter, carte_donjon_entrer, carte_donjon_explorer…) "
+                "— ne raconte pas simplement le résultat et NE TE RE-PRÉSENTE PAS.",
                 "================================================",
             ]
             return "\n".join(lignes)
@@ -252,6 +277,8 @@ class PromptBuilder:
         phase = etat.get("phase", "inconnue")
         lignes.append(f"Phase actuelle : {phase}")
 
+        pjs = etat.get("pj", []) or []
+
         if phase == "combat":
             tour = etat.get("tour", 1)
             lignes.append(f"Tour de combat : {tour}")
@@ -263,18 +290,37 @@ class PromptBuilder:
                 lignes.append(f"Ordre d'initiative : {ordre}")
             courant = etat.get("courant_tour_pour")
             if courant:
-                lignes.append(f"C'est au tour de : {courant}")
+                pj_courant = next(
+                    (p for p in pjs if p.get("nom") == courant), None
+                ) if pjs else None
+                qui = (
+                    f"{courant} (joueur : {pj_courant.get('joueur')})"
+                    if pj_courant is not None
+                    else f"{courant} (PNJ/monstre)"
+                )
+                lignes.append(f"C'est au tour de : {qui}")
+                lignes.append(
+                    "Résous UNIQUEMENT les actions de cet acteur puis appelle "
+                    "tour_suivant_combat."
+                )
+        voyage = etat.get("voyage") or {}
+        if voyage:
+            lignes.append(
+                f"\nVoyage en cours : {voyage.get('resume', '?')} "
+                f"(jours avec rencontre : "
+                f"{', '.join(str(j) for j in voyage.get('jours_rencontres', []) or []) or 'aucun'})"
+            )
 
         pjs = etat.get("pj", []) or []
         if pjs:
-            lignes.append("\nPersonnages Joueurs :")
+            lignes.append("\nPersonnages Joueurs (nom — joueur qui le joue) :")
             for p in pjs:
                 lignes.append(
                     f"  - {p.get('nom','?')}: {p.get('race','?')} "
                     f"{p.get('classe','?')} niv.{p.get('niveau','?')} — "
                     f"PV {p.get('pv','?')}/{p.get('pv_max','?')} — "
-                    f"CA {p.get('ca','?')} — conditions: "
-                    f"{p.get('conditions') or 'aucune'}"
+                    f"CA {p.get('ca','?')} — joueur: {p.get('joueur','?')} — "
+                    f"conditions: {p.get('conditions') or 'aucune'}"
                 )
 
         pnjs = etat.get("pnj", []) or []
@@ -306,6 +352,12 @@ class PromptBuilder:
                 f"\nQuête en cours : {quete.get('titre','(sans titre)')} "
                 f"— {quete.get('pitch','')}"
             )
+            # Début d'aventure : quête choisie mais aucun événement d'histoire
+            # → on force la mise en contexte narrative AVANT toute action.
+            if (quete.get("titre") or "").strip() and not (
+                etat.get("histoire") or []
+            ):
+                lignes.append(_DEBUT_AVENTURE)
 
         derniere = etat.get("derniere_narration", "")
         if derniere:

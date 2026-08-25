@@ -88,6 +88,133 @@ _RACE_ALIAS = {
 }
 
 
+# --------------------------------------------------------------------------- #
+#  Âges, tailles et poids de départ (tables officielles FR — DRS/gemmaline)
+# --------------------------------------------------------------------------- #
+# Âge adulte par race + jets supplémentaires selon le groupe de classe :
+#   groupe 0 : Barbare, Roublard (Voleur), Ensorceleur (Sorcier)
+#   groupe 1 : Barde, Guerrier, Paladin, Rôdeur, Moine
+#   groupe 2 : Clerc, Druide, Magicien
+_AGES_DEPART: dict[str, dict[str, Any]] = {
+    "Humain":    {"adulte": 15,  "jets": ["1d4", "1d6", "2d6"]},
+    "Demi-elfe": {"adulte": 20,  "jets": ["1d6", "2d6", "3d6"]},
+    "Demi-orc":  {"adulte": 14,  "jets": ["1d4", "2d6", "2d6"]},
+    "Elfe":      {"adulte": 110, "jets": ["4d6", "6d6", "10d6"]},
+    "Gnome":     {"adulte": 40,  "jets": ["4d6", "6d6", "9d6"]},
+    "Nain":      {"adulte": 40,  "jets": ["3d6", "5d6", "7d6"]},
+    "Halfelin":  {"adulte": 20,  "jets": ["2d4", "3d6", "4d6"]},
+}
+
+_GROUPE_AGE_CLASSES: dict[str, int] = {}
+for _c in ("Barbare", "Voleur", "Sorcier"):
+    _GROUPE_AGE_CLASSES[_c] = 0
+for _c in ("Barde", "Guerrier", "Paladin", "Rodeur", "Moine"):
+    _GROUPE_AGE_CLASSES[_c] = 1
+for _c in ("Clerc", "Druide", "Magicien"):
+    _GROUPE_AGE_CLASSES[_c] = 2
+
+
+def _groupe_age_classe(classe: str) -> int:
+    """Index du groupe de classe pour la table des âges (défaut 0)."""
+    canon = resoudre_classe(classe)
+    return _GROUPE_AGE_CLASSES.get(canon, 0)
+
+
+# Mensurations : taille/poids de base (cm/kg) et dés, par sexe.
+# Le bonus de poids = (bonus de taille en cm) × (jet du dé de poids) ÷ 5 ;
+# « x1/5 » signifie simplement bonus_cm ÷ 5 (pas de dé).
+_MENSURATIONS: dict[str, dict[str, tuple[int, str, int, str]]] = {
+    "Humain":    {"m": (150, "5d10", 60, "2d4"), "f": (135, "5d10", 42, "2d4")},
+    "Demi-elfe": {"m": (140, "5d8", 50, "2d4"),  "f": (135, "5d8", 40, "2d4")},
+    "Demi-orc":  {"m": (150, "5d12", 75, "2d6"), "f": (135, "5d12", 55, "2d6")},
+    "Elfe":      {"m": (135, "5d6", 42, "1d6"),  "f": (135, "5d6", 40, "1d6")},
+    "Gnome":     {"m": (90, "5d4", 20, ""),      "f": (85, "5d4", 17, "")},
+    "Nain":      {"m": (115, "5d4", 65, "2d6"),  "f": (110, "5d4", 50, "2d6")},
+    "Halfelin":  {"m": (80, "5d4", 15, ""),      "f": (75, "5d4", 12, "")},
+}
+
+
+def _jet_des(formule: str) -> int:
+    """Lance une formule simple « NdM » (ex. '5d10') ; 0 si vide/invalide."""
+    m = re.fullmatch(r"\s*(\d+)\s*d\s*(\d+)\s*", formule or "")
+    if not m:
+        return 0
+    nb, faces = int(m.group(1)), int(m.group(2))
+    return sum(random.randint(1, faces) for _ in range(max(0, nb)))
+
+
+def tirer_apparence(race: str, classe: str = "", sexe: str = "") -> dict[str, Any]:
+    """Tirage aléatoire âge/taille/poids selon les tables officielles 3.5 FR.
+
+    - âge = âge adulte de la race + jet du groupe de classe ;
+    - taille = base raciale (selon sexe) + jet de taille ;
+    - poids = base raciale + (bonus de taille × jet de poids ÷ 5).
+
+    Renvoie valeurs brutes + chaînes prêtes pour les champs libres du
+    formulaire (« 112 ans », « 1,65 m », « 52 kg »). Races/sexe inconnus →
+    profil humain générique.
+    """
+    race_c = resoudre_race(race) or "Humain"
+    sexe_c = (sexe or "").strip().upper()
+    cle_sexe = "f" if sexe_c == "F" else "m"
+    base_taille, des_taille, base_poids, des_poids = _MENSURATIONS.get(
+        race_c, _MENSURATIONS["Humain"]
+    )[cle_sexe]
+
+    infos_age = _AGES_DEPART.get(race_c, _AGES_DEPART["Humain"])
+    groupe = _groupe_age_classe(classe)
+    age = infos_age["adulte"] + _jet_des(infos_age["jets"][groupe])
+
+    bonus_cm = _jet_des(des_taille)
+    taille_cm = base_taille + bonus_cm
+    if des_poids:
+        poids_kg = base_poids + round(bonus_cm * _jet_des(des_poids) / 5)
+    else:
+        poids_kg = base_poids + round(bonus_cm / 5)
+
+    return {
+        "age_ans": age,
+        "taille_cm": taille_cm,
+        "poids_kg": poids_kg,
+        "age": f"{age} ans",
+        "taille": f"{taille_cm / 100:.2f}".replace(".", ",") + " m",
+        "poids": f"{poids_kg} kg",
+        "race": race_c,
+        "formule_age": infos_age["jets"][groupe],
+    }
+
+
+# --------------------------------------------------------------------------- #
+#  Capacité de charge (PHB 3.5, table p.162 convertie en kg)
+# --------------------------------------------------------------------------- #
+_CHARGE_MAX_LB: dict[int, int] = {
+    1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90,
+    10: 100, 11: 115, 12: 130, 13: 150, 14: 175, 15: 200, 16: 230,
+    17: 266, 18: 306, 19: 346, 20: 400, 21: 460, 22: 520, 23: 600,
+    24: 700, 25: 800, 26: 900, 27: 1040, 28: 1180, 29: 1320,
+}
+
+# Multiplicateur de charge par catégorie de taille (PHB 3.5).
+_CHARGE_MULT_TAILLE = {"P": 0.75, "M": 1.0, "G": 2.0, "T": 4.0, "C": 8.0}
+
+
+def charge_maximale(for_valeur: int, taille: str = "M") -> int:
+    """Charge maximale transportable (kg) selon la Force et la taille.
+
+    Table PHB 3.5 (livres) convertie en kilogrammes, puis pondérée par la
+    catégorie de taille (Petit ×¾, Moyen ×1, Grand ×2…). Au-delà de FOR 29,
+    la charge est quadruplée par tranche de +10.
+    """
+    f = max(1, int(for_valeur or 1))
+    if f <= 29:
+        lb = _CHARGE_MAX_LB[f]
+    else:
+        # Paliers au-delà de la table : ×4 tous les 10 points de Force.
+        lb = _CHARGE_MAX_LB[29] * (4 ** ((f - 29 + 9) // 10))
+    mult = _CHARGE_MULT_TAILLE.get((taille or "M").strip().upper(), 1.0)
+    return int(round(lb * 0.4536 * mult))
+
+
 def _normaliser(texte: str) -> str:
     """Minuscules sans accents pour les lookups d'alias."""
     nf = unicodedata.normalize("NFKD", (texte or "").lower())
@@ -440,6 +567,8 @@ def calculer_derivees(
         "bab": bab,
         "sauvegardes": sauves,
         "initiative": mod_carac(final["DEX"]),
+        # Charge maximale transportable (kg) : Force × catégorie de taille.
+        "charge_max": charge_maximale(final["FOR"], RACES.get(race_canon, {}).get("taille", "M")),
     }
 
 
@@ -529,6 +658,55 @@ _CLASSE_EN = {
     "Paladin": "paladin", "Rodeur": "ranger", "Sorcier": "sorcerer",
     "Voleur": "rogue",
 }
+
+# Catégorie visuelle par classe : l'archétype (« look » attendu : armure,
+# attributs emblématiques) qui guide ComfyUI quand le nom de classe seul est
+# trop abstrait. Clés = noms canoniques FR du catalogue.
+_CATEGORIE_CLASSE = {
+    "Guerrier": "battle-hardened armored warrior with sword and shield",
+    "Barbare": "wild fur-clad barbarian wielding primal weapons",
+    "Paladin": "holy knight in gleaming plate armor bearing a sacred symbol",
+    "Rodeur": "wilderness ranger in leather armor with a bow and cloak",
+    "Voleur": "hooded rogue in dark leathers hiding daggers",
+    "Barde": "flamboyant bard in colorful garb carrying a lute",
+    "Moine": "disciplined monk in simple wrapped robes",
+    "Clerc": "devout priest in holy vestments bearing a divine symbol",
+    "Druide": "nature-bound druid with a gnarled wooden staff and furs",
+    "Magicien": "scholarly wizard in long robes with a spellbook and staff",
+    "Sorcier": "sorcerer wreathed in innate arcane energy",
+    "Warlock": "warlock marked by an eldritch pact, ominous aura",
+    "Assassin": "masked assassin in black garments",
+    "Artificier": "tinkerer artificer with mechanical gadgets and goggles",
+    "Alchimiste": "alchemist surrounded by bubbling vials",
+}
+
+
+def _taille_cm(valeur: str) -> Optional[int]:
+    """Extrait une taille en cm depuis un champ libre (« 1,65 m », « 165 », …)."""
+    v = (valeur or "").strip().lower().replace(",", ".")
+    m = re.search(r"(\d+(?:\.\d+)?)\s*m\b", v)
+    if m:
+        return int(float(m.group(1)) * 100)
+    m = re.search(r"(\d{2,3})\s*cm", v)
+    if m:
+        return int(m.group(1))
+    # Nombre seul plausible (80-250) → centimètres.
+    m = re.fullmatch(r"(\d{2,3})", v)
+    if m and 80 <= int(m.group(1)) <= 250:
+        return int(m.group(1))
+    return None
+
+
+def _corpulence(poids_kg: float, taille_cm: int) -> str:
+    """Qualificatif de carrure (IMC) pour guider le rendu, '' si banal."""
+    if taille_cm <= 0:
+        return ""
+    imc = poids_kg / ((taille_cm / 100) ** 2)
+    if imc < 18.5:
+        return "slender wiry build"
+    if imc > 28:
+        return "stout heavyset build"
+    return ""
 _COULEURS_EN = {
     "noir": "black", "noire": "black", "noirs": "black",
     "brun": "brown", "brune": "brown", "bruns": "brown",
@@ -546,18 +724,35 @@ _COULEURS_EN = {
 
 
 def _en_couleur(valeur: str) -> str:
-    """Traduit une couleur FR courante vers l'anglais (laisse tel quel sinon)."""
-    cle = (valeur or "").strip().lower()
-    cle_sans_accent = unicodedata.normalize("NFKD", cle)
-    cle_sans_accent = "".join(c for c in cle_sans_accent if not unicodedata.combining(c))
-    return _COULEURS_EN.get(cle_sans_accent, valeur.strip())
+    """Traduit une couleur FR courante vers l'anglais (laisse tel quel sinon).
+
+    Gère les couleurs composées mot à mot (« blanc argenté » → « white silver »).
+    """
+    brut = (valeur or "").strip()
+    cle = unicodedata.normalize("NFKD", brut.lower())
+    cle_sans_accent = "".join(c for c in cle if not unicodedata.combining(c))
+    if cle_sans_accent in _COULEURS_EN:
+        return _COULEURS_EN[cle_sans_accent]
+    mots = []
+    for mot in brut.split():
+        nm = unicodedata.normalize("NFKD", mot.lower())
+        nm = "".join(c for c in nm if not unicodedata.combining(c))
+        mots.append(_COULEURS_EN.get(nm, mot))
+    return " ".join(mots)
 
 
 def construire_prompt_portrait(fiche: dict[str, Any]) -> str:
-    """Prompt détaillé pour ComfyUI : identité + apparence + traits raciaux."""
+    """Prompt détaillé pour ComfyUI : race (+ traits visuels), classe (+ sa
+    catégorie visuelle) et champ apparence (sexe, âge, taille, poids,
+    yeux/cheveux/peau, description libre)."""
     apparence = fiche.get("apparence") or {}
-    sexe = (apparence.get("sexe") or "").strip()
-    article = _ARTICLE_SEXE.get(sexe.upper(), "a")
+    sexe_brut = (str(apparence.get("sexe") or "")).strip()
+    # Tolérant : « F »/« fém »/« féminin » → F ; sinon M ; vide → androgyne.
+    sexe_c = "F" if sexe_brut.upper().startswith("F") else (
+        "M" if sexe_brut.upper().startswith("M") else
+        ("AUTRE" if sexe_brut else "")
+    )
+    article = _ARTICLE_SEXE.get(sexe_c, "an androgynous")
 
     race_canon = resoudre_race(str(fiche.get("race", ""))) or str(fiche.get("race", ""))
     classe_canon = resoudre_classe(str(fiche.get("classe", ""))) or str(fiche.get("classe", ""))
@@ -565,20 +760,40 @@ def construire_prompt_portrait(fiche: dict[str, Any]) -> str:
     sujets = [article]
     sujets.append(_RACE_EN.get(race_canon, race_canon.lower()))
     if classe_canon:
-        sujets.append(
-            f"{_CLASSE_EN.get(classe_canon, classe_canon.lower())} adventurer"
-        )
+        sujets.append(_CLASSE_EN.get(classe_canon, classe_canon.lower()))
 
     details: list[str] = []
+    # Description raciale (traits visuels canoniques du catalogue).
     traits_race = RACES.get(race_canon, {}).get("traits_visuels", "")
     if traits_race:
         details.append(traits_race)
+    # Catégorie de classe : l'archétype visuel (armure, emblème…).
+    categorie_classe = _CATEGORIE_CLASSE.get(classe_canon, "")
+    if categorie_classe:
+        details.append(categorie_classe)
 
     # Âge : on extrait le nombre (« 112 ans » → « 112 years old »).
     age_brut = str(apparence.get("age") or "").strip()
     m_age = re.search(r"\d+", age_brut)
     if m_age:
         details.append(f"{m_age.group(0)} years old")
+
+    # Taille : « 1,65 m » / « 165 cm » → « 165 cm tall ».
+    taille_cm = None
+    for cle_taille in ("taille", "taille_physique"):
+        taille_cm = _taille_cm(str(apparence.get(cle_taille) or ""))
+        if taille_cm:
+            break
+    if taille_cm:
+        details.append(f"{taille_cm} cm tall")
+
+    # Poids + taille → carrure (IMC) ; le poids seul ne se voit pas.
+    m_poids = re.search(r"\d+", str(apparence.get("poids") or ""))
+    corpulence = ""
+    if m_poids and taille_cm:
+        corpulence = _corpulence(int(m_poids.group(0)), taille_cm)
+    if corpulence:
+        details.append(corpulence)
 
     yeux = _en_couleur(str(apparence.get("yeux") or ""))
     if yeux:
@@ -590,9 +805,11 @@ def construire_prompt_portrait(fiche: dict[str, Any]) -> str:
     if peau:
         details.append(f"{peau} skin")
 
-    description_libre = str(apparence.get("description") or "").strip()
-    if description_libre:
-        details.append(description_libre)
+    # Description libre + traits distinctifs (les deux schémas de fiche).
+    for cle_desc in ("description", "traits_distinctifs"):
+        texte = str(apparence.get(cle_desc) or "").strip()
+        if texte:
+            details.append(texte.replace("\n", ", "))
 
     sujet = " ".join(sujets)
     corps = (

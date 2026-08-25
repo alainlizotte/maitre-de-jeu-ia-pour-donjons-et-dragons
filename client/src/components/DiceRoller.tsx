@@ -1,12 +1,14 @@
-// Dé visuel client — jet rapide d'1d20 (information). Le MJ lance les vrais
-// jets via tool-calling serveur ; ceci n'est qu'un aide-mémoire joueur.
+// Dé visuel client — jet rapide d1d20/d6/d8/d100 pour le joueur. Le résultat
+// est annoncé dans le chat de partie (visible du MJ et des autres joueurs) ;
+// les jets officiels (attaques, sauvegardes) restent lancés par le MJ via
+// tool-calling serveur.
 
 import { useState } from "react";
 
-const FACES = { 20: "dice-d20", 6: "dice-d6", 100: "dice-d100", 8: "dice-d8" } as const;
+const FACES = [20, 6, 8, 100] as const;
 
-export function DiceRoller() {
-  const [sides, setSides] = useState<keyof typeof FACES>(20);
+export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
+  const [sides, setSides] = useState<(typeof FACES)[number]>(20);
   const [result, setResult] = useState<number | null>(null);
   const [log, setLog] = useState<string[]>([]);
 
@@ -15,12 +17,14 @@ export function DiceRoller() {
     setResult(r);
     const line = `1d${sides} → ${r}${r === 20 ? " ⭐" : r === 1 ? " 💀" : ""}`;
     setLog((l) => [line, ...l].slice(0, 12));
+    // Annonce le jet dans le chat de partie (informe le MJ et l'équipe).
+    sendSay?.(`🎲 Jet manuel : 1d${sides} → ${r}${r === 20 ? " (20 naturel !)" : r === 1 ? " (1 naturel…)" : ""}`);
   };
 
   return (
     <div className="flex flex-col items-center text-center">
       <div className="mb-3 flex gap-2">
-        {(Object.keys(FACES) as unknown as (keyof typeof FACES)[]).map((n) => (
+        {FACES.map((n) => (
           <button
             key={n}
             onClick={() => setSides(n)}
@@ -43,7 +47,9 @@ export function DiceRoller() {
         {result ?? "?"}
       </button>
       <div className="mt-3 text-stone-500 text-xs">
-        Cliquez pour lancer 1d{sides} (visuel joueur)
+        {sendSay
+          ? `Lance 1d${sides} et annonce le résultat au MJ`
+          : `Lance 1d${sides} (visuel local)`}
       </div>
       {log.length > 0 && (
         <ul className="mt-3 text-stone-400 text-xs space-y-0.5 self-stretch">

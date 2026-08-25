@@ -36,13 +36,8 @@ log = logging.getLogger("dnd35.rag.extract")
 
 # Localisation des sources / cibles. Aucune dépendance vers la config YAML —
 # ce script est autonome et peut tourner même si ChromaDB n'est pas initialisé.
-DEFAULT_OCR_DIR = Path(
-    r"C:/Users/alain/OneDrive/Desktop/Dongeon dragon/documentation/livres/"
-    r"Donjons et Dragons - AD&D - 3.5ème Edition OCR"
-)
-DEFAULT_OUT_ROOT = Path(
-    r"C:/Users/alain/OneDrive/Desktop/Dongeon dragon/projet_DnD35/knowledge_import"
-)
+DEFAULT_OCR_DIR = Path("documentation/livres")
+DEFAULT_OUT_ROOT = Path("./knowledge_import")
 
 KB1 = "KB1_Manuels_de_base"
 KB2 = "KB2_Aide_creation_perso"
@@ -191,7 +186,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--out", default=str(DEFAULT_OUT_ROOT),
-        help="Racine knowledge_import (default: projet_DnD35/knowledge_import)"
+        help="Racine knowledge_import (default: ./knowledge_import du projet)"
     )
     parser.add_argument("--dry", action="store_true",
                         help="Liste le mapping sans écrire")

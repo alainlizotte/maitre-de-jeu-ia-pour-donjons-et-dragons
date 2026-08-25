@@ -19,7 +19,7 @@
       },
       "required": ["FOR", "DEX", "CON", "INT", "SAG", "CHA"]
     },
-    "pv": {"type": "integer", "minimum": 0, "description": "Points de vie actuels."},
+    "pv": {"type": "integer", "minimum": -10, "description": "Points de vie actuels. Peut descendre sous 0 : mourant entre -1 et -9, mort a -10 (regles officielles Injury and Death 3.5)."},
     "pv_max": {"type": "integer", "minimum": 1, "description": "Points de vie maximaux."},
     "ca": {"type": "integer", "description": "Classe d'Armure (CA)."},
     "sauvegardes": {

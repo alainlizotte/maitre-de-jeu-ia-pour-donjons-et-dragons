@@ -60,13 +60,16 @@ class GameConfig:
     default_frame: str = "Côte des Épées (Faerûn)"
     max_history_events: int = 50
     max_recap_chars: int = 6000
+    # Budget en caractères de l'historique envoyé au LLM (~3 k tokens) :
+    # évite la saturation du contexte sur les longues campagnes.
+    max_history_chars: int = 12000
     stream_to_clients: bool = True
 
 
 @dataclass
 class RagConfig:
     enabled: bool = False
-    source_dir: str = "../Dongeon dragon/projet_DnD35/knowledge_import"
+    source_dir: str = "./knowledge_import"
     persist_dir: str = "./server/data/chroma"
     embedding_model: str = "nomic-embed-text-v1.5"
     # Serveur d'embeddings dédié (llama.cpp `--embedding`). Vide → retombe sur

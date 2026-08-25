@@ -1,7 +1,8 @@
 """Outil Distribution manuels — adapté de `Outil_FichiersDepart.py`.
 
-Fournit `distribuer_manuels_carte()` à appeler en début de partie. Émet dans
-le chat des liens Markdown vers les manuels D&D 3.5 et la carte du monde.
+Fournit `manuels_distribuer()` à appeler en début de partie. Émet dans
+le chat des liens Markdown vers les manuels D&D 3.5 et les cartes de
+référence (Faerûn, Outreterre, Toril).
 
 Le catalogue inclut les 17 manuels de l'édition 3.5 (SCAN + OCR disponibles).
 Les manuels sont groupés par catégorie pour le menu déroulant frontend.
@@ -24,17 +25,16 @@ MANUELS_WEB_BASE_URL = os.environ.get(
     "DND35_MANUELS_URL",
     "https://ateliersynthetique.ca/d&d/manuels",
 )
-FICHIER_CARTE_LOWRES = "cote_epees_lowres.jpg"
-FICHIER_CARTE_HIRES = "cote_epees_hires.jpg"
-WORLD_MAP_LOWRES_URL = os.environ.get(
-    "DND35_MAP_LOW_URL",
-    "https://ateliersynthetique.ca/d&d/manuels/cote_epees_lowres.jpg",
-)
-WORLD_MAP_HIGHRES_URL = os.environ.get(
-    "DND35_MAP_HIGH_URL",
-    "https://media.wizards.com/2015/images/dnd/"
-    "resources/Sword-Coast-Map_HighRes.jpg",
-)
+
+# Cartes de référence (dossier projet `cartes/`, copié au démarrage du serveur
+# vers data/cartes/ et servi sous /data/cartes/…). La première est la carte
+# de jeu affichée par l'onglet « Monde » du panneau droit.
+CARTES_REFERENCE = [
+    ("faerun_nord.png", "Faerûn — Nord (Côte des Épées)", "Faerûn Nord"),
+    ("faerun.png", "Faerûn — carte complète", "Faerûn"),
+    ("outreterre.png", "Outreterre (Underdark)", "Outreterre"),
+    ("toril.png", "Toril — monde entier", "Toril"),
+]
 
 # Catalogue complet des 17 manuels D&D 3.5, groupés par catégorie.
 FICHIERS_DEFAUT = [
@@ -186,12 +186,12 @@ def url_manuel(ctx: ToolContext, public_name: str) -> str:
     return _url_locale(ctx, public_name) or _safe_url(MANUELS_WEB_BASE_URL, public_name)
 
 
-def url_carte_lowres(ctx: ToolContext) -> str:
-    return _url_locale(ctx, FICHIER_CARTE_LOWRES) or WORLD_MAP_LOWRES_URL
-
-
-def url_carte_hires(ctx: ToolContext) -> str:
-    return _url_locale(ctx, FICHIER_CARTE_HIRES) or WORLD_MAP_HIGHRES_URL
+def url_carte_reference(ctx: ToolContext, nom_fichier: str) -> Optional[str]:
+    """URL locale d'une carte de référence si présente sous data/cartes/."""
+    chemin = os.path.join(ctx.data_dir, "cartes", nom_fichier)
+    if os.path.isfile(chemin):
+        return "/data/cartes/" + quote(nom_fichier, safe="")
+    return None
 
 
 def _party_state(ctx: ToolContext) -> PartyState:
@@ -244,14 +244,20 @@ async def manuels_distribuer(ctx: ToolContext) -> ToolResult:
             )
         lignes.append("")
 
-    lignes.append(
-        f"🗺️ **Carte de la Côte des Épées (LowRes)** : "
-        f"![carte]({url_carte_lowres(ctx)})"
-    )
-    lignes.append(
-        f"🗺️ **Carte HighRes** : "
-        f"[Cote des Epees HighRes]({url_carte_hires(ctx)})"
-    )
+    # Cartes de référence — la carte de jeu (nord de Faerûn, celle de
+    # l'onglet « Monde ») en image, les autres en liens cliquables.
+    cartes_dispo = []
+    for _f, _t, _l in CARTES_REFERENCE:
+        _u = url_carte_reference(ctx, _f)
+        if _u:
+            cartes_dispo.append((_f, _t, _l, _u))
+    if cartes_dispo:
+        lignes.append("🗺️ **Cartes de référence** :")
+        premier = cartes_dispo[0]
+        lignes.append(f"![{premier[1]}]({premier[3]})")
+        for _f, _t, _l, _u in cartes_dispo[1:]:
+            lignes.append(f"- [{_t}]({_u})")
+        lignes.append("")
 
     etat.setdefault("distribution", {})["faite"] = True
     err = _sauver_etat(ctx, etat)

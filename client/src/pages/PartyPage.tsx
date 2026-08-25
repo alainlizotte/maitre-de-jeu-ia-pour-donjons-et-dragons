@@ -43,16 +43,27 @@ export function PartyPage() {
 
   const { sendSay, sendTeamSay, socket } = useChatSocket(partie_id ?? null);
 
-  const phase = (state?.phase ?? "").toLowerCase();
-  const hasQuest = Boolean(state?.quete?.titre);
-  const showPicker = (phase === "opening" || phase === "") && !hasQuest && partie_id;
+  // set_quest enregistre toujours un objet quête (même à titre vide pour
+  // « aventure libre ») ; tant que rien n'est enregistré, le sélecteur reste
+  // affiché quelle que soit la phase — aucune limite de temps.
+  const quete = state?.quete ?? null;
+  const queteChoisie = Boolean(quete && (quete.titre || quete.source));
+  const showPicker = Boolean(partie_id) && !queteChoisie;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <div className="flex-1 min-h-0 flex overflow-hidden">
         <StateSidebar />
         <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          {showPicker && (
+          {quete?.titre && (
+            <div className="m-4 mb-2 shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2">
+              <span className="text-amber-300 font-semibold">📜 Quête : {quete.titre}</span>
+              {quete.pitch && (
+                <span className="text-stone-400 text-sm"> — {quete.pitch}</span>
+              )}
+            </div>
+          )}
+          {showPicker && partie_id && (
             <div className="p-4 shrink-0">
               <ScenarioPicker partieId={partie_id} />
             </div>

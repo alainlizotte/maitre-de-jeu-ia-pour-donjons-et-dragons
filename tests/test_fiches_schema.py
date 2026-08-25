@@ -113,3 +113,20 @@ def test_fiche_pv_negatif_rejetee(ctx: ToolContext) -> None:
     }
     with pytest.raises(ValueError, match="pv_max"):
         _save_fiche(ctx, "Mort", fiche)
+
+
+def test_fiche_pv_negatifs_acceptes(ctx: ToolContext) -> None:
+    """Règles officielles Injury and Death 3.5 : les PV descendent sous 0
+    (mourant entre -1 et -9, mort à -10). Le schéma doit les accepter."""
+    for pv in (-1, -5, -9, -10):
+        fiche = {
+            "nom": f"Agonisant{abs(pv)}", "race": "Humain",
+            "classe": "Guerrier", "niveau": 1,
+            "carac": {"FOR": 14, "DEX": 12, "CON": 14, "INT": 10,
+                      "SAG": 11, "CHA": 10},
+            "pv": pv, "pv_max": 12, "ca": 14,
+            "sauvegardes": {"Vigueur": 3, "Reflexes": 0, "Volonte": 0},
+            "bab": 1,
+        }
+        path = _save_fiche(ctx, fiche["nom"], fiche)
+        assert Path(path).is_file(), f"pv={pv} doit être accepté (règle 3.5)"

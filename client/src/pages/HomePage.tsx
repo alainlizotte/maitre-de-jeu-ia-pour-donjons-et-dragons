@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken, setToken } from "../api/rest";
 import type { FichePerso } from "../api/types";
 import { useParty } from "../store";
+import { SheetModal } from "../components/StateSidebar";
 import { slugify } from "../utils/slug";
 
 // --------------------------------------------------------------------------- //
@@ -23,25 +24,27 @@ function MiniPortrait({ perso }: { perso: FichePerso }) {
         .slice(0, 2)
         .join("") || "?";
     return (
-      <div className="h-28 w-full rounded border border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 flex items-center justify-center font-serif text-3xl text-amber-500/70">
+      <div className="aspect-square w-full rounded border border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 flex items-center justify-center font-serif text-3xl text-amber-500/70">
         {initiales}
       </div>
     );
   }
+  // Cadre carré + object-contain : le portrait entier reste visible
+  // (aucun rognage), centré dans son cadre.
   return (
     <img
       src={perso.portrait}
       alt={perso.nom}
-      className="h-28 w-full object-cover object-top rounded border border-stone-700"
+      className="aspect-square w-full object-contain bg-stone-950 rounded border border-stone-700"
       onError={() => setErreur(true)}
     />
   );
 }
 
 function CartePerso({ perso }: { perso: FichePerso }) {
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const [confirmer, setConfirmer] = useState(false);
+  const [voirFiche, setVoirFiche] = useState(false);
   const slug = slugify(perso.nom);
   const supprimer = useMutation({
     mutationFn: () => api.deletePerso(slug),
@@ -68,11 +71,13 @@ function CartePerso({ perso }: { perso: FichePerso }) {
           </div>
         )}
         <div className="mt-auto pt-3 flex gap-2">
+          {/* Consultation seule : la fiche s'ouvre en lecture (modale). */}
           <button
             className="flex-1 px-2 py-1.5 bg-stone-700 hover:bg-stone-600 rounded text-sm"
-            onClick={() => navigate(`/personnage/${encodeURIComponent(slug)}`)}
+            onClick={() => setVoirFiche(true)}
+            title="Consulter la fiche complète"
           >
-            Modifier
+            Voir la fiche
           </button>
           {confirmer ? (
             <>
@@ -101,6 +106,7 @@ function CartePerso({ perso }: { perso: FichePerso }) {
           )}
         </div>
       </div>
+      {voirFiche && <SheetModal nom={perso.nom} onClose={() => setVoirFiche(false)} />}
     </div>
   );
 }
@@ -122,6 +128,16 @@ export function HomePage() {
   const [pendingJoin, setPendingJoin] = useState<{ id: string; titre: string } | null>(null);
   const [mdpJoin, setMdpJoin] = useState("");
   const [mdpErreur, setMdpErreur] = useState("");
+
+  // Suppression d'une partie — confirmation en deux temps dans la liste.
+  const [supprId, setSupprId] = useState<string | null>(null);
+  const supprimerPartie = useMutation({
+    mutationFn: (id: string) => api.deleteParty(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["parties"] });
+      setSupprId(null);
+    },
+  });
 
   // Non connecté → page de connexion.
   if (!getToken()) {
@@ -255,10 +271,14 @@ export function HomePage() {
               ))}
             </select>
           </label>
-          {personnage && (
+          {personnage ? (
             <p className="text-xs text-emerald-400 mt-1">
               ✓ Vous rejoindrez les parties en tant que{" "}
               <strong>{labelPersoChoisi}</strong>.
+            </p>
+          ) : (
+            <p className="text-xs text-amber-500/90 mt-1">
+              ⚠ Sélectionnez un personnage pour créer ou rejoindre une partie.
             </p>
           )}
         </div>
@@ -274,7 +294,8 @@ export function HomePage() {
             />
             <button
               className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 rounded font-medium text-stone-900"
-              disabled={!utilisateur || create.isPending}
+              disabled={!utilisateur || !personnage || create.isPending}
+              title={personnage ? undefined : "Choisissez d'abord un personnage"}
               onClick={() => create.mutate()}
             >
               {create.isPending ? "Création…" : "Créer"}
@@ -329,7 +350,9 @@ export function HomePage() {
                   </div>
                   {p.protegee ? (
                     <button
-                      className="px-3 py-1.5 bg-stone-700 hover:bg-stone-600 rounded text-sm shrink-0"
+                      className="px-3 py-1.5 bg-stone-700 hover:bg-stone-600 disabled:opacity-40 rounded text-sm shrink-0"
+                      disabled={!personnage}
+                      title={personnage ? undefined : "Choisissez d'abord un personnage"}
                       onClick={() => {
                         setPendingJoin(pendingJoin?.id === p.id ? null : { id: p.id, titre: p.titre });
                         setMdpJoin("");
@@ -340,13 +363,51 @@ export function HomePage() {
                     </button>
                   ) : (
                     <button
-                      className="px-3 py-1.5 bg-stone-700 hover:bg-stone-600 rounded text-sm shrink-0"
+                      className="px-3 py-1.5 bg-stone-700 hover:bg-stone-600 disabled:opacity-40 rounded text-sm shrink-0"
+                      disabled={!personnage}
+                      title={personnage ? undefined : "Choisissez d'abord un personnage"}
                       onClick={() => rejoindre(p.id)}
                     >
                       Rejoindre
                     </button>
                   )}
+                  <button
+                    className="px-3 py-1.5 bg-stone-700 hover:bg-rose-900/60 rounded text-sm shrink-0"
+                    title="Supprimer cette partie (état, historiques, cartes)"
+                    onClick={() => {
+                      setSupprId(supprId === p.id ? null : p.id);
+                      setPendingJoin(null);
+                    }}
+                  >
+                    🗑️
+                  </button>
                 </div>
+                {supprId === p.id && (
+                  <div className="mt-3 flex gap-2 items-center flex-wrap bg-rose-950/40 border border-rose-900/60 rounded px-3 py-2">
+                    <span className="text-rose-300 text-xs flex-1 min-w-48">
+                      Effacer définitivement « {p.titre} » ? État, historique de chat
+                      et cartes du donjon seront perdus.
+                    </span>
+                    <button
+                      className="px-3 py-1.5 bg-rose-700 hover:bg-rose-600 rounded text-sm font-medium shrink-0"
+                      onClick={() => supprimerPartie.mutate(p.id)}
+                      disabled={supprimerPartie.isPending}
+                    >
+                      {supprimerPartie.isPending ? "Suppression…" : "Confirmer la suppression"}
+                    </button>
+                    <button
+                      className="px-2 py-1.5 bg-stone-700 hover:bg-stone-600 rounded text-sm shrink-0"
+                      onClick={() => setSupprId(null)}
+                    >
+                      ✕
+                    </button>
+                    {supprimerPartie.isError && (
+                      <span className="text-rose-400 text-xs w-full">
+                        ⚠️ {(supprimerPartie.error as Error).message}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {pendingJoin?.id === p.id && (
                   <form
                     className="mt-3 flex gap-2 items-center"
@@ -370,7 +431,9 @@ export function HomePage() {
                     />
                     <button
                       type="submit"
-                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 rounded text-sm font-medium text-stone-900"
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 rounded text-sm font-medium text-stone-900"
+                      disabled={!personnage}
+                      title={personnage ? undefined : "Choisissez d'abord un personnage"}
                     >
                       Entrer
                     </button>

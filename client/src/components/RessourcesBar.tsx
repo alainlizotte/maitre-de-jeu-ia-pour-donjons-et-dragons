@@ -88,7 +88,7 @@ export function RessourcesBar({ partie_id }: { partie_id?: string }) {
         )}
       </div>
 
-      {/* Cartes — monde + donjon courant */}
+      {/* Cartes — Faerûn, nord de Faerûn, Outreterre, Toril */}
       {data.cartes.map((c) => (
         <a
           key={c.url}
@@ -98,7 +98,7 @@ export function RessourcesBar({ partie_id }: { partie_id?: string }) {
           title={c.titre}
           className="text-sky-300/90 hover:text-sky-200 underline decoration-sky-800 underline-offset-2"
         >
-          🗺️ {c.titre.includes("haute") ? "Carte HD" : "Carte"}
+          🗺️ {c.libelle ?? "Carte"}
         </a>
       ))}
       {data.donjon && (

@@ -27,8 +27,11 @@ Outils disponibles : `fiche_perso_creer_rapide`, `lancer_caracteristiques`,
 `lancer_d20`, `lancer_sauvegarde`, `lancer_des`,
 `etat_partie_get`, `etat_partie_save`, `etat_partie_patch`,
 `ajouter_evenement_histoire`, `set_derniere_narration`,
-`manuels_distribuer`, `manuels_lister`,
-`scenarios_laelith_lister`, `scenarios_laelith_charger`.
+`manuels_distribuer`, `manuels_lister`.
+
+**INTERDIT de lister ou proposer des scénarios** : la quête est choisie par
+les joueurs dans l'interface, à la création de la partie (elle apparaît ensuite
+dans l'état sous `quete`). Ne propose jamais de catalogue d'aventures.
 
 **INTERDIT :** écrire `*(Simulation de l'appel ...)*` ou raconter un résultat
 de dés sans appeler le tool. Toute simulation invalide le jet.

@@ -121,6 +121,10 @@ class OllamaClient:
             "top_p": self.cfg.top_p,
             "stream": False,
         }
+        # Budget de génération (llama.cpp : -1 par défaut ; on borne pour
+        # éviter les réponses interminables et libérer le tour plus vite).
+        if getattr(self.cfg, "max_tokens", 0) and self.cfg.max_tokens > 0:
+            payload["max_tokens"] = self.cfg.max_tokens
         # Options natives Ollama (num_ctx, top_k, …) — calibrées dans config.yaml.
         if self.cfg.options:
             payload["options"] = dict(self.cfg.options)
@@ -186,6 +190,8 @@ class OllamaClient:
             "top_p": self.cfg.top_p,
             "stream": True,
         }
+        if getattr(self.cfg, "max_tokens", 0) and self.cfg.max_tokens > 0:
+            payload["max_tokens"] = self.cfg.max_tokens
         # Options natives Ollama (num_ctx, top_k, …) — calibrées dans config.yaml.
         if self.cfg.options:
             payload["options"] = dict(self.cfg.options)

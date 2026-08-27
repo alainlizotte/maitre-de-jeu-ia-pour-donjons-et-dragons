@@ -37,6 +37,9 @@ class PartySession:
     max_history_events: int = 50
     # Chat d'équipe (joueurs ↔ joueurs, sans le MJ).
     team_history: list[dict[str, str]] = field(default_factory=list)
+    # Indique que le MJ est en cours de traitement (pensée/génération).
+    # Les messages "say" des joueurs sont rejetés tant que thinking est True.
+    thinking: bool = False
 
     def add_participant(self, name: str) -> None:
         if name and name not in self.participants:

@@ -9,6 +9,7 @@ llm:
   temperature: 0.75
   top_p: 0.9
   max_context_tokens: 8192    # Gemma 4 12B accepte jusqu'à 8192 native
+  max_tokens: 8192            # budget max de tokens générés par réponse
 
   # Options natives transmises à Ollama via le champ `options` du payload
   # OpenAI-compatible. Permet de tuner le runtime sans modifier le code.
@@ -55,6 +56,13 @@ game:
   max_history_events: 50
   max_recap_chars: 6000
   stream_to_clients: true      # le MJ stream-token sa réponse aux joueurs
+  block_messages_during_think: false  # bloquer l'envoi de messages pendant que le MJ travaille
+
+image:
+  # Génération d'images via ComfyUI (monstres, salles, portraits).
+  # Désactivé par défaut — activez si ComfyUI est installé et accessible.
+  enabled: false
+  # base_url: "http://comfyui:8188"   # Docker ; local : http://127.0.0.1:8188
 
 rag:
   # Base de connaissances RAG (Phase 2). Désactivé par défaut ; passez à

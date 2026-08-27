@@ -32,6 +32,7 @@ MANUELS_WEB_BASE_URL = os.environ.get(
 CARTES_REFERENCE = [
     ("faerun_nord.png", "Faerûn — Nord (Côte des Épées)", "Faerûn Nord"),
     ("faerun.png", "Faerûn — carte complète", "Faerûn"),
+    ("laelith.jpg", "Laelith — carte de la ville", "Laelith"),
     ("outreterre.png", "Outreterre (Underdark)", "Outreterre"),
     ("toril.png", "Toril — monde entier", "Toril"),
 ]

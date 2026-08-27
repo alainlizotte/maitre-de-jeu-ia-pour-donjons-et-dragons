@@ -80,7 +80,7 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const t = text.trim();
-    if (!t || !player) return;
+    if (!t || !player || thinking) return;
     sendSay(t);
     setText("");
   };
@@ -107,20 +107,22 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
 
       <form onSubmit={submit} className="shrink-0 border-t border-stone-800 p-3 flex gap-2">
         <input
-          className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400"
+          className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400 disabled:opacity-40"
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={
-            player
-              ? "Que faites-vous ?"
-              : "Saisissez votre pseudo à l'accueil d'abord…"
+            thinking
+              ? "Le MJ réfléchit…"
+              : player
+                ? "Que faites-vous ?"
+                : "Saisissez votre pseudo à l'accueil d'abord…"
           }
-          disabled={!player}
+          disabled={!player || thinking}
         />
         <button
           type="submit"
           className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 rounded font-medium text-stone-900"
-          disabled={!player || !text.trim()}
+          disabled={!player || !text.trim() || thinking}
         >
           Envoyer
         </button>

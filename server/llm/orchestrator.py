@@ -115,6 +115,7 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "calculer_initiative",
         "engager_combat",
         "demarrer_combat",
+        "combat_ajouter_combattant",
         "tour_suivant_combat",
         "finir_combat",
         "fiche_perso_recuperer",
@@ -146,6 +147,12 @@ _SIMULATION_PATTERNS = [
     re.compile(r"\*\(Appel\s+de\s+l'outil[^*]*?\)\*", re.IGNORECASE),
     re.compile(r"\*\(Simulation\s+des\s+jets[^*]*?\)\*", re.IGNORECASE),
     re.compile(r"\*Simulation\s+de\s+l'appel\s+`?\w+`?\*\*", re.IGNORECASE),
+    # « (L'application de l'outil X met à jour ...) » — Gemma formule aussi
+    # ses simulations de cette façon (observé en partie réelle).
+    re.compile(r"\*\(L'application\s+de\s+l'outil[^*]*?\)\*", re.IGNORECASE),
+    re.compile(r"\(L'application\s+de\s+l'outil[^)]*\)", re.IGNORECASE),
+    # « (L'outil X est appliqué : ...) » / « (Application de l'outil ...) ».
+    re.compile(r"\*?\(?(?:L'outil\s+\w+\s+est\s+appliqu|Application\s+de\s+l'outil)[^)]*\)?\*?", re.IGNORECASE),
     # Prose ordinaire : "Je vais simuler l'appel ..."  (sans astérisques).
     re.compile(r"\bsimul(?:er|e|ait|ent|é)\s+?(?:l'appel|l'outil|le\s+tool|les\s+jets)\b", re.IGNORECASE),
     # Variante sans astérisques : "(Simulation de l'appel ...)".
@@ -182,6 +189,23 @@ _DAMAGE_PROSE_PATTERNS = [
     re.compile(
         r"\b(?:inflig\w*|subit|subissent|encourt)\s+(?:\*\*)?\d{1,3}(?:\*\*)?"
         r"\s*(?:points\s+de\s+)?d[ée]g[âa]ts",
+        re.IGNORECASE,
+    ),
+    # "Résultat de l'attaque] : 14 au toucher, 12 dégâts" — sans tool
+    re.compile(
+        r"\[?R[ée]sultat\s+de\s+l['']attaque\]?\s*[:\.]?\s*\d+\s*au\s+toucher"
+        r"[,;\s]+\d+\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
+        re.IGNORECASE,
+    ),
+    # "te tue X points de dégâts", "lui inflige X PV de dégâts"
+    re.compile(
+        r"\b(?:t[''](?:a|e)\s+)?(?:inflig\w*|tue|font)\s+(?:\*\*)?\d{1,3}"
+        r"(?:\*\*)?\s*(?:points?\s+(?:de\s+)?(?:vie|dégâts)|PV\s+de\s+dégâts)",
+        re.IGNORECASE,
+    ),
+    # "遭遇" style : "X au toucher, Y dégâts" after a mention of attack
+    re.compile(
+        r"\b\d+\s+au\s+toucher[,;\s]+\d+\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
         re.IGNORECASE,
     ),
 ]

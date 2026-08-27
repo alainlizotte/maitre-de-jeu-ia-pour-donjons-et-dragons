@@ -382,6 +382,7 @@ export function MonsterSheetModal({
 export function Bestiary() {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [sortBy, setSortBy] = useState<"nom" | "fp">("fp");
 
   const { data, isLoading } = useQuery({
     queryKey: ["bestiaire"],
@@ -404,6 +405,11 @@ export function Bestiary() {
       })
     : monsters;
 
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "nom") return a.nom.localeCompare(b.nom, "fr");
+    return parseFp(a.fp) - parseFp(b.fp);
+  });
+
   const monster = monsters.find((m) => m.cle === selected);
 
   if (monster) {
@@ -419,11 +425,37 @@ export function Bestiary() {
         placeholder="Filtrer…"
         className="w-full bg-stone-800 border border-stone-700 rounded px-2 py-1 text-xs mb-2 focus:outline-none focus:border-amber-400"
       />
-      <div className="text-xs text-stone-500 mb-2">
-        {filtered.length} monstre{filtered.length !== 1 ? "s" : ""}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-stone-500">
+          {sorted.length} monstre{sorted.length !== 1 ? "s" : ""}
+        </span>
+        <div className="flex rounded overflow-hidden border border-stone-700 text-[10px] shrink-0">
+          <button
+            onClick={() => setSortBy("nom")}
+            className={
+              "px-2 py-0.5 " +
+              (sortBy === "nom"
+                ? "bg-stone-700 text-amber-300"
+                : "bg-stone-900 text-stone-400 hover:text-stone-200")
+            }
+          >
+            A→Z
+          </button>
+          <button
+            onClick={() => setSortBy("fp")}
+            className={
+              "px-2 py-0.5 " +
+              (sortBy === "fp"
+                ? "bg-stone-700 text-amber-300"
+                : "bg-stone-900 text-stone-400 hover:text-stone-200")
+            }
+          >
+            FP
+          </button>
+        </div>
       </div>
       <ul className="space-y-1 max-h-[50vh] overflow-auto">
-        {filtered.map((m) => (
+        {sorted.map((m) => (
           <li key={m.cle}>
             <button
               onClick={() => setSelected(m.cle)}

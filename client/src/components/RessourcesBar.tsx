@@ -17,6 +17,7 @@ const CAT_ORDER = [
 export function RessourcesBar({ partie_id }: { partie_id?: string }) {
   const [scenariosOuverts, setScenariosOuverts] = useState(false);
   const [manuelsOuverts, setManuelsOuverts] = useState(false);
+  const [cartesOuvertes, setCartesOuvertes] = useState(false);
   const { data } = useQuery({
     queryKey: ["ressources", partie_id ?? null],
     queryFn: () => api.ressources(partie_id),
@@ -61,7 +62,7 @@ export function RessourcesBar({ partie_id }: { partie_id?: string }) {
           {manuelsOuverts ? " ▴" : " ▾"}
         </button>
         {manuelsOuverts && (
-          <div className="absolute bottom-full mb-2 left-0 z-50 w-[420px] max-h-80 overflow-auto bg-stone-900 border border-stone-700 rounded-lg shadow-xl p-2">
+          <div className="absolute bottom-full mb-2 left-0 z-50 w-[420px] max-w-[calc(100vw-1rem)] max-h-80 overflow-auto bg-stone-900 border border-stone-700 rounded-lg shadow-xl p-2">
             <div className="text-stone-500 text-[10px] uppercase mb-2">
               Manuels D&D 3.5 — clic pour consulter
             </div>
@@ -88,30 +89,46 @@ export function RessourcesBar({ partie_id }: { partie_id?: string }) {
         )}
       </div>
 
-      {/* Cartes — Faerûn, nord de Faerûn, Outreterre, Toril */}
-      {data.cartes.map((c) => (
-        <a
-          key={c.url}
-          href={c.url}
-          target="_blank"
-          rel="noreferrer"
-          title={c.titre}
+      {/* Cartes — dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => setCartesOuvertes((v) => !v)}
           className="text-sky-300/90 hover:text-sky-200 underline decoration-sky-800 underline-offset-2"
         >
-          🗺️ {c.libelle ?? "Carte"}
-        </a>
-      ))}
-      {data.donjon && (
-        <a
-          href={data.donjon}
-          target="_blank"
-          rel="noreferrer"
-          title="Carte du donjon (SVG)"
-          className="text-sky-300 hover:text-sky-200 font-medium underline decoration-sky-800 underline-offset-2"
-        >
-          🧭 Donjon
-        </a>
-      )}
+          🗺️ Cartes ({data.cartes.length})
+          {cartesOuvertes ? " ▴" : " ▾"}
+        </button>
+        {cartesOuvertes && (
+          <div className="absolute bottom-full mb-2 left-0 z-50 w-80 max-w-[calc(100vw-1rem)] max-h-72 overflow-auto bg-stone-900 border border-stone-700 rounded-lg shadow-xl p-2">
+            <div className="text-stone-500 text-[10px] uppercase mb-1">
+              Cartes de référence — clic pour consulter
+            </div>
+            {data.cartes.map((c) => (
+              <a
+                key={c.url}
+                href={c.url}
+                target="_blank"
+                rel="noreferrer"
+                title={c.titre}
+                className="block px-2 py-1.5 rounded hover:bg-stone-800 text-stone-200"
+              >
+                🗺️ {c.libelle ?? "Carte"}
+              </a>
+            ))}
+            {data.donjon && (
+              <a
+                href={data.donjon}
+                target="_blank"
+                rel="noreferrer"
+                title="Carte du donjon (SVG)"
+                className="block px-2 py-1.5 rounded hover:bg-stone-800 text-stone-200"
+              >
+                🧭 Donjon
+              </a>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Scénarios — popover */}
       <div className="relative">
@@ -123,7 +140,7 @@ export function RessourcesBar({ partie_id }: { partie_id?: string }) {
           {scenariosOuverts ? " ▴" : " ▾"}
         </button>
         {scenariosOuverts && (
-          <div className="absolute bottom-full mb-2 left-0 z-40 w-80 max-h-72 overflow-auto bg-stone-900 border border-stone-700 rounded-lg shadow-xl p-2">
+          <div className="absolute bottom-full mb-2 left-0 z-40 w-80 max-w-[calc(100vw-1rem)] max-h-72 overflow-auto bg-stone-900 border border-stone-700 rounded-lg shadow-xl p-2">
             <div className="text-stone-500 text-[10px] uppercase mb-1">
               Scénarios PDF — clic pour consulter
             </div>

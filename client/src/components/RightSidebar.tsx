@@ -204,14 +204,31 @@ export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps
   const [tab, setTab] = useState<Tab>("des");
   const teamUnread = useParty((s) => s.teamUnread);
   const resetTeamUnread = useParty((s) => s.resetTeamUnread);
+  const donjonId = useParty((s) => s.state?.donjon?.id);
 
   const handleTabChange = (t: Tab) => {
     setTab(t);
     if (t === "equipe") resetTeamUnread();
   };
 
+  // Auto-switch : entrée dans un donjon → onglet "Donjon" actif
+  //              sortie du donjon → onglet "Monde" actif
+  const prevDonjon = useRef(donjonId);
+  useEffect(() => {
+    const wasNull = prevDonjon.current == null;
+    const isNull = donjonId == null;
+    if (wasNull && !isNull) {
+      // Entrée dans un donjon
+      setTab("donjon");
+    } else if (!wasNull && isNull) {
+      // Sortie du donjon
+      setTab("monde");
+    }
+    prevDonjon.current = donjonId;
+  }, [donjonId]);
+
   return (
-    <aside className="w-80 shrink-0 min-h-0 border-l border-stone-800 bg-stone-900/50 flex flex-col overflow-hidden">
+    <aside className="w-full md:w-80 h-full shrink-0 min-h-0 border-l-0 md:border-l border-stone-800 bg-stone-900/50 flex flex-col overflow-hidden">
       <div className="flex border-b border-stone-800 text-xs shrink-0">
         {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
           <button

@@ -138,7 +138,7 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     """
     import random
 
-    from .monstres import _find_monstre
+    from .monstres import _find_monstre, _find_monstre_with_fallback
 
     noms = [n.strip() for n in monstres.split(",") if n.strip()]
     if not noms:
@@ -155,12 +155,12 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     # basé sur le nom, deux créatures identiques doivent rester distinctes.
     labels_resolus = []
     for nom in noms:
-        m0 = _find_monstre(ctx, nom)
+        m0 = _find_monstre_with_fallback(ctx, nom)
         labels_resolus.append(str((m0 or {}).get("nom") or nom))
     labels_uniques = _noms_uniques(labels_resolus)
 
     for i, nom in enumerate(noms):
-        m = _find_monstre(ctx, nom)
+        m = _find_monstre_with_fallback(ctx, nom)
         label = labels_uniques[i]
         if m:
             try:
@@ -192,6 +192,8 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
         participants.append({"nom": label, "init": jet + mod,
                              "jet_brut": jet, "mod": mod})
         src = "" if m else " (stats inconnues : mod +0)"
+        if m and m.get("generique"):
+            src = " (générique : stats estimées)"
         lignes.append(
             f"- **{label}** — initiative {jet + mod} "
             f"(d20={jet}, mod={mod:+d}){src}"
@@ -380,6 +382,124 @@ async def finir_combat(ctx: ToolContext) -> ToolResult:
             "courant_tour_pour": None,
             "initiative": [],
             "monstres_combat": [],
+        },
+    )
+
+
+@tool
+async def combat_ajouter_combattant(
+    ctx: ToolContext,
+    nom: str,
+    initiative: Optional[int] = None,
+    allie: bool = False,
+) -> ToolResult:
+    """
+    Ajoute un combattant AU combat DÉJÀ EN COURS sans le réinitialiser :
+    invoquation de monstre (Invocation de monstre I-IX, squelettes de clerc…),
+    renfort qui surgit, familier qui rejoint la mêlée. Le combattant est
+    inséré dans l'ordre d'initiative existant (jet 1d20 + mod. INIT du
+    bestiaire si `initiative` n'est pas fourni) et ses PV sont suivis
+    mécaniquement dans monstres_combat. NE PAS utiliser engager_combat pour
+    cela (il réinitialiserait tout le combat).
+
+    :param nom (str): nom du monstre invoqué (ex. "Loup", "Squelette").
+    :param initiative (int): résultat d'initiative déjà jeté (optionnel ;
+        sinon 1d20 + mod bestiaire).
+    :param allie (bool): True si le combattant se bat POUR les PJ (invoqué
+        par un lanceur de sorts joueur). Défaut: False (ennemi).
+    """
+    import random
+
+    from .monstres import _find_monstre_with_fallback
+
+    state = _party(ctx)
+    etat = state.load()
+    if etat.get("phase") != "combat" or not etat.get("initiative"):
+        return ToolResult(
+            text=(
+                "❌ Aucun combat en cours — utilise `engager_combat` pour "
+                "déclencher une rencontre, puis `combat_ajouter_combattant` "
+                "pour les renforts/invoquations en cours de mêlée."
+            )
+        )
+
+    # Stats du bestiaire (PV/CA/INIT) si le monstre y figure.
+    m = _find_monstre_with_fallback(ctx, nom)
+    label_base = str((m or {}).get("nom") or nom).strip() or nom
+
+    # Désambiguïsation vs les combattants DÉJÀ sur le plateau (homonymes).
+    existants = [str(e.get("nom", "")) for e in etat["initiative"]]
+    vus: dict[str, int] = {}
+    for n in existants:
+        cle = n.strip().lower()
+        vus[cle] = vus.get(cle, 0) + 1
+    cle_base = label_base.lower()
+    label = label_base if vus.get(cle_base, 0) == 0 else (
+        f"{label_base} ({vus[cle_base] + 1})"
+    )
+
+    # Initiative : valeur fournie, sinon 1d20 + mod bestiaire.
+    mod = 0
+    if m:
+        try:
+            mod = int(str(m.get("init", "0")).replace("+", "").strip())
+        except ValueError:
+            mod = 0
+    if initiative is not None:
+        total = int(initiative)
+        jet = total - mod
+    else:
+        jet = random.randint(1, 20)
+        total = jet + mod
+
+    # Insertion dans l'ordre existant (tri décroissant, stable).
+    entree = {"nom": label, "init": total, "jet_brut": jet, "mod": mod}
+    ordre = etat["initiative"]
+    ordre.append(entree)
+    ordre.sort(key=lambda x: x.get("init", 0), reverse=True)
+
+    # Suivi mécanique des PV (ennemis ET alliés invoqués).
+    if m:
+        try:
+            pv_m = int(str(m.get("pv", "0")).strip().split("(")[0])
+        except ValueError:
+            pv_m = 0
+        try:
+            ca_m = int(str(m.get("ca", "0")).strip())
+        except ValueError:
+            ca_m = 0
+        monstre_entry = {
+            "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
+            "fp": str(m.get("fp", "?")), "conditions": [],
+        }
+    else:
+        monstre_entry = {
+            "nom": label, "pv": -1, "pv_max": -1, "ca": None,
+            "fp": "?", "conditions": [], "inconnu": True,
+        }
+    if allie:
+        monstre_entry["allie"] = True
+    etat.setdefault("monstres_combat", []).append(monstre_entry)
+
+    err = state.save(etat)
+    if err:
+        return ToolResult(text=err)
+
+    camp = "allié invoqué" if allie else "ennemi"
+    src = "" if m else " (stats inconnues : mod +0 — consulte le bestiaire)"
+    position = ordre.index(entree) + 1
+    return ToolResult(
+        text=(
+            f"✨ **{label}** rejoint le combat ({camp}) — initiative "
+            f"{total} (d20={jet}, mod={mod:+d}){src}, agira en "
+            f"{position}e position dans l'ordre.\n"
+            "Ordre : " + " → ".join(e.get("nom", "?") for e in ordre) +
+            "\n_Ses PV sont suivis mécaniquement : utilise "
+            "fiche_perso_infliger_degats quand il subit des dégâts._"
+        ),
+        state_patch={
+            "initiative": ordre,
+            "monstres_combat": etat.get("monstres_combat", []),
         },
     )
 

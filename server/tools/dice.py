@@ -97,6 +97,8 @@ async def lancer_d20(
     # mod. de caractéristique. Si nom_personnage + competence sont donnés et
     # que la fiche contient des rangs, on recalcule rangs + mod. carac.
     modificateur = _as_int(modificateur)
+    if difficulte is not None:
+        difficulte = _as_int(difficulte, 10)
     mod_final = modificateur
     note_mod = ""
     if nom_personnage and competence:

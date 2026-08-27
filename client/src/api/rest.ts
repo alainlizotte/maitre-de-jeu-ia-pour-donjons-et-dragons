@@ -10,7 +10,7 @@ import type {
   PartiesList,
   PartyState,
   Ressources,
-  Scenario,
+  Universe,
 } from "./types";
 
 const API = "/api";
@@ -154,7 +154,7 @@ export const api = {
   // -- Scénarios (sélecteur de quête) ------------------------------------ //
   listScenarios: (partieId?: string) =>
     fetch(`${API}/scenarios${partieId ? `?partie_id=${encodeURIComponent(partieId)}` : ""}`).then(
-      jq<Scenario[]>,
+      jq<Universe[]>,
     ),
   setQuest: (partieId: string, quete: { titre: string; pitch: string; source: string }) =>
     fetch(`${API}/parties/${partieId}/quest`, {

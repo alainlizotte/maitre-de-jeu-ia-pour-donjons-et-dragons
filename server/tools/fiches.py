@@ -252,13 +252,16 @@ def _save_fiche(ctx: ToolContext, nom: str, fiche: dict[str, Any]) -> str:
     return path
 
 
-def _sync_pj(ctx: ToolContext, nom: str, champs: dict[str, Any]) -> None:
+def _sync_pj(ctx: ToolContext, nom: str, champs: dict[str, Any]) -> Optional[int]:
     """Répercute des champs d'une fiche sur l'entrée PJ de l'état de partie.
 
     Sans cette synchro, la fiche JSON évolue (PV après dégâts/soins,
     conditions…) mais la liste `pj` de `partie_<id>.json` — celle que le
     front affiche (barres de PV, cartes joueurs) — reste figée. Fail-safe :
     toute erreur (partie absente du disque…) est ignorée.
+
+    Renvoie l'index du PJ mis à jour dans `etat["pj"]` (pour construire des
+    path patches `pj.<i>.<champ>` diffusés en temps réel au front), ou None.
     """
     try:
         from ..game.state import PartyState   # import tardif (évite cycles)
@@ -266,19 +269,36 @@ def _sync_pj(ctx: ToolContext, nom: str, champs: dict[str, Any]) -> None:
         state = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
         etat = state.load()
         if "_erreur" in etat:
-            return
+            return None
         cible = None
-        for p in etat.get("pj") or []:
+        idx: Optional[int] = None
+        for i, p in enumerate(etat.get("pj") or []):
             if str(p.get("nom", "")).lower() == str(nom).strip().lower():
                 cible = p
+                idx = i
                 break
         if cible is None:
-            return
+            return None
         cible.update(champs)
         etat["pj"] = etat.get("pj") or []
         state.save(etat)
+        return idx
     except Exception:                                        # noqa: BLE001
-        pass
+        return None
+
+
+def _patch_pj(nom: str, idx: Optional[int], champs: dict[str, Any]) -> dict[str, Any]:
+    """Construit le state_patch d'un tool touchant une fiche PJ.
+
+    `pj_updated` est un signal (déclenche le re-fetch REST côté front) ;
+    les entrées `pj.<i>.<champ>` sont des path patches appliqués en direct
+    au store Zustand — les barres de PV bougent sans attendre le polling.
+    """
+    patch: dict[str, Any] = {"pj_updated": nom}
+    if idx is not None:
+        for k, v in champs.items():
+            patch[f"pj.{idx}.{k}"] = v
+    return patch
 
 
 # --------------------------------------------------------------------------- #
@@ -710,7 +730,14 @@ async def fiche_perso_mettre_a_jour(
     # Si le champ touche l'entrée PJ affichée (pv, pv_max, ca…), on synchronise
     # l'état de partie pour que le front voie la fiche évoluer en direct.
     if keys[0] in ("pv", "pv_max", "ca", "conditions") and len(keys) == 1:
-        _sync_pj(ctx, nom, {keys[0]: v})
+        idx = _sync_pj(ctx, nom, {keys[0]: v})
+        return ToolResult(
+            text=(
+                f"✅ Fiche de {nom} mise à jour : {champ} = "
+                f"{json.dumps(v, ensure_ascii=False)}"
+            ),
+            state_patch=_patch_pj(nom, idx, {keys[0]: v}),
+        )
     return ToolResult(
         text=(
             f"✅ Fiche de {nom} mise à jour : {champ} = "
@@ -876,9 +903,12 @@ async def fiche_perso_infliger_degats(
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
     # Synchro de l'entrée PJ de l'état de partie (barres PV du front).
-    _sync_pj(ctx, nom, {"pv": nv, "conditions": conds})
+    idx = _sync_pj(ctx, nom, {"pv": nv, "conditions": conds})
     msg = f"💥 {nom} subit {d} dégâts → PV {nv}/{fiche.get('pv_max','?')}" + etat_msg
-    return ToolResult(text=msg, state_patch={"pj_updated": nom})
+    return ToolResult(
+        text=msg,
+        state_patch=_patch_pj(nom, idx, {"pv": nv, "conditions": conds}),
+    )
 
 
 @tool
@@ -910,14 +940,14 @@ async def fiche_perso_soigner(
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
     # Synchro de l'entrée PJ de l'état de partie (barres PV du front).
-    _sync_pj(ctx, nom, {"pv": nv, "conditions": conds})
+    idx = _sync_pj(ctx, nom, {"pv": nv, "conditions": conds})
     return ToolResult(
         text=(
             f"✨ {nom} récupère {s} PV → PV {nv}/{max_pv}"
             + (" (maximum atteint)" if nv == max_pv else "")
             + (" — conditions de blessure levées." if nettoye else "")
         ),
-        state_patch={"pj_updated": nom},
+        state_patch=_patch_pj(nom, idx, {"pv": nv, "conditions": conds}),
     )
 
 
@@ -948,11 +978,11 @@ async def fiche_perso_condition(
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
     # Synchro de l'entrée PJ de l'état de partie (conditions affichées).
-    _sync_pj(ctx, nom, {"conditions": conds})
+    idx = _sync_pj(ctx, nom, {"conditions": conds})
     action = "affecté par" if appliquer else "n'est plus affecté par"
     return ToolResult(
         text=f"{nom} est {action} **{cond}**. Conditions actives : {conds}",
-        state_patch={"pj_updated": nom},
+        state_patch=_patch_pj(nom, idx, {"conditions": conds}),
     )
 
 

@@ -24,11 +24,38 @@ export interface PartyState {
     salles_visitees: string[];
     portes_bloquees: string[];
     grille: unknown[];
+    /** Coordonnées [x, y] de la salle où se trouve le groupe. */
+    courant?: number[];
   };
+  donjons_exploreres?: Record<string, {
+    id: string | null;
+    salles_visitees: string[];
+    portes_bloquees: string[];
+    grille: unknown[];
+    courant?: number[];
+  }>;
   quete: { titre: string; pitch: string; source: string };
   histoire: string[];
   derniere_narration: string;
+  /** Combattants non-JJ suivis mécaniquement pendant le combat. */
+  monstres_combat?: MonstreCombat[];
+  /** Journal des illustrations de monstres croisés ({nom, url}). */
+  rencontres_images?: { nom: string; url: string }[];
   _erreur?: string;
+}
+
+export interface MonstreCombat {
+  nom: string;
+  pv: number;
+  pv_max: number;
+  ca?: number | null;
+  fp?: string;
+  conditions?: string[];
+  /** true = invoqué/allié combattant pour les joueurs. */
+  allie?: boolean;
+  inconnu?: boolean;
+  /** Illustration persistée (survit aux rechargements, jusqu'à la mort). */
+  image_url?: string;
 }
 
 export interface InitiativeEntry {
@@ -132,11 +159,28 @@ export interface EncounterMonster {
 export interface Scenario {
   id: string;
   titre: string;
-  niveau: string;
-  theme: string;
   pitch: string;
-  source: string;
-  fichier?: string | null;
+  niveau?: string;
+  joueurs?: string;
+  pdf?: string | null;
+  cartes?: { nom: string; fichier: string }[];
+  artwork?: {
+    lieux?: { nom: string; fichier: string }[];
+    monstres?: { nom: string; fichier: string }[];
+    pnj?: { nom: string; fichier: string }[];
+  };
+  objets?: { nom: string; fichier: string }[];
+  enigmes?: { nom: string; fichier: string }[];
+  annexes?: { nom: string; fichier: string }[];
+}
+
+/** Univers contenant des scénarios. */
+export interface Universe {
+  id: string;
+  nom: string;
+  description: string;
+  cartes?: { nom: string; fichier: string }[];
+  scenarios: Scenario[];
 }
 
 /** /api/ressources — liens permanents affichés dans la barre de ressources. */

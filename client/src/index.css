@@ -10,6 +10,24 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* Mobile — hauteur dynamique (barre d'adresse des navigateurs téléphone),
+   pas de rebond/refresh sur le balayage, pas de flash au tap. */
+@supports (height: 100dvh) {
+  html, body, #root { height: 100dvh; }
+}
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Vue mobile (PartyPage) — entrée glissée du panneau après onglet/balayage.
+   --panel-dir (+1/-1/0) donne le sens d'arrivée du panneau. */
+@keyframes panel-in {
+  from { opacity: 0.4; transform: translateX(calc(var(--panel-dir, 0) * 18px)); }
+  to   { opacity: 1;   transform: translateX(0); }
+}
+.panel-swap { animation: panel-in 0.18s ease-out; }
+
 /* Rendu Markdown narration — styles appliqués dans un conteneur .prose-chat. */
 .prose-chat h1, .prose-chat h2, .prose-chat h3 {
   @apply font-serif font-bold mt-3 mb-1 text-orange-500;

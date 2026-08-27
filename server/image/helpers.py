@@ -15,6 +15,7 @@ Les usages valides sont définis dans `comfyui.USAGES_VALIDES` : « monstre »,
 
 from __future__ import annotations
 import os
+import re
 from typing import Any, Optional
 
 from .comfyui import ComfyUIBackend, USAGES_VALIDES
@@ -51,7 +52,10 @@ async def _notify_pending(ctx, usage: str) -> None:
 # consignes passent obligatoirement par le prompt positif.
 _ANTI_TEXT = (
     "textless image, no letters, no words, no inscriptions, no runes, "
-    "no watermark, no signature, no frame, no border, no ornamental writing"
+    "no watermark, no signature, no frame, no border, no ornamental writing, "
+    "no stat block, no stat sheet, no character sheet, no numbers, "
+    "no UI elements, no HUD, no text overlay, no title, no caption, "
+    "no hp bar, no health bar, no name plate, no label, no annotation"
 )
 
 
@@ -62,7 +66,9 @@ def get_backend() -> Optional[ComfyUIBackend]:
     d'un appel, generer() lèvera ComfyUIError et l'appelant gérera le cas.
     """
     try:
-        return ComfyUIBackend()
+        from ..config import get_config
+        base_url = get_config().image.base_url
+        return ComfyUIBackend(base_url=base_url)
     except Exception:
         return None
 
@@ -72,13 +78,19 @@ async def generer_si_dispo(
     prompt: str,
     dest_path: str,
 ) -> Optional[str]:
-    """Génère une image si ComfyUI est dispo, renvoie son chemin ; sinon None.
+    """Génère une image si ComfyUI est dispo et activé, renvoie son chemin ; sinon None.
 
     En cas d'erreur (timeout, ComfyUI injoignable, etc.) on renvoie None
     silencieusement — l'appelant doit savoir qu'il dispose d'un fallback
     (SVG placeholder, pas d'image, etc.) à provisionner côté sien.
     """
     if usage not in USAGES_VALIDES:
+        return None
+    try:
+        from ..config import get_config
+        if not get_config().image.enabled:
+            return None
+    except Exception:
         return None
     b = get_backend()
     if b is None:
@@ -106,22 +118,133 @@ async def generer_averti(ctx, usage: str, prompt: str, dest_path: str) -> Option
 
 
 # --- Helpers de prompts -------------------------------------------------- #
+# Version du prompt template — quand elle change, toutes les images en cache
+# sont régénérées (via le mécanisme desc_hash_v2 dans monstres.py).
+PROMPT_VERSION = "v4_clean_prompt"
+
+
+def _type_en_from_nom(nom: str) -> str:
+    """Extrait le type EN d'un monstre depuis son nom (ex. 'Créature magique de taille G' → 'magical beast')."""
+    n = nom.lower()
+    type_map = [
+        ("mort-vivant", "undead creature"),
+        ("extérieur", "outsider creature"),
+        ("exterieur", "outsider creature"),
+        ("élémentaire", "elemental creature"),
+        ("elementaire", "elemental creature"),
+        ("créature magique", "magical beast"),
+        ("creature magique", "magical beast"),
+        ("créature monstrueuse", "monstrous beast"),
+        ("créature aberrante", "aberration creature"),
+        ("créature artificielle", "construct creature"),
+        ("créature feérique", "fey creature"),
+        ("humanoïde", "humanoid creature"),
+        ("humanoide", "humanoid creature"),
+        ("aberration", "aberration"),
+        ("dragon", "dragon creature"),
+        ("géant", "giant creature"),
+        ("ver", "vermin creature"),
+    ]
+    for fr, en in type_map:
+        if fr in n:
+            return en
+    return ""
+
+
+
+def _sanitize_description(desc: str) -> str:
+    """Nettoie une description de monstre en supprimant tout contenu
+    de stat block D&D (Dés de vie, Initiative, CA, attaques, etc.).
+
+    Le Manuel des Monstres 3.5 mélange souvent le portrait physique et les
+    stats dans le même bloc de texte. On détecte le premier fragment de stat
+    block et on coupe tout ce qui suit.
+    """
+    if not desc:
+        return desc
+
+    # Markers qui signalent le début du stat block (chaque fragment testé)
+    stat_markers = [
+        r"(?i)\bD[ée]s de vie\b",
+        r"(?i)\bHit Dice\b",
+        r"(?i)\bInitiative\b\s*[+:]",
+        r"(?i)\bVitesse\b\s*:",
+        r"(?i)\bSpeed\b\s*:",
+        r"(?i)\bClasse d.armure\b\s*:",
+        r"(?i)\bArmor Class\b\s*:",
+        r"(?i)\bContact\b\s+\d",
+        r"(?i)\bPris au d[eé]pourvu\b\s*:",
+        r"(?i)\bFlat-footed\b\s*:",
+        r"(?i)\bAttaque de base\b\s*:",
+        r"(?i)\bBase Attack\b\s*:",
+        r"(?i)\bAttaque \u00e0 outrance\b\s*:",
+        r"(?i)\bFull Attack\b\s*:",
+        r"(?i)\bEspace occup.e\b\s*:",
+        r"(?i)\bSpace/Reach\b\s*:",
+        r"(?i)\bAttaques sp.ciales\b\s*:",
+        r"(?i)\bSpecial Attacks\b\s*:",
+        r"(?i)\bParticularit.s\b\s*:",
+        r"(?i)\bSpecial Qualities\b\s*:",
+        r"(?i)\bJets de sauvegarde\b\s*:",
+        r"(?i)\bSaving Throws\b\s*:",
+        r"(?i)\bCaract.sristiques\b\s*:",
+        r"(?i)\bAbilities\b\s*:",
+        r"(?i)\bComp.tences\b\s*:",
+        r"(?i)\bSkills\b\s*:",
+        r"(?i)\bDons\b\s*:",
+        r"(?i)\bFeats\b\s*:",
+    ]
+
+    # Nettoyage initial : newlines → virgules
+    text = desc.replace("\n", ", ")
+    fragments = [f.strip() for f in text.split(",") if f.strip()]
+
+    kept = []
+    for frag in fragments:
+        # Si on tombe sur un marker de stat block, on arrête
+        if any(re.search(p, frag) for p in stat_markers):
+            break
+        kept.append(frag)
+
+    result = ", ".join(kept)
+    result = re.sub(r",\s*,+", ",", result)
+    result = re.sub(r"\s{2,}", " ", result)
+    return result.strip(" ,")
+
+
 def monstre_prompt(nom: str, description: str = "") -> str:
     """Prompt pour un monstre.
 
     `description` : apparence physique du monstre (extraite du bestiaire
     local ou de la KB RAG — Manuel des Monstres). Sans elle, le générateur
-    ne connaît que le nom et invente une créature quelconque : une « Goule »
-    n'aurait rien d'un mort-vivant décharné. On évite la mention « D&D 3.5 »
-    qui poussait le modèle vers un style page de manuscrit encadré d'écritures.
+    ne connaît que le nom et invente une créature quelconque.
+
+    IMPORTANT : le nom du monstre N'EST PAS inclus dans le prompt image
+    pour éviter que le modèle ne génère du texte (le nom comme étiquette).
+    Seule la description physique est utilisée. Le type de créature (EN)
+    est ajouté comme mot-clé pour guider le style.
     """
-    desc = description.strip().strip(".").replace("\n", ", ")
-    suffixe = f", {desc}" if desc else ""
+    # Sanitizer la description pour ne garder que l'apparence physique
+    desc = _sanitize_description(description)
+    desc = desc.strip().strip(".").replace("\n", ", ")
+    # Extraire le type EN depuis la description ou le nom pour le prompt
+    type_en = _type_en_from_nom(nom)
+    type_prefix = f"{type_en}, " if type_en else ""
+    if desc:
+        subject = f"{type_prefix}{desc}"
+    else:
+        subject = f"{type_prefix}dark fantasy creature" if type_en else "dark fantasy creature"
     return (
-        f"dark fantasy illustration of a single {nom}{suffixe}, "
+        f"dark fantasy illustration of {subject}, "
         "tabletop RPG monster art, dramatic lighting, detailed digital "
         "painting, full body, centered, plain dark background, "
-        + _ANTI_TEXT
+        "purely visual artwork, clean illustration, "
+        "ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS, "
+        "NO WRITING, NO INSCRIPTIONS, NO RUNES, NO LABELS, "
+        "NO STAT BLOCKS, NO UI, NO HUD, NO WATERMARK, NO BORDER, "
+        "NO NAME PLATE, NO CAPTION, NO TITLE, NO FRAME, "
+        "purely visual illustration with zero text of any kind, "
+        "painting only, no written content whatsoever"
     )
 
 

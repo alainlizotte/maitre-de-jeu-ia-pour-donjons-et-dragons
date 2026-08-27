@@ -361,6 +361,17 @@ def _find_monstre(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
     return meilleur4[2] if meilleur4 else None
 
 
+def _find_monstre_with_fallback(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
+    """Cherche un monstre dans le bestiaire. Si aucun match exact, tente un
+    monstre générique basé sur le type et la taille demandés."""
+    m = _find_monstre(ctx, nom)
+    if m is not None:
+        return m
+    # Tenter un monstre générique (ex. "Créature magique de taille G")
+    generique = _generer_monstre_genérique(nom, ctx)
+    return generique
+
+
 def _suggestions(monstres: dict[str, Any], cands: list[str],
                  limite: int = 3) -> list[str]:
     """Noms du bestiaire les plus proches d'une requête non résolue
@@ -380,6 +391,145 @@ def _suggestions(monstres: dict[str, Any], cands: list[str],
             scores.append((-score, len(k), k))
     scores.sort()
     return [k for _, _, k in scores[:limite]]
+
+
+# Mapping tailles FR → facteur de mise à l'échelle des PV / CA
+_TAILLE_ECHELLE: dict[str, dict[str, Any]] = {
+    # taille → {pv_factor, ca_mod, label}
+    "T":  {"pv_factor": 0.5, "ca_mod": -1, "label": "petite"},
+    "P":  {"pv_factor": 0.75, "ca_mod": 0, "label": "petite"},
+    "M":  {"pv_factor": 1.0, "ca_mod": 0, "label": "moyenne"},
+    "G":  {"pv_factor": 1.5, "ca_mod": 1, "label": "grande"},
+    "TG": {"pv_factor": 2.0, "ca_mod": 2, "label": "très grande"},
+    "Gig":{"pv_factor": 3.0, "ca_mod": 3, "label": "gigantesque"},
+    "Col":{"pv_factor": 4.0, "ca_mod": 4, "label": "colossale"},
+}
+
+# Alias de tailles (texte libre → clé)
+_TAILLE_ALIAS: dict[str, str] = {}
+for _k, _v in _TAILLE_ECHELLE.items():
+    _TAILLE_ALIAS[_k.lower()] = _k
+    _TAILLE_ALIAS[_v["label"].lower()] = _k
+_taille_extra = {
+    "t": "T", "p": "P", "m": "M", "g": "G", "tg": "TG",
+    "gigantesque": "Gig", "colossal": "Col", "colossale": "Col",
+    "tiny": "T", "small": "P", "medium": "M", "large": "G",
+    "huge": "TG", "gargantuan": "Gig", "colossal": "Col",
+    "minuscule": "T", "très petite": "P", "très grande": "TG",
+}
+_TAILLE_ALIAS.update(_taille_extra)
+
+
+def _extraire_taille(nom: str) -> Optional[str]:
+    """Extrait la taille d'un nom de monstre (ex. 'Créature magique de taille G' → 'G')."""
+    n = nom.lower()
+    # Cherche "taille X" ou "size X"
+    m = re.search(r"(?:taille|size)\s+([A-Za-z]+)", n)
+    if m:
+        t = _TAILLE_ALIAS.get(m.group(1).lower())
+        if t:
+            return t
+    # Cherche la taille seule en fin de chaîne
+    for alias, cle in sorted(_TAILLE_ALIAS.items(), key=lambda x: -len(x[0])):
+        if n.endswith(alias):
+            return cle
+    return None
+
+
+def _generer_monstre_genérique(
+    nom: str, ctx: ToolContext
+) -> Optional[dict[str, Any]]:
+    """Génère un monstre générique basé sur le nom et la taille demandés.
+
+    Quand aucun monstre du bestiaire ne correspond, on crée une fiche
+    minimaliste avec des stats de base proportionnées à la taille demandée.
+    On tente aussi de copier la description visuelle (prompt_image) d'un
+    monstre du même type dans le bestiaire pour que l'image générée
+    ressemble à quelque chose de cohérent.
+    Renvoie None si même le type ne peut pas être déterminé.
+    """
+    taille_cle = _extraire_taille(nom) or "M"
+    echelle = _TAILLE_ECHELLE.get(taille_cle, _TAILLE_ECHELLE["M"])
+
+    # Extraire le type de créature du nom
+    type_fr = ""
+    n_lower = nom.lower()
+    for type_key, _ in _TYPES_EN:
+        if type_key in n_lower:
+            type_fr = type_key
+            break
+
+    # PV de base selon la taille (fourchette D&D 3.5 standard)
+    pv_base = {
+        "T": 3, "P": 6, "M": 10, "G": 20, "TG": 35, "Gig": 60, "Col": 100,
+    }
+    pv = max(1, int(pv_base.get(taille_cle, 10) * echelle["pv_factor"]))
+    ca = 10 + echelle["ca_mod"]
+
+    # Chercher un monstre du même type dans le bestiaire pour copier sa description
+    prompt_description = ""
+    if type_fr:
+        best = _load_bestiaire(ctx)
+        monstres_dict = best.get("monstres", {})
+        for m in monstres_dict.values():
+            if m.get("type", "").lower().startswith(type_fr.lower()):
+                pi = str(m.get("prompt_image") or "").strip()
+                if pi and not _GENERIC_PROMPT_RE.match(pi):
+                    prompt_description = pi
+                    break
+
+    fiche = {
+        "nom": nom,
+        "type": type_fr or "inconnu",
+        "taille": taille_cle,
+        "dv": "1d8",
+        "pv": pv,
+        "pv_max": pv,
+        "ca": ca,
+        "vitesse": "9m",
+        "bab": "+0",
+        "init": "+0",
+        "attaques": "1 attaque corpo",
+        "degs": "1d6",
+        "sauvegardes": "Vig +0, Réf +0, Vol +0",
+        "carac": "For 10, Dex 10, Con 10, Int 2, Sag 10, Cha 10",
+        "comp": "",
+        "dons": "",
+        "capacites": "",
+        "faiblesses": "",
+        "fp": "1/4",
+        "alignement": "Neutre",
+        "cle": _slug(nom),
+        "prompt_image": prompt_description or (
+            f"fantasy {type_fr or 'creature'} creature, "
+            f"D&D style illustration, ink style, dramatic lighting"
+        ),
+        "generique": True,
+    }
+
+    # Persister dans le bestiaire pour les prochains appels
+    try:
+        best_path = _bestiaire_path(ctx)
+        try:
+            with open(best_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            raw = {}
+        cle = _slug(nom)
+        raw[cle] = fiche
+        if "_meta" in raw and isinstance(raw["_meta"], dict):
+            raw["_meta"]["nb_monstres"] = sum(
+                1 for k in raw if k != "_meta"
+                and isinstance(raw[k], dict) and "nom" in raw[k]
+            )
+        with open(best_path, "w", encoding="utf-8") as f:
+            json.dump(raw, f, ensure_ascii=False, indent=2)
+        global _BESTIAIRE_CACHE
+        _BESTIAIRE_CACHE = None
+    except Exception:
+        pass
+
+    return fiche
 
 
 def _find_image(ctx: ToolContext, nom: str) -> Optional[str]:
@@ -487,9 +637,20 @@ async def _description_monstre(m: Optional[dict[str, Any]], nom: str) -> str:
 
 
 def _hash_desc(description: str) -> str:
-    """Hash court de la description (invalidation du cache d'images)."""
+    """Hash court de la description (invalidation du cache d'images).
+
+    Inclut la version du prompt template (PROMPT_VERSION) pour forcer la
+    régénération de toutes les images quand le prompt change (ex. ajout
+    d'anti-texte renforcé).
+    """
+    try:
+        from ..image.helpers import PROMPT_VERSION
+        version = PROMPT_VERSION
+    except ImportError:
+        version = "v1"
+    combined = f"{version}|{description}"
     return (
-        hashlib.sha1(description.encode("utf-8")).hexdigest()[:12]
+        hashlib.sha1(combined.encode("utf-8")).hexdigest()[:12]
         if description else ""
     )
 
@@ -564,6 +725,75 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
         return _url_for(r, ctx.data_dir)
     img_path = _find_image(ctx, nom) or _write_placeholder(ctx, nom)
     return _url_for(img_path, ctx.data_dir)
+
+
+def _norm_nom_simple(s: Any) -> str:
+    """Comparaison de noms insensible casse/accents (journal ↔ combat)."""
+    s = unicodedata.normalize("NFKD", str(s or "").strip().lower())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def _fusionner_rencontres(
+    etat: dict, rencontres: list[tuple[str, str]]
+) -> bool:
+    """Fusionne des (nom, url) dans le journal `rencontres_images` de l'état.
+
+    Mute `etat` en place (pas de save ici — l'appelant persiste). Renvoie
+    True si le journal a changé. Déduplique par nom normalisé, borne à 30.
+    """
+    connus = {
+        _norm_nom_simple(r.get("nom"))
+        for r in etat.get("rencontres_images") or []
+    }
+    changed = False
+    for nom, url in rencontres:
+        if not nom or not url:
+            continue
+        key = _norm_nom_simple(nom)
+        if key in connus:
+            continue
+        etat.setdefault("rencontres_images", []).append(
+            {"nom": str(nom), "url": url}
+        )
+        connus.add(key)
+        changed = True
+    if len(etat.get("rencontres_images") or []) > 30:
+        etat["rencontres_images"] = etat["rencontres_images"][-30:]
+        changed = True
+    return changed
+
+
+def _memoriser_rencontre(ctx: ToolContext, nom: str, url: str) -> None:
+    """Persiste l'illustration d'une rencontre dans l'état de partie.
+
+    - `monstres_combat[i].image_url` : si le monstre est engagé au combat,
+      son portrait survit aux rechargements de page (le front le réaffiche
+      jusqu'à sa mort) ;
+    - `rencontres_images` : journal des monstres croisés en jeu (exploration
+      comprise) pour réhydrater la galerie « Monstres rencontrés ».
+
+    Fail-safe : toute erreur est silencieusement ignorée.
+    """
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        st = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+        etat = st.load()
+        if "_erreur" in etat:
+            return
+        changed = False
+        for m in etat.get("monstres_combat") or []:
+            if (
+                _norm_nom_simple(m.get("nom")) == _norm_nom_simple(nom)
+                and m.get("image_url") != url
+            ):
+                m["image_url"] = url
+                changed = True
+        if _fusionner_rencontres(etat, [(nom, url)]):
+            changed = True
+        if changed:
+            st.save(etat)
+    except Exception:                                            # noqa: BLE001
+        pass
 
 
 # --------------------------------------------------------------------------- #
@@ -642,6 +872,11 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
                 if "comfyui" not in src:
                     src = "placeholder"
     url = _url_for(img_path, ctx.data_dir)
+    # Persiste la rencontre (journal + combat éventuel) pour que le portrait
+    # survive aux rechargements de page, jusqu'à la mort du monstre.
+    _memoriser_rencontre(
+        ctx, str((m or {}).get("nom") or nom), url
+    )
     if m is None:
         sugg = _suggestions(monstres, _candidats_noms(nom))
         texte = (
@@ -781,7 +1016,8 @@ async def monstre_ajouter_bestiaire(
         "fp": fp,
         "alignement": alignement,
         "cle": cle,
-        "prompt_image": f"fantasy {nom.lower()} creature, D&D 3.5 illustration, ink style, dramatic lighting",
+        "prompt_image": f"fantasy {_type_en(type_monstre) or type_monstre.lower()} creature, "
+                        f"D&D style illustration, ink style, dramatic lighting",
     }
     raw[cle] = fiche
     # Met à jour le meta nb_monstres

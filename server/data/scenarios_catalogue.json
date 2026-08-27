@@ -1,0 +1,537 @@
+{
+  "universes": [
+    {
+      "id": "divers",
+      "nom": "Divers",
+      "description": "Scénarios génériques, utilisables dans tout univers D&D.",
+      "cartes": [],
+      "scenarios": [
+        {
+          "id": "divers_crypts_kelemvor",
+          "titre": "Crypts Kelemvor",
+          "pdf": "/data/scenarios/Divers/Crypts Kelemvor.pdf",
+          "pitch": "Les PJ infiltrent les cryptes de Kelemvor, dieu des morts, pour recuperer un artefact vole. Entre gardiens morts-vivants et pieges divins, seulement les plus avisés en sortent vivants.",
+          "niveau": "3-5",
+          "joueurs": "4-5"
+        },
+        {
+          "id": "divers_dues_for_the_dead",
+          "titre": "Dues For The Dead",
+          "pdf": "/data/scenarios/Divers/Dues for the Dead.pdf",
+          "pitch": "Un jeune clerc sollicite l'aide des PJ pour purifier un ancien sanctuaire profane par des morts-vivants. Aventure d'initiation courte et efficace.",
+          "niveau": "1",
+          "joueurs": "3-4"
+        },
+        {
+          "id": "divers_shadows_over_the_moonsea",
+          "titre": "Shadows Over The Moonsea",
+          "pdf": "/data/scenarios/Divers/Shadows over the Moonsea.pdf",
+          "pitch": "Sur la Mer des Nuees, des villages cotiers disparaissent dans la brume. Les PJ enquêtent sur une menace aquatique qui se cache sous les vagues.",
+          "niveau": "1-4",
+          "joueurs": "3-4"
+        },
+        {
+          "id": "divers_six_faces_death",
+          "titre": "Six Faces Death",
+          "pdf": "/data/scenarios/Divers/Six Faces Death.pdf",
+          "pitch": "Six epreuves mortelles ponctuent le chemin vers un donjon oublie. Chaque salle teste un aspect different des PJ : combat, ruse, endurance et volonte.",
+          "niveau": "11-13",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "divers_army_of_the_damned",
+          "titre": "Army of the Damned",
+          "pdf": "/data/scenarios/Divers/Army of the Damned/armyofthedamned.pdf",
+          "pitch": "Dans l'univers d'Innistrad (Magic: The Gathering), une armee de morts-vivants marche sur la province de Stensia. Les PJ doivent survivre a une invasion zombie tout en decouvrant l'origine du fleau. Aventure longue avec artwork, cartes, objets magiques et enigme musicale.",
+          "cartes": [
+            {
+              "nom": "Innistrad Map",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Maps/Innistrad Map.png"
+            },
+            {
+              "nom": "Iso Shadowgrange",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Maps/Iso Shadowgrange.png"
+            },
+            {
+              "nom": "Mauer Estate",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Maps/Mauer Estate.png"
+            },
+            {
+              "nom": "Stensia Map",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Maps/Stensia Map.png"
+            }
+          ],
+          "artwork": {
+            "lieux": [
+              {
+                "nom": "Mauer Estate",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/Mauer Estate.jpg"
+              },
+              {
+                "nom": "Shadowgrange",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/Shadowgrange.jpg"
+              },
+              {
+                "nom": "Stensia Silbern",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/Stensia Silbern.jpg"
+              },
+              {
+                "nom": "Stensia Valley1",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/Stensia Valley1.jpg"
+              },
+              {
+                "nom": "Stensia Valley2",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/Stensia Valley2.jpg"
+              },
+              {
+                "nom": "Stensia Valley3",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/Stensia Valley3.jpg"
+              },
+              {
+                "nom": "Stensia Valley4",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/Stensia Valley4.jpg"
+              },
+              {
+                "nom": "oaktree",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Locations/oaktree.jpg"
+              }
+            ],
+            "monstres": [
+              {
+                "nom": "Anton",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Anton.jpg"
+              },
+              {
+                "nom": "Ashmouth Hound",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Ashmouth Hound.jpg"
+              },
+              {
+                "nom": "Charmbreaker_Devils",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Charmbreaker_Devils.jpg"
+              },
+              {
+                "nom": "Demonlord of Ashmouth",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Demonlord of Ashmouth.jpg"
+              },
+              {
+                "nom": "Eudora",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Eudora.jpg"
+              },
+              {
+                "nom": "Falkenrath Marauders",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Falkenrath Marauders.jpg"
+              },
+              {
+                "nom": "Flowering Lumberknot",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Flowering Lumberknot.jpg"
+              },
+              {
+                "nom": "Hellrider",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Hellrider.jpg"
+              },
+              {
+                "nom": "Kessig Recluse",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Kessig Recluse.jpg"
+              },
+              {
+                "nom": "Lambert",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Lambert.jpg"
+              },
+              {
+                "nom": "Manor Skeleton",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Manor Skeleton.jpg"
+              },
+              {
+                "nom": "Ralph Brunn",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Ralph Brunn.png"
+              },
+              {
+                "nom": "Rinelda Smitt",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Rinelda Smitt.jpg"
+              },
+              {
+                "nom": "Shriekgeist",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Shriekgeist.jpg"
+              },
+              {
+                "nom": "Siegfied",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Siegfied.jpg"
+              },
+              {
+                "nom": "Skaab Goliath",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Skaab Goliath.jpg"
+              },
+              {
+                "nom": "Stitcher_sApprentice",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Stitcher_sApprentice.jpg"
+              },
+              {
+                "nom": "TheThing",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/TheThing.jpg"
+              },
+              {
+                "nom": "Walking Corpse",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Walking Corpse.jpg"
+              },
+              {
+                "nom": "Zombie Apocalypse",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/Zombie Apocalypse.jpg"
+              },
+              {
+                "nom": "animated armor",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/Monsters/animated armor.jpg"
+              }
+            ],
+            "pnj": [
+              {
+                "nom": "Captain Levi",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/NPCs/Captain Levi.jpg"
+              },
+              {
+                "nom": "Priestess Flora",
+                "fichier": "/data/scenarios/Divers/Army of the Damned/Artwork/NPCs/Priestess Flora.png"
+              }
+            ]
+          },
+          "enigmes": [
+            {
+              "nom": "innistradPLAY",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Music Puzzle/innistradPLAY.png"
+            },
+            {
+              "nom": "innistradRead",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Music Puzzle/innistradRead.png"
+            }
+          ],
+          "objets": [
+            {
+              "nom": "loot_Alchemists Fire",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_Alchemists Fire.jpg"
+            },
+            {
+              "nom": "loot_Avacyns Collar",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_Avacyns Collar.jpg"
+            },
+            {
+              "nom": "loot_GhoulcallersBell",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_GhoulcallersBell.jpg"
+            },
+            {
+              "nom": "loot_Mithral Chain Mail",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_Mithral Chain Mail.jpg"
+            },
+            {
+              "nom": "loot_Moonsilver Spear",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_Moonsilver Spear.jpg"
+            },
+            {
+              "nom": "loot_Shapeshifters Blade",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_Shapeshifters Blade.jpg"
+            },
+            {
+              "nom": "loot_Silver-Inlaid Dagger",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_Silver-Inlaid Dagger.jpg"
+            },
+            {
+              "nom": "loot_Wolfhunters Quiver",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_Wolfhunters Quiver.jpg"
+            },
+            {
+              "nom": "loot_cleaver",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_cleaver.jpg"
+            },
+            {
+              "nom": "loot_demonmail",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_demonmail.jpg"
+            },
+            {
+              "nom": "loot_elbrus",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_elbrus.jpg"
+            },
+            {
+              "nom": "loot_hauberk",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_hauberk.jpg"
+            },
+            {
+              "nom": "loot_recombob",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_recombob.jpg"
+            },
+            {
+              "nom": "loot_violin",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Magic Items/loot_violin.jpg"
+            }
+          ],
+          "annexes": [
+            {
+              "nom": "Decoded",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Geralf_s Letter/Decoded.pdf"
+            },
+            {
+              "nom": "Substitution Text",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Geralf_s Letter/Substitution Text.pdf"
+            },
+            {
+              "nom": "Substitution Working Text",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Geralf_s Letter/Substitution Working Text.pdf"
+            },
+            {
+              "nom": "Innistrad Races",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Innistrad Human Variants/Innistrad Races.pdf"
+            },
+            {
+              "nom": "Plane_Shift_Innistrad",
+              "fichier": "/data/scenarios/Divers/Army of the Damned/Innistrad Human Variants/Plane_Shift_Innistrad.pdf"
+            }
+          ],
+          "niveau": "1-10",
+          "joueurs": "4-6"
+        }
+      ]
+    },
+    {
+      "id": "laelith",
+      "nom": "Laelith",
+      "description": "Scénarios dans la cité de Laelith, cité-fantôme des Royaumes Oubliés.",
+      "cartes": [
+        {
+          "nom": "laelith",
+          "fichier": "/data/scenarios/Laelith/Cartes/laelith.jpg"
+        },
+        {
+          "nom": "provinces Laelith",
+          "fichier": "/data/scenarios/Laelith/Cartes/provinces Laelith.jpg"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "laelith_loeil_de_gruumsh",
+          "titre": "L'Oeil de Gruumsh",
+          "pdf": "/data/scenarios/Laelith/L'Oeil de Gruumsh/Oeil-de-Gruumsh.pdf",
+          "pitch": "Un culte orc dedie a Grumsh menace les alentours de Laelith. Les PJ doivent demanteler l'organisation avant qu'elle ne lance son rituel de destruction.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/L'Oeil de Gruumsh/monstresList.htm"
+            }
+          ],
+          "niveau": "1-3",
+          "joueurs": "4"
+        },
+        {
+          "id": "laelith_la_tombe_des_rois_serpents",
+          "titre": "La tombe des rois serpents",
+          "pdf": "/data/scenarios/Laelith/La tombe des rois serpents/Tombe-des-rois-serpents.pdf",
+          "pitch": "Sous Laelith, la cite-fantome, repose la tombe des anciens Rois Serpents. Les pillards qui s'y aventurent ne reviennent jamais. Les PJ sont charges de descendre dans ce tombeau maudit.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/La tombe des rois serpents/monstresList.htm"
+            }
+          ],
+          "niveau": "1-3",
+          "joueurs": "4-5"
+        },
+        {
+          "id": "laelith_à_la_chasse_aux_gobs",
+          "titre": "À la chasse aux gobs",
+          "pdf": "/data/scenarios/Laelith/À la chasse aux gobs/Chasse-aux-gobs.pdf",
+          "pitch": "Des gobelins ravagent les routes autour de Laelith. Les PJ sont envoyes pour les eradiquer, mais decouvrent que la menace est bien plus organisee qu'un simple raid.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/À la chasse aux gobs/monstresList.htm"
+            }
+          ],
+          "niveau": "1-3",
+          "joueurs": "4"
+        }
+      ]
+    },
+    {
+      "id": "royaumes_oublies",
+      "nom": "Les Royaumes Oubliés",
+      "description": "Aventures dans les Royaumes Oubliés de Forgotten Realms (Faerûn).",
+      "cartes": [
+        {
+          "nom": "faerun",
+          "fichier": "/data/scenarios/Les Royaumes Oubliés/Cartes/faerun.png"
+        },
+        {
+          "nom": "faerun_nord",
+          "fichier": "/data/scenarios/Les Royaumes Oubliés/Cartes/faerun_nord.png"
+        },
+        {
+          "nom": "outreterre",
+          "fichier": "/data/scenarios/Les Royaumes Oubliés/Cartes/outreterre.png"
+        },
+        {
+          "nom": "toril",
+          "fichier": "/data/scenarios/Les Royaumes Oubliés/Cartes/toril.png"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "ro_adventure_in_the_clouds",
+          "titre": "ADVENTURE IN THE CLOUDS",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/ADVENTURE IN THE CLOUDS.pdf",
+          "pitch": "Au-dessus des nuages, une cite volante abrite des tresors inimaginables et des dangers mortels. Seuls les aventuriers les plus puissants oseront s'y aventurer.",
+          "niveau": "13+",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_aurumglathrolos_adventure",
+          "titre": "AURUMGLATHROLOS ADVENTURE",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/AURUMGLATHROLOS ADVENTURE.pdf",
+          "pitch": "Une expedition vers les ruines d'Aurumglathrolos, cite naine legendaire, revele des tresors gardes par des creatures oubliees. Aventure d'exploration et de pillage de donjon.",
+          "niveau": "9+",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_family_secrets",
+          "titre": "Family Secrets",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/Family Secrets.pdf",
+          "pitch": "La famille des PJ cache un lourd secret. Enquete domestique, revelations familiales et combats dans les rues d'une cite des Royaumes Oublies.",
+          "niveau": "2-4",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_le_sceau_des_sept_sœurs",
+          "titre": "LE SCEAU DES SEPT SŒURS",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/LE SCEAU DES SEPT SŒURS.pdf",
+          "pitch": "Le Sceau des Sept Soeurs, ancien artefact de protection, se fissure. Les PJ doivent rassembler les fragments avant que les tenebres n'engloutissent la region.",
+          "niveau": "5-8",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_les_invasions_barbares",
+          "titre": "Les Invasions Barbares",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/Les invasions barbares.pdf",
+          "pitch": "Des hordes barbares deferlent sur les frontieres des royaumes civilises. Les PJ doivent organiser la defense ou decouvrir qui tire les ficelles derriere l'invasion.",
+          "niveau": "3+",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_riatavin_adventure",
+          "titre": "Riatavin Adventure",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/Riatavin Adventure.pdf",
+          "pitch": "A Riatavin, cite marchande du sud de Faerun, complots et trahisons se cachent derriere le commerce. Les PJ s'enlisent dans une toile d'intrigues politiques et de meurtres.",
+          "niveau": "6+",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_royaumes_oublies",
+          "titre": "Royaumes Oubliés",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/Royaumes Oubliés.pdf",
+          "pitch": "Aventure de decouverte dans les terres oubliees de Faerun. Les PJ explorent des ruines ancetres, affrontent des monstres et rassemblent des indices sur une civilisation disparue.",
+          "niveau": "5-10",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_the_dark_of_dorgnaktor",
+          "titre": "THE DARK OF DORGNAK'TOR",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/THE DARK OF DORGNAK'TOR.pdf",
+          "pitch": "Dans les profondeurs de Dorgnak'Tor, un ancien mal se reveille. Les PJ plongent dans un donjon souterrain rempli de morts-vivants et de magie noire.",
+          "niveau": "7+",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_the_crown_of_mystra",
+          "titre": "The Crown Of Mystra",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/The Crown of Mystra.pdf",
+          "pitch": "La Couronne de Mystra, artefact de pouvoir magique immense, a disparu. Les PJ parcourront Faerun pour la retrouver avant qu'elle ne tombe entre de mauvaises mains.",
+          "niveau": "1-8",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_the_dead_of_night",
+          "titre": "The Dead Of Night",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/The Dead of Night.pdf",
+          "pitch": "La nuit, les morts se levent dans un village isole. Les PJ doivent decouvrir la cause de cette resurrection et mettre fin a la malédiction avant l'aube.",
+          "niveau": "6+",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_the_grandfather_tree",
+          "titre": "The Grandfather Tree",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/The Grandfather Tree.pdf",
+          "pitch": "Le Grandpere Arbre, arbre colossal et sacre, est menace. Les PJ doivent proteger cet etre ancestral et les creatures qui l'habitent contre une corruption grandissante.",
+          "niveau": "5-8",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_the_sea_curse",
+          "titre": "The Sea Curse",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/The Sea Curse.pdf",
+          "pitch": "Une malédiction maritime frappe les pecheurs d'un village cotier. Les PJ enquêtent sur l'origine du sort et doivent affronter la creature qui hante les fonds marins.",
+          "niveau": "3-5",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_thieves_guild",
+          "titre": "Thieves Guild",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/Thieves guild.pdf",
+          "pitch": "L'infiltration d'une guilde de voleurs, missions de vol, d'espionnage et de double/triple jeux dans les bas-fonds d'une grande cite.",
+          "niveau": "1+",
+          "joueurs": "3-6"
+        },
+        {
+          "id": "ro_unknown_tower",
+          "titre": "Unknown Tower",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/Unknown Tower.pdf",
+          "pitch": "Une tour inconnue apparait du jour au lendemain, defiant les lois de la nature. Les PJ doivent l'explorer pour decouvrir son origine et la menace qu'elle represente.",
+          "niveau": "9-12",
+          "joueurs": "4-6"
+        },
+        {
+          "id": "ro_to_find_a_gate",
+          "titre": "To Find a Gate",
+          "pdf": "/data/scenarios/Les Royaumes Oubliés/To Find a Gate/To Find a Gate.pdf",
+          "pitch": "Dans les Montagnes du monde, les PJ cherchent un portail oublie menant a une terre perdue. Exploration, survie en milieu hostile et combats contre les gardiens du portail.",
+          "cartes": [
+            {
+              "nom": "Forest of Gate",
+              "fichier": "/data/scenarios/Les Royaumes Oubliés/To Find a Gate/Cartes/Forest of Gate.BMP"
+            },
+            {
+              "nom": "Gate Level 1",
+              "fichier": "/data/scenarios/Les Royaumes Oubliés/To Find a Gate/Cartes/Gate Level 1.BMP"
+            },
+            {
+              "nom": "Spine of the World",
+              "fichier": "/data/scenarios/Les Royaumes Oubliés/To Find a Gate/Cartes/Spine of the World.BMP"
+            }
+          ],
+          "niveau": "4-6",
+          "joueurs": "4-6"
+        }
+      ]
+    },
+    {
+      "id": "terres_eternel",
+      "nom": "Les Terres de l'Éternel",
+      "description": "Aventures dans les Terres de l'Éternel, cadre d'initiation D&D.",
+      "cartes": [
+        {
+          "nom": "atlas",
+          "fichier": "/data/scenarios/Les Terres de l'Éternel/Cartes/atlas.jpg"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "terres_dragon_hurlemont",
+          "titre": "Le Dragon de Hurlemont",
+          "pdf": "/data/scenarios/Les Terres de l'Éternel/Le Dragon de Hurlemont/Le_Dragon_de_Hurlemont_A5.pdf",
+          "pitch": "Livret d'initiation complet avec personnages pre-tires. Un dragon terrorise le village de Hurlemont. Parfait pour decouvrir D&D avec des personnages prets a jouer.",
+          "annexes": [
+            {
+              "nom": "Le_Dragon_de_Hurlemont_Fiches_Joueurs_A4_paysage",
+              "fichier": "/data/scenarios/Les Terres de l'Éternel/Le Dragon de Hurlemont/Le_Dragon_de_Hurlemont_Fiches_Joueurs_A4_paysage.pdf"
+            }
+          ],
+          "niveau": "1 (initiation)",
+          "joueurs": "4-5"
+        }
+      ]
+    }
+  ]
+}

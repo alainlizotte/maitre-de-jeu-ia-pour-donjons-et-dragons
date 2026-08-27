@@ -1,23 +1,80 @@
-// Carte du monde — image réelle « Nord de Faerûn » (cartes/faerun_nord.png)
-// servie par le serveur sous /data/cartes/. Le marqueur doré du groupe est
-// positionné en pourcentage de l'image : lieu.position_x (0 = ouest → 100 =
-// est) et lieu.position_y (0 = nord → 100 = sud), patchés en direct par le
-// MJ via `carte_joueurs_placer_ville` / `carte_joueurs_position`.
-// Zoom à boutons + glisser pour naviguer, recentrage auto sur le groupe.
+// Carte du monde — image adaptée à l'univers de la quête en cours.
+// Le marqueur doré du groupe est positionné en pourcentage de l'image :
+// lieu.position_x (0 = ouest → 100 = est) et lieu.position_y (0 = nord →
+// 100 = sud), patchés en direct par le MJ via carte_joueurs_placer_ville
+// / carte_joueurs_position. Zoom à boutons + glisser pour naviguer,
+// recentrage auto sur le groupe.
 
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
 
-const MAP_URL = "/data/cartes/faerun_nord.png";
-// Dimensions natives de l'image (ratio d'affichage du cadre).
-const MAP_W = 1137;
-const MAP_H = 928;
+// ── Lookup univers → carte par défaut ──────────────────────────────────── //
+// Clé = ID d'univers dans scenarios_catalogue.json ; valeur = URL de la
+// carte principale + dimensions natives (pour le ratio d'affichage).
+interface MapInfo { url: string; w: number; h: number; label: string; atlas?: string }
 
-// Atlas interactif de Faerûn (AideDD) — complément en ligne : les noms des
-// marqueurs y sont identiques à ceux du serveur (cf. server/tools/cartes.py).
-// Le lien profond faerun@<Ville> centre l'atlas sur la ville.
-const ATLAS_BASE = "https://www.aidedd.org/atlas/fr/faerun";
-const ATLAS_VILLES = new Set(
+const FALLBACK_MAP: MapInfo = {
+  url: "/data/scenarios/Les Royaumes Oubliés/Cartes/faerun_nord.png",
+  w: 1137, h: 928, label: "Faerûn — Nord",
+  atlas: "https://www.aidedd.org/atlas/fr/faerun",
+};
+
+const UNIVERSE_MAPS: Record<string, MapInfo> = {
+  royaumes_oublies: FALLBACK_MAP,
+  laelith: {
+    url: "/data/scenarios/Laelith/Cartes/laelith.jpg",
+    w: 1200, h: 900, label: "Laelith",
+    atlas: "https://www.aidedd.org/atlas/fr/laelith",
+  },
+  terres_eternel: {
+    url: "/data/scenarios/Les Terres de l'Éternel/Cartes/atlas.jpg",
+    w: 1200, h: 900, label: "Les Terres de l'Éternel",
+  },
+  divers: FALLBACK_MAP,
+};
+
+// ── Surcharge par scénario ─────────────────────────────────────────────── //
+// Certains scénarios ont leur propre carte du monde, plus pertinente que
+// la carte d'univers. Clé = ID du scénario dans scenarios_catalogue.json.
+const SCENARIO_MAPS: Record<string, MapInfo> = {
+  terres_dragon_hurlemont: {
+    url: "/data/scenarios/Les Terres de l'Éternel/Cartes/atlas.jpg",
+    w: 1200, h: 900, label: "Les Terres de l'Éternel",
+  },
+  ro_to_find_a_gate: {
+    url: "/data/scenarios/Les Royaumes Oubliés/To Find a Gate/Cartes/Spine of the World.jpg",
+    w: 800, h: 600, label: "Spine of the World",
+  },
+  divers_army_of_the_damned: {
+    url: "/data/scenarios/Divers/Army of the Damned/Maps/Innistrad Map.png",
+    w: 1200, h: 900, label: "Innistrad",
+  },
+};
+
+/** Extrait l'ID d'univers et l'ID scénario à partir de la source de la quête.
+ *  Formats supportés :
+ *   - Neuf : `[univers_scenario_id] /data/scenarios/...`
+ *   - Ancien : `/data/scenarios/Laelith/...` (détection par chemin) */
+function extractIds(questSource?: string): { universe: string; scenario: string } {
+  const src = questSource ?? "";
+  // Format neuf : [prefix_scenario] ...
+  const m = src.match(/^\[([a-z_]+?)_/);
+  if (m?.[1]) {
+    // Extraire l'ID complet du scénario (tout ce qui est entre [ et ])
+    const fullId = src.match(/^\[([^\]]+)\]/)?.[1] ?? "";
+    return { universe: m[1], scenario: fullId };
+  }
+  // Format ancien : détecter l'univers dans le chemin /data/scenarios/<Univers>/...
+  const lower = src.toLowerCase();
+  if (lower.includes("/scenarios/laelith/")) return { universe: "laelith", scenario: "" };
+  if (lower.includes("/scenarios/les royaumes") || lower.includes("/scenarios/les_royaumes")) return { universe: "royaumes_oublies", scenario: "" };
+  if (lower.includes("/scenarios/les terres") || lower.includes("/scenarios/les_terres")) return { universe: "terres_eternel", scenario: "" };
+  if (lower.includes("/scenarios/divers/")) return { universe: "divers", scenario: "" };
+  return { universe: "", scenario: "" };
+}
+
+// ── Atlas interactif ───────────────────────────────────────────────────── //
+const ATLAS_VILLES_FAERUN = new Set(
   [
     "Mirabar", "Luskan", "Neverwinter", "Waterdeep", "Daggerford", "Triboar",
     "Phandalin", "Everlund", "Silverymoon", "Mithral Hall", "Evereska",
@@ -36,17 +93,25 @@ function sansAccentsMin(s: string): string {
 export function WorldMap() {
   const state = useParty((s) => s.state);
   const lieu = state?.lieu;
-  // Position du groupe en % de la carte — absente tant que le MJ ne l'a pas
-  // placée (`carte_joueurs_placer_ville`).
   const mx = lieu?.position_x;
   const my = lieu?.position_y;
   const aPosition = mx != null && my != null;
 
-  // « Auberge du Drakkar, Waterdeep » → « Waterdeep » : si le lieu courant est
-  // une ville connue de l'atlas AideDD, on propose le lien profond.
+  // Déterminer la carte : scénario > univers > fallback
+  const { universe: universeId, scenario: scenarioId } = extractIds(state?.quete?.source);
+  const mapInfo = (scenarioId ? SCENARIO_MAPS[scenarioId] : undefined)
+    ?? UNIVERSE_MAPS[universeId]
+    ?? FALLBACK_MAP;
+  const MAP_URL = mapInfo.url;
+  const MAP_W = mapInfo.w;
+  const MAP_H = mapInfo.h;
+  const ATLAS_BASE = mapInfo.atlas;
+
+  // Atlas link (si ville connue sur carte Faerûn)
   const nomAtlas = (() => {
+    if (!ATLAS_BASE) return "";
     const brut = (lieu?.nom ?? "").split(",").pop()?.trim() ?? "";
-    return ATLAS_VILLES.has(sansAccentsMin(brut)) ? brut : "";
+    return ATLAS_VILLES_FAERUN.has(sansAccentsMin(brut)) ? brut : "";
   })();
   const urlAtlas = nomAtlas ? `${ATLAS_BASE}@${encodeURIComponent(nomAtlas)}` : null;
 
@@ -131,7 +196,7 @@ export function WorldMap() {
   return (
     <div>
       <div className="mb-2 text-sm text-amber-200 font-serif text-center">
-        Faerûn — Nord
+        {mapInfo.label}
       </div>
       {lieu && (
         <div className="text-center mb-2">
@@ -159,7 +224,7 @@ export function WorldMap() {
         >
           <img
             src={MAP_URL}
-            alt="Carte du nord de Faerûn"
+            alt={`Carte : ${mapInfo.label}`}
             draggable={false}
             onError={() => setErreur(true)}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
@@ -189,8 +254,8 @@ export function WorldMap() {
         </div>
         {erreur && (
           <div className="absolute inset-0 flex items-center justify-center text-center text-stone-500 text-xs italic px-6">
-            Carte introuvable sur le serveur (cartes/faerun_nord.png) —
-            redémarrez le serveur pour la copier dans data/cartes/.
+            Carte introuvable sur le serveur —
+            redémarrez le serveur pour la copier dans data/scenarios/.
           </div>
         )}
         {!aPosition && !erreur && (

@@ -19,10 +19,12 @@ export function useChatSocket(partie_id: string | null) {
   const setParticipants = useParty((s) => s.setParticipants);
   const addParticipant = useParty((s) => s.addParticipant);
   const addMonster = useParty((s) => s.addMonster);
+  const removeMonsterByNom = useParty((s) => s.removeMonsterByNom);
   const addScene = useParty((s) => s.addScene);
   const addTeamMessage = useParty((s) => s.addTeamMessage);
   const setTeamMessages = useParty((s) => s.setTeamMessages);
   const applyPatches = useParty((s) => s.applyPatches);
+  const bumpStateRev = useParty((s) => s.bumpStateRev);
   const player = useParty((s) => s.player);
   const lastJoinRef = useRef<string>("");
 
@@ -184,7 +186,7 @@ export function useChatSocket(partie_id: string | null) {
         }
         case "dm": {
           // state_patches du tour : images → galerie de la colonne droite,
-          // le reste (lieu.position_x/y, phase, pj.0.pv…) → état du store
+          // le reste (lieu.position_x, phase, pj.0.pv…) → état du store
           // en direct (sans attendre le polling REST de 15 s).
           const patches = (msg.state_patches || []) as Record<string, unknown>[];
           applyPatches(patches);
@@ -193,6 +195,24 @@ export function useChatSocket(partie_id: string | null) {
             for (const cle of ["image_monstre", "image_scene"]) {
               const img = p[cle];
               if (typeof img === "string") classifyImage(img);
+            }
+          }
+          // Signal serveur « une fiche a changé » (pj_updated) : re-fetch
+          // immédiat de l'état REST pour rattraper ce que les path patches
+          // ne couvrent pas (entrée créée, renommée, supprimée…).
+          if (patches.some((p) => p && "pj_updated" in p)) {
+            bumpStateRev();
+          }
+          // Mort d'un monstre : son portrait quitte la galerie
+          // (« les images restent affichées jusqu'à sa mort »).
+          for (const p of patches) {
+            if (!p) continue;
+            const mc = p["monstres_combat"];
+            if (!Array.isArray(mc)) continue;
+            for (const m of mc as { nom?: string; conditions?: string[] }[]) {
+              if (m?.nom && (m.conditions ?? []).includes("Détruit")) {
+                removeMonsterByNom(m.nom);
+              }
             }
           }
           const sid = streamId.current || uid();

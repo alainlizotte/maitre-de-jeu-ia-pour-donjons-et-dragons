@@ -19,6 +19,9 @@ class LLMConfig:
     temperature: float = 0.75
     top_p: float = 0.9
     max_context_tokens: int = 8192
+    # Budget max de tokens générés par réponse (llama.cpp / Ollama).
+    # 0 ou négatif = illimité (défaut serveur).
+    max_tokens: int = 8192
     tool_mode: str = "prompt"        # "native" | "prompt" | "auto"
     detect_simulation: bool = True
     max_tool_iterations: int = 10
@@ -64,6 +67,10 @@ class GameConfig:
     # évite la saturation du contexte sur les longues campagnes.
     max_history_chars: int = 12000
     stream_to_clients: bool = True
+    # Bloque l'envoi de messages par les utilisateurs pendant que le MJ
+    # travaille (réfléchit, écrit, génère une image). Empêche l'accumulation
+    # de messages en attente quand le LLM est lent.
+    block_messages_during_think: bool = False
 
 
 @dataclass
@@ -84,12 +91,19 @@ class RagConfig:
 
 
 @dataclass
+class ImageConfig:
+    enabled: bool = False
+    base_url: str = ""  # vide → $COMFYUI_BASE_URL ou http://127.0.0.1:8188
+
+
+@dataclass
 class AppConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     game: GameConfig = field(default_factory=GameConfig)
     rag: RagConfig = field(default_factory=RagConfig)
+    image: ImageConfig = field(default_factory=ImageConfig)
     raw: dict[str, Any] = field(default_factory=dict)
     project_root: Path = Path(__file__).resolve().parent.parent
 
@@ -125,6 +139,7 @@ def load_config(path: str | os.PathLike[str] | None = None) -> AppConfig:
         paths=_coerce(PathsConfig, raw.get("paths", {})),
         game=_coerce(GameConfig, raw.get("game", {})),
         rag=_coerce(RagConfig, raw.get("rag", {})),
+        image=_coerce(ImageConfig, raw.get("image", {})),
         raw=raw,
         project_root=project_root,
     )

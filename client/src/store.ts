@@ -70,6 +70,10 @@ interface PartyStore {
    *  en direct via WS — évite d'attendre le polling REST (15 s) pour
    *  voir bouger le marqueur de carte, les PV, la phase, etc. */
   applyPatches: (patches: Record<string, unknown>[]) => void;
+  /** Incrémenté à chaque signal de changement serveur (pj_updated…) —
+   *  PartyPage s'en sert pour re-fetch l'état REST sans attendre le poll. */
+  stateRev: number;
+  bumpStateRev: () => void;
 
   // -- Fil de discussion -------------------------------------------------- //
   messages: ChatMessage[];
@@ -79,6 +83,9 @@ interface PartyStore {
   // -- Monstres rencontrés (galerie bas de colonne droite) --------------- //
   monsters: EncounterMonster[];
   addMonster: (m: EncounterMonster) => void;
+  /** Retire un monstre de la galerie (mort au combat). Comparaison
+   *  insensible à la casse/accents/tirets (nom bestiaire ↔ nom dérivé URL). */
+  removeMonsterByNom: (nom: string) => void;
 
   // -- Scènes illustrées (salles de donjon + moments clés) ---------------- //
   scenes: EncounterMonster[];
@@ -111,6 +118,17 @@ const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
+
+/** Normalise un nom de monstre pour comparaison (casse/accents/tirets). */
+function normMonsterKey(s: string): string {
+  return (s || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export const useParty = create<PartyStore>((set) => ({
   utilisateur: initialUtilisateur(),
@@ -170,9 +188,13 @@ export const useParty = create<PartyStore>((set) => ({
       } catch {
         return st;
       }
+      let touched = false;
       for (const p of patches) {
         if (!p) continue;
         for (const [chemin, val] of Object.entries(p)) {
+          // Signaux (pas des chemins) : ignorés ici — ils déclenchent un
+          // re-fetch REST via bumpStateRev côté useChatSocket.
+          if (chemin === "pj_updated" || chemin === "__reset__") continue;
           const parts = chemin.split(".");
           let obj: Record<string, unknown> = next;
           for (let i = 0; i < parts.length - 1; i++) {
@@ -187,10 +209,14 @@ export const useParty = create<PartyStore>((set) => ({
             obj = cible as Record<string, unknown>;
           }
           obj[parts[parts.length - 1]] = val;
+          touched = true;
         }
       }
-      return { state: next as unknown as PartyState };
+      return touched ? { state: next as unknown as PartyState } : st;
     }),
+
+  stateRev: 0,
+  bumpStateRev: () => set((st) => ({ stateRev: st.stateRev + 1 })),
 
   messages: [],
   thinking: false,
@@ -203,6 +229,14 @@ export const useParty = create<PartyStore>((set) => ({
         ? { monsters: [m, ...st.monsters.filter((x) => x.url !== m.url)] }
         : { monsters: [m, ...st.monsters].slice(0, 12) },
     ),
+  removeMonsterByNom: (nom) =>
+    set((st) => {
+      const key = normMonsterKey(nom);
+      if (!key) return st;
+      return {
+        monsters: st.monsters.filter((m) => normMonsterKey(m.nom) !== key),
+      };
+    }),
 
   scenes: [],
   addScene: (sc) =>

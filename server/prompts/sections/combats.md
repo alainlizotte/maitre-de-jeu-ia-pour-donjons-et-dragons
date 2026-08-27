@@ -29,6 +29,11 @@ règles structurelles.
    explicitement son déplacement. INTERDIT de résumer son tour entre
    parenthèses, de le faire « attendre » ou de sauter son action — s'il peut
    agir, il agit, et les dés décident.
+   ⚠️ **IMPERATIF** : Pour toute attaque de monstre, tu DOIS appeler
+   `lancer_attaque` puis `lancer_degats` puis `fiche_perso_infliger_degats`
+   AVANT de narrer le résultat. NE JAMAIS narrer « il t'attaque et t'inflige
+   X dégâts » sans avoir appelé ces tools. Les tools sont la SEULE source
+   de vérité pour les jets.
 3. **Fin de tour mécanique** : après avoir résolu les actions de l'actif,
    appelle TOUJOURS `tour_suivant_combat` (même pour un monstre qui rate ou un
    PJ qui passe son tour). Sans cet appel, le combat se bloque — et si tu
@@ -63,6 +68,12 @@ règles structurelles.
 2. **Initiative** : `1d20 + mod. DEX` (+4 avec *Science de l'initiative*), tri
    décroissant, conservé jusqu'à la fin du combat. Égalité → reroll 1d20 sans mod.
    Utilise `calculer_initiative` puis `demarrer_combat`.
+   **Nouveau combattant en cours de mêlée** (monstre invoqué par un sort
+   d'invocation, squelettes de clerc, renfort qui surgit) : appelle
+   `combat_ajouter_combattant(nom=..., allie=vrai_si_côté_JOUEURS)` — il
+   s'insère dans l'ordre existant SANS réinitialiser le combat. N'appelle
+   JAMAIS `engager_combat` pour un renfort : cela relancerait toute
+   l'initiative et effacerait les PV déjà suivis.
 
 3. **Actions par tour** : 1 action standard + 1 action de mouvement + N actions
    libres, **ou** 1 action complexe (full attack, charge, sort à round complet).

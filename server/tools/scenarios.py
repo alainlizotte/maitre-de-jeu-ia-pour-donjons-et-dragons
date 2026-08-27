@@ -1,14 +1,9 @@
-"""Outil Scénarios — adapté de `Outil_DonneesDistante.py`.
+"""Outil Scénarios — catalogue structuré par univers.
 
-Donne au MJ (LLM) un catalogue de scénarios pré-rédigés :
-- le catalogue historique « univers Laelith » (`data/scenarios_laelith.json`
-  s'il existe, sinon un catalogue de secours embarqué de 7 scénarios) ;
-- **plus** les scénarios locaux PDF (`data/scenarios.json`, PDF servis sous
-  `data/scenarios/` — cf. dossier documentation/scénarios du projet source).
-  Le texte d'un PDF est extrait à la demande via PyMuPDF (cache mémoire,
-  plafonné en caractères) pour que le MJ puisse réellement le mener.
-
-Les fichiers PDF restent consultables par les joueurs via `/data/scenarios/…`.
+Charge `data/scenarios_catalogue.json` : chaque univers contient des
+scénarios avec PDF, cartes, artwork, objets, enigmes, annexes.
+Le texte d'un PDF est extrait à la demande via PyMuPDF (cache mémoire,
+plafonné en caractères) pour que le MJ puisse mener l'aventure.
 """
 
 from __future__ import annotations
@@ -20,130 +15,73 @@ from typing import Any, Optional
 from .base import ToolContext, ToolResult, tool
 
 
-# --------------------------------------------------------------------------- #
-#  Catalogue de secours (7 scénarios génériques) — idem original.
-# --------------------------------------------------------------------------- #
-CATALOGUE_FALLBACK = [
-    {
-        "id": "1",
-        "titre": "La Voix sous les Pavés",
-        "niveau": "1–3",
-        "theme": "Enquête urbaine / politique",
-        "pitch": "Disparitions dans les bas-quartiers de Laelith ; une voix attire les âmes égarées dans les égouts.",
-    },
-    {
-        "id": "2",
-        "titre": "Les Échos de la Tour Brisée",
-        "niveau": "3–5",
-        "theme": "Donjon / magie ancienne",
-        "pitch": "Un arcane déchu a laissé une tour en ruines, lueurs nocturnes, bestioles mange-bétail.",
-    },
-    {
-        "id": "3",
-        "titre": "Le Sel Noir de la Côte",
-        "niveau": "2–4",
-        "theme": "Maritime / contrebande",
-        "pitch": "Brigands attaquant les convois de sel ; derrière eux une organisation plus large.",
-    },
-    {
-        "id": "4",
-        "titre": "La Complainte des Bois-Ombres",
-        "niveau": "4–6",
-        "theme": "Forêt maudite / fey",
-        "pitch": "Une forêt voisine se meurt ; les druides implorent les aventuriers.",
-    },
-    {
-        "id": "5",
-        "titre": "Le Trône de Cendre",
-        "niveau": "6–9",
-        "theme": "Politique de cour / trahison",
-        "pitch": "Mort suspecte d'un député de Laelith ; l'assassin doit être découvert avant qu'il ne frappe à nouveau.",
-    },
-    {
-        "id": "6",
-        "titre": "Le Tombeau de Selvar le Sombre",
-        "niveau": "5–7",
-        "theme": "Donjon funéraire / mort-vivant",
-        "pitch": "Le tombeau d'un ancien sorcier s'ouvre ; les pillards ne reviennent jamais.",
-    },
-    {
-        "id": "7",
-        "titre": "Le Marchand de Sable",
-        "niveau": "2–4",
-        "theme": "Voyage / commerce mystérieux",
-        "pitch": "Un marchand ambulant propose des objets magiques à prix ridicule. Que cache sa caravane ?",
-    },
-]
-
-_CATALOGUE_CACHE: Optional[list[dict[str, Any]]] = None
+_CATALOGUE_CACHE: Optional[dict[str, Any]] = None
+_FLAT_CACHE: Optional[list[dict[str, Any]]] = None
 
 
 def _catalogue_path(ctx: ToolContext) -> str:
-    return os.path.join(ctx.data_dir, "scenarios_laelith.json")
+    return os.path.join(ctx.data_dir, "scenarios_catalogue.json")
 
 
-def _charger_catalogue_laelith(ctx: ToolContext) -> list[dict[str, Any]]:
-    """Charge le catalogue Laelith local si présent, sinon renvoie le fallback."""
+def charger_catalogue(ctx: ToolContext) -> dict[str, Any]:
+    """Charge le catalogue structuré (cache mémoire)."""
+    global _CATALOGUE_CACHE
+    if _CATALOGUE_CACHE is not None:
+        return _CATALOGUE_CACHE
     path = _catalogue_path(ctx)
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if isinstance(data, list) and data:
-            return list(data)
-        if isinstance(data, dict) and "scenarios" in data:
-            return list(data["scenarios"])
+        if isinstance(data, dict) and "universes" in data:
+            _CATALOGUE_CACHE = data
+            return _CATALOGUE_CACHE
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
-    return list(CATALOGUE_FALLBACK)
-
-
-def _charger_scenarios_locaux(ctx: ToolContext) -> list[dict[str, Any]]:
-    """Charge le catalogue des scénarios PDF locaux (data/scenarios.json)."""
-    path = os.path.join(ctx.data_dir, "scenarios.json")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict) and isinstance(data.get("scenarios"), list):
-            return [
-                s for s in data["scenarios"]
-                if isinstance(s, dict) and s.get("fichier")
-            ]
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        pass
-    return []
-
-
-def _charger_catalogue(ctx: ToolContext) -> list[dict[str, Any]]:
-    """Catalogue unifié : Laelith + scénarios locaux PDF (avec doublons filtrés)."""
-    global _CATALOGUE_CACHE
-    if _CATALOGUE_CACHE is not None:
-        return _CATALOGUE_CACHE
-    vus: set[str] = set()
-    cata: list[dict[str, Any]] = []
-    for s in _charger_catalogue_laelith(ctx) + _charger_scenarios_locaux(ctx):
-        sid = str(s.get("id", ""))
-        if sid and sid in vus:
-            continue
-        if sid:
-            vus.add(sid)
-        cata.append(s)
-    _CATALOGUE_CACHE = cata
+    _CATALOGUE_CACHE = {"universes": []}
     return _CATALOGUE_CACHE
+
+
+def _charger_catalogue_plat(ctx: ToolContext) -> list[dict[str, Any]]:
+    """Catalogue plat (tous scénarios de tous univers) pour les tools LLM."""
+    global _FLAT_CACHE
+    if _FLAT_CACHE is not None:
+        return _FLAT_CACHE
+    cata = charger_catalogue(ctx)
+    flat: list[dict[str, Any]] = []
+    for u in cata.get("universes", []):
+        for s in u.get("scenarios", []):
+            s2 = dict(s)
+            s2["_univers"] = u.get("nom", "")
+            s2["_univers_id"] = u.get("id", "")
+            flat.append(s2)
+    _FLAT_CACHE = flat
+    return _FLAT_CACHE
 
 
 # --------------------------------------------------------------------------- #
 #  Extraction PDF (PyMuPDF) — à la demande, cache mémoire, plafonnée.
 # --------------------------------------------------------------------------- #
 _PDF_TEXT_CACHE: dict[str, str] = {}
-_PDF_MAX_CHARS = 24000  # borne : assez pour un module complet sans exploser le contexte
+_PDF_MAX_CHARS = 24000
 
 
-def _extraire_pdf(ctx: ToolContext, chemin_relatif: str) -> str:
-    """Extrait le texte d'un PDF sous data_dir (cache + plafond de caractères)."""
-    cle = chemin_relatif
+def _url_to_path(ctx: ToolContext, url: str) -> str:
+    """Convertit une URL /data/scenarios/... en chemin disque data_dir."""
+    if url.startswith("/data/scenarios/"):
+        rel = url[len("/data/scenarios/"):]
+    elif url.startswith("/data/"):
+        rel = url[len("/data/"):]
+    else:
+        rel = url.lstrip("/")
+    return os.path.join(ctx.data_dir, "scenarios", rel)
+
+
+def extraire_pdf(ctx: ToolContext, pdf_url: str) -> str:
+    """Extrait le texte d'un PDF à partir de son URL /data/ (cache + plafond)."""
+    cle = pdf_url
     if cle in _PDF_TEXT_CACHE:
         return _PDF_TEXT_CACHE[cle]
-    path = os.path.join(ctx.data_dir, chemin_relatif)
+    path = _url_to_path(ctx, pdf_url)
     texte = ""
     try:
         import pymupdf  # pylint: disable=import-outside-toplevel
@@ -161,42 +99,44 @@ def _extraire_pdf(ctx: ToolContext, chemin_relatif: str) -> str:
     return _PDF_TEXT_CACHE[cle]
 
 
-def _url_data(chemin_relatif: str) -> str:
-    """URL publique d'un fichier sous data_dir (montage StaticFiles /data)."""
-    from urllib.parse import quote
-    return "/data/" + quote(chemin_relatif.lstrip("/"))
-
-
 # --------------------------------------------------------------------------- #
-#  Tools
+#  Tools LLM
 # --------------------------------------------------------------------------- #
 @tool
 async def scenarios_laelith_lister(ctx: ToolContext) -> ToolResult:
     """
-    Liste les scénarios disponibles : univers Laelith (catalogue classique)
-    + scénarios PDF locaux complets (dont le texte intégral est extrait au
-    chargement). Renvoie titre + niveaux + thème + court pitch pour chacun.
+    Liste les scénarios disponibles, groupés par univers.
     Utiliser ensuite `scenarios_laelith_charger` pour récupérer un scénario.
     Aucun argument.
     """
-    cat = _charger_catalogue(ctx)
-    if not cat:
+    cata = charger_catalogue(ctx)
+    universes = cata.get("universes", [])
+    if not universes:
         return ToolResult(text="⚠️ Aucun scénario disponible.")
-    lignes = ["📚 **Catalogue de scénarios (Laelith + PDF locaux)**"]
-    for s in cat:
-        local = " 📄 PDF local" if s.get("fichier") else ""
-        lignes.append(
-            f"\n**[{s.get('id','?')}] {s.get('titre','?')}** "
-            f"— Niveaux {s.get('niveau','?')}{local}"
-        )
-        if s.get("theme"):
-            lignes.append(f"   _Thème_ : {s['theme']}")
-        if s.get("pitch"):
-            lignes.append(f"   _Pitch_ : {s['pitch']}")
+    lignes = ["📚 **Catalogue de scénarios par univers**"]
+    for u in universes:
+        noms_cartes = ""
+        if u.get("cartes"):
+            noms_cartes = f" ({len(u['cartes'])} cartes)"
+        lignes.append(f"\n## {u.get('nom', '?')}{noms_cartes}")
+        if u.get("description"):
+            lignes.append(f"_{u['description']}_")
+        for s in u.get("scenarios", []):
+            pdf = " 📄" if s.get("pdf") else ""
+            assets = []
+            if s.get("cartes"): assets.append(f"{len(s['cartes'])} cartes")
+            if s.get("artwork"): assets.append("artwork")
+            if s.get("objets"): assets.append(f"{len(s['objets'])} objets")
+            if s.get("enigmes"): assets.append(f"{len(s['enigmes'])} énigmes")
+            if s.get("annexes"): assets.append(f"{len(s['annexes'])} annexes")
+            extra = f" [{', '.join(assets)}]" if assets else ""
+            lignes.append(f"- **[{s.get('id','?')}] {s.get('titre','?')}**{pdf}{extra}")
+            if s.get("pitch"):
+                lignes.append(f"  _{s['pitch']}_")
     lignes.append(
-        "\n— Choisissez un scénario par son identifiant `[id]`. "
-        "Je peux adapter le niveau et le cadre si besoin. Les scénarios PDF "
-        "locaux sont chargés avec leur texte intégral."
+        "\n— Identifiant du scénario : `[id]`. "
+        "Le texte PDF est extrait au chargement. Les images/artwork/objets "
+        "sont consultables via les URLs du catalogue."
     )
     return ToolResult(text="\n".join(lignes))
 
@@ -206,19 +146,16 @@ async def scenarios_laelith_charger(
     ctx: ToolContext, scenario_id: str
 ) -> ToolResult:
     """
-    Charge le détail d'un scénario par son identifiant. Pour un scénario PDF
-    local, le texte intégral est extrait du fichier (plafonné) pour que le MJ
-    puisse mener l'aventure fidèlement ; l'URL publique du PDF est incluse
-    pour que les joueurs le consultent. Lancement : le MJ adapte ensuite le
-    pitch à sa table via `etat_partie_patch` (quete.titre / quete.pitch /
-    quete.source).
+    Charge le détail d'un scénario par son identifiant. Pour un scénario PDF,
+    le texte intégral est extrait du fichier (plafonné). L'URL publique du
+    PDF est incluse pour que les joueurs le consultent.
+    Le MJ adapte ensuite le pitch via etat_partie_patch (quete.titre / pitch).
 
     :param scenario_id (str): identifiant du scénario tel que listé.
     """
-    cat = _charger_catalogue(ctx)
-    # Recherche par id (insensible à la casse/type)
+    flat = _charger_catalogue_plat(ctx)
     sid = str(scenario_id).strip()
-    s = next((x for x in cat if str(x.get("id","")) == sid), None)
+    s = next((x for x in flat if str(x.get("id", "")) == sid), None)
     if s is None:
         return ToolResult(
             text=(
@@ -228,40 +165,47 @@ async def scenarios_laelith_charger(
         )
     champs = [
         f"📜 **Scénario {s.get('id','?')} : {s.get('titre','?')}**",
-        f"- Niveaux : {s.get('niveau','?')}",
-        f"- Thème : {s.get('theme','?')}",
-        f"- Pitch : {s.get('pitch','?')}",
+        f"- Univers : {s.get('_univers', '?')}",
     ]
-    for k in ("source", "systeme", "etapes", "pnj", "lieux", "monstres"):
-        if s.get(k):
-            v = s[k]
-            if isinstance(v, (list, dict)):
-                v = json.dumps(v, ensure_ascii=False)
-            champs.append(f"- {k.capitalize()} : {v}")
-    if s.get("fichier"):
-        # Scénario PDF local : URL joueur + texte extrait pour le MJ.
-        url = _url_data(s["fichier"])
-        champs.append(f"- 📄 PDF consultable par les joueurs : {url}")
-        for annexe in s.get("fichiers_annexes", []) or []:
-            champs.append(f"- 🗺️ Annexe : {_url_data(annexe)}")
-        texte = _extraire_pdf(ctx, s["fichier"])
+    if s.get("pitch"):
+        champs.append(f"- Pitch : {s['pitch']}")
+    if s.get("pdf"):
+        champs.append(f"- 📄 PDF consultable par les joueurs : {s['pdf']}")
+        # Extraire texte pour le MJ
+        texte = extraire_pdf(ctx, s["pdf"])
         champs.append(f"\n=== TEXTE DU SCÉNARIO (extrait) ===\n{texte}")
-    elif s.get("full"):
-        champs.append(f"\n[JSON complet]\n{json.dumps(s, ensure_ascii=False, indent=2)}")
-
-    # Auto-patch de la quête dans l'état partie : le MJ n'a plus besoin de le
-    # faire manuellement via etat_partie_patch (souvent oublié par le LLM).
+    # Assets
+    for label, cle in [("Cartes", "cartes"), ("Objets", "objets"),
+                       ("Énigmes", "enigmes")]:
+        items = s.get(cle)
+        if items:
+            champs.append(f"\n### {label} ({len(items)})")
+            for item in items:
+                champs.append(f"- {item.get('nom', '?')} : {item.get('fichier', '?')}")
+    if s.get("artwork"):
+        art = s["artwork"]
+        for cat_label, cat_key in [("Lieux", "lieux"), ("Monstres", "monstres"), ("PNJ", "pnj")]:
+            imgs = art.get(cat_key)
+            if imgs:
+                champs.append(f"\n### Artwork — {cat_label} ({len(imgs)})")
+                for img in imgs:
+                    champs.append(f"- {img.get('nom', '?')} : {img.get('fichier', '?')}")
+    if s.get("annexes"):
+        champs.append(f"\n### Annexes ({len(s['annexes'])})")
+        for a in s["annexes"]:
+            champs.append(f"- {a.get('nom', '?')} : {a.get('fichier', '?')}")
+    # Auto-patch quête
     quete = {
         "titre": str(s.get("titre", "")),
         "pitch": str(s.get("pitch", "")),
-        "source": f"[{s.get('id','')}] " + str(s.get("fichier") or s.get("source") or ""),
+        "source": f"[{s.get('id','')}] " + str(s.get("pdf") or s.get("_univers", "")),
     }
     try:
         if ctx.partie_id:
-            from ..game.state import PartyState  # pylint: disable=import-outside-toplevel
+            from ..game.state import PartyState
             PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id).patch(
                 "quete", json.dumps(quete, ensure_ascii=False)
             )
     except Exception:                                           # noqa: BLE001
-        pass  # hors partie ou état indisponible — le catalogue reste consultable
+        pass
     return ToolResult(text="\n".join(champs), state_patch={"quete": quete})

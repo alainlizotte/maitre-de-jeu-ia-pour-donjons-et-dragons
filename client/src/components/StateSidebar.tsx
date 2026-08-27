@@ -340,14 +340,14 @@ export function StateSidebar() {
 
   if (!state) {
     return (
-      <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
+      <aside className="w-full md:w-72 h-full shrink-0 border-r-0 md:border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
         <p className="text-stone-500 text-sm italic">Chargement de l'état…</p>
       </aside>
     );
   }
   if ("_erreur" in state) {
     return (
-      <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
+      <aside className="w-full md:w-72 h-full shrink-0 border-r-0 md:border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
         <p className="text-rose-400 text-sm">⚠️ {state._erreur}</p>
       </aside>
     );
@@ -364,7 +364,7 @@ export function StateSidebar() {
   );
 
   return (
-    <aside className="w-72 shrink-0 border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
+    <aside className="w-full md:w-72 h-full shrink-0 border-r-0 md:border-r border-stone-800 bg-stone-900/50 p-3 overflow-y-auto overflow-x-hidden">
       <div className="mb-3">
         <h2 className="font-serif text-amber-200 text-sm uppercase tracking-wide">
           {state.meta?.titre || "(sans titre)"}
@@ -392,25 +392,43 @@ export function StateSidebar() {
             ⚔️ Initiative — Tour {state.tour}
           </h3>
           <ul className="space-y-0.5 text-sm">
-            {state.initiative.map((it, i) => (
-              <li
-                key={i}
-                className={
-                  "flex justify-between px-2 py-1 rounded " +
-                  (state.courant_tour_pour === it.nom
-                    ? "bg-amber-800/60 text-amber-100 font-medium border border-amber-600/40"
-                    : "text-stone-300")
-                }
-              >
-                <span>
-                  {state.courant_tour_pour === it.nom && <span className="mr-1">▶</span>}
-                  {it.nom}
-                </span>
-                <span className="text-stone-400 tabular-nums text-xs">
-                  {it.init ?? it.total ?? "?"}
-                </span>
-              </li>
-            ))}
+            {state.initiative.map((it, i) => {
+              // PV des combattants non-joueurs suivis (monstres, invoqués).
+              const mob = (state.monstres_combat ?? []).find(
+                (m) => m.nom === it.nom,
+              );
+              const detruit = Boolean(mob?.conditions?.includes("Détruit"));
+              const pvTxt =
+                mob && !mob.inconnu && mob.pv_max > 0
+                  ? `${mob.pv}/${mob.pv_max} pv`
+                  : mob
+                    ? "pv ?"
+                    : null;
+              return (
+                <li
+                  key={i}
+                  className={
+                    "flex justify-between gap-1 px-2 py-1 rounded " +
+                    (state.courant_tour_pour === it.nom
+                      ? mob?.allie
+                        ? "bg-emerald-800/50 text-emerald-100 font-medium border border-emerald-600/40"
+                        : "bg-amber-800/60 text-amber-100 font-medium border border-amber-600/40"
+                      : mob?.allie
+                        ? "text-emerald-300/80"
+                        : "text-stone-300")
+                  }
+                >
+                  <span className="truncate">
+                    {state.courant_tour_pour === it.nom && <span className="mr-1">▶</span>}
+                    {mob && (mob.allie ? "🪄 " : detruit ? "☠️ " : "👹 ")}
+                    <span className={detruit ? "line-through opacity-60" : ""}>{it.nom}</span>
+                  </span>
+                  <span className="text-stone-400 tabular-nums text-xs whitespace-nowrap">
+                    {pvTxt ? `${pvTxt} · ` : ""}{it.init ?? it.total ?? "?"}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
           {state.courant_tour_pour && (
             <div className="text-xs text-amber-400 mt-1 text-center italic">

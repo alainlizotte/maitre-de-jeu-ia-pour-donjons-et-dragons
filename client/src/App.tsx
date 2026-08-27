@@ -23,21 +23,22 @@ export default function App() {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="border-b border-stone-800 bg-stone-950/80 px-4 py-2 flex items-center gap-3">
-        <Link to="/" className="font-serif text-lg text-amber-300 font-bold">
-          🎲 D&D 3.5 — Maître du Jeu
+      <header className="border-b border-stone-800 bg-stone-950/80 px-3 md:px-4 py-2 flex items-center gap-2 md:gap-3">
+        <Link to="/" className="font-serif text-lg text-amber-300 font-bold shrink-0">
+          <span className="md:hidden">🎲 D&D</span>
+          <span className="hidden md:inline">🎲 D&D 3.5 — Maître du Jeu</span>
         </Link>
-        <span className="text-xs text-stone-400 flex items-center gap-3">
+        <span className="text-xs text-stone-400 flex items-center gap-2 md:gap-3 min-w-0">
           <span className={backendOk ? "text-emerald-400" : "text-rose-400"}>
             ● {backendLabel} {backendOk ? "ok" : "down"}
           </span>
           {data?.model && (
-            <span className="text-stone-500 max-w-48 truncate" title={data.model}>
+            <span className="hidden md:inline text-stone-500 max-w-48 truncate" title={data.model}>
               {data.model}
             </span>
           )}
           {data?.rag?.enabled && (
-            <span className="text-amber-300" title="Knowledge Base active">
+            <span className="hidden md:inline text-amber-300" title="Knowledge Base active">
               📚 RAG ({Object.values(data.rag?.collections ?? {}).reduce((a, b) => a + b, 0)})
             </span>
           )}
@@ -45,7 +46,7 @@ export default function App() {
         <span className="ml-auto flex items-center gap-2 text-sm">
           {connecte && (
             <>
-              <span className="text-stone-300">👤 {utilisateur || "connecté"}</span>
+              <span className="text-stone-300 truncate max-w-24 md:max-w-none">👤 {utilisateur || "connecté"}</span>
               <button
                 onClick={deconnexion}
                 className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-xs text-stone-300"

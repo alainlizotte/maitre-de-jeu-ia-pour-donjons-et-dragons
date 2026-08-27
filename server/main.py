@@ -38,6 +38,7 @@ from . import persos as persos_mod
 from .config import AppConfig, get_config, set_config
 from .game.session import PartySession, registry as sessions
 from .game.state import PartyState, SCHEMA_PARTIE
+from .llm.client import Message
 from .llm.client import OllamaClient
 from .llm.orchestrator import EventCallback, Orchestrator
 from .llm.prompt_builder import PromptBuilder
@@ -45,6 +46,15 @@ from .rag.store import RagStore
 from .tools.base import ToolContext
 from .tools.monstres import image_pour
 from .tools.registry import discover_tools
+
+import re as _re_mod
+
+# Détection d'une invoquation / renfort annoncé par un joueur en combat :
+# déclenche le rattrapage 5bis-b si le MJ l'a narrée sans tool.
+_INVOKE_RE = _re_mod.compile(
+    r"\b(invoqu\w*|convoqu\w*|invocation\w*|summon\w*|renforts?)\b",
+    _re_mod.IGNORECASE,
+)
 
 
 # Logging : active le logger de l'orchestrateur (dnd35.orchestrator) qui trace
@@ -888,8 +898,8 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
         for _f, _titre, _libelle in CARTES_REFERENCE
         if (data_dir / "cartes" / _f).is_file()
     ]
-    # Atlas externe — carte interactive de Faerûn hébergée par AideDD
-    # (lien internet, nouvel onglet ; complète les PNG hors-ligne ci-dessus).
+    # Atlas externes — cartes interactives hébergées par AideDD
+    # (liens internet, nouvel onglet ; complètent les PNG hors-ligne ci-dessus).
     cartes.append(
         {
             "titre": "Faerûn — Atlas interactif (AideDD, internet)",
@@ -897,15 +907,35 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
             "url": "https://www.aidedd.org/atlas/fr/faerun",
         }
     )
-    scenarios = [
+    cartes.append(
         {
-            "id": s.get("id", ""),
-            "titre": s.get("titre", "?"),
-            "niveau": s.get("niveau", "?"),
-            "url": S._url_data(s["fichier"]),
+            "titre": "Laelith — Atlas interactif (AideDD, internet)",
+            "libelle": "Atlas Laelith",
+            "url": "https://www.aidedd.org/atlas/fr/laelith",
         }
-        for s in S._charger_scenarios_locaux(ctx)
-    ]
+    )
+
+    # Cartes d'univers — scénarios par univers (cartes communes)
+    cata = S.charger_catalogue(ctx)
+    for u in cata.get("universes", []):
+        for c in u.get("cartes", []):
+            cartes.append({
+                "titre": f"{u.get('nom', '')} — {c.get('nom', 'Carte')}",
+                "libelle": f"🗺️ {c.get('nom', 'Carte')}",
+                "url": c.get("fichier", ""),
+            })
+
+    # Scénarios PDF (ancien format plat pour la RessourcesBar)
+    scenarios = []
+    for u in cata.get("universes", []):
+        for s in u.get("scenarios", []):
+            if s.get("pdf"):
+                scenarios.append({
+                    "id": s.get("id", ""),
+                    "titre": s.get("titre", "?"),
+                    "niveau": s.get("niveau", "?"),
+                    "url": s["pdf"],
+                })
 
     donjon: Optional[str] = None
     if partie_id:
@@ -922,31 +952,22 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-#  Scénarios — catalogue pour le sélecteur de quête côté frontend.
+#  Scénarios — catalogue structuré par univers pour le sélecteur de quête.
 # --------------------------------------------------------------------------- #
 @app.get("/api/scenarios")
 async def list_scenarios(partie_id: Optional[str] = None) -> list[dict[str, Any]]:
-    """Liste les scénarios disponibles (Laelith + PDF locaux) pour le sélecteur."""
-    from .tools.scenarios import _charger_catalogue
+    """Retourne la liste des univers, chacun contenant ses scénarios.
+    Le frontend affiche d'abord la sélection univers, puis les scénarios
+    de l'univers choisi."""
+    from .tools.scenarios import charger_catalogue
     data_dir = cfg.abs(cfg.paths.data_dir)
     ctx = ToolContext(
         partie_id=partie_id or "_",
         joueur="",
         data_dir=str(data_dir),
     )
-    cat = _charger_catalogue(ctx)
-    return [
-        {
-            "id": s.get("id", ""),
-            "titre": s.get("titre", "?"),
-            "niveau": s.get("niveau", "?"),
-            "theme": s.get("theme", ""),
-            "pitch": s.get("pitch", ""),
-            "source": s.get("source", ""),
-            "fichier": ("/data/" + s["fichier"]) if s.get("fichier") else None,
-        }
-        for s in cat
-    ]
+    cata = charger_catalogue(ctx)
+    return cata.get("universes", [])
 
 
 @app.post("/api/parties/{partie_id}/quest")
@@ -1238,6 +1259,15 @@ async def _handle_say(
     if not text.strip():
         return
 
+    # 0. Bloquer les messages pendant que le MJ traite (pensée/génération).
+    if getattr(session, "thinking", False):
+        await session.broadcast({
+            "type": "sys",
+            "event": "turn_blocked",
+            "detail": "⏳ Le MJ est en train de travailler — patientez avant d'envoyer un nouveau message.",
+        })
+        return
+
     # 1. Mémorise le message joueur + broadcast immédiat à tous (echo).
     session.remember_player_message(player, text)
     await session.broadcast({
@@ -1276,7 +1306,12 @@ async def _handle_say(
         # injectée plus bas force le MJ à jouer le monstre puis avancer.
 
     # 2. Statut "thinking" aux clients connectés.
-    await session.broadcast({"type": "status", "description": "Le MJ réfléchit..."})
+    session.thinking = True
+    await session.broadcast({
+        "type": "status",
+        "description": "Le MJ réfléchit...",
+        "thinking_blocked": True,
+    })
 
     # 3→6. Tour du MJ — sérialisé par partie (un seul MJ à la fois) et compté
     # globalement (le unload n'a lieu que quand plus aucun tour n'est actif).
@@ -1333,7 +1368,11 @@ async def _handle_say(
                         f"\"{actif}\", cible=<nom du PJ visé>) → "
                         "lancer_degats → infliger_degats(nom=<PJ>, "
                         "degats=N) si touché ; si le jet rate, narre "
-                        "l'échec. Puis appelle tour_suivant_combat."
+                        "l'échec. Puis appelle tour_suivant_combat. "
+                        "OBLIGATION ABSOLUE : Tu DOIS appeler lancer_attaque "
+                        "ET infliger_degats (si touché) AVANT de narrer quoi "
+                        "que ce soit. NE PAS écrire l'action en prose sans "
+                        "tool — chaque attaque MUST passer par les tools."
                     )
                 system_text += (
                     f"\n\n⚔️ **TOUR EN COURS** — round {etat.get('tour', 1)}. "
@@ -1341,7 +1380,11 @@ async def _handle_say(
                     "Économie d'actions D&D 3.5 : max 1 action standard + 1 "
                     "action de mouvement (+ actions libres) par round. Toute "
                     "attaque passe par lancer_attaque, toute sauvegarde par "
-                    "lancer_sauvegarde, tout dégât appliqué par infliger_degats."
+                    "lancer_sauvegarde, tout dégât appliqué par infliger_degats. "
+                    "Invoquation / renfort en cours de mêlée (sort "
+                    "d'invocation, squelettes, allié appelé) : appelle "
+                    "combat_ajouter_combattant(nom, allie) AVANT de narrer "
+                    "l'arrivée de la créature — jamais engager_combat."
                 )
             # On re-construit la conversation à partir de l'historique (système
             # en tête), avec un budget en caractères : le message système et
@@ -1378,11 +1421,161 @@ async def _handle_say(
             orch = _orchestrator(app)
             result = await orch.run(messages, ctx, on_event=on_event, on_delta=on_delta)
 
-            # 5bis. ⚔️ Comptabilité de tour : un petit LLM oublie souvent
-            # `tour_suivant_combat` après avoir résolu l'action de l'actif.
-            # Règle D&D : une réponse du MJ = un tour de table consommé. Si la
-            # phase est toujours combat ET l'actif inchangé (et que le combat
-            # était déjà en cours AVANT ce message), on avance mécaniquement.
+            # 5bis. ⚔️ Rejeu forcé des tours monstres non résolus mécaniquement.
+            # Si c'est le tour d'un monstre et qu'aucun `lancer_attaque` ou
+            # `lancer_degats` n'a été appelé, on ré-invoque le MJ avec un
+            # message correctif qui le force à jouer le monstre via les tools.
+            try:
+                apres = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                if (
+                    etat_avant.get("phase") == "combat"
+                    and apres.get("phase") == "combat"
+                    and str(apres.get("courant_tour_pour") or "")
+                    == actif_avant
+                    and actif_avant
+                ):
+                    pj_actif_apres = next(
+                        (p for p in (apres.get("pj") or [])
+                         if p.get("nom") == actif_avant), None,
+                    )
+                    est_monstre = pj_actif_apres is None
+
+                    monstre_a_attaque = False
+                    if est_monstre:
+                        for tc in result.tool_calls_trace:
+                            if tc.get("name") in (
+                                "lancer_attaque", "lancer_degats",
+                                "fiche_perso_infliger_degats",
+                            ):
+                                monstre_a_attaque = True
+                                break
+
+                    # Si le monstre n'a pas attaqué → rejeu avec correctif
+                    if est_monstre and not monstre_a_attaque:
+                        print(
+                            f"[dnd35] Tour monstre {actif_avant} sans "
+                            f"attaque outillée — rejeu avec correctif"
+                        )
+                        # Injecter un correctif dans l'historique conversationnel
+                        corrective = (
+                            "⚠️ ERREUR : tu n'as pas joué le tour de "
+                            f"**{actif_avant}**. C'est SON tour de combat. "
+                            "Tu DOIS jouer CE monstre maintenant. "
+                            "Choisis une action d'attaque et appelle les outils "
+                            "`lancer_attaque` puis `lancer_degats` puis "
+                            "`fiche_perso_infliger_degats` pour appliquer les "
+                            "dégâts. NE demandez PAS aux joueurs ce qu'ils "
+                            "font — c'est au tour du monstre d'agir. "
+                            "NE narrate PAS en prose sans d'abord appeler "
+                            "ces outils. Si le monstre rate, passez au "
+                            "tour suivant avec `tour_suivant_combat`."
+                        )
+                        # Reconstituer les messages avec le correctif
+                        corrective_messages = list(messages) + [
+                            Message(role="assistant",
+                                    content=result.narration),
+                            Message(role="system",
+                                    content=corrective),
+                        ]
+                        result2 = await orch.run(
+                            corrective_messages, ctx,
+                            on_event=on_event, on_delta=None,
+                        )
+                        # Si la 2e tentative a réussi → fusionner les résultats
+                        has_attack2 = any(
+                            tc.get("name") in (
+                                "lancer_attaque", "lancer_degats",
+                                "fiche_perso_infliger_degats",
+                            )
+                            for tc in result2.tool_calls_trace
+                        )
+                        if has_attack2:
+                            # Fusionner les tool events et patches
+                            result.tool_calls_trace.extend(
+                                result2.tool_calls_trace
+                            )
+                            result.tool_events.extend(
+                                result2.tool_events
+                            )
+                            result.state_patches.extend(
+                                result2.state_patches
+                            )
+                            result.narration = result2.narration
+                            result.iterations += result2.iterations
+                            print(
+                                f"[dnd35] Rejeu monstre {actif_avant} "
+                                f"réussi ({len(result2.tool_calls_trace)} "
+                                f"tools appelés)"
+                            )
+                        else:
+                            print(
+                                f"[dnd35] Rejeu monstre {actif_avant} "
+                                f"toujours sans attaque — avancement forcé"
+                            )
+            except Exception as e:
+                print(f"[dnd35] 5bis rejeu failed: {e}")
+
+            # 5bis-b. ⚔️ Rattrapage des invoquations non enregistrées.
+            # Le joueur annonce une invoquation/renfort en combat mais le MJ
+            # l'a narrée en prose sans appeler combat_ajouter_combattant (le
+            # petit modèle 4B le fait souvent). On ré-invoque le MJ avec un
+            # correctif ciblé — best effort, comme le rejeu monstre ci-dessus.
+            try:
+                _invoque_match = _INVOKE_RE.search(text or "")
+                _deja_ajoute = any(
+                    tc.get("name") == "combat_ajouter_combattant"
+                    for tc in result.tool_calls_trace
+                )
+                if (
+                    etat_avant.get("phase") == "combat"
+                    and _invoque_match
+                    and not _deja_ajoute
+                ):
+                    print("[dnd35] Invoquation narrée sans "
+                          "combat_ajouter_combattant — rejeu avec correctif")
+                    corrective_inv = (
+                        "⚠️ ERREUR : le joueur vient d'annoncer une "
+                        "invoquation / un renfort, mais tu as narré "
+                        "l'arrivée de la créature SANS l'enregistrer "
+                        "mécaniquement. Appelle IMMÉDIATEMENT "
+                        "`combat_ajouter_combattant(nom=<créature invoquée>, "
+                        "allie=true si elle combat pour les joueurs)` : "
+                        "l'outil l'insère dans l'ordre d'initiative et suit "
+                        "ses PV. N'appelle PAS engager_combat (il "
+                        "réinitialiserait le combat en cours). Reprends ensuite "
+                        "ta narration en t'appuyant sur le résultat de l'outil."
+                    )
+                    corrective_messages = list(messages) + [
+                        Message(role="assistant", content=result.narration),
+                        Message(role="system", content=corrective_inv),
+                    ]
+                    result2 = await orch.run(
+                        corrective_messages, ctx,
+                        on_event=on_event, on_delta=None,
+                    )
+                    ok2 = any(
+                        tc.get("name") == "combat_ajouter_combattant"
+                        for tc in result2.tool_calls_trace
+                    )
+                    if ok2:
+                        result.tool_calls_trace.extend(
+                            result2.tool_calls_trace
+                        )
+                        result.tool_events.extend(result2.tool_events)
+                        result.state_patches.extend(result2.state_patches)
+                        result.narration = result2.narration
+                        result.iterations += result2.iterations
+                        print("[dnd35] Rejeu invoquation réussi")
+                    else:
+                        print("[dnd35] Rejeu invoquation toujours sans "
+                              "outil — best effort accepté")
+            except Exception as e:
+                print(f"[dnd35] 5bis-b rejeu invoquation failed: {e}")
+
+            # 5bis suite : avancement mécanique du tour
             try:
                 apres = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
@@ -1427,11 +1620,16 @@ async def _handle_say(
                 # 5ter. Clôture automatique : quand tous les monstres suivis
                 # par engager_combat sont détruits, le combat se termine
                 # mécaniquement (le modèle oublie souvent finir_combat).
+                # NB : les alliés invoqués (combat_ajouter_combattant
+                # allie=True) ne comptent pas — seuls les ennemis cloturent.
                 if apres.get("phase") == "combat":
                     mons = apres.get("monstres_combat") or []
-                    if mons and all(
+                    ennemis = [
+                        m2 for m2 in mons if not m2.get("allie")
+                    ]
+                    if ennemis and all(
                         "Détruit" in (m2.get("conditions") or [])
-                        for m2 in mons
+                        for m2 in ennemis
                     ):
                         apres["phase"] = "exploration"
                         apres["initiative"] = []
@@ -1460,9 +1658,15 @@ async def _handle_say(
                 # oublie souvent d'appeler monstre_consulter à l'annonce d'une
                 # rencontre ; on garantit ici le portrait de chaque monstre
                 # nouveau (cache instantané s'il existe déjà, budget temps
-                # sinon pour ne pas bloquer la table).
+                # sinon pour ne pas bloquer la table). L'URL est persistée
+                # dans monstres_combat[i].image_url ET le journal
+                # rencontres_images : le front peut ainsi réafficher les
+                # portraits après un rechargement de page, jusqu'à la mort
+                # du monstre.
                 _t0 = time.time()
                 _vus: set[str] = set()
+                _img_persist = False
+                _nouvelles_rencontres: list[tuple[str, str]] = []
                 for mo in apres.get("monstres_combat") or []:
                     nom_mo = str((mo or {}).get("nom") or "").strip()
                     cle_mo = nom_mo.lower()
@@ -1480,6 +1684,19 @@ async def _handle_say(
                         continue
                     if url_img:
                         result.state_patches.append({"image_monstre": url_img})
+                        if (mo or {}).get("image_url") != url_img:
+                            mo["image_url"] = url_img
+                            _img_persist = True
+                        _nouvelles_rencontres.append((nom_mo, url_img))
+                if _nouvelles_rencontres:
+                    from .tools.monstres import _fusionner_rencontres
+                    if _fusionner_rencontres(apres, _nouvelles_rencontres):
+                        _img_persist = True
+                if _img_persist:
+                    PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).save(apres)
             except Exception as e:                                   # noqa: BLE001
                 print(f"[dnd35] Avancement de tour auto échoué (ignoré) : {e}")
 
@@ -1511,6 +1728,7 @@ async def _handle_say(
         last_turn = await _turn_end()
 
     # 7. Patches d'état → re-synchronise l'UI avec l'état persistant final.
+    session.thinking = False
     await session.broadcast({"type": "status", "description": "", "done": True})
 
     # 8. Décharge le modèle LLM de la VRAM pour libérer la place à ComfyUI —
@@ -1554,7 +1772,7 @@ _cartes_src = cfg.project_root / "cartes"
 if _cartes_src.is_dir() and _data_dir.is_dir():
     _cartes_dst = _data_dir / "cartes"
     _cartes_dst.mkdir(parents=True, exist_ok=True)
-    for _f in sorted(_cartes_src.glob("*.png")):
+    for _f in sorted(_cartes_src.glob("*.*")):
         _dest = _cartes_dst / _f.name
         if not _dest.is_file():
             import shutil as _shutil

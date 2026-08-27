@@ -38,9 +38,13 @@ SCHEMA_PARTIE: dict[str, Any] = {
     "lieu": {"nom": "(non déterminé)", "type": "ville", "description": "",
              "position_x": 0, "position_y": 0},
     "donjon": {"id": None, "salles_visitees": [], "portes_bloquees": [], "grille": []},
+    "donjons_exploreres": {},
     "quete": {"titre": "", "pitch": "", "source": ""},
     "histoire": [],
     "derniere_narration": "",
+    # Journal des illustrations de monstres croisés ({nom, url}) — sert à
+    # réhydrater la galerie « Monstres rencontrés » après rechargement.
+    "rencontres_images": [],
 }
 
 

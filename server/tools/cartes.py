@@ -528,19 +528,42 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
                 f"avec une direction (nord/sud/est/ouest).\n\n🖼️ Carte : {url}"
             ),
         )
-    entree = {
-        "x": 0, "y": 0, "type": "entrée",
-        "description": "L'entrée du donjon. Une lourde porte de bois noir se dresse devant vous.",
-        "visitee": True,
-        "portes": {"nord": True, "sud": False, "est": True, "ouest": True},
-    }
-    donjon = {
-        "id": donjon_id,
-        "grille": _dict_vers_grille({(0, 0): entree}),
-        "salles_visitees": ["0,0"],
-        "portes_bloquees": [],
-        "courant": [0, 0],
-    }
+    # Vérifier si ce donjon a déjà été exploré dans cette partie.
+    archive = (etat.get("donjons_exploreres") or {}).get(donjon_id)
+    if archive and archive.get("grille"):
+        # Restaurer l'état antérieur du donjon.
+        donjon = dict(archive)
+        donjon["id"] = donjon_id
+        # S'assurer que les champs requis existent.
+        donjon.setdefault("grille", [])
+        donjon.setdefault("salles_visitees", [])
+        donjon.setdefault("portes_bloquees", [])
+        donjon.setdefault("courant", [0, 0])
+        courant = donjon["courant"]
+        cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
+        msg_restore = (
+            f"🔄 Vous retournez dans **{donjon_id}** — "
+            f"salle actuelle restaurée ({cx},{cy}), "
+            f"{len(donjon.get('salles_visitees', []))} salles déjà explorées."
+        )
+    else:
+        entree = {
+            "x": 0, "y": 0, "type": "entrée",
+            "description": "L'entrée du donjon. Une lourde porte de bois noir se dresse devant vous.",
+            "visitee": True,
+            "portes": {"nord": True, "sud": False, "est": True, "ouest": True},
+        }
+        donjon = {
+            "id": donjon_id,
+            "grille": _dict_vers_grille({(0, 0): entree}),
+            "salles_visitees": ["0,0"],
+            "portes_bloquees": [],
+            "courant": [0, 0],
+        }
+        msg_restore = (
+            f"🚪 Vous entrez dans **{donjon_id}**. Salle d'entrée (0,0). "
+            f"Portes visibles : nord, est, ouest."
+        )
     etat["donjon"] = donjon
     etat["phase"] = "exploration"
     err = _sauver_etat(ctx, etat)
@@ -555,11 +578,8 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
         return ToolResult(text=f"❌ Erreur SVG : {e}")
     url = _url_for(path, ctx.data_dir)
     return ToolResult(
-        text=(
-            f"🚪 Vous entrez dans **{donjon_id}**. Salle d'entrée (0,0). "
-            f"Portes visibles : nord, est, ouest. \n\n🖼️ Carte : {url}"
-        ),
-        state_patch={"donjon_id": donjon_id, "phase": "exploration",
+        text=f"{msg_restore}\n\n🖼️ Carte : {url}",
+        state_patch={"donjon": donjon, "phase": "exploration",
                      "carte_donjon": url},
     )
 
@@ -677,7 +697,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
             + ", ".join([k for k, v in salle.get("portes", {}).items() if v])
             + f".\n\n🖼️ Carte : {url}{img_line}"
         ),
-        state_patch={"carte_donjon": url, "donjon_courant": [nx, ny]},
+        state_patch={"donjon": donjon, "carte_donjon": url},
     )
 
 
@@ -707,7 +727,7 @@ async def carte_donjon_get(ctx: ToolContext) -> ToolResult:
             f"Salles visitées : {len(donjon.get('salles_visitees',[]))}\n"
             f"🖼️ Carte : {url}"
         ),
-        state_patch={"carte_donjon": url},
+        state_patch={"donjon": donjon, "carte_donjon": url},
     )
 
 
@@ -715,17 +735,32 @@ async def carte_donjon_get(ctx: ToolContext) -> ToolResult:
 async def carte_donjon_sortir(ctx: ToolContext) -> ToolResult:
     """
     Quitte le donjon → retour au mode monde. Met `etat_partie.phase` en
-    `opening_complete` (l'exploration reprend où on en était). Aucun argument.
+    `exploration` (l'exploration reprend où on en était). Le donjon est
+    archivé dans `donjons_exploreres` pour conserver le progrès si on y
+    retourne plus tard dans la même partie. Aucun argument.
     """
     etat = _charger_etat(ctx)
+    donjon = etat.get("donjon") or {}
+    donjon_id = donjon.get("id")
+    # Archiver le donjon courant avant de le vider.
+    if donjon_id and donjon.get("grille"):
+        etat.setdefault("donjons_exploreres", {})[donjon_id] = {
+            "id": donjon_id,
+            "grille": donjon.get("grille", []),
+            "salles_visitees": donjon.get("salles_visitees", []),
+            "portes_bloquees": donjon.get("portes_bloquees", []),
+            "courant": donjon.get("courant", [0, 0]),
+        }
     etat["donjon"] = {"id": None, "salles_visitees": [], "portes_bloquees": [], "grille": []}
     etat["phase"] = "exploration"
     err = _sauver_etat(ctx, etat)
     if err:
         return ToolResult(text=f"❌ {err}")
+    donjon_vide = etat["donjon"]
     return ToolResult(
         text="🚪 Vous quittez le donjon. Retour à la carte du monde.",
-        state_patch={"phase": "exploration", "quitte_donjon": True},
+        state_patch={"phase": "exploration", "donjon": donjon_vide,
+                     "donjons_exploreres": etat.get("donjons_exploreres", {})},
     )
 
 

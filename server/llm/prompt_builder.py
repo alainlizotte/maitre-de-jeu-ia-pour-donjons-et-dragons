@@ -346,6 +346,19 @@ class PromptBuilder:
                 f"{len(salles)} salle(s) visitée(s) : {', '.join(salles)}"
             )
 
+        donjons_archives = etat.get("donjons_exploreres") or {}
+        if donjons_archives:
+            noms = [
+                f"{did} ({len(d.get('salles_visitees', []))} salles)"
+                for did, d in donjons_archives.items()
+                if did and d.get("grille")
+            ]
+            if noms:
+                lignes.append(
+                    "\nDonjons déjà explorés dans cette partie (archivés) : "
+                    + ", ".join(noms)
+                )
+
         quete = etat.get("quete", {}) or {}
         if quete:
             lignes.append(

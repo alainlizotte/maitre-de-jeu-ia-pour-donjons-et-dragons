@@ -819,15 +819,23 @@ def _infliger_degats_monstre(
     mons = etat.get("monstres_combat") or []
     cn = _norm_nom_simple(nom)
     cible = None
+    # Passe 1 : correspondance EXACTE — indispensable pour les homonymes
+    # désambiguïsés (« Gobelin (2) ») : sans elle, le prefix-match de la
+    # passe 2 redirigerait les dégâts sur le premier « Gobelin ».
     for m in mons:
-        mn = _norm_nom_simple(m.get("nom"))
-        if (
-            mn == cn
-            or (len(cn) >= 4 and mn.startswith(cn))
-            or (len(mn) >= 4 and cn.startswith(mn))
-        ):
+        if _norm_nom_simple(m.get("nom")) == cn:
             cible = m
             break
+    # Passe 2 : correspondance par préfixe (tolérance aux libellés du LLM).
+    if cible is None:
+        for m in mons:
+            mn = _norm_nom_simple(m.get("nom"))
+            if (
+                (len(cn) >= 4 and mn.startswith(cn))
+                or (len(mn) >= 4 and cn.startswith(mn))
+            ):
+                cible = m
+                break
     if cible is None:
         return None
     if cible.get("inconnu"):

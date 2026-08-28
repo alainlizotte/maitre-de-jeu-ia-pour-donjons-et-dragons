@@ -340,7 +340,7 @@ async def lancer_degats(
     if faces not in (2, 3, 4, 6, 8, 10, 12, 20, 100):
         return ToolResult(text=f"⚠️ Type de dé {faces} non standard en D&D 3.5.")
     jets = [random.randint(1, faces) for _ in range(nb_des)]
-    total = sum(jets) + bonus
+    total = max(0, sum(jets) + bonus)  # jamais de dégâts négatifs (min 0)
     lignes = [
         f"💥 **Dégâts** : {arme_ou_sort} → {cible}",
         f"- Formule : {nb_des}d{faces}{'+' if bonus >= 0 else ''}{bonus}",
@@ -349,6 +349,10 @@ async def lancer_degats(
         f"- Bonus dégâts : {bonus:+d}",
         f"- **Dégâts infligés : {total}**",
     ]
+    if sum(jets) + bonus < 0:
+        lignes.append(
+            "- ℹ️ Total négatif ramené à 0 (les dégâts ne soignent pas la cible)."
+        )
     return ToolResult(text="\n".join(lignes))
 
 

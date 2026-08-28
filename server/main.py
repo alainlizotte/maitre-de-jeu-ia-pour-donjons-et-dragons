@@ -1332,6 +1332,77 @@ def _extrait_arme_bonus(attaques: str) -> Optional[tuple[str, int]]:
     return (arme, int(m.group(2))) if arme else None
 
 
+async def _appliquer_degats_oublies(
+    orch: Orchestrator,
+    result: Any,
+    ctx: ToolContext,
+    on_event: Optional[Any],
+) -> str:
+    """Rattrapage mécanique : tout `lancer_degats` réussi dont les dégâts
+    n'ont PAS été appliqués ensuite (`fiche_perso_infliger_degats` absent de
+    la trace du tour) est appliqué ici par le serveur. Les dégâts jetés ne
+    doivent jamais rester sans effet sur la cible.
+
+    Anti double-application (file par cible, dans l'ordre de la trace) :
+    - un `infliger(D)` consomme le plus ancien jet orphelin de même cible et
+      de même total (cas nominal, touche par touche) ;
+    - sinon, si la SOMME des jets orphelins de la cible vaut D, il les
+      consomme tous (le LLM a appliqué les touches en un seul appel) ;
+    - les jets restés orphelins en fin de tour sont appliqués par le serveur.
+
+    Renvoie le texte mécanique à ajouter à la narration ("" si rien à faire).
+    """
+    import unicodedata as _uni
+
+    def _norm_nom(s: str) -> str:
+        n = _uni.normalize("NFKD", str(s or "").strip().lower())
+        return "".join(c for c in n if not _uni.combining(c))
+
+    trace = result.tool_calls_trace
+    # File des jets orphelins : cible normalisée → liste de totaux.
+    orphelins: dict[str, list[int]] = {}
+
+    for tc in trace:
+        nom_tc = tc.get("name")
+        if nom_tc == "lancer_degats" and tc.get("ok"):
+            cible = str((tc.get("args") or {}).get("cible") or "").strip()
+            m_total = _re_mod.search(
+                r"[Dd]égâts infligés\s*:\s*(\d+)", tc.get("text") or "")
+            if cible and m_total:
+                orphelins.setdefault(_norm_nom(cible), []).append(
+                    int(m_total.group(1)))
+        elif nom_tc == "fiche_perso_infliger_degats" and tc.get("ok"):
+            args_j = tc.get("args") or {}
+            try:
+                d = int(args_j.get("degats") or 0)
+            except (TypeError, ValueError):
+                continue
+            cle = _norm_nom(args_j.get("nom"))
+            file_c = orphelins.get(cle) or []
+            # 1) montant exact → consomme le plus ancien jet correspondant.
+            if d in file_c:
+                file_c.pop(file_c.index(d))
+            # 2) somme des jets restants → le LLM a appliqué plusieurs
+            #    touches en un seul appel.
+            elif file_c and sum(file_c) == d:
+                file_c.clear()
+            if not file_c and cle in orphelins:
+                del orphelins[cle]
+
+    # Jets restés orphelins → le serveur les applique (toujours indiqués).
+    lignes: list[str] = []
+    for cible_norm, totaux in orphelins.items():
+        for total in totaux:
+            tr = await orch.execute_tool_direct(
+                "fiche_perso_infliger_degats",
+                {"nom": cible_norm, "degats": total},
+                ctx, on_event, result,
+            )
+            if tr is not None and not tr.text.startswith("❌"):
+                lignes.append(tr.text)
+    return "\n\n".join(lignes)
+
+
 async def _attaque_auto_monstre(
     orch: Orchestrator,
     result: Any,
@@ -1827,6 +1898,21 @@ async def _handle_say(
                               "outil — best effort accepté")
             except Exception as e:
                 print(f"[dnd35] 5bis-b rejeu invoquation failed: {e}")
+
+            # 5bis-c. 💥 Rattrapage dégâts non appliqués : tout lancer_degats
+            # réussi du tour DOIT se traduire par une application effective
+            # sur la cible (fiche PJ ou monstre suivi). Si le modèle a oublié
+            # fiche_perso_infliger_degats, le serveur applique les dégâts
+            # manquants exactement une fois (appariement anti double-application).
+            try:
+                txt_rattrapage = await _appliquer_degats_oublies(
+                    orch, result, ctx, on_event)
+                if txt_rattrapage:
+                    result.narration += "\n\n" + txt_rattrapage
+                    print("[dnd35] Dégâts non appliqués rattrapés "
+                          "automatiquement (tools serveur).")
+            except Exception as e:
+                print(f"[dnd35] Rattrapage dégâts échoué (ignoré) : {e}")
 
             # 5bis suite : avancement mécanique du tour
             try:

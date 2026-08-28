@@ -167,20 +167,64 @@ export function PartyPage() {
     setMobileView(MOBILE_VIEWS[next]);
   };
 
+  // ── Bannière de quête ── //
+  // Desktop : nom + résumé affichés. Smartphone : seul le nom est affiché,
+  // un clic sur la bannière déplie/replie le résumé.
+  const QuestBanner = () => {
+    const q = quete!;
+    const [ouvert, setOuvert] = useState(false);
+    const clickable = isMobile && Boolean(q.pitch);
+    const title = (
+      <span className="text-amber-300 font-semibold">📜 {q.titre}</span>
+    );
+    return (
+      <div
+        role={clickable ? "button" : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onClick={() => clickable && setOuvert((o) => !o)}
+        onKeyDown={
+          clickable
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setOuvert((o) => !o);
+                }
+              }
+            : undefined
+        }
+        className={
+          "m-4 mb-2 shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 " +
+          (clickable ? "select-none cursor-pointer" : "")
+        }
+      >
+        <div className="flex items-center justify-between gap-2">
+          {title}
+          {clickable && (
+            <span className="text-stone-400 text-xs shrink-0">
+              {ouvert ? "▴" : "▾"}
+            </span>
+          )}
+        </div>
+        {q.pitch && (!isMobile || ouvert) && (
+          <div className="text-stone-400 text-sm mt-1">{q.pitch}</div>
+        )}
+      </div>
+    );
+  };
+
   // Colonne centrale, commune aux deux layouts : bannière de quête,
   // sélecteur de scénario (avant le premier choix), puis le chat.
   const colonneCentrale = (
     <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-      {quete?.titre && (
-        <div className="m-4 mb-2 shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2">
-          <span className="text-amber-300 font-semibold">📜 Quête : {quete.titre}</span>
-          {quete.pitch && (
-            <span className="text-stone-400 text-sm"> — {quete.pitch}</span>
-          )}
-        </div>
-      )}
+      {quete?.titre && <QuestBanner />}
       {showPicker && partie_id && (
-        <div className="p-4 shrink-0">
+        <div
+          className={
+            isMobile
+              ? "px-4 pt-4 pb-0 flex-1 min-h-0 flex flex-col overflow-hidden"
+              : "p-4 shrink-0"
+          }
+        >
           <ScenarioPicker partieId={partie_id} />
         </div>
       )}

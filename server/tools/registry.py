@@ -199,3 +199,29 @@ def _arg_label(ann) -> str:
     if ann in (int, float, str, bool):
         return ann.__name__
     return "str"
+
+
+def tools_prompt_compact(registry: dict[str, ToolSpec]) -> str:
+    """Bloc COURT documentant les tools pour le mode « auto » (natif + texte).
+
+    Le tool-calling natif de llama.cpp avec Gemma est fragile : le modèle
+    écrit souvent l'appel en prose (`outil(key="value")`) au lieu d'émettre
+    un tool_calls JSON. Ce bloc compact (quelques dizaines de tokens) lui
+    rappelle les DEUX canaux valides — le tool_calls natif OU la balise
+    `<tool ...>` textuelle — tous deux parsés de façon déterministe par le
+    backend. Version allégée de `tools_prompt_section` pour ne pas diluer
+    le signal des schémas JSON du payload.
+    """
+    noms = ", ".join(sorted(registry.keys()))
+    return (
+        "## Appels d'outils (OBLIGATOIRES pour tout jet de dés, dégât, "
+        "sauvegarde, fiche, monstre, donjon ou changement d'état)\n"
+        "Deux formats valides, au choix :\n"
+        '1. tool_calls natif (JSON du payload) — recommandé ;\n'
+        '2. balise texte seule sur sa ligne : <tool name="nom" key="value">\n'
+        "INTERDIT : écrire l'appel en prose `nom(key=\"value\")`, simuler le "
+        "résultat, inventer un chiffre ou écrire « *(Attente du résultat…)* » "
+        "— tout appel en syntaxe fonctionnelle est intercepté et exécuté, et "
+        "tout résultat non issu d'un tool est INVALIDE.\n"
+        f"Tools disponibles : {noms}"
+    )

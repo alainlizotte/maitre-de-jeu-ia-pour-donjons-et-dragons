@@ -791,6 +791,18 @@ async def illustration_scene(ctx: ToolContext, description: str, titre: str = ""
     description = (description or "").strip()
     if not description:
         return ToolResult(text="❌ Décris la scène à illustrer.")
+    # Toggle runtime (config `image.scenes_enabled` ou bouton du GUI) :
+    # les scènes seules sont coupées — monstres, portraits et illustrations
+    # de donjon restent générés.
+    try:
+        from ..config import get_config
+        if not get_config().image.scenes_enabled:
+            return ToolResult(
+                text="🚫 Illustration de scène désactivée (réglage du tableau "
+                     "de bord) — poursuis la narration sans image."
+            )
+    except Exception:                                           # noqa: BLE001
+        pass  # config illisible → comportement historique (générer)
     titre = (titre or "").strip()
     cache_dir = os.path.join(ctx.data_dir, "images_scenes")
     try:

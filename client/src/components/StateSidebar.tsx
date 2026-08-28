@@ -404,6 +404,15 @@ export function StateSidebar() {
                   : mob
                     ? "pv ?"
                     : null;
+              // PV des PJ directement depuis l'état (fiche + barres du front,
+              // synchronisés par WS) — les joueurs sont suivis comme les
+              // monstres dans la liste d'initiative.
+              const pj = (state.pj ?? []).find((p) => p.nom === it.nom);
+              const pvJoueur =
+                pj && pj.pv !== undefined
+                  ? `${pj.pv}/${pj.pv_max ?? "?"} pv`
+                  : null;
+              const pvFinal = pvTxt ?? pvJoueur;
               return (
                 <li
                   key={i}
@@ -424,7 +433,7 @@ export function StateSidebar() {
                     <span className={detruit ? "line-through opacity-60" : ""}>{it.nom}</span>
                   </span>
                   <span className="text-stone-400 tabular-nums text-xs whitespace-nowrap">
-                    {pvTxt ? `${pvTxt} · ` : ""}{it.init ?? it.total ?? "?"}
+                    {pvFinal ? `${pvFinal} · ` : ""}init. {it.init ?? it.total ?? "?"}
                   </span>
                 </li>
               );

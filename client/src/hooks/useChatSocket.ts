@@ -154,7 +154,15 @@ export function useChatSocket(partie_id: string | null) {
           setThinking(msg.done ? false : Boolean(msg.description));
           break;
         case "delta": {
-          if (!streamId.current) {
+          // On n'accumule que dans un bloc « streaming » encore vivant. Si le
+          // streamId restant est périmé (bloc déjà finalisé ou disparu), on
+          // repart sur un nouveau bloc plutôt que d'écraser un message ancien.
+          if (
+            !streamId.current ||
+            !useParty
+              .getState()
+              .messages.some((m) => m.id === streamId.current && m.streaming)
+          ) {
             streamId.current = uid();
             addMessage({
               id: streamId.current,
@@ -216,7 +224,19 @@ export function useChatSocket(partie_id: string | null) {
             }
           }
           const sid = streamId.current || uid();
-          if (!streamId.current) {
+          const streamingTarget = streamId.current
+            ? useParty
+                .getState()
+                .messages.find((m) => m.id === streamId.current && m.streaming)
+            : undefined;
+          if (streamingTarget) {
+            finalizeStream(
+              sid,
+              msg.text,
+              msg.tool_events || [],
+              (msg.tool_events || []).find((e) => (e as ToolEvent).image)?.image,
+            );
+          } else {
             addMessage({
               id: sid,
               role: "dm",
@@ -224,13 +244,6 @@ export function useChatSocket(partie_id: string | null) {
               toolEvents: msg.tool_events || [],
               ts: Date.now(),
             });
-          } else {
-            finalizeStream(
-              sid,
-              msg.text,
-              msg.tool_events || [],
-              (msg.tool_events || []).find((e) => (e as ToolEvent).image)?.image,
-            );
           }
           streamId.current = null;
           setThinking(false);

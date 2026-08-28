@@ -878,7 +878,15 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
         ctx, str((m or {}).get("nom") or nom), url
     )
     if m is None:
-        sugg = _suggestions(monstres, _candidats_noms(nom))
+        # Suggestions de noms proches dans le bestiaire (fail-safe : jamais
+        # bloquant si le bestiaire est illisible).
+        try:
+            sugg = _suggestions(
+                _load_bestiaire(ctx).get("monstres", {}),
+                _candidats_noms(nom),
+            )
+        except Exception:                                        # noqa: BLE001
+            sugg = []
         texte = (
             f"❓ Monstre **{nom}** absent du bestiaire local. "
             f"Pour les stats, interrogez la KB « D&D 3.5 — Manuels » "

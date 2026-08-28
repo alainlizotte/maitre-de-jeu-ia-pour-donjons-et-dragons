@@ -716,6 +716,23 @@ async def fiche_perso_mettre_a_jour(
         v = valeur
 
     keys = champ.split(".")
+
+    # Champs numériques vitaux : coercion stricte — un LLM peut envoyer
+    # "15 PV" ou du texte libre qui corromprait la fiche (puis ferait
+    # crasher les tools de soins/dégâts à la lecture).
+    if keys[0] in ("pv", "pv_max", "ca", "bab", "niveau", "or", "initiative") \
+            and len(keys) == 1:
+        try:
+            v = int(str(v))
+        except (TypeError, ValueError):
+            return ToolResult(
+                text=(
+                    f"❌ Valeur non numérique pour '{champ}' : "
+                    f"{json.dumps(v, ensure_ascii=False)!r} — donne un nombre "
+                    "(ex. valeur=\"12\")."
+                )
+            )
+
     cur: Any = fiche
     for k in keys[:-1]:
         if k not in cur or not isinstance(cur[k], dict):
@@ -924,9 +941,22 @@ async def fiche_perso_soigner(
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
-    s = max(0, int(soin))
-    max_pv = int(fiche.get("pv_max", 0))
-    nv = min(max_pv, int(fiche.get("pv", 0)) + s)
+    try:
+        s = max(0, int(soin))
+        max_pv = int(fiche.get("pv_max", 0))
+        nv = min(max_pv, int(fiche.get("pv", 0)) + s)
+    except (TypeError, ValueError):
+        # Données de fiche corrompues (ex. pv patché en texte par le LLM) :
+        # message clair plutôt qu'un crash — le MJ peut corriger via
+        # fiche_perso_mettre_a_jour.
+        return ToolResult(
+            text=(
+                f"❌ PV illisibles sur la fiche de '{nom}' "
+                f"(pv={fiche.get('pv')!r}, pv_max={fiche.get('pv_max')!r}) — "
+                "corrige-les avec fiche_perso_mettre_a_jour(champ=\"pv\", "
+                "valeur=<nombre>) avant de soigner."
+            )
+        )
     fiche["pv"] = nv
     # PV positifs → on lève les états liés aux blessures (règles 3.5).
     conds: list[str] = fiche.setdefault("conditions", [])

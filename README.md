@@ -98,9 +98,9 @@ py -m uvicorn server.main:app --port 8000            # → http://127.0.0.1:8000
 
 | Clé | Défaut | Rôle |
 |---|---|---|
-| `llm.backend` | `ollama` | `ollama` ou `llamacpp` (endpoint OpenAI-compatible) |
-| `llm.base_url` | `http://localhost:11434/v1` | Endpoint du backend LLM |
-| `llm.model` | `gemma4:12b` | Modèle de chat (Qwen, Mistral… supportés) |
+| `llm.backend` | `llamacpp` | `llamacpp` ou `ollama` (endpoint OpenAI-compatible) |
+| `llm.base_url` | `http://localhost:8080/v1` | Endpoint du backend LLM |
+| `llm.model` | `gemma-4-E4B-it-Q4_0` | Modèle de chat (Qwen, Mistral… supportés) |
 | `llm.tool_mode` | `auto` | `native` / `prompt` (balises `<tool>`) / `auto` |
 | `llm.detect_simulation` | `true` | Corrige les « simulations » textuelles d'outils |
 | `rag.enabled` | `true` | Knowledge base ChromaDB (règles D&D 3.5) |

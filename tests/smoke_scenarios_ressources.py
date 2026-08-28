@@ -34,7 +34,7 @@ async def main() -> None:
     universes = cata.get("universes", [])
     assert len(universes) == 4, f"4 univers attendus, trouvé {len(universes)}"
     n_total = sum(len(u.get("scenarios", [])) for u in universes)
-    assert n_total == 24, f"24 scénarios attendus, trouvé {n_total}"
+    assert n_total == 30, f"30 scénarios attendus, trouvé {n_total}"
     print("✅ catalogue : 4 univers, %d scénarios" % n_total)
 
     # 2. Lister (tool LLM) — formattage par univers
@@ -58,6 +58,13 @@ async def main() -> None:
     assert "Gruumsh" in r2.text
     assert "Annexes" in r2.text or "annexes" in r2.text
     print("✅ charger Oeil de Gruumsh : texte + annexes")
+
+    # 4bis. Charger un nouveau scénario Laelith (Douze fontaines, bestiaire inclus)
+    r2b = await scenarios_laelith_charger(ctx, "laelith_douze_fontaines")
+    assert "Douze fontaines" in r2b.text
+    assert "monstresList.htm" in r2b.text
+    assert "Annexes" in r2b.text or "annexes" in r2b.text
+    print("✅ charger Douze fontaines : texte + bestiaire (monstresList)")
 
     # 5. Charger un scénario Royaumes Oubliés
     r3 = await scenarios_laelith_charger(ctx, "ro_to_find_a_gate")

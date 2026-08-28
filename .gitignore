@@ -43,3 +43,7 @@ server/data/utilisateurs.json
 knowledge_import/
 documentation/
 server/data/*.bak
+
+# Import brut de scénarios (doublons de server/data/scenarios/) + runtime
+nouveaux scénarios/
+server/data/settings.json

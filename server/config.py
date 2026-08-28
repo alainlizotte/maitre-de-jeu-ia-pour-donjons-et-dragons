@@ -12,10 +12,12 @@ import yaml
 
 @dataclass
 class LLMConfig:
-    backend: str = "ollama"          # "ollama" | "llamacpp"
-    base_url: str = "http://localhost:11434/v1"
-    api_key: str = "ollama"
-    model: str = "gemma4:12b"
+    # llama.cpp est le backend de référence (conteneur Docker `llamacpp`).
+    # "ollama" reste supporté (unload via /api/generate, champ `options`).
+    backend: str = "llamacpp"        # "llamacpp" | "ollama"
+    base_url: str = "http://localhost:8080/v1"
+    api_key: str = "none"            # llama.cpp n'exige pas de clé
+    model: str = "gemma-4-E4B-it-Q4_0"
     temperature: float = 0.75
     top_p: float = 0.9
     max_context_tokens: int = 8192
@@ -35,9 +37,10 @@ class LLMConfig:
     #           modèle (gain de plusieurs secondes par tour).
     unload_after_turn: bool = True
     unload_delay_minutes: float = 5.0
-    # Options natives transmises à Ollama via le champ `options` du payload
-    # OpenAI-compatible (ex: num_ctx, top_k, seed, …). Calibré par l'utilisateur
-    # pour Gemma 4 12B : {num_ctx: 60000, top_k: 64}.
+    # Options natives transmises via le champ `options` du payload
+    # OpenAI-compatible (Ollama : num_ctx, top_k, seed, …). llama.cpp les
+    # ignore — ctx-size, KV cache, etc. se règlent via les flags du serveur
+    # (docker-compose.yml) ; laisser vide dans ce cas.
     options: dict[str, Any] = field(default_factory=dict)
 
 
@@ -78,9 +81,9 @@ class RagConfig:
     enabled: bool = False
     source_dir: str = "./knowledge_import"
     persist_dir: str = "./server/data/chroma"
-    embedding_model: str = "nomic-embed-text-v1.5"
-    # Serveur d'embeddings dédié (llama.cpp `--embedding`). Vide → retombe sur
-    # `llm.base_url` (comportement historique Ollama, embeddings via le LLM).
+    embedding_model: str = "embeddinggemma"
+    # Serveur d'embeddings dédié (conteneur llamaembed, port hôte 8081). Vide
+    # → retombe sur `llm.base_url` (le chat gemma ne fait pas d'embeddings).
     embedding_base_url: str = ""
     chunk_size: int = 1500
     chunk_overlap: int = 200
@@ -94,6 +97,16 @@ class RagConfig:
 class ImageConfig:
     enabled: bool = False
     base_url: str = ""  # vide → $COMFYUI_BASE_URL ou http://127.0.0.1:8188
+    # Illustration des scènes marquantes (outil `illustration_scene`) : peut
+    # être coupé seul via ce flag ou le bouton du GUI (persisté dans
+    # data/settings.json). Monstres, portraits et illustrations de donjon
+    # restent générés quoi qu'il arrive.
+    scenes_enabled: bool = True
+    # Verrou dur = valeur BRUTE de `image.scenes_enabled` dans config.yaml,
+    # capturée avant l'override du bouton GUI (settings.json). À false, les
+    # scènes sont coupées, l'onglet « Scènes » et son bouton disparaissent
+    # de l'interface, et le toggle runtime est refusé (403).
+    scenes_config: bool = True
 
 
 @dataclass
@@ -143,6 +156,10 @@ def load_config(path: str | os.PathLike[str] | None = None) -> AppConfig:
         raw=raw,
         project_root=project_root,
     )
+
+    # Verrou dur : capture la valeur YAML pure de `image.scenes_enabled`
+    # avant tout override runtime (settings.json appliqué au startup).
+    cfg.image.scenes_config = cfg.image.scenes_enabled
 
     # S'assure que les dossiers critiques existent
     for p in (cfg.paths.data_dir, cfg.paths.prompts_dir, cfg.paths.sections_dir, cfg.rag.persist_dir):

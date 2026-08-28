@@ -140,6 +140,9 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
             style={{ width: dispW }}
             onLoad={(e) => {
               const el = e.target as HTMLImageElement;
+              // Ré-affiche une image potentiellement masquée par un onError
+              // antérieur (404 transitoire pendant l'absence de donjon).
+              el.style.display = "";
               if (el.naturalWidth > 0) {
                 setNat((prev) =>
                   prev.w === el.naturalWidth && prev.h === el.naturalHeight

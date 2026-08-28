@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/rest";
 import type { Scenario, Universe } from "../api/types";
 import { useParty } from "../store";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 interface ScenarioPickerProps {
   partieId: string;
@@ -15,6 +16,7 @@ interface ScenarioPickerProps {
 export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
   const queryClient = useQueryClient();
   const setThinking = useParty((s) => s.setThinking);
+  const isMobile = useIsMobile();
   const [selectedUniverse, setSelectedUniverse] = useState<Universe | null>(null);
 
   const { data: universes, isLoading } = useQuery({
@@ -62,8 +64,14 @@ export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
   // ── Écran 2 : scénarios de l'univers sélectionné ── //
   if (selectedUniverse) {
     return (
-      <div className="bg-stone-900/80 border border-stone-700 rounded-lg p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div
+        className={
+          isMobile
+            ? "flex flex-1 min-h-0 flex-col bg-stone-900/80 border border-stone-700 rounded-lg p-4"
+            : "bg-stone-900/80 border border-stone-700 rounded-lg p-4 mb-4"
+        }
+      >
+        <div className="flex items-center gap-2 mb-3 shrink-0">
           <button
             onClick={() => setSelectedUniverse(null)}
             className="text-stone-400 hover:text-stone-200 text-sm"
@@ -75,12 +83,12 @@ export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
           </h3>
         </div>
         {selectedUniverse.description && (
-          <p className="text-stone-400 text-xs mb-3 italic">
+          <p className="text-stone-400 text-xs mb-3 italic shrink-0">
             {selectedUniverse.description}
           </p>
         )}
         {selectedUniverse.cartes && selectedUniverse.cartes.length > 0 && (
-          <div className="flex gap-2 mb-3 flex-wrap">
+          <div className="flex gap-2 mb-3 flex-wrap shrink-0">
             {selectedUniverse.cartes.map((c) => (
               <a
                 key={c.fichier}
@@ -94,7 +102,13 @@ export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
             ))}
           </div>
         )}
-        <div className="max-h-[55vh] overflow-y-auto pr-1 mb-3">
+        <div
+          className={
+            isMobile
+              ? "flex-1 min-h-0 overflow-y-auto pr-1 mb-3"
+              : "max-h-[55vh] overflow-y-auto pr-1 mb-3"
+          }
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {selectedUniverse.scenarios.map((s) => (
               <button
@@ -175,14 +189,26 @@ export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
 
   // ── Écran 1 : sélection de l'univers ── //
   return (
-    <div className="bg-stone-900/80 border border-stone-700 rounded-lg p-4 mb-4">
-      <h3 className="text-amber-200 font-serif text-base mb-3">
+    <div
+      className={
+        isMobile
+          ? "flex flex-1 min-h-0 flex-col bg-stone-900/80 border border-stone-700 rounded-lg p-4"
+          : "bg-stone-900/80 border border-stone-700 rounded-lg p-4 mb-4"
+      }
+    >
+      <h3 className="text-amber-200 font-serif text-base mb-3 shrink-0">
         📜 Choisissez un univers pour commencer l'aventure
       </h3>
-      <p className="text-stone-400 text-xs mb-4">
+      <p className="text-stone-400 text-xs mb-4 shrink-0">
         Sélectionnez un univers, puis un scénario pré-rédigé, ou créez votre propre aventure.
       </p>
-      <div className="max-h-[60vh] overflow-y-auto pr-1 mb-3">
+      <div
+        className={
+          isMobile
+            ? "flex-1 min-h-0 overflow-y-auto pr-1 mb-3"
+            : "max-h-[60vh] overflow-y-auto pr-1 mb-3"
+        }
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {items.map((u) => (
             <button

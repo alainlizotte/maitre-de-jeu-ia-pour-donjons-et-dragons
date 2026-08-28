@@ -2,30 +2,38 @@
 # Copiez ce fichier en config.yaml et ajustez selon votre installation.
 
 llm:
-  # Backend Ollama (endpoint OpenAI-compatible).
-  base_url: "http://localhost:11434/v1"
-  api_key: "ollama"           # placeholder requis par le client OpenAI
-  model: "gemma4:12b"          # Gemma 4 12B (votre choix)
+  # Backend : "llamacpp" (référence) ou "ollama"
+  # ── llama.cpp ───────────────────────────────────────────
+  # Local : http://localhost:8080/v1 — Docker : http://llamacpp:8080/v1
+  backend: "llamacpp"
+  base_url: "http://localhost:8080/v1"
+  api_key: "none"              # llama.cpp n'exige pas de clé
+  model: "gemma-4-E4B-it-Q4_0" # GGUF dans ./models/ (voir scripts/download_model.ps1)
+  think: false                 # désactive le thinking (Gemma 4, Qwen3…)
+  options: {}                  # llama.cpp gère ctx-size, KV cache, etc. via flags
+
+  # ── Ollama (alternative) ────────────────────────────────
+  # backend: "ollama"
+  # base_url: "http://localhost:11434/v1"
+  # api_key: "ollama"           # placeholder requis par le client OpenAI
+  # model: "igorls/gemma-4-12B-it-qat-q4_0-unquantized-heretic:latest"
+  # options:
+  #   num_ctx: 60000
+  #   top_k: 64
+
   temperature: 0.75
   top_p: 0.9
-  max_context_tokens: 8192    # Gemma 4 12B accepte jusqu'à 8192 native
+  max_context_tokens: 8192    # llama.cpp : ctx-size (2 Go VRAM libre avec -ngl 32)
   max_tokens: 8192            # budget max de tokens générés par réponse
 
-  # Options natives transmises à Ollama via le champ `options` du payload
-  # OpenAI-compatible. Permet de tuner le runtime sans modifier le code.
-  # Valeurs calibrées par l'utilisateur pour Gemma 4 12B :
-  options:
-    num_ctx: 60000          # fenêtre de contexte large (tokens)
-    top_k: 64               # sampling diversifié (meilleurs résultats observés)
-
   # Stratégie de function-calling.
-  # "native"   : envoie le schéma JSON des tools à Ollama (support Gemma 4 limité).
+  # "native"   : envoie le schéma JSON des tools au backend (support Gemma 4 limité).
   # "prompt"   : décrit les tools dans le system prompt + parsing structuré (plus robuste avec Gemma).
   # "auto"     : tente native, retombe sur prompt si le LLM simule.
   tool_mode: "prompt"
 
   # Détecte et corrige les « simulations » textuelles d'appels d'outils
-  # (pattern *(Simulation de l'appel ...)* observé sous OpenWebUI).
+  # (pattern *(Simulation de l'appel ...)* observé avec les petits modèles).
   detect_simulation: true
   max_tool_iterations: 6      # borne la boucle tool-call / responde
 
@@ -63,6 +71,10 @@ image:
   # Désactivé par défaut — activez si ComfyUI est installé et accessible.
   enabled: false
   # base_url: "http://comfyui:8188"   # Docker ; local : http://127.0.0.1:8188
+  # Illustration des scènes marquantes uniquement (outil illustration_scene).
+  # Basculable aussi à chaud via le bouton de la galerie « Scènes » (persisté
+  # dans data/settings.json). Monstres, portraits et donjons restent générés.
+  scenes_enabled: true
 
 rag:
   # Base de connaissances RAG (Phase 2). Désactivé par défaut ; passez à
@@ -73,11 +85,15 @@ rag:
   source_dir: "./knowledge_import"
   # Persistance du vector store ChromaDB embarqué.
   persist_dir: "./server/data/chroma"
-  embedding_model: "nomic-embed-text"   # doit être `ollama pull` au préalable
+  # Serveur d'embeddings dédié llama.cpp (conteneur llamaembed, port hôte
+  # 8081). Vide → retombe sur llm.base_url (inadapté : le chat gemma ne fait
+  # pas d'embeddings).
+  embedding_base_url: "http://localhost:8081/v1"
+  embedding_model: "embeddinggemma"   # GGUF dans ./models-embed/ (alias --alias)
   chunk_size: 1500            # tokens cibles par chunk (cf. MANIFESTE_KNOWLEDGE_BASE)
   chunk_overlap: 200          # tokens de chevauchement entre chunks consécutifs
   top_k: 5                    # nombre d'extraits récupérés par requête
   query_max_tokens: 1500      # budget max injecté dans le system prompt
-  # Filtrage par KB : `null` = interroge les 3 KB ; liste pour restreindre
+  # Filtrage par KB : `null` = interroge toutes les KB ; liste pour restreindre
   # (ex: ["KB1_Manuels_de_base"] pour les règles en combat uniquement).
   kb_filter: null

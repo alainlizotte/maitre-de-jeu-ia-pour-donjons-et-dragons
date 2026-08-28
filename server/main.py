@@ -95,6 +95,22 @@ async def lifespan(app: FastAPI):
                 cfg.llm.model = m
         except (json.JSONDecodeError, OSError):
             pass
+    # Réglages persistés via le GUI (bouton « scènes » de la galerie) —
+    # même mécanique que model_choice : prime sur config.yaml au démarrage.
+    # Exception : si config.yaml coupe `image.scenes_enabled` (verrou dur),
+    # settings.json ne peut pas le réactiver — le fichier de config est
+    # autoritaire et l'onglet « Scènes » disparaît de l'interface.
+    settings_path = cfg.abs(cfg.paths.data_dir) / "settings.json"
+    if not cfg.image.scenes_config:
+        cfg.image.scenes_enabled = False
+    elif settings_path.is_file():
+        try:
+            saved = json.loads(settings_path.read_text(encoding="utf-8"))
+            scenes = (saved.get("images") or {}).get("scenes_enabled")
+            if isinstance(scenes, bool):
+                cfg.image.scenes_enabled = scenes
+        except (json.JSONDecodeError, OSError):
+            pass
     client = OllamaClient(cfg.llm)
     available = await client.list_models()
     model_names = [m.get("id", "") for m in available]
@@ -438,6 +454,63 @@ async def set_model(payload: dict[str, Any]) -> dict[str, Any]:
     except OSError:
         pass  # persistance best-effort ; le changement runtime reste actif
     return {"ok": True, "model": model}
+
+
+# --------------------------------------------------------------------------- #
+#  Réglages d'images — toggle runtime persisté (bouton GUI « scènes »)
+# --------------------------------------------------------------------------- #
+def _settings_path() -> Path:
+    return cfg.abs(cfg.paths.data_dir) / "settings.json"
+
+
+@app.get("/api/settings/images")
+async def image_settings() -> dict[str, Any]:
+    """État de la génération d'images : globale + scènes seules.
+
+    `scenes_config_enabled` = verrou dur lu de config.yaml : à false, le front
+    retire l'onglet « Scènes » et son bouton (seul l'onglet Monstres reste).
+    """
+    return {
+        "enabled": cfg.image.enabled,
+        "scenes_enabled": cfg.image.scenes_enabled,
+        "scenes_config_enabled": cfg.image.scenes_config,
+    }
+
+
+@app.post("/api/settings/images/scenes")
+async def set_image_scenes(payload: dict[str, Any]) -> dict[str, Any]:
+    """Active/désactive à chaud l'illustration des scènes marquantes
+    (outil `illustration_scene`). Monstres, portraits et illustrations de
+    donjon restent actifs dans tous les cas. Le choix est persisté dans
+    data/settings.json et prime sur config.yaml au redémarrage (config/
+    est monté read-only en Docker, data_dir est writable).
+    """
+    if not cfg.image.scenes_config:
+        raise HTTPException(
+            status_code=403,
+            detail="Illustration des scènes verrouillée à off par config.yaml "
+                   "(image.scenes_enabled: false) — le toggle GUI est désactivé.",
+        )
+    enabled = payload.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(status_code=400, detail="Champ 'enabled' (bool) requis.")
+    cfg.image.scenes_enabled = enabled
+    try:
+        data: dict[str, Any] = {}
+        if _settings_path().is_file():
+            try:
+                data = json.loads(_settings_path().read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                data = {}
+        images = data.get("images") if isinstance(data.get("images"), dict) else {}
+        images["scenes_enabled"] = enabled
+        data["images"] = images
+        _settings_path().write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError:
+        pass  # persistance best-effort ; le changement runtime reste actif
+    return {"ok": True, "enabled": cfg.image.enabled, "scenes_enabled": enabled}
 
 
 # --------------------------------------------------------------------------- #
@@ -1016,7 +1089,8 @@ async def rag_ingest(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         raise HTTPException(
             status_code=503,
             detail="RAG désactivé. Passez `rag.enabled: true` dans config.yaml "
-                   "et assurez-vous que `ollama pull nomic-embed-text` a été lancé.",
+                   "et vérifiez que le conteneur llamaembed est actif "
+                   "(http://localhost:8081).",
         )
     force = bool((payload or {}).get("force"))
     stats = await store.ingest(force=force)
@@ -1248,6 +1322,130 @@ async def _delayed_unload_task(app: FastAPI, delay_s: float) -> None:
         pass
 
 
+def _extrait_arme_bonus(attaques: str) -> Optional[tuple[str, int]]:
+    """Parse la première attaque du bestiaire : « Cimeterre +2 (corps à
+    corps) ; arc court +3 ». Renvoie (arme, bonus) ou None si injouable."""
+    m = _re_mod.match(r"(.+?)\s*([+-]\d+)\s*(?:\(|$)", (attaques or "").strip())
+    if not m:
+        return None
+    arme = m.group(1).strip()
+    return (arme, int(m.group(2))) if arme else None
+
+
+async def _attaque_auto_monstre(
+    orch: Orchestrator,
+    result: Any,
+    ctx: ToolContext,
+    actif: str,
+    on_event: Optional[Any],
+) -> str:
+    """Joue mécaniquement le tour d'un monstre non résolu par le LLM :
+    attaque du premier PJ vivant, dégâts du bestiaire, application PV.
+    Renvoie le texte mécanique à ajouter à la narration ("" si non jouable —
+    l'avancement forcé 5bis-suite prend alors le relais)."""
+    from .tools.monstres import _find_monstre_with_fallback
+
+    state = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+    etat = state.load()
+
+    # Garde : un monstre déjà « Détruit » (ou allié) ne doit pas auto-attaquer —
+    # son tour sera simplement avancé par le rattrapage existant.
+    mob_suivi = next(
+        (
+            mo for mo in (etat.get("monstres_combat") or [])
+            if mo.get("nom") == actif
+        ),
+        None,
+    )
+    if mob_suivi and ("Détruit" in (mob_suivi.get("conditions") or [])
+                      or mob_suivi.get("allie")):
+        return ""
+
+    m = _find_monstre_with_fallback(ctx, actif)
+    if not m:
+        return ""
+    arme_bonus = _extrait_arme_bonus(str(m.get("attaques") or ""))
+    if not arme_bonus:
+        return ""
+    arme, bonus_atk = arme_bonus
+
+    degs = str(m.get("degs") or "")
+    partie_arme = degs.lower().find(arme.lower())
+    bloc = degs[partie_arme + len(arme):] if partie_arme >= 0 else degs
+    m_dmg = _re_mod.search(r"(\d+)[dD](\d+)([+-]\d+)?", bloc)
+    if not m_dmg:
+        return ""
+    nb_des, faces = int(m_dmg.group(1)), int(m_dmg.group(2))
+    bonus_dmg = int(m_dmg.group(3) or 0)
+
+    # Cible : le premier PJ vivant (mort si condition « Mort » ou PV ≤ -10).
+    cible = ""
+    ca_cible = 0
+    for p in etat.get("pj") or []:
+        conds = [str(c).lower() for c in (p.get("conditions") or [])]
+        if "mort" in conds:
+            continue
+        pv = p.get("pv")
+        if pv is None or int(pv) > -10:
+            cible = str(p.get("nom") or "")
+            try:
+                ca_cible = int(p.get("ca") or 0)
+            except (TypeError, ValueError):
+                ca_cible = 0
+            break
+    if not cible:
+        return ""
+
+    lignes: list[str] = []
+    tr_atk = await orch.execute_tool_direct(
+        "lancer_attaque",
+        {
+            "nom_attaquant": actif,
+            "arme": arme,
+            "bonus_attaque": bonus_atk,
+            "nom_cible": cible,
+            "ca_cible": ca_cible,
+        },
+        ctx,
+        on_event,
+        result,
+    )
+    if tr_atk is None:
+        return ""
+    lignes.append(tr_atk.text)
+
+    if ("✅ **Touché**" in tr_atk.text) or ("⭐ **20 naturel**" in tr_atk.text):
+        tr_dm = await orch.execute_tool_direct(
+            "lancer_degats",
+            {
+                "nb_des": nb_des,
+                "faces": faces,
+                "bonus": bonus_dmg,
+                "arme_ou_sort": arme,
+                "cible": cible,
+            },
+            ctx,
+            on_event,
+            result,
+        )
+        if tr_dm is None:
+            return "\n\n".join(lignes)
+        lignes.append(tr_dm.text)
+        m_total = _re_mod.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr_dm.text)
+        total = int(m_total.group(1)) if m_total else None
+        if total is not None:
+            tr_inf = await orch.execute_tool_direct(
+                "fiche_perso_infliger_degats",
+                {"nom": cible, "degats": total},
+                ctx,
+                on_event,
+                result,
+            )
+            if tr_inf is not None:
+                lignes.append(tr_inf.text)
+    return "\n\n".join(lignes)
+
+
 async def _handle_say(
     initiator: WebSocket,
     session: PartySession,
@@ -1421,10 +1619,11 @@ async def _handle_say(
             orch = _orchestrator(app)
             result = await orch.run(messages, ctx, on_event=on_event, on_delta=on_delta)
 
-            # 5bis. ⚔️ Rejeu forcé des tours monstres non résolus mécaniquement.
+            # 5bis. ⚔️ Relance des tours monstres non résolus mécaniquement.
             # Si c'est le tour d'un monstre et qu'aucun `lancer_attaque` ou
-            # `lancer_degats` n'a été appelé, on ré-invoque le MJ avec un
-            # message correctif qui le force à jouer le monstre via les tools.
+            # `lancer_degats` n'a été appelé, le serveur Joue son tour lui-même
+            # (attaque automatique des PJ) ou, en secours, ré-invoque le MJ
+            # avec un message correctif.
             try:
                 apres = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
@@ -1453,68 +1652,122 @@ async def _handle_say(
                                 monstre_a_attaque = True
                                 break
 
-                    # Si le monstre n'a pas attaqué → rejeu avec correctif
+                    # Si le monstre n'a pas attaqué → on BOOSTE son tour.
+                    # En priorité : résolution automatique déterministe par le
+                    # serveur (le LLM bloque encore souvent à ce stade, un 2e
+                    # passage LLM échoue parfois aussi). En secours (monstre
+                    # allié, stats injouables, PJ absents) : rejeu LLM best
+                    # effort comme avant.
+                    mob_combat = next(
+                        (
+                            mo for mo in (apres.get("monstres_combat") or [])
+                            if mo.get("nom") == actif_avant
+                        ),
+                        None,
+                    )
+                    monstre_ennemi = (
+                        mob_combat is not None and not mob_combat.get("allie")
+                    )
                     if est_monstre and not monstre_a_attaque:
-                        print(
-                            f"[dnd35] Tour monstre {actif_avant} sans "
-                            f"attaque outillée — rejeu avec correctif"
-                        )
-                        # Injecter un correctif dans l'historique conversationnel
-                        corrective = (
-                            "⚠️ ERREUR : tu n'as pas joué le tour de "
-                            f"**{actif_avant}**. C'est SON tour de combat. "
-                            "Tu DOIS jouer CE monstre maintenant. "
-                            "Choisis une action d'attaque et appelle les outils "
-                            "`lancer_attaque` puis `lancer_degats` puis "
-                            "`fiche_perso_infliger_degats` pour appliquer les "
-                            "dégâts. NE demandez PAS aux joueurs ce qu'ils "
-                            "font — c'est au tour du monstre d'agir. "
-                            "NE narrate PAS en prose sans d'abord appeler "
-                            "ces outils. Si le monstre rate, passez au "
-                            "tour suivant avec `tour_suivant_combat`."
-                        )
-                        # Reconstituer les messages avec le correctif
-                        corrective_messages = list(messages) + [
-                            Message(role="assistant",
-                                    content=result.narration),
-                            Message(role="system",
-                                    content=corrective),
-                        ]
-                        result2 = await orch.run(
-                            corrective_messages, ctx,
-                            on_event=on_event, on_delta=None,
-                        )
-                        # Si la 2e tentative a réussi → fusionner les résultats
-                        has_attack2 = any(
-                            tc.get("name") in (
-                                "lancer_attaque", "lancer_degats",
-                                "fiche_perso_infliger_degats",
-                            )
-                            for tc in result2.tool_calls_trace
-                        )
-                        if has_attack2:
-                            # Fusionner les tool events et patches
-                            result.tool_calls_trace.extend(
-                                result2.tool_calls_trace
-                            )
-                            result.tool_events.extend(
-                                result2.tool_events
-                            )
-                            result.state_patches.extend(
-                                result2.state_patches
-                            )
-                            result.narration = result2.narration
-                            result.iterations += result2.iterations
+                        auto_msg = ""
+                        if monstre_ennemi:
                             print(
-                                f"[dnd35] Rejeu monstre {actif_avant} "
-                                f"réussi ({len(result2.tool_calls_trace)} "
-                                f"tools appelés)"
+                                f"[dnd35] Tour monstre {actif_avant} sans "
+                                "attaque outillée — résolution automatique"
                             )
+                            auto_msg = await _attaque_auto_monstre(
+                                orch, result, ctx, actif_avant, on_event
+                            )
+                        if auto_msg:
+                            result.narration += "\n\n" + auto_msg
+                            print(
+                                f"[dnd35] Tour monstre {actif_avant} joué "
+                                "automatiquement (tools serveur)"
+                            )
+                            # On avance immédiatement vers l'actif suivant (au
+                            # lieu de dépendre de l'avancement forcé) ; si
+                            # l'outil échoue, 5bis-suite prendra le relais.
+                            try:
+                                tr_tour = await orch.execute_tool_direct(
+                                    "tour_suivant_combat",
+                                    {},
+                                    ctx,
+                                    on_event,
+                                    result,
+                                )
+                                if tr_tour and not tr_tour.text.startswith("❌"):
+                                    result.narration += "\n\n" + tr_tour.text
+                            except Exception as e:                   # noqa: BLE001
+                                print(
+                                    f"[dnd35] Auto-avance monstre échoué "
+                                    f"(ignoré) : {e}"
+                                )
                         else:
-                            print(
-                                f"[dnd35] Rejeu monstre {actif_avant} "
-                                f"toujours sans attaque — avancement forcé"
+                            raison = (
+                                "Stats injouables pour"
+                                if monstre_ennemi
+                                else "Monstre allié/inconnu"
                             )
+                            print(
+                                f"[dnd35] {raison} {actif_avant} — "
+                                "rejeu LLM avec correctif"
+                            )
+                            # Injecter un correctif dans l'historique conversationnel
+                            corrective = (
+                                "⚠️ ERREUR : tu n'as pas joué le tour de "
+                                f"**{actif_avant}**. C'est SON tour de combat. "
+                                "Tu DOIS jouer CE monstre maintenant. "
+                                "Choisis une action d'attaque et appelle les outils "
+                                "`lancer_attaque` puis `lancer_degats` puis "
+                                "`fiche_perso_infliger_degats` pour appliquer les "
+                                "dégâts. NE demandez PAS aux joueurs ce qu'ils "
+                                "font — c'est au tour du monstre d'agir. "
+                                "NE narrate PAS en prose sans d'abord appeler "
+                                "ces outils. Si le monstre rate, passez au "
+                                "tour suivant avec `tour_suivant_combat`."
+                            )
+                            # Reconstituer les messages avec le correctif
+                            corrective_messages = list(messages) + [
+                                Message(role="assistant",
+                                        content=result.narration),
+                                Message(role="system",
+                                        content=corrective),
+                            ]
+                            result2 = await orch.run(
+                                corrective_messages, ctx,
+                                on_event=on_event, on_delta=None,
+                            )
+                            # Si la 2e tentative a réussi → fusionner les résultats
+                            has_attack2 = any(
+                                tc.get("name") in (
+                                    "lancer_attaque", "lancer_degats",
+                                    "fiche_perso_infliger_degats",
+                                )
+                                for tc in result2.tool_calls_trace
+                            )
+                            if has_attack2:
+                                # Fusionner les tool events et patches
+                                result.tool_calls_trace.extend(
+                                    result2.tool_calls_trace
+                                )
+                                result.tool_events.extend(
+                                    result2.tool_events
+                                )
+                                result.state_patches.extend(
+                                    result2.state_patches
+                                )
+                                result.narration = result2.narration
+                                result.iterations += result2.iterations
+                                print(
+                                    f"[dnd35] Rejeu monstre {actif_avant} "
+                                    f"réussi ({len(result2.tool_calls_trace)} "
+                                    f"tools appelés)"
+                                )
+                            else:
+                                print(
+                                    f"[dnd35] Rejeu monstre {actif_avant} "
+                                    f"toujours sans attaque — avancement forcé"
+                                )
             except Exception as e:
                 print(f"[dnd35] 5bis rejeu failed: {e}")
 

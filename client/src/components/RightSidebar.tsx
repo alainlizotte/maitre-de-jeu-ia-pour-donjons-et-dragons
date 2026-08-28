@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DiceRoller } from "./DiceRoller";
 import { DungeonView } from "./DungeonView";
 import { WorldMap } from "./WorldMap";
 import { Bestiary, MonsterSheetModal } from "./Bestiary";
 import { TeamChat } from "./TeamChat";
 import { useParty } from "../store";
+import { api } from "../api/rest";
 import type { EncounterMonster } from "../api/types";
 
 type Tab = "des" | "equipe" | "monde" | "donjon" | "bestiaire";
@@ -39,16 +41,35 @@ function EncounterGallery() {
   // Agrandissement plein écran d'une scène.
   const [zoom, setZoom] = useState<EncounterMonster | null>(null);
 
-  // Une nouvelle scène arrive → on bascule dessus automatiquement.
+  // Toggle « génération des scènes » (persisté côté serveur). Monstres,
+  // portraits et illustrations de donjon ne sont pas affectés.
+  const queryClient = useQueryClient();
+  const { data: imageSettings } = useQuery({
+    queryKey: ["imageSettings"],
+    queryFn: () => api.imageSettings(),
+    staleTime: 60_000,
+  });
+  const toggleScenes = useMutation({
+    mutationFn: (v: boolean) => api.setImageScenes(v),
+    onSuccess: (s) => queryClient.setQueryData(["imageSettings"], s),
+  });
+  const scenesOn = imageSettings?.scenes_enabled ?? true;
+  // Verrou dur config.yaml : à false, ni l'onglet « Scènes » ni le bouton
+  // de toggle ne sont rendus — seule la galerie Monstres reste.
+  const scenesAvailable = imageSettings?.scenes_config_enabled ?? true;
+  const isMonstres = !scenesAvailable || onglet === "monstres";
+
+  // Une nouvelle scène arrive → on bascule dessus automatiquement
+  // (seulement si l'onglet Scènes existe, i.e. config l'autorise).
   const prevScenes = useRef(scenes.length);
   useEffect(() => {
-    if (scenes.length > prevScenes.current) {
+    if (scenesAvailable && scenes.length > prevScenes.current) {
       setOnglet("scenes");
       setSelectedS(0);
       setReplie(false);
     }
     prevScenes.current = scenes.length;
-  }, [scenes.length]);
+  }, [scenes.length, scenesAvailable]);
 
   // Fermeture de l'agrandissement au clavier.
   useEffect(() => {
@@ -60,12 +81,12 @@ function EncounterGallery() {
     return () => window.removeEventListener("keydown", h);
   }, [zoom]);
 
-  const items = onglet === "monstres" ? monsters : scenes;
-  const brutIdx = onglet === "monstres" ? selectedM : selectedS;
+  const items = isMonstres ? monsters : scenes;
+  const brutIdx = isMonstres ? selectedM : selectedS;
   const idx = Math.min(brutIdx, Math.max(0, items.length - 1));
   const current = items[idx];
   const selectItem = (i: number) =>
-    onglet === "monstres" ? setSelectedM(i) : setSelectedS(i);
+    isMonstres ? setSelectedM(i) : setSelectedS(i);
 
   return (
     <div
@@ -83,40 +104,62 @@ function EncounterGallery() {
           {replie ? "▸" : "▾"}
         </button>
         <h3 className="text-xs uppercase text-stone-500 truncate">
-          {onglet === "monstres" ? (
+          {isMonstres ? (
             <>Monstres rencontrés {monsters.length > 0 && <span className="text-amber-400">({monsters.length})</span>}</>
           ) : (
             <>Scènes {scenes.length > 0 && <span className="text-amber-400">({scenes.length})</span>}</>
           )}
         </h3>
-        <div className="ml-auto flex rounded overflow-hidden border border-stone-700 text-[10px] shrink-0">
-          <button
-            onClick={() => setOnglet("monstres")}
-            className={
-              "px-2 py-1 " +
-              (onglet === "monstres"
-                ? "bg-stone-700 text-amber-300 font-medium"
-                : "bg-stone-900 text-stone-400 hover:text-stone-200")
-            }
-          >
-            Monstres
-          </button>
-          <button
-            onClick={() => setOnglet("scenes")}
-            className={
-              "px-2 py-1 relative " +
-              (onglet === "scenes"
-                ? "bg-stone-700 text-amber-300 font-medium"
-                : "bg-stone-900 text-stone-400 hover:text-stone-200")
-            }
-          >
-            Scènes
-          </button>
-        </div>
+        {scenesAvailable && (
+          <>
+            <div className="ml-auto flex rounded overflow-hidden border border-stone-700 text-[10px] shrink-0">
+              <button
+                onClick={() => setOnglet("monstres")}
+                className={
+                  "px-2 py-1 " +
+                  (onglet === "monstres"
+                    ? "bg-stone-700 text-amber-300 font-medium"
+                    : "bg-stone-900 text-stone-400 hover:text-stone-200")
+                }
+              >
+                Monstres
+              </button>
+              <button
+                onClick={() => setOnglet("scenes")}
+                className={
+                  "px-2 py-1 relative " +
+                  (onglet === "scenes"
+                    ? "bg-stone-700 text-amber-300 font-medium"
+                    : "bg-stone-900 text-stone-400 hover:text-stone-200")
+                }
+              >
+                Scènes
+              </button>
+            </div>
+            <button
+              onClick={() => toggleScenes.mutate(!scenesOn)}
+              disabled={toggleScenes.isPending}
+              className={
+                "shrink-0 w-6 h-6 rounded border text-[11px] leading-none flex items-center justify-center " +
+                (scenesOn
+                  ? "border-amber-600/60 bg-stone-800 text-amber-300 hover:bg-stone-700"
+                  : "border-stone-700 bg-stone-900 text-stone-600 hover:text-stone-400") +
+                (toggleScenes.isPending ? " opacity-50 animate-pulse" : "")
+              }
+              title={
+                scenesOn
+                  ? "Illustration des scènes : ACTIVÉE — cliquer pour désactiver (les monstres, portraits et donjons restent illustrés)"
+                  : "Illustration des scènes : DÉSACTIVÉE — cliquer pour réactiver"
+              }
+            >
+              {scenesOn ? "🖼" : "🚫"}
+            </button>
+          </>
+        )}
       </div>
       {!replie && !current && (
         <div className="flex-1 flex items-center justify-center text-center text-stone-600 text-xs italic px-4">
-          {onglet === "monstres"
+          {isMonstres
             ? "Les images des monstres croisés en jeu s'afficheront ici."
             : "Les illustrations des salles explorées et des scènes marquantes s'afficheront ici."}
         </div>
@@ -130,8 +173,8 @@ function EncounterGallery() {
             <img
               src={current.url}
               alt={current.nom}
-              title={onglet === "monstres" ? `Voir la fiche de ${current.nom}` : "Agrandir"}
-              onClick={() => (onglet === "monstres" ? setSheet(current) : setZoom(current))}
+              title={isMonstres ? `Voir la fiche de ${current.nom}` : "Agrandir"}
+              onClick={() => (isMonstres ? setSheet(current) : setZoom(current))}
               className="max-w-full max-h-full object-contain cursor-zoom-in"
               onError={(e) => {
                 // PNG manquant → placeholder SVG du même slug.
@@ -149,7 +192,7 @@ function EncounterGallery() {
                   key={m.url}
                   onClick={() => selectItem(i)}
                   onDoubleClick={() =>
-                    onglet === "monstres" ? setSheet(m) : setZoom(m)
+                    isMonstres ? setSheet(m) : setZoom(m)
                   }
                   title={m.nom}
                   className={

@@ -199,12 +199,15 @@ class PartyState:
 
     def replace_all(self, nouveau_etat: Any) -> tuple[bool, str]:
         """Remplace l'état complet. Préserve la date de création si présente."""
-        if not isinstance(nouveau_etat, dict):
-            return False, "❌ Attendu un objet JSON à la racine."
+        # Accepte une chaîne JSON (format tool `etat_partie_save`) ou un dict.
+        # NB : l'ancien garde-fou `isinstance(nouveau_etat, dict)` rejetait
+        # TOUTE chaîne JSON — le tool ne pouvait donc jamais aboutir.
         try:
             data = json.loads(nouveau_etat) if isinstance(nouveau_etat, str) else nouveau_etat
         except json.JSONDecodeError as e:
             return False, f"❌ JSON invalide : {e}"
+        if not isinstance(data, dict):
+            return False, "❌ Attendu un objet JSON à la racine."
         ancien = self.load()
         if isinstance(ancien, dict) and ancien.get("meta", {}).get("date_creation"):
             data.setdefault("meta", {})["date_creation"] = ancien["meta"]["date_creation"]

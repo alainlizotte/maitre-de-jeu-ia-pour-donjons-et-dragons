@@ -14,8 +14,9 @@
 # box/routeur vers cette machine, ou via un reverse proxy (Caddy/Nginx) avec
 # HTTPS pour une exposition propre en domaine.
 #
-# Ollama tourne dans un conteneur sÃ©parÃ© (rÃ©seau openwebui-net).
-# Le service dnd35 s'y connecte via l'alias rÃ©seau `ollama:11434`.
+# llama.cpp (chat) et llamaembed (embeddings RAG) tournent dans des conteneurs
+# dédiés sur le réseau openwebui-net ; dnd35 s'y connecte via
+# `http://llamacpp:8080/v1` et `http://llamaembed:8080/v1`.
 #
 # ArrÃªt :
 #   docker compose down               # garde les volumes
@@ -50,9 +51,9 @@ services:
     networks:
       - openwebui-net
 
-  # â”€â”€ llama.cpp (alternative Ã  Ollama) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  # Pour activer : mettre `llm.backend: "llamacpp"` dans config/config.yaml
-  # et lancer : docker compose up -d llamacpp
+  # â”€â”€ llama.cpp (backend LLM de référence) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Backend par défaut (llm.backend: "llamacpp" dans config/config.yaml).
+  # Alternative : Ollama (voir le bloc commenté dans config.example.yaml).
   #
   # PrÃ©requis :
   #   1. TÃ©lÃ©charger les modÃ¨les dans ./models/ (voir scripts/download_model.ps1)

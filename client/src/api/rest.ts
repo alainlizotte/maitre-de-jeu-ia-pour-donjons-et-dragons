@@ -5,6 +5,7 @@ import type {
   EncounterMonster,
   FichePerso,
   HealthStatus,
+  ImageSettings,
   ModelePerso,
   ModelsList,
   PartiesList,
@@ -144,6 +145,11 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model }),
     }).then(jq<{ ok: boolean; model: string }>),
+
+  // -- Réglages d'images (toggle « scènes » de la galerie) ---------------- //
+  imageSettings: () => fetch(`${API}/settings/images`).then(jq<ImageSettings>),
+  setImageScenes: (enabled: boolean) =>
+    post<ImageSettings>(`${API}/settings/images/scenes`, { enabled }),
 
   // -- Fiches personnages -------------------------------------------------- //
   getFiche: (nom: string) =>

@@ -149,6 +149,15 @@ export interface ModelsList {
   error?: string;
 }
 
+/** /api/settings/images — génération d'images (globale + scènes seules). */
+export interface ImageSettings {
+  enabled: boolean;
+  scenes_enabled: boolean;
+  /** Verrou dur config.yaml (image.scenes_enabled) — à false, l'onglet
+   *  « Scènes » et son bouton sont retirés de la galerie. */
+  scenes_config_enabled: boolean;
+}
+
 /** Monstre rencontré en cours de partie (galerie colonne droite). */
 export interface EncounterMonster {
   url: string;   // /data/bestiaire_cache/<slug>.png|svg

@@ -27,7 +27,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 from ..tools.base import ToolContext, ToolResult, ToolSpec, invoke_tool
 from ..game.state import PartyState
-from ..tools.registry import tools_prompt_section, tools_schemas_all
+from ..tools.registry import tools_prompt_compact, tools_prompt_section, tools_schemas_all
 from .client import ChatResult, Message, OllamaClient, _strip_thinking
 
 # Ensembles de tools par phase. Un modèle 12B ne gère fiablement que ~10
@@ -158,6 +158,16 @@ _SIMULATION_PATTERNS = [
     # Variante sans astérisques : "(Simulation de l'appel ...)".
     re.compile(r"\(Simulation\s+de\s+l'appel[^*]*?\)", re.IGNORECASE),
     re.compile(r"\(Simulation\s+des\s+jets[^*]*?\)", re.IGNORECASE),
+    # Méta-placeholders observés en partie réelle (Gemma E4B) :
+    # « *(Appel au tool lancer_attaque pour la dague)* »,
+    # « *(Attente du résultat du jet de dés)* »,
+    # « *(Le résultat du jet est appliqué et les dégâts sont calculés.)* ».
+    re.compile(r"\(\s*Appel\s+au\s+tool\b[^)]*\)", re.IGNORECASE),
+    re.compile(r"\(\s*Appel\s+au\s+sort\s*\)", re.IGNORECASE),
+    re.compile(r"\(\s*Attente\s+du\s+r[ée]sultat\b[^)]*\)", re.IGNORECASE),
+    re.compile(r"\(\s*Le\s+r[ée]sultat\s+du\s+jet\s+est\s+appliqu[ée][^)]*\)", re.IGNORECASE),
+    re.compile(r"\(\s*Les\s+d[ée]g[âa]ts\s+sont\s+calcul[ée]s?[^)]*\)", re.IGNORECASE),
+    re.compile(r"\(\s*Le\s+jet\s+d['']attaque\s+est\s+lanc[ée][^)]*\)", re.IGNORECASE),
     # Prose de jets improvisés (Gemma E4B sans balise tool) : le modèle écrit
     # le résultat directement dans la narration au lieu d'appeler lancer_d20
     # / lancer_attaque. Exemples ciblés :
@@ -270,6 +280,440 @@ def strip_prompt_tool_calls(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+#  Blocs <tool_call>{...}</tool_call> (format texte llama.cpp / Qwen / jinja)
+# --------------------------------------------------------------------------- #
+_TOOLCALL_BLOCK_RE = re.compile(
+    r"<tool_call>\s*(?P<json>\{.*?\})\s*</tool_call>",
+    re.DOTALL,
+)
+
+
+def extract_toolcall_blocks(text: str) -> tuple[list[dict[str, Any]], str]:
+    """Extrait les blocs `<tool_call>{"name": ..., "arguments": {...}}</tool_call>`.
+
+    llama.cpp sans `--jinja` (ou avec un template de chat non-outils) laisse
+    parfois l'appel en texte brut dans `content` au lieu de peupler
+    `tool_calls`. On normalise ici ces blocs vers le format natif.
+
+    Renvoie `(calls, texte_nettoyé)` — les blocs sont retirés du texte.
+    """
+    calls: list[dict[str, Any]] = []
+    cleaned = text
+    for m in list(_TOOLCALL_BLOCK_RE.finditer(text)):
+        try:
+            data = json.loads(m.group("json"))
+        except json.JSONDecodeError:
+            continue
+        name = data.get("name") or (data.get("function") or {}).get("name") or ""
+        raw_args = (
+            data.get("arguments")
+            if "arguments" in data
+            else (data.get("function") or {}).get("arguments")
+        )
+        if not name:
+            continue
+        if isinstance(raw_args, str):
+            try:
+                raw_args = json.loads(raw_args) if raw_args else {}
+            except json.JSONDecodeError:
+                raw_args = {}
+        calls.append({"name": str(name), "arguments": raw_args or {}})
+    if calls:
+        cleaned = _TOOLCALL_BLOCK_RE.sub("", cleaned)
+    return calls, cleaned
+
+
+# --------------------------------------------------------------------------- #
+#  Balises <tool_call name=".." key="value" ... /> (attributs XML)
+# --------------------------------------------------------------------------- #
+# Variante observée en partie réelle (Qwen/Hermes sur llama.cpp) : le modèle
+# écrit l'appel en balise auto-fermée avec les arguments en ATTRIBUTS XML,
+# `<tool_call name="lancer_d20" difficulte="30" raison="..." />`, au lieu du
+# bloc JSON `<tool_call>{...}</tool_call>`. Ni le parseur `<tool ...>` (mode
+# prompt) ni le parseur de blocs JSON ne la couvrent — elle fuyait alors
+# telle quelle dans la narration montrée au joueur.
+_TOOLCALL_ATTR_SELFCLOSE_RE = re.compile(
+    r"<tool_call\s+(?P<attrs>[^<>]*?)/>",
+    re.IGNORECASE | re.DOTALL,
+)
+_TOOLCALL_ATTR_PAIR_RE = re.compile(
+    r"<tool_call\s+(?P<attrs>[^<>]*?)>\s*</tool_call>",
+    re.IGNORECASE | re.DOTALL,
+)
+# Fermeture orpheline résiduelle (ex. `<tool_call ... /> </tool_call>`).
+_TOOLCALL_ORPHAN_CLOSE_RE = re.compile(r"</tool_call\s*>", re.IGNORECASE)
+
+
+def extract_toolcall_attr_calls(text: str) -> tuple[list[dict[str, Any]], str]:
+    """Extrait les balises `<tool_call name=".." key="value" ... />`.
+
+    Renvoie `(calls, texte_nettoyé)` au même format que les tool_calls natifs
+    — les balises sont retirées du texte. La valeur de l'attribut `name` sert
+    de nom d'outil, les autres attributs deviennent les arguments.
+    """
+    calls: list[dict[str, Any]] = []
+    spans: list[tuple[int, int]] = []
+    for pat in (_TOOLCALL_ATTR_SELFCLOSE_RE, _TOOLCALL_ATTR_PAIR_RE):
+        for m in pat.finditer(text or ""):
+            args: dict[str, Any] = {}
+            for am in _ARG_RE.finditer(m.group("attrs")):
+                v = am.group("val")
+                v = v.replace('\\"', '"').replace("\\\\", "\\").replace("\\n", "\n").replace("\\t", "\t")
+                args[am.group("key")] = v
+            name = str(args.pop("name", "")).strip()
+            if not name:
+                continue
+            calls.append({"name": name, "arguments": args})
+            spans.append((m.start(), m.end()))
+    cleaned = text
+    for s, e in reversed(spans):
+        cleaned = cleaned[:s] + cleaned[e:]
+    return calls, cleaned
+
+
+# --------------------------------------------------------------------------- #
+#  Résolution floue de noms d'outils (Lancer_d20 → lancer_d20, etc.)
+# --------------------------------------------------------------------------- #
+def _norm_tool_name(name: str) -> str:
+    """Normalise un identifiant pour comparaison : minuscules, sans accents,
+    sans underscores/tirets (« Lancer_d20 », « lancer-dés », « Lancer_dés »
+    → « lancerd20 » / « lancerdes »)."""
+    import unicodedata
+    nf = unicodedata.normalize("NFKD", (name or "").lower())
+    ascii_ = "".join(c for c in nf if not unicodedata.combining(c))
+    return re.sub(r"[_\-\s]+", "", ascii_)
+
+
+def resolve_tool_name(raw: str, tools: dict[str, Any]) -> Optional[str]:
+    """Résout un nom d'outil écrit par le LLM vers un tool réel du registre.
+
+    Ordre : exact → insensible à la casse → normalisé (accents/underscores) →
+    containment unique (alias court non ambigu, ex. « infliger_degats » →
+    « fiche_perso_infliger_degats »). Renvoie None si rien ne correspond.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    if raw in tools:
+        return raw
+    lower = raw.lower()
+    for n in tools:
+        if n.lower() == lower:
+            return n
+    norm = _norm_tool_name(raw)
+    if norm:
+        for n in tools:
+            if _norm_tool_name(n) == norm:
+                return n
+        # Alias court non ambigu (garder une longueur minimale pour éviter
+        # les collisions du type « lancer » → plusieurs candidats).
+        if len(norm) >= 6:
+            cands = [
+                n for n in tools
+                if norm in _norm_tool_name(n) or _norm_tool_name(n) in norm
+            ]
+            if len(cands) == 1:
+                return cands[0]
+    return None
+
+
+def _norm_arg_name(name: str) -> str:
+    return _norm_tool_name(name)
+
+
+def sanitize_tool_args(
+    spec: Any, args: dict[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
+    """Nettoie les arguments d'un appel récupéré du LLM (natif ou prose).
+
+    - rapproche les noms d'arguments mal orthographiés du nom réel
+      (ex. `attaquant` → `nom_attaquant`) ;
+    - coerce les valeurs numériques reçues en chaîne ;
+    - REJETTE les valeurs placeholders non numériques pour les paramètres
+      int/float (ex. `bonus_attaque="Calculé sur la fiche"`, `degats=N`) :
+      le paramètre retombe alors sur sa valeur par défaut et le tool garde
+      son propre recoupement (fiche/bestiaire).
+
+    Renvoie `(args_propres, notes)` — les notes expliquent les ajustements
+    et sont renvoyées au LLM dans le résultat du tool.
+    """
+    import inspect as _inspect
+    expected = getattr(spec, "expected_args", {}) or {}
+    norm_map = {_norm_arg_name(p): p for p in expected}
+    notes: list[str] = []
+    out: dict[str, Any] = {}
+    for key, val in list((args or {}).items()):
+        # 1. Résolution du nom d'argument.
+        target = expected.get(key) and key or norm_map.get(_norm_arg_name(key))
+        if target is None:
+            cands = [
+                p for p in expected
+                if _norm_arg_name(p) == _norm_arg_name(key)
+                or (_norm_arg_name(key) and (
+                    _norm_arg_name(key) in _norm_arg_name(p)
+                    or _norm_arg_name(p) in _norm_arg_name(key)
+                ))
+            ]
+            if len(cands) == 1:
+                target = cands[0]
+        if target is None:
+            continue  # argument inconnu → ignoré (invoke_tool filtre aussi)
+        # 2. Placeholders numériques (« N », « X », « Calculé sur la fiche »).
+        hint = spec.resolved_hints.get(target)
+        origin = getattr(hint, "__origin__", None)
+        if origin is not None:
+            from typing import Union as _U
+            if origin is _U:
+                real = [a for a in getattr(hint, "__args__", [])
+                        if a is not type(None)]
+                hint = real[0] if real else hint
+        # Les params annotés `Any` (ex. bonus_attaque: Any = 0) se trahissent
+        # par leur valeur par défaut numérique.
+        param = expected.get(target)
+        if param is not None:
+            from typing import Any as _Any
+            hint_is_vague = (
+                hint is None
+                or hint is _inspect.Parameter.empty
+                or hint is _Any
+                or hint is object
+            )
+            if hint_is_vague and isinstance(param.default, (int, float)) \
+                    and not isinstance(param.default, bool):
+                hint = int if isinstance(param.default, int) else float
+        if hint in (int, float) and isinstance(val, str):
+            v = val.strip()
+            if not re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?", v):
+                notes.append(
+                    f"argument « {key} » ignoré (valeur non numérique "
+                    f"« {val[:60] } ») — le tool utilise sa valeur par défaut"
+                )
+                continue
+        out[target] = val
+    return out, notes
+
+
+# --------------------------------------------------------------------------- #
+#  Récupération des appels écrits en syntaxe fonctionnelle dans la prose
+# --------------------------------------------------------------------------- #
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_éèêëàâäîïôöûüçÉÈÊÀÂÎÔÛÇ]*")
+# Placeholders méta que le modèle écrit autour de ses faux appels.
+_PROSE_PLACEHOLDER_RES = [
+    re.compile(r"\*?\(\s*Appel\s+au\s+tool\b[^)]*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Appel\s+au\s+sort\s*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Appels?\s+d['']outils?[^)]*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Attente\s+du\s+r[ée]sultat\b[^)]*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Le\s+r[ée]sultat\s+du\s+jet\s+est\s+appliqu[ée][^)]*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Les\s+d[ée]g[âa]ts\s+sont\s+calcul[ée]s?[^)]*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Le\s+jet\s+d['']attaque\s+est\s+lanc[ée][^)]*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Simulation[^)]*\)\*?", re.IGNORECASE),
+]
+
+
+def _parse_args_blob(blob: str) -> dict[str, Any]:
+    """Parse `key="val", key2=12, key3='x'` en dict (valeurs typées)."""
+    args: dict[str, Any] = {}
+    depth = 0
+    cur = ""
+    parts: list[str] = []
+    in_str: Optional[str] = None
+    i = 0
+    n = len(blob)
+    while i < n:
+        ch = blob[i]
+        if in_str:
+            if ch == "\\" and i + 1 < n:
+                # Caractère échappé (ex. \" dans un JSON quoté) : la paire
+                # entière appartient à la valeur et ne referme pas la chaîne.
+                cur += ch + blob[i + 1]
+                i += 2
+                continue
+            cur += ch
+            if ch == in_str:
+                in_str = None
+            i += 1
+            continue
+        if ch in "\"'":
+            in_str = ch
+            cur += ch
+        elif ch in "([{":
+            depth += 1
+            cur += ch
+        elif ch in ")]}":
+            depth -= 1
+            cur += ch
+        elif ch == "," and depth == 0:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+        i += 1
+    if cur.strip():
+        parts.append(cur)
+    # Un fragment SANS `=` ne peut pas être un nouvel argument (syntaxe
+    # invalide en Python/JSON) : c'est une valeur non quotée qui contenait
+    # une virgule (ex. `participants=Brunhild:+2, Gobelin:+1`) — on le
+    # rattache au fragment précédent.
+    merged: list[str] = []
+    for part in parts:
+        if "=" not in part and merged:
+            merged[-1] = merged[-1] + "," + part
+        else:
+            merged.append(part)
+    for part in merged:
+        if "=" not in part:
+            continue
+        key, _, val = part.partition("=")
+        key = key.strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            continue
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            inner = val[1:-1]
+            inner = inner.replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
+            args[key] = inner
+            continue
+        if re.fullmatch(r"[+-]?\d+", val):
+            args[key] = int(val)
+            continue
+        if re.fullmatch(r"[+-]?\d+\.\d+", val):
+            args[key] = float(val)
+            continue
+        if val.lower() in ("true", "vrai"):
+            args[key] = True
+            continue
+        if val.lower() in ("false", "faux"):
+            args[key] = False
+            continue
+        # Jeton nu (placeholder « N »/« X » ou valeur sans guillemets).
+        args[key] = val
+    return args
+
+
+def _find_call_end(text: str, open_paren: int) -> Optional[int]:
+    """Trouve l'index de la `)` fermante en respectant les chaînes quotées."""
+    depth = 0
+    in_str: Optional[str] = None
+    i = open_paren
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if in_str:
+            if ch == "\\":
+                i += 2  # caractère échappé : sauter le suivant
+                continue
+            if ch == in_str:
+                in_str = None
+            i += 1
+            continue
+        if ch in "\"'":
+            in_str = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return None
+
+
+def parse_prose_tool_calls(
+    text: str, tools: dict[str, Any]
+) -> tuple[list[dict[str, Any]], str]:
+    """Récupère les appels écrits en syntaxe fonctionnelle dans la narration.
+
+    Gemma (comme la plupart des modèles sans tool-calling natif fiable sur
+    llama.cpp) écrit souvent ses appels directement en prose :
+
+        `carte_donjon_entrer(donjon_id="Grotte du Gobelin")`
+        **Lancer_d20(nom_personnage="Sylvaris", difficulte="15")**
+
+    On détecte ces motifs (backticks, gras, texte nu), on résout le nom en
+    flou vers le registre réel, on parse/sanitise les arguments, et on
+    renvoie `(calls, texte_nettoyé)` où le texte nettoyé peut être montré
+    au joueur. Seuls les identifiants résolvant vers un tool connu sont
+    interceptés — la prose ordinaire n'est pas affectée.
+    """
+    if not text or "(" not in text:
+        return [], text
+    calls: list[dict[str, Any]] = []
+    spans: list[tuple[int, int]] = []
+    for m in _IDENT_RE.finditer(text):
+        start_ident = m.start()
+        open_paren = m.end()
+        # L'identifiant doit être immédiatement suivi de `(`.
+        while open_paren < len(text) and text[open_paren] == " ":
+            open_paren += 1
+        if open_paren >= len(text) or text[open_paren] != "(":
+            continue
+        # Pas de mot-clé Python/JS courant devant (ex. fonction narrative).
+        prefix = text[max(0, start_ident - 1):start_ident]
+        if prefix.isalnum():
+            continue
+        name = m.group(0)
+        resolved = resolve_tool_name(name, tools)
+        if not resolved:
+            continue
+        end = _find_call_end(text, open_paren)
+        if end is None:
+            continue
+        blob = text[open_paren + 1:end]
+        # Éviter les gigantesques faux positifs (prose avec parenthèses).
+        if len(blob) > 2000:
+            continue
+        args = _parse_args_blob(blob)
+        args, _notes = sanitize_tool_args(tools[resolved], args)
+        calls.append({"name": resolved, "arguments": args})
+        # Étend le span aux décorations markdown (backticks / astérisques).
+        s, e = start_ident, end + 1
+        while s > 0 and text[s - 1] in "`*_~":
+            s -= 1
+        while e < len(text) and text[e] in "`*_~":
+            e += 1
+        spans.append((s, e))
+    cleaned = text
+    for s, e in reversed(spans):
+        cleaned = cleaned[:s] + cleaned[e:]
+    if spans:
+        # Double espace résiduel après retrait d'un appel en milieu de phrase.
+        cleaned = re.sub(r"(?<=\S)  +(?=\S)", " ", cleaned)
+        # Lignes devenues vides (l'appel était seul sur sa ligne) → repli des
+        # sauts de ligne multiples, puis nettoyage des lignes blanches fins.
+        cleaned = _tidy_empty_lines(cleaned)
+        cleaned = re.sub(r"^[ \t]+\n", "\n", cleaned, flags=re.MULTILINE)
+    return calls, cleaned
+
+
+def _tidy_empty_lines(text: str) -> str:
+    """Réduit les runs de >2 sauts de ligne consécutifs après nettoyage."""
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None) -> str:
+    """Nettoie la narration finale de toute trace de mécanique d'appel :
+
+    - appels en syntaxe fonctionnelle `tool(...)` (résolvant un vrai tool) ;
+    - balises `<tool ...>` et blocs `<tool_call>` résiduels ;
+    - placeholders méta « *(Appel au tool …)* », « *(Attente du résultat …)* »…
+    """
+    if not text:
+        return text
+    out = text
+    if tools:
+        _calls, out = parse_prose_tool_calls(out, tools)
+    out = strip_prompt_tool_calls(out)
+    out = _TOOLCALL_BLOCK_RE.sub("", out)
+    out = _TOOLCALL_ATTR_SELFCLOSE_RE.sub("", out)
+    out = _TOOLCALL_ATTR_PAIR_RE.sub("", out)
+    out = _TOOLCALL_ORPHAN_CLOSE_RE.sub("", out)
+    for pat in _PROSE_PLACEHOLDER_RES:
+        out = pat.sub("", out)
+    out = _tidy_empty_lines(out)
+    return out.strip()
+
+
+# --------------------------------------------------------------------------- #
 #  Session d'orchestration (une par message joueur)
 # --------------------------------------------------------------------------- #
 EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
@@ -367,17 +811,24 @@ class Orchestrator:
         schemas = tools_schemas_all(filtered)
         tool_section = tools_prompt_section(filtered)
 
-        # En mode "prompt" seulement, on documente les balises <tool ...> au
-        # system message (Gemma/Qwen tool-calling natif fragile sans schémas).
-        # En mode "auto" on laisse d'abord les schémas JSON du payload parler
-        # seuls — Gemma 4 12B supporte le tool-calling natif mais dilue le
-        # signal si les outils sont aussi re-documentés en prose (context too
-        # heavy). La prose n'est ajoutée qu'en mode "prompt" pur.
-        if self.tool_mode == "prompt" and tool_section and work and work[0].role == "system":
-            work[0] = Message(
-                role="system",
-                content=work[0].content + "\n\n" + tool_section,
-            )
+        # En mode "prompt", on documente les balises <tool ...> au system
+        # message (Gemma/Qwen tool-calling natif fragile sans schémas).
+        # En mode "auto", on injecte une version COMPACTE (noms + deux
+        # formats acceptés) : le tool-calling natif de llama.cpp/Gemma
+        # échoue souvent en prose — la balise textuelle donne au modèle un
+        # canal d'appel déterministe que le backend parse de façon fiable.
+        if work and work[0].role == "system":
+            if self.tool_mode == "prompt" and tool_section:
+                work[0] = Message(
+                    role="system",
+                    content=work[0].content + "\n\n" + tool_section,
+                )
+            elif self.tool_mode == "auto" and filtered:
+                compact = tools_prompt_compact(filtered)
+                work[0] = Message(
+                    role="system",
+                    content=work[0].content + "\n\n" + compact,
+                )
 
         # OpenAI impose : si tools non vides, tool_choice = "auto" sauf si
         # l'on veut forcer un appel. On laisse "auto".
@@ -387,7 +838,119 @@ class Orchestrator:
             tools_arg = schemas if use_native else None
             chat = await self.client.chat(work, tools=tools_arg, tool_choice="auto" if use_native else None)
 
+            # --- Bbis. Blocs <tool_call> textuels (llama.cpp sans jinja) ----
+            # Le backend laisse parfois l'appel dans `content` au lieu de
+            # `tool_calls` : on les normalise vers le pipeline natif.
+            block_calls, content_clean = extract_toolcall_blocks(chat.content or "")
+            if block_calls:
+                _log.info(
+                    "%d bloc(s) <tool_call> textuel(s) récupéré(s) dans content",
+                    len(block_calls),
+                )
+                chat = ChatResult(
+                    content=content_clean,
+                    tool_calls=(chat.tool_calls or []) + block_calls,
+                    finish_reason=chat.finish_reason,
+                    raw=chat.raw,
+                )
+
+            # --- B. Mode natif : tool_calls présents -----------------------
+            if chat.tool_calls and use_native:
+                # Contenu nettoyé de toute syntaxe d'appel résiduelle pour ne
+                # pas encourager le modèle à répéter le format en prose.
+                clean_native = strip_narration_artifacts(chat.content or "", self.tools)
+                work.append(Message(
+                    role="assistant",
+                    content=clean_native,
+                    tool_calls=chat.tool_calls,
+                ))
+                await self._exec_tool_calls(chat.tool_calls, ctx, work, result, on_event)
+                continue
+
+            # --- Bter. Balises <tool_call name=".." key="value" .. /> -----
+            # Variante attributs XML auto-fermée (Qwen/Hermes sur llama.cpp) :
+            # ni tool_calls natif ni balise `<tool ...>` du mode prompt —
+            # on l'exécute réellement quel que soit le mode, puis on boucle
+            # pour que le modèle narrate le VRAI résultat du tool.
+            attr_calls, attr_clean = extract_toolcall_attr_calls(chat.content or "")
+            if attr_calls:
+                _log.info(
+                    "%d balise(s) <tool_call .../> (attributs XML) récupérée(s) : %s",
+                    len(attr_calls),
+                    ", ".join(c["name"] for c in attr_calls),
+                )
+                work.append(Message(role="assistant", content=attr_clean.strip()))
+                work.append(Message(
+                    role="system",
+                    content=(
+                        "ℹ️ SYSTÈME : ta balise "
+                        "`<tool_call name=\"...\" key=\"value\" />` a été "
+                        "INTERCEPTÉE et exécutée réellement. Le résultat "
+                        "officiel suit dans le message tool — c'est la seule "
+                        "valeur valide. À l'avenir, utilise la balise "
+                        "`<tool name=\"...\" key=\"value\">` seule sur sa "
+                        "ligne, et n'écris jamais la syntaxe d'appel dans la "
+                        "narration."
+                    ),
+                ))
+                await self._exec_tool_calls_prompt(attr_calls, ctx, work, result, on_event)
+                continue
+
+            # --- C. Mode prompt : extraire balises <tool> -------------------
+            prompt_calls = parse_prompt_tool_calls(chat.content)
+            if prompt_calls:
+                # On enregistre la réponse nettoyée des balises comme
+                # assistant — le modèle voit sa propre prose SANS la balise,
+                # ce qui évite de le pousser à réécrire du pseudo-code.
+                clean = strip_prompt_tool_calls(chat.content).strip()
+                work.append(Message(
+                    role="assistant",
+                    content=clean,
+                ))
+                # NB : on ne stream PAS ce texte résiduel au client. Seule la
+                # narration finale (étape D) part en streaming — sinon le bloc
+                # affiché serait remplacé/écrasé par le dm final (symptôme
+                # « des blocs de conversation disparaissent » quand le MJ
+                # enchaîne plusieurs outils dans un même tour).
+                await self._exec_tool_calls_prompt(prompt_calls, ctx, work, result, on_event)
+                continue
+
+            # --- C2. Rattrapage : appels écrits en syntaxe fonctionnelle ----
+            # `tool_name(key="value")` dans la prose (backticks, gras ou nu).
+            # Comportement observé avec Gemma/llama.cpp en mode natif : le
+            # modèle « narre » l'appel au lieu de l'émettre — on l'exécute
+            # réellement puis on boucle pour qu'il narrate le VRAI résultat.
+            prose_calls, prose_clean = parse_prose_tool_calls(chat.content or "", self.tools)
+            if prose_calls:
+                _log.info(
+                    "%d appel(s) d'outil récupéré(s) de la prose : %s",
+                    len(prose_calls),
+                    ", ".join(c["name"] for c in prose_calls),
+                )
+                clean = prose_clean.strip()
+                work.append(Message(role="assistant", content=clean))
+                # (pas de on_delta ici : le résiduel serait ensuite écrasé par
+                #  la narration finale — même raison que la phase C.)
+                work.append(Message(
+                    role="system",
+                    content=(
+                        "ℹ️ SYSTÈME : tes appels écrits en syntaxe "
+                        "`outil(...)` dans la narration ont été INTERCEPTÉS et "
+                        "exécutés réellement. Les résultats officiels suivent "
+                        "dans les messages tool — ce sont les seules valeurs "
+                        "valides (ignore tout chiffre que tu aurais pu "
+                        "inventer avant). À l'avenir, appelle les outils via "
+                        "le tool_calls natif ou la balise "
+                        "`<tool name=\"...\" key=\"value\">` seule sur sa "
+                        "ligne, JAMAIS en syntaxe fonctionnelle dans le texte."
+                    ),
+                ))
+                await self._exec_tool_calls_prompt(prose_calls, ctx, work, result, on_event)
+                continue
+
             # --- A. Détection de simulation textuelle ----------------------
+            # (après B/C/C2 : si un appel réel a été récupéré, ce n'est plus
+            # une simulation à corriger — le tour continue avec les résultats.)
             if self.detect_simulation:
                 # Si un tool de dés a déjà tourné dans CE tour, la reformulation
                 # du résultat ("il subit 7 dégâts") est légitime : on désactive
@@ -423,33 +986,6 @@ class Orchestrator:
                         continue
                     # 2 corrections déjà : on continue avec le reste (best effort).
 
-            # --- B. Mode natif : tool_calls présents -----------------------
-            if chat.tool_calls and use_native:
-                work.append(Message(
-                    role="assistant",
-                    content=chat.content or "",
-                    tool_calls=chat.tool_calls,
-                ))
-                await self._exec_tool_calls(chat.tool_calls, ctx, work, result, on_event)
-                continue
-
-            # --- C. Mode prompt : extraire balises <tool> -------------------
-            prompt_calls = parse_prompt_tool_calls(chat.content)
-            if prompt_calls:
-                # On enregistre la réponse nettoye des balises comme assistant.
-                # Ollama v1 attend `tool_calls` natifs pour le mode prompt sans
-                # schéma — on passe directement par le message.
-                clean = strip_prompt_tool_calls(chat.content).strip()
-                work.append(Message(
-                    role="assistant",
-                    content=chat.content,
-                ))
-                if on_delta and clean:
-                    # On pousse quand même le texte résiduel (hors balises tool).
-                    await on_delta(clean)
-                await self._exec_tool_calls_prompt(prompt_calls, ctx, work, result, on_event)
-                continue
-
             # --- D. Réponse finale (narration) ------------------------------
             # Aucun appel d'outil à effectuer ⇒ narration complète du MJ.
             # On refait l'appel en streaming pour envoyer les tokens au fur
@@ -468,6 +1004,10 @@ class Orchestrator:
             # fuir (tags coupés entre chunks) — on re-nettoie la narration
             # finale avant historique/broadcast.
             narration = _strip_thinking(narration)
+            # Nettoyage des artefacts d'appel (syntaxe `outil(...)`, balises
+            # résiduelles, placeholders « *(Attente du résultat …)* ») : le
+            # joueur ne doit JAMAIS voir la mécanique interne.
+            narration = strip_narration_artifacts(narration, self.tools)
 
             # --- D1bis. Simulation dans la narration FINALE (streamée) ------
             # Le check A porte sur le premier échantillon (chat non streamé) ;
@@ -587,7 +1127,9 @@ class Orchestrator:
             else:
                 fb = await self.client.chat(final_work, tools=None)
                 narration = fb.content
-            return _strip_thinking(narration).strip()
+            return _strip_thinking(
+                strip_narration_artifacts(narration, self.tools)
+            ).strip()
         except Exception as e:                                   # noqa: BLE001
             _log.warning("narration fallback échoué : %s", e)
             return ""
@@ -617,20 +1159,24 @@ class Orchestrator:
             else:
                 args = raw_args or {}
 
-            spec = self.tools.get(name)
-            if not spec:
+            # Résolution floue du nom (le LLM écrit parfois « Lancer_d20 »).
+            resolved = resolve_tool_name(name, self.tools)
+            if not resolved:
                 self._reply_tool_error(
                     work, name, call.get("id"),
                     f"❌ Tool '{name}' inconnu. Tools disponibles : "
-                    + ", ".join(self.tools.keys()),
+                    + ", ".join(sorted(self.tools.keys())),
                 )
                 continue
+            spec = self.tools[resolved]
+            args, notes = sanitize_tool_args(spec, args)
             tr = await self._run_one_tool(spec, ctx, args, on_event, result)
+            extra = f"\nℹ️ {'; '.join(notes)}" if notes else ""
             work.append(Message(
                 role="tool",
-                name=name,
-                tool_call_id=call.get("id") or name,
-                content=self._cap_tool_text(tr.text),
+                name=resolved,
+                tool_call_id=call.get("id") or resolved,
+                content=self._cap_tool_text(tr.text + extra),
             ))
 
     async def _exec_tool_calls_prompt(
@@ -645,22 +1191,26 @@ class Orchestrator:
         for call in calls:
             name = call.get("name", "")
             args = call.get("arguments", {}) or {}
-            spec = self.tools.get(name)
-            if not spec:
+            # Résolution floue du nom (prose : casse/accents/alias courts).
+            resolved = resolve_tool_name(name, self.tools)
+            if not resolved:
                 work.append(Message(
                     role="tool",
                     name=name,
                     content=(
                         f"❌ Tool '{name}' inconnu. Tools disponibles : "
-                        + ", ".join(self.tools.keys())
+                        + ", ".join(sorted(self.tools.keys()))
                     ),
                 ))
                 continue
+            spec = self.tools[resolved]
+            args, notes = sanitize_tool_args(spec, args)
             tr = await self._run_one_tool(spec, ctx, args, on_event, result)
+            extra = f"\nℹ️ {'; '.join(notes)}" if notes else ""
             work.append(Message(
                 role="tool",
-                name=name,
-                content=self._cap_tool_text(tr.text),
+                name=resolved,
+                content=self._cap_tool_text(tr.text + extra),
             ))
 
     # ------------------------------------------------------------------ #
@@ -720,3 +1270,23 @@ class Orchestrator:
         if tr.state_patch:
             result.state_patches.append(tr.state_patch)
         return tr
+
+    # ------------------------------------------------------------------ #
+    async def execute_tool_direct(
+        self,
+        name: str,
+        args: dict[str, Any],
+        ctx: ToolContext,
+        on_event: Optional[EventCallback] = None,
+        result: Optional[OrchestratedResult] = None,
+    ) -> Optional[ToolResult]:
+        """Exécute un tool par nom (résolution floue incluse) avec le
+        bookkeeping commun (trace, events, patches). Sert aux rattrapages
+        serveur déterministes — ex. l'attaque automatique des monstres quand
+        le LLM n'a pas joué leur tour. Renvoie None si le nom est inconnu."""
+        resolved = resolve_tool_name(name, self.tools)
+        if resolved is None:
+            return None
+        spec = self.tools[resolved]
+        result = result or OrchestratedResult()
+        return await self._run_one_tool(spec, ctx, args, on_event, result)

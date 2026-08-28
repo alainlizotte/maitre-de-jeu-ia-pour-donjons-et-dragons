@@ -25,20 +25,20 @@ log = logging.getLogger("dnd35.rag.embeddings")
 
 
 class EmbeddingError(RuntimeError):
-    """Échec d'obtenir un embedding depuis Ollama."""
+    """Échec d'obtention d'un embedding depuis le serveur llama.cpp."""
 
 
 class Embedder:
-    """Client léger sur l'endpoint `/embeddings` d'Ollama.
+    """Client léger sur l'endpoint `/v1/embeddings` (OpenAI-compatible).
 
     Pérenne sur l'exécution serveur : un seul `httpx.AsyncClient` réutilisé.
     """
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434/v1",
-        api_key: str = "ollama",
-        model: str = "nomic-embed-text",
+        base_url: str = "http://localhost:8081/v1",
+        api_key: str = "none",
+        model: str = "embeddinggemma",
     ):
         # `base_url` peut déjà pointer sur `/v1` (config llm.base_url) ;
         # l'endpoint embeddings vit sous `/v1/embeddings`.

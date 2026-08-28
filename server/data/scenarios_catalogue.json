@@ -344,6 +344,90 @@
           ],
           "niveau": "1-3",
           "joueurs": "4"
+        },
+        {
+          "id": "laelith_douze_fontaines",
+          "titre": "Douze fontaines",
+          "pdf": "/data/scenarios/Laelith/Douze fontaines/Douze-fontaines.pdf",
+          "pitch": "Un vampire sanguinaire, l'Empereur-Demon, projette d'empoisonner les douze fontaines d'eau potable de Laelith pour provoquer un soulevement populaire et renverser le Roi-Dieu. Les PJ doivent remonter la piste des empoisonneurs avant que la ville ne sombre dans le chaos.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/Douze fontaines/monstresList.htm"
+            }
+          ],
+          "niveau": "3",
+          "joueurs": "4"
+        },
+        {
+          "id": "laelith_duel_au_pinceau",
+          "titre": "Duel au pinceau",
+          "pdf": "/data/scenarios/Laelith/Duel au pinceau/Duel-au-pinceau.pdf",
+          "pitch": "Sur la place des Sept Royaumes, un duel pictural oppose deux artistes de la guilde des peintres. Mais derriere la quete de reconnaissance se cache un sombre complot : un portrait trop fidele peut ensorceler a distance la personne representee. Scenario de decouverte de Laelith, peu de combats.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/Duel au pinceau/monstresList.htm"
+            }
+          ],
+          "niveau": "2",
+          "joueurs": "4"
+        },
+        {
+          "id": "laelith_lauberge_du_sanglier_gris",
+          "titre": "L'auberge du Sanglier Gris",
+          "pdf": "/data/scenarios/Laelith/L'auberge du Sanglier Gris/Auberge-du-sanglier-gris.pdf",
+          "pitch": "En escortant un marchand de draps jusqu'a Hilminia, les PJ passent la nuit a l'auberge du Sanglier Gris dans le fief de Mueck. Mais l'auberge cache un reseau souterrain : captures, ils devront s'echapper de sa cave avant que leurs ravisseurs ne decouvrent leur fuite.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/L'auberge du Sanglier Gris/monstresList.htm"
+            }
+          ],
+          "niveau": "3",
+          "joueurs": "4"
+        },
+        {
+          "id": "laelith_la_secte_du_crane",
+          "titre": "La Secte du Crâne",
+          "pdf": "/data/scenarios/Laelith/La Secte du Crâne/Secte-du-crane.pdf",
+          "pitch": "Sur les quais de Laelith, un riche marchand offre une forte recompense pour retrouver son fils disparu pres du temple du Crâne. Les PJ y font la connaissance du fouineur Lamb et percent, au fil de leur enquete, les mysteres de la secte du Crâne.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/La Secte du Crâne/monstresList.htm"
+            }
+          ],
+          "niveau": "2",
+          "joueurs": "4"
+        },
+        {
+          "id": "laelith_le_collier_de_zark",
+          "titre": "Le Collier de Zark",
+          "pdf": "/data/scenarios/Laelith/Le Collier de Zark/Collier-de-Zark.pdf",
+          "pitch": "Zark, le fox-terrier du marchand Amlarag, s'est echappe dans les ruelles de Laelith. Son maitre offre 50 pieces d'or pour le retrouver, mais le collier de laiton garni de boules de verre multicolores que porte le chien attire bien d'autres convoitises. Scenario de decouverte de Laelith, peu de combats.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/Le Collier de Zark/monstresList.htm"
+            }
+          ],
+          "niveau": "2",
+          "joueurs": "4"
+        },
+        {
+          "id": "laelith_le_masque_de_utruz",
+          "titre": "Le masque de Utruz",
+          "pdf": "/data/scenarios/Laelith/Le masque de Utruz/Masque-utruz.pdf",
+          "pitch": "Engages par l'usurier Grassepath, les PJ doivent recuperer un masque de bronze des mains d'un halfelin voleur a sa sortie des geoles du Roi-Dieu. Cette mission apparemment simple revele bientot un tresor cache et ramene sur leur piste un ennemi surgi du passe.",
+          "annexes": [
+            {
+              "nom": "monstresList",
+              "fichier": "/data/scenarios/Laelith/Le masque de Utruz/monstresList.htm"
+            }
+          ],
+          "niveau": "3",
+          "joueurs": "4"
         }
       ]
     },

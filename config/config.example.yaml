@@ -11,6 +11,10 @@ llm:
   model: "gemma-4-E4B-it-Q4_0" # GGUF dans ./models/ (voir scripts/download_model.ps1)
   think: false                 # désactive le thinking (Gemma 4, Qwen3…)
   options: {}                  # llama.cpp gère ctx-size, KV cache, etc. via flags
+                               # Docker (docker-compose.yml, service llamacpp) :
+                               #   -ngl 99   : toutes les couches sur GPU
+                               #   -c 32768  : ctx-size (= max_context_tokens)
+                               #   -n 8192   : max tokens générés (= max_tokens)
 
   # ── Ollama (alternative) ────────────────────────────────
   # backend: "ollama"
@@ -23,8 +27,8 @@ llm:
 
   temperature: 0.75
   top_p: 0.9
-  max_context_tokens: 8192    # llama.cpp : ctx-size (2 Go VRAM libre avec -ngl 32)
-  max_tokens: 8192            # budget max de tokens générés par réponse
+  max_context_tokens: 32768   # llama.cpp : ctx-size (-c 32768, -ngl 99)
+  max_tokens: 8192            # budget max de tokens générés par réponse (-n 8192)
 
   # Stratégie de function-calling.
   # "native"   : envoie le schéma JSON des tools au backend (support Gemma 4 limité).

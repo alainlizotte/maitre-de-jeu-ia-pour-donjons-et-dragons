@@ -51,6 +51,25 @@
         "properties": {"nom": {"type": "string"}, "qte": {"type": "integer"}}
       }
     },
+    "inventaire": {
+      "type": "array",
+      "description": "Inventaire structuré suivi mécaniquement (poids par unité pour le calcul d'encombrement).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "nom": {"type": "string"},
+          "qte": {"type": "integer"},
+          "poids": {"type": "number", "description": "Poids en kg d'une unite (depuis le catalogue PHB ou fourni)."}
+        }
+      }
+    },
+    "poids_transporte": {"type": "number", "description": "Poids total transporte en kg (recalcule a chaque inventaire)."},
+    "etat_encumbrance": {
+      "type": "string",
+      "description": "Categorie d'encombrement D&D 3.5 : Legere / Moyenne / Lourde / Depassee.",
+      "enum": ["Legere", "Moyenne", "Lourde", "Depassee"]
+    },
+    "charge_max": {"type": "integer", "description": "Charge maximale transportable en kg (table PHB 3.5)."},
     "or": {"type": "integer", "description": "Or en pieces de cuivre (pc).", "default": 0},
     "alignement": {"type": "string", "description": "Alignement D&D, ex. 'Loyal Bon'."},
     "histoire": {"type": "string", "description": "Background roleplay libre."},

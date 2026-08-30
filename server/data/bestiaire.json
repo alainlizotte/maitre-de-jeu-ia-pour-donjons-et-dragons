@@ -244,7 +244,7 @@
     "fp": "1/4",
     "alignement": "Neutre",
     "source_page": "p. 289",
-    "prompt_image": "giant rat monster, enormous rodent, mangy fur, sewer tunnel, sharp teeth, fantasy art",
+    "prompt_image": "giant rat, monstrous rat the size of a dog with matted grey-brown fur, one long naked tail, four legs, yellow incisors, dungeon sewer",
     "cle": "rat_geant"
   },
   "ogre": {
@@ -364,7 +364,7 @@
     "fp": "2",
     "alignement": "Chaotique mauvais",
     "source_page": "p. 161",
-    "prompt_image": "ghoul undead creature, gaunt human, elongated claws, fangs, graveyard, crawling stance, D&D art",
+    "prompt_image": "ghoul, gaunt undead with grey rubbery skin, one head, two arms ending in elongated claws, two legs, fanged gaping mouth, hunched loping stance, graveyard at night",
     "cle": "goule"
   },
   "gargouille": {
@@ -604,7 +604,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy ankheg creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "ankheg, burrowing insect monster on six legs, brown-green chitin plates, large mandibles, two twitching antennae, bursting up through tilled farmland",
     "cle": "ankheg"
   },
   "basilic": {
@@ -627,7 +627,7 @@
     "faiblesses": "—",
     "fp": "5",
     "alignement": "Neutre",
-    "prompt_image": "fantasy basilic creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "a one-headed monstrous lizard beast, dull brown hide with yellowish belly, glowing pale green eyes, powerful toothy jaws, low squat body on many short legs, petrified stone remains nearby, badlands",
     "cle": "basilic"
   },
   "behir": {
@@ -650,7 +650,7 @@
     "faiblesses": "—",
     "fp": "8",
     "alignement": "Neutre",
-    "prompt_image": "fantasy béhir creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "a long blue-scaled serpentine dragon with rows of small legs along its snakelike body, one horned head crackling with lightning, mountain tunnel",
     "cle": "behir"
   },
   "gars_velu": {
@@ -673,7 +673,7 @@
     "faiblesses": "Sensibilité à la lumière du jour (-1 attaques)",
     "fp": "2",
     "alignement": "Chaotique mauvais",
-    "prompt_image": "fantasy gars velu creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "hairy brute, hulking goblinoid thug with shaggy matted brown fur, sloping brow, yellow eyes, heavy wooden club, cave entrance",
     "cle": "gars_velu"
   },
   "bulette": {
@@ -696,7 +696,7 @@
     "faiblesses": "—",
     "fp": "7",
     "alignement": "Neutre",
-    "prompt_image": "fantasy bulette creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "bulette land shark, armor-plated predator with thick grey scales, huge mouth of teeth, fin on its arched back, four powerful clawed legs, single tail, bursting up through the earth",
     "cle": "bulette"
   },
   "centaure": {
@@ -719,7 +719,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy centaure creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "a centaur archer drawing a longbow, tanned human torso, bay horse body, windswept grassland",
     "cle": "centaure"
   },
   "chimere": {
@@ -742,7 +742,7 @@
     "faiblesses": "—",
     "fp": "7",
     "alignement": "Chaotique mauvais",
-    "prompt_image": "fantasy chimère creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "chimera, fierce three-headed monster with the body and mane of a lion and dragon wings: a lion head, a horned black dragon head and a shaggy goat head, barren rocky slope",
     "cle": "chimere"
   },
   "cocatrix": {
@@ -765,7 +765,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy cocatrix creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "cockatrice, grotesque small hybrid with a rooster head and red comb, one pair of bat-like wings, scaled lizard body, single serpent tail, pair of lizard legs, ruined farmyard",
     "cle": "cocatrix"
   },
   "djinn": {
@@ -788,7 +788,7 @@
     "faiblesses": "—",
     "fp": "5",
     "alignement": "Chaotique bon",
-    "prompt_image": "fantasy djinn creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "djinn, imposing genie of the air, noble turbaned figure with shimmering blue skin floating on a whirlwind, curved scimitar, cloud palace",
     "cle": "djinn"
   },
   "doppelganger": {
@@ -811,7 +811,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy doppelganger creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "doppelganger, hairless humanoid of bland grey features caught mid-transformation, half its face shifting into another man's visage, plain grey skin, shadowed city alley",
     "cle": "doppelganger"
   },
   "drider": {
@@ -834,7 +834,7 @@
     "faiblesses": "—",
     "fp": "6",
     "alignement": "Chaotique mauvais",
-    "prompt_image": "fantasy drider creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "drider, cruel dark elf with obsidian skin and white hair on the body of a giant spider, eight arachnid legs, slender hands weaving a spell, web-shrouded cavern city",
     "cle": "drider"
   },
   "elementaire_d_air_moyen": {
@@ -857,7 +857,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy élémentaire d'air (moyen) creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "medium air elemental, swirling funnel of wind and dust, faintly humanoid silhouette of vapor, stormy sky",
     "cle": "elementaire_d_air_moyen"
   },
   "elementaire_de_feu_moyen": {
@@ -880,7 +880,7 @@
     "faiblesses": "Vulnérabilité au froid (dégâts x1,5)",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy élémentaire de feu (moyen) creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "fire elemental, humanoid figure of living flame and embers, blazing arms, scorched ground",
     "cle": "elementaire_de_feu_moyen"
   },
   "elementaire_de_terre_moyen": {
@@ -903,7 +903,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy élémentaire de terre (moyen) creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "earth elemental, bulky humanoid of packed earth and stone, glowing crystal eyes, rugged cavern",
     "cle": "elementaire_de_terre_moyen"
   },
   "ettin": {
@@ -926,7 +926,7 @@
     "faiblesses": "—",
     "fp": "6",
     "alignement": "Chaotique mauvais",
-    "prompt_image": "fantasy éttin creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "ettin, giant two-headed humanoid monster, thick muscular torso, two angry faces, matted hair, crude wooden clubs, rocky hills",
     "cle": "ettin"
   },
   "geant_des_collines": {
@@ -949,7 +949,7 @@
     "faiblesses": "—",
     "fp": "7",
     "alignement": "Neutre mauvais",
-    "prompt_image": "fantasy géant des collines creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "hill giant, brutish huge humanoid, thick tanned skin, wild black hair and beard, patchy animal-hide clothes, massive wooden club, rocky highlands",
     "cle": "geant_des_collines"
   },
   "geant_du_givre": {
@@ -972,7 +972,7 @@
     "faiblesses": "—",
     "fp": "9",
     "alignement": "Neutre mauvais",
-    "prompt_image": "fantasy géant du givre creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "frost giant, huge muscular giant with pale blue-white skin and ice-blond hair, fur-trimmed hide armor, greataxe, glacial ravine",
     "cle": "geant_du_givre"
   },
   "gnoll": {
@@ -995,7 +995,7 @@
     "faiblesses": "Lâcheté : fuit si en difficulté sans chef",
     "fp": "1",
     "alignement": "Chaotique mauvais",
-    "prompt_image": "fantasy gnoll creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "gnoll warrior, hyena-headed humanoid with mangy yellow-brown spotted fur, hunched stance, studded hide armor, long wooden spear, arid scrubland",
     "cle": "gnoll"
   },
   "golem_de_chair": {
@@ -1018,7 +1018,7 @@
     "faiblesses": "Ralenti 2d6 rounds par feu ou froid (au lieu d'être blessé)",
     "fp": "7",
     "alignement": "Neutre",
-    "prompt_image": "fantasy golem de chair creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "a towering patchwork humanoid of pale corpse flesh stitched together with thick seams, heavy slack face, lumbering in a lightning-lit laboratory",
     "cle": "golem_de_chair"
   },
   "golem_d_argile": {
@@ -1041,7 +1041,7 @@
     "faiblesses": "—",
     "fp": "10",
     "alignement": "Neutre",
-    "prompt_image": "fantasy golem d'argile creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "clay golem, hulking broad-shouldered humanoid molded from grey-brown baked clay, cracked earthen surface, heavy blunt fists, dim vaulted workshop",
     "cle": "golem_d_argile"
   },
   "griffon": {
@@ -1064,7 +1064,7 @@
     "faiblesses": "—",
     "fp": "4",
     "alignement": "Neutre",
-    "prompt_image": "fantasy griffon creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "griffin, majestic hybrid beast with an eagle head and hooked beak, feathered eagle forelegs with talons, tawny lion hindquarters with a single tufted tail, one pair of broad wings, mountain aerie",
     "cle": "griffon"
   },
   "harpie": {
@@ -1087,7 +1087,7 @@
     "faiblesses": "—",
     "fp": "4",
     "alignement": "Chaotique mauvais",
-    "prompt_image": "fantasy harpie creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "harpy, vile winged creature with a woman's face and bare torso, one pair of great vulture wings fused to her arms, bird legs with talons, tattered rags, windswept cliff nest",
     "cle": "harpie"
   },
   "hippogriffe": {
@@ -1110,7 +1110,7 @@
     "faiblesses": "—",
     "fp": "2",
     "alignement": "Neutre",
-    "prompt_image": "fantasy hippogriffe creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "hippogriff, proud hybrid beast with an eagle head and hooked beak, feathered eagle forelegs with talons, horse hindquarters with a single flowing tail, one pair of broad wings, soaring over mountain cliffs",
     "cle": "hippogriffe"
   },
   "homme-lezard": {
@@ -1133,7 +1133,7 @@
     "faiblesses": "—",
     "fp": "1",
     "alignement": "Neutre",
-    "prompt_image": "fantasy homme-lézard creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "lizardfolk, reptilian humanoid with green scales, long snout, one thick tail, clawed hands, wooden shield and club, misty swamp",
     "cle": "homme-lezard"
   },
   "hydre_5_tetes": {
@@ -1156,7 +1156,7 @@
     "faiblesses": "—",
     "fp": "7",
     "alignement": "Neutre",
-    "prompt_image": "fantasy hydre (5 têtes) creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "hydra, massive reptilian water monster with five long necks and five heads, squat scaly quadruped body with a single tail, dark marsh swamp",
     "cle": "hydre_5_tetes"
   },
   "licorne": {
@@ -1179,7 +1179,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Chaotique bon",
-    "prompt_image": "fantasy licorne creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "unicorn, graceful pure-white mare with a single spiral ivory horn on her forehead, flowing silver mane and tail, cloven hooves, enchanted sunlit forest",
     "cle": "licorne"
   },
   "manticore": {
@@ -1202,7 +1202,7 @@
     "faiblesses": "—",
     "fp": "5",
     "alignement": "Loyal mauvais",
-    "prompt_image": "fantasy manticore creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "manticore, monster with the body of a red-maned lion on four legs, one pair of dark leathery bat wings, a fanged monstrous lion-like face, one thick tail bristling with iron spikes, arid badlands",
     "cle": "manticore"
   },
   "meduse": {
@@ -1225,7 +1225,7 @@
     "faiblesses": "—",
     "fp": "5",
     "alignement": "Loyal mauvais",
-    "prompt_image": "fantasy méduse creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "medusa, cursed woman whose bald head is covered in small living vipers instead of hair, pale green scaly skin, elegant dark robes, longbow in hand, ruined temple",
     "cle": "meduse"
   },
   "ogre-mage": {
@@ -1248,7 +1248,7 @@
     "faiblesses": "—",
     "fp": "8",
     "alignement": "Loyal mauvais",
-    "prompt_image": "fantasy ogre-mage creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "ogre mage, towering giant with pale blue-green skin, black topknot hair, one pair of short curved horns, elegant lacquered armor, spell glowing in one clawed hand, misty mountain pass",
     "cle": "ogre-mage"
   },
   "gelee_ocre": {
@@ -1271,7 +1271,7 @@
     "faiblesses": "—",
     "fp": "5",
     "alignement": "Neutre",
-    "prompt_image": "fantasy gelée ocre creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "a shapeless blob of tawny yellow slime spread across dungeon flagstones, slow drips and bulges",
     "cle": "gelee_ocre"
   },
   "cube_gelatineux": {
@@ -1294,7 +1294,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy cube gélatineux creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "a giant translucent jelly cube filling a dungeon corridor from floor to ceiling, faint bones and coins suspended inside it",
     "cle": "cube_gelatineux"
   },
   "ours_sanguinaire": {
@@ -1317,7 +1317,7 @@
     "faiblesses": "—",
     "fp": "7",
     "alignement": "Neutre",
-    "prompt_image": "fantasy ours sanguinaire creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "dire bear, enormous prehistoric cave bear with massive shoulders, shaggy dull brown fur, four powerful legs, roaring, primeval forest",
     "cle": "ours_sanguinaire"
   },
   "loup_atroce": {
@@ -1340,7 +1340,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy loup atroce creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "dire wolf, huge prehistoric wolf with grey-brown shaggy fur and one bushy tail, powerful jaws, winter forest",
     "cle": "loup_atroce"
   },
   "salamandre": {
@@ -1363,7 +1363,7 @@
     "faiblesses": "Vulnérabilité au froid (dégâts x1,5)",
     "fp": "6",
     "alignement": "Neutre mauvais",
-    "prompt_image": "fantasy salamandre creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "salamander, serpentine fire creature with a humanoid torso and a snake lower body, brass spear, flames dancing along its scales, elemental fire",
     "cle": "salamandre"
   },
   "satyre": {
@@ -1386,7 +1386,7 @@
     "faiblesses": "—",
     "fp": "2",
     "alignement": "Neutre",
-    "prompt_image": "fantasy satyre creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "satyr, merry woodland fey with a man's bare torso and the furry hind legs of a goat, small curling horns, pointed ears, playing pan pipes, sun-dappled forest glade",
     "cle": "satyre"
   },
   "scorpion_geant": {
@@ -1409,7 +1409,7 @@
     "faiblesses": "—",
     "fp": "3",
     "alignement": "Neutre",
-    "prompt_image": "fantasy scorpion géant creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "giant scorpion, oversized arachnid with armored segmented body, large pincers, venomous stinger tail",
     "cle": "scorpion_geant"
   },
   "sahuagin": {
@@ -1432,7 +1432,7 @@
     "faiblesses": "Sensibilité à la lumière du jour (-1 attaques)",
     "fp": "2",
     "alignement": "Loyal mauvais",
-    "prompt_image": "fantasy sahuagin creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "sahuagin sea devil, green-scaled shark-like humanoid, fin on head and back, webbed claws, trident in hand, underwater ruins",
     "cle": "sahuagin"
   },
   "troll": {
@@ -1455,7 +1455,7 @@
     "faiblesses": "Feu et acide : annulent la régénération (blessures persistantes)",
     "fp": "5",
     "alignement": "Chaotique mauvais",
-    "prompt_image": "fantasy troll creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "troll, tall gaunt monster with rubbery moss-green hide, long arms ending in hooked claws, hunched lurching gait, mossy swamp",
     "cle": "troll"
   },
   "vampire": {
@@ -1524,7 +1524,7 @@
     "faiblesses": "—",
     "fp": "2",
     "alignement": "Neutre mauvais",
-    "prompt_image": "fantasy worg creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "worg, oversized malevolent wolf with shaggy black-grey fur and one bushy tail, intelligent cruel amber eyes, dark pine forest",
     "cle": "worg"
   },
   "wyverne": {
@@ -1547,7 +1547,7 @@
     "faiblesses": "—",
     "fp": "6",
     "alignement": "Neutre",
-    "prompt_image": "fantasy wyverne creature, D&D 3.5 manual illustration, ink style, dramatic lighting",
+    "prompt_image": "wyvern, sleek two-legged dragon with a long neck, broad leathery wings and a whip-like tail ending in a venomous stinger, perched on a rocky spire",
     "cle": "wyverne"
   },
   "animal_de_taille_p": {
@@ -1572,7 +1572,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal de taille p creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "small wild animal, fox-like creature with russet fur and one bushy tail, four legs, forest undergrowth"
   },
   "animal_de_taille_m": {
     "nom": "Animal de taille M",
@@ -1596,7 +1596,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "medium wild animal, grey timber wolf standing alert, four legs, one bushy tail, birch woodland"
   },
   "animal_de_taille_tp": {
     "nom": "Animal de taille TP",
@@ -1620,7 +1620,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_tp",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal de taille tp creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "very small animal, bright songbird perched on a mossy branch, feathers, woodland"
   },
   "animal_de_taille_g": {
     "nom": "Animal de taille G",
@@ -1644,7 +1644,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "large wild animal, big brown bear standing on all fours, thick shaggy fur, four legs, one short tail, pine forest"
   },
   "animal_aquatique_de_taille_m": {
     "nom": "Animal (aquatique) de taille M",
@@ -1668,7 +1668,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal (aquatique) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "medium aquatic animal, sleek seal with whiskers and flippers, coastal rocks"
   },
   "animal_aquatique_de_taille_tg": {
     "nom": "Animal (aquatique) de taille TG",
@@ -1692,7 +1692,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal (aquatique) de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "huge aquatic animal, enormous whale breaching the surface, vast open ocean"
   },
   "vision_aveugle_ext": {
     "nom": "Vision aveugle (Ext)",
@@ -1740,7 +1740,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_min",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal de taille min creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "tiny field mouse, very small brown rodent with round ears and one long thin tail, sitting among clover and grass"
   },
   "combat": {
     "nom": "Combat",
@@ -1788,7 +1788,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "huge wild animal, massive bison bull with shaggy dark fur, four legs, open plain"
   },
   "animal_aquatique_de_taille_p": {
     "nom": "Animal (aquatique) de taille P",
@@ -1812,7 +1812,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal (aquatique) de taille p creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "small aquatic animal, bright tropical fish with delicate fins, coral reef"
   },
   "animal_aquatique_de_taille_g": {
     "nom": "Animal (aquatique) de taille G",
@@ -1836,7 +1836,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal (aquatique) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "large predatory fish, sleek torpedo-shaped body with one dorsal fin and one powerful tail fin, rows of sharp teeth, open deep blue water"
   },
   "serpent_constricteur_geant": {
     "nom": "Serpent constricteur géant",
@@ -1860,7 +1860,7 @@
     "alignement": "—",
     "cle": "serpent_constricteur_geant",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy serpent constricteur géant creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant constrictor snake, immense thick-bodied python with olive-green diamond-pattern scales, coiled loops, flicking tongue, no limbs, jungle undergrowth"
   },
   "succube": {
     "nom": "Succube",
@@ -1884,7 +1884,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "succube",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy succube creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "succubus demon, beautiful seductive fiend, bat-like wings, small horns, cloven hooves, seductive smile, fiery infernal glow"
   },
   "vrock": {
     "nom": "Vrock",
@@ -1908,7 +1908,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "vrock",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vrock creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a vulture-headed demon with a grim humanoid body, two clawed arms, large dark feathered wings, tan feathers on its shoulders, dark energy crackling, smoky ruin"
   },
   "fee_de_taille_m": {
     "nom": "Fée de taille M",
@@ -1932,7 +1932,7 @@
     "alignement": "généralement chaotique bon",
     "cle": "fee_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy fée de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "fey noble, graceful elf-like woman with one pair of moth wings, pointed ears, gown woven of leaves and petals, glowing motes of magic, moonlit woodland glade"
   },
   "creature_magique_de_taille_g": {
     "nom": "Créature magique de taille G",
@@ -1956,7 +1956,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "creature_magique_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "large magical beast, armored predator with iridescent scales, four clawed legs and a single horn, mystical glade"
   },
   "grig": {
     "nom": "Grig",
@@ -1980,7 +1980,7 @@
     "alignement": "toujours neutre bon",
     "cle": "grig",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy grig creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "grig, tiny fey with an elfin upper body and cricket hind legs with antennae, holding a tiny fiddle, sunny meadow"
   },
   "nixe": {
     "nom": "Nixe",
@@ -2004,7 +2004,7 @@
     "alignement": "toujours neutre",
     "cle": "nixe",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy nixe creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "nixie, small green-skinned water fey with webbed fingers and one pair of dragonfly wings, reed-fringed pond"
   },
   "pixie": {
     "nom": "Pixie",
@@ -2028,7 +2028,7 @@
     "alignement": "toujours neutre bon",
     "cle": "pixie",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy pixie creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "pixie, tiny winged fey man with pointed ears, one pair of silver dragonfly wings, mischievous grin, tiny sword, sunlit forest glade"
   },
   "aberration_de_taille_p": {
     "nom": "Aberration de taille P",
@@ -2052,7 +2052,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "aberration_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aberration de taille p creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "small aberration, slimy tentacled horror the size of a dog with too many unblinking eyes, dank cave"
   },
   "aberration_de_taille_m": {
     "nom": "Aberration de taille M",
@@ -2076,7 +2076,7 @@
     "alignement": "généralement neutre mauvais",
     "cle": "aberration_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aberration de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "aberration, twisted humanoid horror with mottled skin and unblinking eyes, malformed limbs, alien lair"
   },
   "geant_de_taille_g": {
     "nom": "Géant de taille G",
@@ -2100,7 +2100,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "geant_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy géant de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "hill giant, brutish huge humanoid, thick tanned skin, wild black hair and beard, patchy animal-hide clothes, massive wooden club, rocky highlands"
   },
   "aberration_air_de_taille_p": {
     "nom": "Aberration (Air) de taille P",
@@ -2124,7 +2124,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "aberration_air_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aberration (air) de taille p creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a small floating aberration, bloated translucent balloon body with thin trailing tentacles and a toothy maw, drifting through a stormy sky"
   },
   "aberration_de_taille_tg": {
     "nom": "Aberration de taille TG",
@@ -2148,7 +2148,7 @@
     "alignement": "généralement neutre",
     "cle": "aberration_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aberration de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a levitating spherical horror with a single great central eye and a crown of flexible eyestalks, a wide toothy maw below the central eye, dark cavern"
   },
   "ouvrier_formien": {
     "nom": "Ouvrier formien",
@@ -2172,7 +2172,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "ouvrier_formien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy ouvrier formien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "formian worker, centaur-like insect creature with brown chitin, six-legged ant lower body, slight humanoid torso and head with gentle mandibles, torch-lit hive tunnels"
   },
   "soldat_formien": {
     "nom": "Soldat formien",
@@ -2196,7 +2196,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "soldat_formien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy soldat formien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "formian warrior, centaur-like insect outsider with dark russet chitin armor plating, six-legged ant lower body, humanoid torso, fierce ant head with large mandibles, hurling a javelin, hive warband"
   },
   "contremaitre_formien": {
     "nom": "Contremaître formien",
@@ -2220,7 +2220,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "contremaitre_formien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy contremaître formien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "formian taskmaster, centaur-like insect outsider with russet chitin, six-legged ant lower body, humanoid torso, ant head with mandibles, coiled whip in one clawed hand, hive tunnels"
   },
   "myrmarque_formien": {
     "nom": "Myrmarque formien",
@@ -2244,7 +2244,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "myrmarque_formien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy myrmarque formien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "formian myrmarch, ant-centaur outsider with russet chitin, six-legged ant lower body, upright humanoid torso, wise ant-like head with mandibles and antennae, ornate collar, hive throne hall"
   },
   "reine_formienne": {
     "nom": "Reine formienne",
@@ -2268,7 +2268,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "reine_formienne",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy reine formienne creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "formian queen, enormous ant-centaur with a huge swollen abdomen trailing behind a six-legged ant body, regal humanoid torso, ant head with a crown-like crest, egg chamber of the hive"
   },
   "elementaire_air_extraplanaire_de_taille_g": {
     "nom": "Élémentaire (Air, extraplanaire) de taille G",
@@ -2292,7 +2292,7 @@
     "alignement": "généralement neutre mauvais",
     "cle": "elementaire_air_extraplanaire_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy élémentaire (air, extraplanaire) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "large air elemental, towering funnel of swirling wind and cloud, faint humanoid silhouette of vapor and dust with two arm-like vortices, lightning glints inside the vortex, stormy sky"
   },
   "creature_artificielle_de_taille_g": {
     "nom": "Créature artificielle de taille G",
@@ -2604,7 +2604,7 @@
     "alignement": "généralement neutre mauvais",
     "cle": "gobelin_homme_d_armes_de_niveau_1",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy gobelin, homme d'armes de niveau 1 creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "goblin warrior, small green-skinned humanoid with long pointed ears and a wicked grin, studded leather armor, crooked scimitar and small wooden shield, torch-lit dungeon"
   },
   "humanoide_gobelinoide_de_taille_m": {
     "nom": "Humanoïde (gobelinoïde) de taille M",
@@ -2724,7 +2724,7 @@
     "alignement": "toujours neutre bon",
     "cle": "leonin",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy léonin creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "leonal guardinal, noble celestial lion being, muscular humanoid body covered in golden fur, majestic leonine head with a great tawny mane, calm glowing eyes, soft divine golden aura, heavenly plain"
   },
   "halfelin_homme_d_armes_de_niveau_1": {
     "nom": "Halfelin, homme d'armes de niveau 1",
@@ -2748,7 +2748,7 @@
     "alignement": "généralement neutre",
     "cle": "halfelin_homme_d_armes_de_niveau_1",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy halfelin, homme d'armes de niveau 1 creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "halfling warrior, very small cheerful human-like fellow with curly brown hair, fitted leather vest, shortsword and sling, cozy village lane"
   },
   "hobgobelin_homme_d_armes_de_niveau_1": {
     "nom": "Hobgobelin, homme d'armes de niveau 1",
@@ -2772,7 +2772,7 @@
     "alignement": "généralement loyal mauvais",
     "cle": "hobgobelin_homme_d_armes_de_niveau_1",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy hobgobelin, homme d'armes de niveau 1 creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "hobgoblin soldier, tall disciplined goblinoid, dark red-brown skin, flat harsh face, yellow eyes, chainmail armor with longsword and shield, marching in rank"
   },
   "humanoide_reptilien_de_taille_m": {
     "nom": "Humanoïde (reptilien) de taille M",
@@ -2820,7 +2820,7 @@
     "alignement": "généralement neutre",
     "cle": "homme-poisson_hommes_d_armes_de_niveau_1",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy homme-poisson, hommes d'armes de niveau 1 creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "merfolk warrior, muscular human man upper body, shimmering teal fish tail with a single fluke instead of legs, holding a slender spear, sunlit coral reef"
   },
   "creature_artificielle_de_taille_tp": {
     "nom": "Créature artificielle de taille TP",
@@ -2892,7 +2892,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "kolyarut",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy kolyarut creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "kolyarut, mechanical ineluctable construct of pure order, metallic body, glowing runes, clockwork"
   },
   "marut": {
     "nom": "Marut",
@@ -2916,7 +2916,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "marut",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy marut creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "marut, giant ineluctable construct of pure law, black metallic armor, mechanical face, revolving gear"
   },
   "zelekhut": {
     "nom": "Zelekhut",
@@ -2940,7 +2940,7 @@
     "alignement": "toujours loyal neutre",
     "cle": "zelekhut",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy zelekhut creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "zelekhut, ineluctable construct of justice, metal-plated body, built-in chains, judgmental aura"
   },
   "kraken": {
     "nom": "Kraken",
@@ -2964,7 +2964,7 @@
     "alignement": "toujours neutre mauvais",
     "cle": "kraken",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy kraken creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "kraken, colossal deep-sea monster, giant squid body with suckered tentacles, glowing eyes, churning stormy ocean waves, shipwrecks"
   },
   "krenshar": {
     "nom": "Krenshar",
@@ -2988,7 +2988,7 @@
     "alignement": "généralement neutre",
     "cle": "krenshar",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy krenshar creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "krenshar, sleek hairless predator on four legs with a single long tail, pale grey skin, its bare scalp peeled back into a hood of skin framing a toothy frightening face, twilight grassland"
   },
   "lamie": {
     "nom": "Lamie",
@@ -3012,7 +3012,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "lamie",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy lamie creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a serene woman's face on the body of a walking lioness, like the sphinx of Giza, gold, desert"
   },
   "lammasu": {
     "nom": "Lammasu",
@@ -3036,7 +3036,7 @@
     "alignement": "toujours loyal bon",
     "cle": "lammasu",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy lammasu creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "lammasu, celestial guardian with the body of a mighty golden lion on four legs, one pair of great feathered wings, wise bearded human face, serene holy aura, temple gates"
   },
   "lezard_voltaique": {
     "nom": "Lézard voltaïque",
@@ -3060,7 +3060,7 @@
     "alignement": "toujours neutre",
     "cle": "lezard_voltaique",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy lézard voltaïque creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "shocker lizard, small bright blue lizard on four legs with a single long tail, pale underbelly, crackling arcs of electricity dancing over its scales, rocky badlands"
   },
   "liane_chasseresse": {
     "nom": "Liane chasseresse",
@@ -3084,7 +3084,7 @@
     "alignement": "toujours neutre",
     "cle": "liane_chasseresse",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy liane chasseresse creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "assassin vine, twisted animated plant of bark-covered vines with jagged dark leaves and snaring tendrils, one main creeping stalk, half-buried bones beneath it, forest floor"
   },
   "lilende": {
     "nom": "Lilende",
@@ -3108,7 +3108,7 @@
     "alignement": "toujours chaotique bon",
     "cle": "lilende",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy lilende creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "lillend, celestial musician with a woman's head and torso, one pair of feathered wings, glistening serpent coils instead of legs, harp in her hands, celestial grove"
   },
   "locathah": {
     "nom": "Locathah",
@@ -3132,7 +3132,7 @@
     "alignement": "généralement neutre",
     "cle": "locathah",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy locathah creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "locathah, fish-like humanoid with fine silver-green scales, large fish head, webbed hands and feet, coral spear, swaying kelp bed"
   },
   "loup_arctique": {
     "nom": "Loup arctique",
@@ -3156,7 +3156,7 @@
     "alignement": "généralement neutre mauvais",
     "cle": "loup_arctique",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy loup arctique creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "arctic wolf, large white-furred wolf, icy blue eyes, snowy tundra pack"
   },
   "magmatique": {
     "nom": "Magmatique",
@@ -3180,7 +3180,7 @@
     "alignement": "toujours chaotique neutre",
     "cle": "magmatique",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy magmatique creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "small magma elemental, squat humanoid formed of black volcanic rock veined with glowing molten lava, radiating heat, lava tube cave"
   },
   "mante_obscure": {
     "nom": "Mante obscure",
@@ -3204,7 +3204,7 @@
     "alignement": "toujours neutre",
     "cle": "mante_obscure",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy mante obscure creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "darkmantle, squid-like cave predator, cone of skin draped like a cloak, cluster of short tentacles beneath, glowing red eyes, hanging from a cavern ceiling like a stalactite"
   },
   "manteleur": {
     "nom": "Manteleur",
@@ -3228,7 +3228,7 @@
     "alignement": "généralement chaotique neutre",
     "cle": "manteleur",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy manteleur creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a living black cloak flying like a manta ray through a dark cavern, its underside lined with a wide fanged mouth, glowing red eyes near the collar, long thin tail trailing behind"
   },
   "maraudeur_ethere": {
     "nom": "Maraudeur éthéré",
@@ -3252,7 +3252,7 @@
     "alignement": "toujours neutre",
     "cle": "maraudeur_ethere",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy maraudeur éthéré creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "ethereal marauder, lean bipedal reptilian creature, pale blue-white chitin skin, three small eyes, two long clawed arms, two-toed digitigrade legs, one thick tail, phasing through swirling mist"
   },
   "mephite_aerien": {
     "nom": "Méphite aérien",
@@ -3276,7 +3276,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_aerien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite aérien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a small winged imp of living wind, pale blue translucent skin, wisps of air curling around it"
   },
   "mephite_aqueux": {
     "nom": "Méphite aqueux",
@@ -3300,7 +3300,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_aqueux",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite aqueux creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a winged imp of living water, slick blue-green skin dripping, swirling droplets"
   },
   "mephite_enflamme": {
     "nom": "Méphite enflammé",
@@ -3324,7 +3324,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_enflamme",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite enflammé creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a winged imp of living flame, red-orange ember skin, small fires around it"
   },
   "mephite_gele": {
     "nom": "Méphite gelé",
@@ -3348,7 +3348,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_gele",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite gelé creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a winged imp of living ice, frost-white crystalline skin, icy mist"
   },
   "mephite_magmatique": {
     "nom": "Méphite magmatique",
@@ -3372,7 +3372,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_magmatique",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite magmatique creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a winged imp of living magma, black stone skin cracked with glowing lava veins"
   },
   "mephite_poussiereux": {
     "nom": "Méphite poussiéreux",
@@ -3396,7 +3396,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_poussiereux",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite poussiéreux creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a winged imp of living dust, body of crumbling dry earth shedding dust, trailing dust motes and falling grit"
   },
   "mephite_salin": {
     "nom": "Méphite salin",
@@ -3420,7 +3420,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_salin",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite salin creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a winged imp of living salt, white crystal-encrusted skin"
   },
   "mephite_terreux": {
     "nom": "Méphite terreux",
@@ -3444,7 +3444,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_terreux",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite terreux creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a small winged imp of living earth, brown rocky skin with stony bumps"
   },
   "mephite_vaporeux": {
     "nom": "Méphite vaporeux",
@@ -3468,7 +3468,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_vaporeux",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite vaporeux creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a winged imp of living steam, grey body half-dissolved in hissing vapor"
   },
   "mephite_vaseux": {
     "nom": "Méphite vaseux",
@@ -3492,7 +3492,7 @@
     "alignement": "généralement neutre",
     "cle": "mephite_vaseux",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy méphite vaseux creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a small winged imp of living ooze, gray-green slimy dripping skin"
   },
   "mimique": {
     "nom": "Mimique",
@@ -3516,7 +3516,7 @@
     "alignement": "généralement neutre",
     "cle": "mimique",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy mimique creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a heavy wooden treasure chest in a torch-lit dungeon, its lid opened into a wide fanged mouth with a long sticky tongue, scattered gold coins"
   },
   "mohrg": {
     "nom": "Mohrg",
@@ -3540,7 +3540,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "mohrg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy mohrg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "mohrg, undead, skeletal body strung with fleshy entrails, long tongue ending in a jaw, graveyard"
   },
   "molosse_d_ombre": {
     "nom": "Molosse d'ombre",
@@ -3564,7 +3564,7 @@
     "alignement": "toujours neutre mauvais",
     "cle": "molosse_d_ombre",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy molosse d'ombre creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "shadow mastiff, large black hound with glowing yellow eyes, wisps of darkness trailing its fur, ghostly baying"
   },
   "molosse_satanique": {
     "nom": "Molosse satanique",
@@ -3588,7 +3588,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "molosse_satanique",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy molosse satanique creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "hell hound, feral canine with smoldering red-black fur, glowing eyes, flames wreathing its jaws, brimstone"
   },
   "momie": {
     "nom": "Momie",
@@ -3612,7 +3612,7 @@
     "alignement": "généralement loyal mauvais",
     "cle": "momie",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy momie creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "mummy, undead wrapped in ancient bandages, desiccated brown skin, glowing eyes, desecrated tomb"
   },
   "aberration_aquatique_de_taille_g": {
     "nom": "Aberration (aquatique) de taille G",
@@ -3804,7 +3804,7 @@
     "alignement": "souvent chaotique mauvais",
     "cle": "orque_homme_d_armes_de_niveau_1",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy orque, homme d'armes de niveau 1 creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "orc warrior, burly green-skinned humanoid, jutting tusks, red eyes, studded leather armor, heavy axe in one hand, torch-lit dungeon corridor"
   },
   "aasimar_homme_d_armes_de_niveau_1": {
     "nom": "Aasimar, homme d'armes de niveau 1",
@@ -3828,7 +3828,7 @@
     "alignement": "généralement bon",
     "cle": "aasimar_homme_d_armes_de_niveau_1",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aasimar, homme d'armes de niveau 1 creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "aasimar warrior, strikingly handsome human with a faint golden radiance, topaz eyes, polished mail shirt, raised longsword, noble bearing"
   },
   "tieffelin_homme_d_armes_de_niveau_1": {
     "nom": "Tieffelin, homme d'armes de niveau 1",
@@ -3852,7 +3852,7 @@
     "alignement": "généralement mauvais",
     "cle": "tieffelin_homme_d_armes_de_niveau_1",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy tieffelin, homme d'armes de niveau 1 creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "tiefling sellsword, lean pale human man with small black horns and one thin tail, dark leather armor, sword at his hip, moody torchlight"
   },
   "aberration_metamorphe_de_taille_m": {
     "nom": "Aberration (métamorphe) de taille M",
@@ -4716,7 +4716,7 @@
     "alignement": "—",
     "cle": "calmar_geant",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy calmar géant creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant squid, enormous marine cephalopod, ten grasping tentacles and arms, huge eyes, deep trench"
   },
   "chameau": {
     "nom": "Chameau",
@@ -4812,7 +4812,7 @@
     "alignement": "—",
     "cle": "chien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy chien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "guard dog, medium brown dog with floppy ears and one wagging tail, alert stance beside a wooden fence, village yard"
   },
   "chouette": {
     "nom": "Chouette",
@@ -4908,7 +4908,7 @@
     "alignement": "—",
     "cle": "crocodile",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy crocodile creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "crocodile, long scaly reptile, huge jaws with teeth, eyes on top of head, river bank"
   },
   "crocodile_geant": {
     "nom": "Crocodile géant",
@@ -4932,7 +4932,7 @@
     "alignement": "—",
     "cle": "crocodile_geant",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy crocodile géant creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant crocodile, enormous scaly reptile, massive jaws full of teeth, murky river"
   },
   "elephant": {
     "nom": "Eléphant",
@@ -4956,7 +4956,7 @@
     "alignement": "—",
     "cle": "elephant",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy eléphant creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "elephant, massive grey pachyderm, large flapping ears, long trunk, ivory tusks, savanna"
   },
   "faucon": {
     "nom": "Faucon",
@@ -5028,7 +5028,7 @@
     "alignement": "—",
     "cle": "gorille",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy gorille creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "ape, powerful burly great ape, dark fur, broad chest, long arms, knuckle-walking, jungle"
   },
   "guepard": {
     "nom": "Guépard",
@@ -5052,7 +5052,7 @@
     "alignement": "—",
     "cle": "guepard",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy guépard creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "cheetah, sleek spotted big cat, long legs built for speed, grasslands"
   },
   "hyene": {
     "nom": "Hyène",
@@ -5076,7 +5076,7 @@
     "alignement": "—",
     "cle": "hyene",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy hyène creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "hyena, spotted scavenging canine, sloping back, powerful jaws, dark plains"
   },
   "leopard": {
     "nom": "Léopard",
@@ -5172,7 +5172,7 @@
     "alignement": "—",
     "cle": "lion",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy lion creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "lion, majestic male lion with a thick golden mane, powerful body, grassland savanna"
   },
   "marsouin": {
     "nom": "Marsouin",
@@ -5244,7 +5244,7 @@
     "alignement": "—",
     "cle": "ours_brun",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy ours brun creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "brown bear, huge shaggy brown bear, powerful claws, muscular hump, roaring, forest"
   },
   "ours_polaire": {
     "nom": "Ours polaire",
@@ -5268,7 +5268,7 @@
     "alignement": "—",
     "cle": "ours_polaire",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy ours polaire creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "polar bear, massive white-furred bear, icy environment, powerful jaws, arctic tundra"
   },
   "pieuvre": {
     "nom": "Pieuvre",
@@ -5316,7 +5316,7 @@
     "alignement": "—",
     "cle": "pieuvre_geante",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy pieuvre géante creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant octopus, huge marine cephalopod, eight sucker-covered tentacles, bulbous head, coastal waters"
   },
   "poney": {
     "nom": "Poney",
@@ -5436,7 +5436,7 @@
     "alignement": "—",
     "cle": "rhinoceros",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy rhinocéros creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "rhinoceros, massive grey horned beast, thick hide, single or twin horns, charging across plains"
   },
   "sanglier": {
     "nom": "Sanglier",
@@ -5484,7 +5484,7 @@
     "alignement": "—",
     "cle": "serpent_constricteur",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy serpent constricteur creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant constrictor snake, immense emerald python with diamond-pattern scales, exactly one head and a limbless sinuous body, heavy coils, jungle riverbank"
   },
   "singe": {
     "nom": "Singe",
@@ -5532,7 +5532,7 @@
     "alignement": "—",
     "cle": "tigre",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy tigre creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "tiger, large striped orange cat, powerful muscles, glowing eyes, dense jungle"
   },
   "belette_sanguinaire": {
     "nom": "Belette sanguinaire",
@@ -5940,7 +5940,7 @@
     "alignement": "toujours neutre",
     "cle": "triceratops",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy tricératops creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "triceratops dinosaur, massive quadrupedal herbivore, three sharp horns and a large bony frill, thick hide, open plains"
   },
   "tyrannosaure": {
     "nom": "Tyrannosaure",
@@ -5964,7 +5964,7 @@
     "alignement": "toujours neutre",
     "cle": "tyrannosaure",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy tyrannosaure creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "tyrannosaurus rex dinosaur, giant two-legged predator, massive jaws full of teeth, tiny arms, thick tail, prehistoric jungle"
   },
   "dragonne": {
     "nom": "Dragonne",
@@ -6012,7 +6012,7 @@
     "alignement": "généralement chaotique bon",
     "cle": "dryade",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy dryade creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "dryade, fey forest spirit, beautiful elfin woman with hair of leaves and vines, gossamer dress, ancient oak tree"
   },
   "enlaceur": {
     "nom": "Enlaceur",
@@ -6036,7 +6036,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "enlaceur",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy enlaceur creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a living rock formation shaped like a tall grey stone stalagmite pillar in a cavern, its stone tip splits open into a wide fanged mouth with glowing red eyes, several long thin rope strands dangle from its rocky flanks, dark cave interior"
   },
   "etrangleur": {
     "nom": "Etrangleur",
@@ -6324,7 +6324,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "efrit",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy efrit creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "efreeti genie, towering fire djinn with ruddy red skin, smoke and flame curling from shoulders, curved scimitar, brass lamp room"
   },
   "jann": {
     "nom": "Jann",
@@ -6372,7 +6372,7 @@
     "alignement": "toujours chaotique bon",
     "cle": "ghaele",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy ghaele creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "ghaele, radiant archon of light, glowing feathered wings, serene holy aspect, celestial radiance"
   },
   "girallon": {
     "nom": "Girallon",
@@ -6420,7 +6420,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "gobelours",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy gobelours creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "bugbear goblinoid, large hulking hairy humanoid, long muscular arms, sharp canine teeth, shaggy fur, crude morningstar, dark cave lair"
   },
   "golem_de_fer": {
     "nom": "Golem de fer",
@@ -6444,7 +6444,7 @@
     "alignement": "toujours neutre",
     "cle": "golem_de_fer",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy golem de fer creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "iron golem, towering construct of riveted iron plates, glowing eyes, heavy crushing fists, bursts of noxious breath, forge"
   },
   "golem_de_pierre": {
     "nom": "Golem de pierre",
@@ -6468,7 +6468,7 @@
     "alignement": "toujours neutre",
     "cle": "golem_de_pierre",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy golem de pierre creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "stone golem, massive humanoid construct of carved granite, slow deliberate steps, glowing eyes, ancient temple threshold"
   },
   "gorgone": {
     "nom": "Gorgone",
@@ -6492,7 +6492,7 @@
     "alignement": "toujours neutre",
     "cle": "gorgone",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy gorgone creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "gorgon, monstrous bull completely covered in pebbled grey-blue metallic scales, curved horns, snorting a puff of green vapor, dark forest clearing"
   },
   "grick": {
     "nom": "Grick",
@@ -6516,7 +6516,7 @@
     "alignement": "généralement neutre",
     "cle": "grick",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy grick creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a rock-colored worm the length of a man, four short fleshy tentacles ringed around its beaked mouth, slithering between dark stones"
   },
   "annis": {
     "nom": "Annis",
@@ -6564,7 +6564,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "guenaude_marine",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy guenaude marine creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "sea hag, hideous green-skinned hag of the sea, seaweed hair, webbed hands, fish-like mottled features, underwater grotto"
   },
   "guenaude_verte": {
     "nom": "Guenaude verte",
@@ -6588,7 +6588,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "guenaude_verte",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy guenaude verte creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "green hag, ugly green-skinned crone, weathered warty face, long matted black hair, clawed fingers, shadowy swamp"
   },
   "hibou_geant": {
     "nom": "Hibou géant",
@@ -6612,7 +6612,7 @@
     "alignement": "généralement neutre bon",
     "cle": "hibou_geant",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy hibou géant creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant owl, huge feathered bird with sweeping wings, large yellow eyes, silent flight, moonlit forest"
   },
   "homoncule": {
     "nom": "Homoncule",
@@ -6684,7 +6684,7 @@
     "alignement": "généralement neutre",
     "cle": "naga_aquatique",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy naga aquatique creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "aquatic naga, serpent-bodied monster with fish-like fins and scales, humanoid head, glowing eyes, underwater ruins"
   },
   "naga_corrupteur": {
     "nom": "Naga corrupteur",
@@ -6708,7 +6708,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "naga_corrupteur",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy naga corrupteur creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "corrupting naga, huge serpent-bodied monster, dark scales, humanoid head with fanged grin, ominous magical aura, deep lair"
   },
   "naga_gardien": {
     "nom": "Naga gardien",
@@ -6732,7 +6732,7 @@
     "alignement": "généralement loyal bon",
     "cle": "naga_gardien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy naga gardien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a bearded crowned man whose entire lower body is a huge coiled golden snake, rearing up from the coils, ancient temple"
   },
   "naga_tenebreux": {
     "nom": "Naga ténébreux",
@@ -6756,7 +6756,7 @@
     "alignement": "généralement loyal mauvais",
     "cle": "naga_tenebreux",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy naga ténébreux creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "dark naga, serpent-bodied monster, glossy black scales, cobra-like hood and humanoid features, shadowy underground den"
   },
   "necrophage": {
     "nom": "Nécrophage",
@@ -6780,7 +6780,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "necrophage",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy nécrophage creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "necrophagous undead, gaunt corpse-like creature, gleaming ribcage, grasping claws, shadowy crypt"
   },
   "nuee_d_araignees": {
     "nom": "Nuée d'araignées",
@@ -6804,7 +6804,7 @@
     "alignement": "toujours neutre",
     "cle": "nuee_d_araignees",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy nuée d'araignées creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "swarm of spiders, countless tiny spiders crawling in a mass, chittering, dark cavern"
   },
   "nuee_de_criquets": {
     "nom": "Nuée de criquets",
@@ -6828,7 +6828,7 @@
     "alignement": "toujours neutre",
     "cle": "nuee_de_criquets",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy nuée de criquets creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "swarm of locusts, dense cloud of chirping insects, fluttering wings, devastated fields"
   },
   "nuee_de_guepes_infernales": {
     "nom": "Nuée de guêpes infernales",
@@ -6852,7 +6852,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "nuee_de_guepes_infernales",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy nuée de guêpes infernales creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "swarm of hell wasps, drone of angry stinging insects, infernal shimmer, buzzing"
   },
   "nuee_de_mille-pattes": {
     "nom": "Nuée de mille-pattes",
@@ -6876,7 +6876,7 @@
     "alignement": "toujours neutre",
     "cle": "nuee_de_mille-pattes",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy nuée de mille-pattes creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "swarm of centipedes, writhing mass of segmented crawling insects, dark undergrowth"
   },
   "nuee_de_rats": {
     "nom": "Nuée de rats",
@@ -6900,7 +6900,7 @@
     "alignement": "toujours neutre",
     "cle": "nuee_de_rats",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy nuée de rats creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "swarm of rats, horde of brown rats scurrying together, red eyes, sewer"
   },
   "nymphe": {
     "nom": "Nymphe",
@@ -6972,7 +6972,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "ombre",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy ombre creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "shadow, undead creature shaped like a humanoid silhouette of pure darkness, faintly glowing eyes, incorporeal and wispy, dim haunted hall"
   },
   "otyugh": {
     "nom": "Otyugh",
@@ -6996,7 +6996,7 @@
     "alignement": "généralement neutre",
     "cle": "otyugh",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy otyugh creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a bloated lumpy mass of brown flesh squatting on stubby legs in a refuse pit, two long tentacles waving above it, one tipped with a toothed mouth"
   },
   "ours_hibou": {
     "nom": "Ours hibou",
@@ -7044,7 +7044,7 @@
     "alignement": "toujours neutre",
     "cle": "oxydeur",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy oxydeur creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "rust monster, insectoid creature that corrodes metal, rusted antennae, rocky lair"
   },
   "pegase": {
     "nom": "Pégase",
@@ -7140,7 +7140,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "rakshasa",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy rakshasa creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "rakshasa, tiger-headed humanoid fiend, sleek striped fur, reversed palms, gold jewelry and rich robes, opulent lair"
   },
   "ravageur_gris": {
     "nom": "Ravageur gris",
@@ -7188,7 +7188,7 @@
     "alignement": "toujours neutre",
     "cle": "ravid",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy ravid creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "ravid, spectral winged undead with sunken eyes and wailing mouth, pale glow, haunted crypt"
   },
   "remorhaz": {
     "nom": "Remorhaz",
@@ -7212,7 +7212,7 @@
     "alignement": "généralement neutre",
     "cle": "remorhaz",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy remorhaz creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "remorhaz, giant centipede-like creature, iridescent blue-white chitin, furnace-hot body, great mandibles, frozen tundra"
   },
   "rhast": {
     "nom": "Rhast",
@@ -7260,7 +7260,7 @@
     "alignement": "toujours neutre",
     "cle": "rukh",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy rukh creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "rukh, gigantic bird of prey, eagle-like body with an enormous wingspan, hooked beak, razor talons, mountainside aerie"
   },
   "secreteur": {
     "nom": "Sécréteur",
@@ -7404,7 +7404,7 @@
     "alignement": "toujours neutre",
     "cle": "strige",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy strige creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "stirge, hideous bloodsucking pest resembling a plump bat with a long needle beak, leathery wings, red gleaming eyes, dangling from a cave ceiling"
   },
   "sylvanien": {
     "nom": "Sylvanien",
@@ -7428,7 +7428,7 @@
     "alignement": "généralement neutre bon",
     "cle": "sylvanien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy sylvanien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "treant, ancient tree-creature, living oak with bark skin, root legs, mossy facial features, primeval forest"
   },
   "tarasque": {
     "nom": "Tarasque",
@@ -7452,7 +7452,7 @@
     "alignement": "toujours neutre",
     "cle": "tarasque",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy tarasque creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "tarasque, colossal reptilian behemoth, armored spiked carapace, twin curved horns, massive claws and tail, devastating rampage"
   },
   "tendriculaire": {
     "nom": "Tendriculaire",
@@ -7476,7 +7476,7 @@
     "alignement": "toujours neutre",
     "cle": "tendriculaire",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy tendriculaire creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "rust monster, low-slung insectoid creature with metallic orange plates, snout-like antennae, damp cavern"
   },
   "tenebreux_aile": {
     "nom": "Ténébreux ailé",
@@ -7692,7 +7692,7 @@
     "alignement": "toujours chaotique",
     "cle": "titan",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy titan creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "titan, colossal godlike giant, classical heroic features, divine aura, lightning arcing, columned heavenly palace"
   },
   "tormante": {
     "nom": "Tormante",
@@ -7836,7 +7836,7 @@
     "alignement": "toujours mauvais",
     "cle": "vampirien",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vampirien creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "vampire spawn, pale undead thrall, gaunt face, thin fangs, dark noble clothing, cold mist"
   },
   "vargouille": {
     "nom": "Vargouille",
@@ -7860,7 +7860,7 @@
     "alignement": "toujours neutre mauvais",
     "cle": "vargouille",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vargouille creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant severed human head floating in the air, leathery bat wings sprouting from the sides of its skull, enormous fanged mouth dominating the face, short writhing tentacles instead of hair, graveyard mist"
   },
   "pouding_noir": {
     "nom": "Pouding noir",
@@ -7884,7 +7884,7 @@
     "alignement": "toujours neutre",
     "cle": "pouding_noir",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy pouding noir creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "black pudding, amorphous black ooze, glossy gelatinous mass, acidic drips, dungeon floor"
   },
   "vase_grise": {
     "nom": "Vase grise",
@@ -7908,7 +7908,7 @@
     "alignement": "toujours neutre",
     "cle": "vase_grise",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vase grise creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a wet gray film of translucent slime coating a stone wall like living ooze, seeping downward"
   },
   "ver_des_glaces": {
     "nom": "Ver des glaces",
@@ -7932,7 +7932,7 @@
     "alignement": "généralement neutre",
     "cle": "ver_des_glaces",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy ver des glaces creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "frost worm, giant pale segmented worm, crystalline ice spikes, frosty white breath, arctic tundra"
   },
   "abeille_geante": {
     "nom": "Abeille géante",
@@ -7956,7 +7956,7 @@
     "alignement": "—",
     "cle": "abeille_geante",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy abeille géante creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant bee, huge honeybee as large as a pony, fuzzy yellow and black striped body, four translucent wings, one stinger, giant honeycomb hive"
   },
   "charancon_geant": {
     "nom": "Charançon géant",
@@ -7980,7 +7980,7 @@
     "alignement": "—",
     "cle": "charancon_geant",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy charançon géant creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant weevil, oversized beetle with a long snout and segmented armor, forest"
   },
   "guepe_geante": {
     "nom": "Guêpe géante",
@@ -8004,7 +8004,7 @@
     "alignement": "—",
     "cle": "guepe_geante",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy guêpe géante creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant wasp, oversized deadly insect with thin waist, translucent wings, poisonous sting, paper nest"
   },
   "punaise_de_feu_geante": {
     "nom": "Punaise de feu géante",
@@ -8028,7 +8028,7 @@
     "alignement": "—",
     "cle": "punaise_de_feu_geante",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy punaise de feu géante creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant fire beetle, oversized beetle with glowing red organs, dark caverns"
   },
   "scarabee_geant": {
     "nom": "Scarabée géant",
@@ -8052,7 +8052,7 @@
     "alignement": "—",
     "cle": "scarabee_geant",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy scarabée géant creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant scarab beetle, oversized armored beetle with gleaming carapace and pincers, undergrowth"
   },
   "wiverne": {
     "nom": "Wiverne",
@@ -8076,7 +8076,7 @@
     "alignement": "généralement neutre",
     "cle": "wiverne",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy wiverne creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "wyvern, dragon-like creature on two legs, barbed stinger on tail, leathery wings, venomous bite, craggy ruins"
   },
   "xill": {
     "nom": "Xill",
@@ -8100,7 +8100,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "xill",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy xill creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "xill, insectoid humanoid, four arms ending in claws, multifaceted alien eyes, violet chitinous plates, planar shadows"
   },
   "yrthak": {
     "nom": "Yrthak",
@@ -8124,7 +8124,7 @@
     "alignement": "souvent neutre",
     "cle": "yrthak",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy yrthak creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "a sleek yellow-brown flying beast with broad leather wings, smooth head crowned by a bony crest with round disk ears, screeching over a canyon"
   },
   "entite_des_profondeurs": {
     "nom": "Entité des Profondeurs",
@@ -8148,7 +8148,7 @@
     "fp": "1/4",
     "alignement": "Neutre",
     "cle": "entite_des_profondeurs",
-    "prompt_image": "fantasy creature creature, D&D style illustration, ink style, dramatic lighting",
+    "prompt_image": "aboleth, ancient deep-sea horror, elongated fish-like body with a single broad tail fin, three glowing purple eyes in a row, four long tentacles around its circular maw, slimy grey-green hide, sunken ruins",
     "generique": true
   }
 }

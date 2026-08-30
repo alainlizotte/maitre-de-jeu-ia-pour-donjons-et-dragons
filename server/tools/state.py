@@ -19,6 +19,44 @@ def _party(ctx: ToolContext) -> PartyState:
     return PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
 
 
+def _nom_normalise(nom: str) -> str:
+    """Nom normalisé pour comparaison (accent/underscore-insensible)."""
+    import unicodedata
+
+    return "".join(
+        ch for ch in unicodedata.normalize("NFD", str(nom).lower())
+        if unicodedata.category(ch) != "Mn"
+    ).replace("_", " ").replace("-", " ").strip()
+
+
+def _combattant_mort(etat: dict, nom: str) -> bool:
+    """Un combattant est-il mort (à exclure de l'initiative) ?
+    PJ : condition « Mort » ; monstre suivi : condition « Détruit ». Un
+    combattant inconnu est réputé mort pour ne jamais bloquer l'avancement."""
+    nn = _nom_normalise(nom)
+    for p in (etat.get("pj") or []):
+        if _nom_normalise(p.get("nom")) == nn:
+            return "Mort" in (p.get("conditions") or [])
+    for mo in (etat.get("monstres_combat") or []):
+        if _nom_normalise(mo.get("nom")) == nn:
+            return "Détruit" in (mo.get("conditions") or [])
+    return True
+
+
+def _prochain_vivant(etat: dict, ordre: list[dict], idx: int) -> int:
+    """Renvoie l'indice du prochain combattant vivant dans `ordre`, en
+    partant de `idx` (le combattant qui doit normalement agir), en bouclant
+    circulairement. Renvoie -1 si aucun vivant."""
+    if not ordre:
+        return -1
+    n = len(ordre)
+    for step in range(n):
+        j = (idx + step) % n
+        if not _combattant_mort(etat, ordre[j].get("nom", "")):
+            return j
+    return -1
+
+
 @tool
 async def etat_partie_get(ctx: ToolContext) -> ToolResult:
     """
@@ -138,11 +176,46 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     """
     import random
 
-    from .monstres import _find_monstre, _find_monstre_with_fallback
+    from .monstres import _find_monstre, _load_bestiaire, _suggestions
 
     noms = [n.strip() for n in monstres.split(",") if n.strip()]
     if not noms:
         return ToolResult(text="❌ Donne au moins un nom de monstre.")
+
+    # ── VALIDITÉ STRICTE DES MONSTRES ───────────────────────────────────
+    # Le MJ ne doit JAMAIS inventer de monstre. On n'accepte que des créatures
+    # du bestiaire officiel (avec description physique ET statistiques).
+    # Tout nom qui ne résout à AUCUN monstre du bestiaire bloque le combat et
+    # affiche les suggestions officielles les plus proches — il est interdit
+    # d'engager un combat avec une créature inventée.
+    def _bdc(nom: str) -> list[str]:
+        best = _load_bestiaire(ctx)
+        return _suggestions(best.get("monstres", {}) or {}, [str(nom or "")])
+
+    monstres_ok: list[dict[str, Any]] = []
+    refus: list[str] = []
+    for nom in noms:
+        m = _find_monstre(ctx, nom)
+        if m is None:
+            refus.append(nom)
+            continue
+        monstres_ok.append(m)
+    if refus:
+        lignes_refus = ["⛔ **Monstres refusés (hors bestiaire officiel 3.5) :**"]
+        for nom in refus:
+            sugg = _bdc(nom)
+            lignes_refus.append(f"- **{nom}** — introuvable dans le bestiaire.")
+            if sugg:
+                lignes_refus.append(
+                    "  _Monstres officiels les plus proches : "
+                    + ", ".join(sugg) + "._"
+                )
+        lignes_refus.append(
+            "_\nIl est INTERDIT d'invoquer une créature inventée (sans fiche "
+            "ni stats officielles). Rejoue avec des noms du bestiaire (voir "
+            "liste ci-dessus / monstre_lister)._"
+        )
+        return ToolResult(text="\n".join(lignes_refus))
 
     state = _party(ctx)
     etat = state.load()
@@ -150,53 +223,38 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     monstres_combat: list[dict] = []
     lignes: list[str] = ["🎲 **Initiative du combat**"]
 
-    # Monstres (init officielle du bestiaire, mod 0 si inconnu).
-    # Les homonymes sont d'abord désambiguïsés : le suivi de tour/PV est
-    # basé sur le nom, deux créatures identiques doivent rester distinctes.
-    labels_resolus = []
-    for nom in noms:
-        m0 = _find_monstre_with_fallback(ctx, nom)
-        labels_resolus.append(str((m0 or {}).get("nom") or nom))
+    # Monstres validés (init officielle du bestiaire). Les homonymes sont
+    # d'abord désambiguïsés : le suivi de tour/PV est basé sur le nom, deux
+    # créatures identiques doivent rester distinctes.
+    labels_resolus = [str((m or {}).get("nom") or noms[i])
+                      for i, m in enumerate(monstres_ok)]
     labels_uniques = _noms_uniques(labels_resolus)
 
-    for i, nom in enumerate(noms):
-        m = _find_monstre_with_fallback(ctx, nom)
+    for i, (nom, m) in enumerate(zip(noms, monstres_ok)):
         label = labels_uniques[i]
-        if m:
-            try:
-                mod = int(str(m.get("init", "0")).replace("+", "").strip())
-            except ValueError:
-                mod = 0
-            try:
-                pv_m = int(str(m.get("pv", "0")).strip().split("(")[0])
-            except ValueError:
-                pv_m = 0
-            try:
-                ca_m = int(str(m.get("ca", "0")).strip())
-            except ValueError:
-                ca_m = 0
-            # Suivi mécanique des PV du monstre pendant le combat.
-            monstres_combat.append({
-                "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
-                "fp": str(m.get("fp", "?")), "conditions": [],
-            })
-        else:
+        try:
+            mod = int(str(m.get("init", "0")).replace("+", "").strip())
+        except ValueError:
             mod = 0
-            # Stats inconnues : suivi conservatif (pas de clôture auto tant
-            # que ce monstre n'a pas été consulté/détruit).
-            monstres_combat.append({
-                "nom": label, "pv": -1, "pv_max": -1, "ca": None,
-                "fp": "?", "conditions": [], "inconnu": True,
-            })
+        try:
+            pv_m = int(str(m.get("pv", "0")).strip().split("(")[0])
+        except ValueError:
+            pv_m = 0
+        try:
+            ca_m = int(str(m.get("ca", "0")).strip())
+        except ValueError:
+            ca_m = 0
+        # Suivi mécanique des PV du monstre pendant le combat.
+        monstres_combat.append({
+            "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
+            "fp": str(m.get("fp", "?")), "conditions": [],
+        })
         jet = random.randint(1, 20)
         participants.append({"nom": label, "init": jet + mod,
                              "jet_brut": jet, "mod": mod})
-        src = "" if m else " (stats inconnues : mod +0)"
-        if m and m.get("generique"):
-            src = " (générique : stats estimées)"
         lignes.append(
             f"- **{label}** — initiative {jet + mod} "
-            f"(d20={jet}, mod={mod:+d}){src}"
+            f"(d20={jet}, mod={mod:+d})"
         )
 
     # PJ vivants (1d20 + mod DEX depuis la fiche)
@@ -341,6 +399,12 @@ async def tour_suivant_combat(ctx: ToolContext) -> ToolResult:
         if idx >= len(ordre):
             idx = 0
             etat["tour"] = (etat.get("tour", 0) or 0) + 1
+    # Sauter les combattants morts / détruits (ne jamais leur donner de tour).
+    prochain = _prochain_vivant(etat, ordre, idx)
+    if prochain == -1:
+        # Plus aucun vivant : on laisse tomber (la clôture 5ter gérera).
+        prochain = idx
+    idx = prochain
     etat["courant_tour_pour"] = ordre[idx].get("nom", "")
     err = state.save(etat)
     if err:
@@ -423,7 +487,10 @@ async def combat_ajouter_combattant(
             )
         )
 
-    # Stats du bestiaire (PV/CA/INIT) si le monstre y figure.
+    # Stats du bestiaire (PV/CA/INIT) si le monstre y figure — les créatures
+    # INVOQUÉES par magie (Invocation de monstre I-IX, squelette animé, …)
+    # sont suivies avec leurs propres PV et n'ont pas besoin de figurer dans
+    # le bestiaire ni de description physique.
     m = _find_monstre_with_fallback(ctx, nom)
     label_base = str((m or {}).get("nom") or nom).strip() or nom
 

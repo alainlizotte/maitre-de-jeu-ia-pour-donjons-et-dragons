@@ -39,6 +39,41 @@ def _slug(s: str) -> str:
     return ascii_only[:60].strip("_").lower() or "monstre"
 
 
+# Marqueurs de numérotation ajoutés aux homonymes en combat (« Gobelin »,
+# « Gobelin (2) », « Gobelin 2 », « Gobelin #2 »). On les retire pour obtenir
+# le NOM DE TYPE canonique : deux créatures identiques doivent partager la
+# MÊME image, pas en générer une aléatoire par individu numéroté.
+_TYPE_SUFFIX_RE = re.compile(
+    r"(?:[\s_\-]*[\(\[](?:#?\d+)[\)\]])|(?:[\s_\-]+#?\d+)$",
+    re.IGNORECASE,
+)
+
+
+def _type_nom(nom: str) -> str:
+    """Nom de type canonique d'un monstre de combat.
+
+    « Gobelin (2) » → « Gobelin », « Gobelin #3 » → « Gobelin ». Sert de clé
+    de cache d'image pour qu'un groupe de monstres identiques réutilise la
+    même illustration au lieu d'en régénérer une aléatoire par individu.
+    """
+    n = str(nom or "").strip()
+    for _ in range(3):
+        dec = _TYPE_SUFFIX_RE.sub("", n).strip()
+        if dec == n:
+            break
+        n = dec
+    return n.strip() or str(nom or "").strip()
+
+
+def _cache_key(nom: str) -> str:
+    """Clé de cache d'image d'un monstre (slug du nom de type canonique).
+
+    Centralise tous les chemins image sur le NOM DE TYPE : « Gobelin (2) »
+    partage le PNG/méta de « Gobelin ».
+    """
+    return _slug(_type_nom(nom))
+
+
 def _bestiaire_path(ctx: ToolContext) -> str:
     return os.path.join(ctx.data_dir, "bestiaire.json")
 
@@ -537,9 +572,10 @@ def _find_image(ctx: ToolContext, nom: str) -> Optional[str]:
 
     On exclut le `.svg` car c'est par convention un placeholder affiché en
     dépannage — pas une « vraie » image. On préfère générer un vrai PNG
-    via ComfyUI plutôt que resservir un vieux SVG.
+    via ComfyUI plutôt que resservir un vieux SVG. Le cache est indexé sur le
+    nom de TYPE (`_cache_key`) pour que les homonymes partagent une image.
     """
-    slug = _slug(nom)
+    slug = _cache_key(nom)
     cache_dir = _cache_dir(ctx)
     for ext in ("png", "jpg", "jpeg", "webp"):
         p = os.path.join(cache_dir, f"{slug}.{ext}")
@@ -550,7 +586,7 @@ def _find_image(ctx: ToolContext, nom: str) -> Optional[str]:
 
 def _find_svg(ctx: ToolContext, nom: str) -> Optional[str]:
     """Renvoie le SVG placeholder existant (le cas échéant)."""
-    slug = _slug(nom)
+    slug = _cache_key(nom)
     p = os.path.join(_cache_dir(ctx), f"{slug}.svg")
     return p if os.path.isfile(p) else None
 
@@ -579,7 +615,7 @@ def _placeholder_svg(nom: str) -> str:
 
 def _write_placeholder(ctx: ToolContext, nom: str) -> str:
     """Écrit le placeholder SVG et renvoie son chemin."""
-    path = os.path.join(_cache_dir(ctx), f"{_slug(nom)}.svg")
+    path = os.path.join(_cache_dir(ctx), f"{_cache_key(nom)}.svg")
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(_placeholder_svg(nom))
@@ -692,7 +728,7 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
     recours), None seulement si même le placeholder est impossible.
     """
     m = _find_monstre(ctx, nom)
-    slug = _slug(nom)
+    slug = _cache_key(nom)
     dest = os.path.join(_cache_dir(ctx), f"{slug}.png")
     meta_path = _meta_path_for(ctx, slug)
     img_path = _find_image(ctx, nom)
@@ -714,8 +750,8 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
             pass
     else:
         description = await _description_monstre(m, nom)
-    nom_canonique = str((m or {}).get("nom") or nom)
-    prompt_text = monstre_prompt(nom_canonique, description)
+    nom_canonique = str((m or {}).get("nom") or _type_nom(nom))
+    prompt_text = monstre_prompt(_type_nom(nom_canonique), description)
     try:
         r = await generer_averti(ctx, "monstre", prompt_text, dest)
     except Exception:
@@ -818,8 +854,9 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     # placeholder SVG. « À jour » = le hash de la description stocké dans
     # <slug>.meta.json correspond à la description courante — un vieux PNG
     # généré sans description (monstre inventé par l'IA) est régénéré dès
-    # qu'une vraie fiche est disponible.
-    slug = _slug(nom)
+    # qu'une vraie fiche est disponible. Le cache est indexé sur le nom de
+    # TYPE (`_cache_key`) pour que les homonymes partagent une image.
+    slug = _cache_key(nom)
     cache_dir = _cache_dir(ctx)
     dest = os.path.join(cache_dir, f"{slug}.png")
     meta_path = _meta_path_for(ctx, slug)

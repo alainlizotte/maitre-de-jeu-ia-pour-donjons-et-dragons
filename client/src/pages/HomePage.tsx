@@ -9,6 +9,7 @@ import { api, getToken, setToken } from "../api/rest";
 import type { FichePerso } from "../api/types";
 import { useParty } from "../store";
 import { SheetModal } from "../components/StateSidebar";
+import { XpBar } from "../components/Bars";
 import { slugify } from "../utils/slug";
 
 // --------------------------------------------------------------------------- //
@@ -64,6 +65,9 @@ function CartePerso({ perso }: { perso: FichePerso }) {
         <div className="text-xs text-stone-500 tabular-nums mt-0.5">
           PV {perso.pv}/{perso.pv_max} · CA {perso.ca} · BBA{" "}
           {perso.bab > 0 ? `+${perso.bab}` : perso.bab}
+        </div>
+        <div className="mt-2 rounded bg-stone-900/60 border border-stone-800 p-2">
+          <XpBar xp={perso.xp} niveau={perso.niveau} compact />
         </div>
         {!perso.portrait && (
           <div className="text-[10px] text-amber-500/70 mt-1 italic">

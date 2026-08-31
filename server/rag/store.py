@@ -54,10 +54,18 @@ class RagStore:
 
     def __init__(self, cfg: AppConfig, embedder: Optional[Embedder] = None):
         self.cfg = cfg
+        # Base URL configurée (hostname Docker interne « llamaembed:8080 » la
+        # plupart du temps) ; on ajoute le port hôte publié 8081 en secours
+        # pour un lancement hors conteneur (tests, dev local).
+        principal = cfg.rag.embedding_base_url or cfg.llm.base_url
+        secours = ("http://localhost:8081/v1",)
+        if principal and principal.startswith("http://localhost:8081"):
+            secours = ()
         self.embedder = embedder or Embedder(
-            base_url=cfg.rag.embedding_base_url or cfg.llm.base_url,
+            base_url=principal,
             api_key=cfg.llm.api_key,
             model=cfg.rag.embedding_model,
+            fallbacks=secours,
         )
         self._persist_dir = cfg.abs(cfg.rag.persist_dir)
         self._source_dir = cfg.abs(cfg.rag.source_dir)

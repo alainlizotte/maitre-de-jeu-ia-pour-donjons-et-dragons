@@ -71,6 +71,8 @@
     },
     "charge_max": {"type": "integer", "description": "Charge maximale transportable en kg (table PHB 3.5)."},
     "or": {"type": "integer", "description": "Or en pieces de cuivre (pc).", "default": 0},
+    "xp": {"type": "integer", "description": "Experience cumulee (DMG 3.5). Niveau N = N*(N-1)/2*1000 XP minimum ; montee automatique avec jet de de de vie.", "minimum": 0, "default": 0},
+    "niveaux_negatifs": {"type": "integer", "description": "Niveaux negatifs cumules (energy drain). Niveau effectif = niveau - niveaux_negatifs ; mort si <= 0.", "minimum": 0, "default": 0},
     "alignement": {"type": "string", "description": "Alignement D&D, ex. 'Loyal Bon'."},
     "histoire": {"type": "string", "description": "Background roleplay libre."},
     "conditions": {"type": "array", "items": {"type": "string"}, "description": "Conditions D&D 3.5 actives."}

@@ -303,6 +303,8 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     etat["initiative"] = participants
     etat["courant_tour_pour"] = participants[0]["nom"]
     etat["monstres_combat"] = monstres_combat
+    from datetime import datetime as _dt
+    etat["tour_depuis"] = _dt.now().isoformat()
     err = state.save(etat)
     if err:
         return ToolResult(text=err)
@@ -314,8 +316,10 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
         "",
         f"⚔️ **Combat engagé ! Tour 1 — c'est au tour de {qui}.**",
         "Ordre : " + " → ".join(p["nom"] for p in participants),
-        "_Au tour de chaque actif : lancer_attaque / lancer_degats / "
-        "lancer_sauvegarde selon ses actions, puis tour_suivant_combat._",
+        "_⚙️ Rotation gérée par le SERVEUR : les monstres attaquent, les "
+        "mourants sont passés et l'XP distribuée automatiquement. Le joueur "
+        "actif déclare son action (attaque, sort…) ; terminer_mon_tour "
+        "passe la main._",
     ]
     return ToolResult(
         text="\n".join(lignes),
@@ -402,10 +406,12 @@ async def tour_suivant_combat(ctx: ToolContext) -> ToolResult:
     # Sauter les combattants morts / détruits (ne jamais leur donner de tour).
     prochain = _prochain_vivant(etat, ordre, idx)
     if prochain == -1:
-        # Plus aucun vivant : on laisse tomber (la clôture 5ter gérera).
+        # Plus aucun vivant : on laisse tomber (la clôture serveur gérera).
         prochain = idx
     idx = prochain
     etat["courant_tour_pour"] = ordre[idx].get("nom", "")
+    from datetime import datetime as _dt2
+    etat["tour_depuis"] = _dt2.now().isoformat()
     err = state.save(etat)
     if err:
         return ToolResult(text=err)
@@ -578,3 +584,68 @@ async def reset_partie(ctx: ToolContext) -> ToolResult:
     À utiliser seulement lors d'un nouveau départ confirmé par les joueurs.
     """
     return ToolResult(text=_party(ctx).reset(), state_patch={"__reset__": True})
+
+
+@tool
+async def terminer_mon_tour(ctx: ToolContext) -> ToolResult:
+    """
+    Termine VOLONTAIREMENT le tour du personnage courant (il renonce à ses
+    actions restantes et passe la main). C'est la seule façon pour un joueur
+    de céder son tour sans agir — la rotation vers le combattant suivant,
+    les tours de monstres et la fin de combat sont ensuite gérés
+    automatiquement par le serveur.
+
+    :param (aucun)
+    """
+    from datetime import datetime as _dt
+
+    state = _party(ctx)
+    etat = state.load()
+    if etat.get("phase") != "combat" or not etat.get("initiative"):
+        return ToolResult(text="❌ Aucun combat en cours.")
+    courant = str(etat.get("courant_tour_pour") or "")
+    # Sécurité : seul le joueur du personnage courant peut terminer son tour
+    # (best effort — un monstre n'a pas de joueur).
+    pj = next(
+        (p for p in etat.get("pj") or []
+         if str(p.get("nom", "")).lower() == courant.lower()),
+        None,
+    )
+    if pj is not None and str(pj.get("joueur") or "").strip():
+        emit = str(ctx.joueur or "").strip().lower()
+        legitime = str(pj.get("joueur")).strip().lower()
+        if emit and emit != legitime:
+            return ToolResult(
+                text=(
+                    f"❌ Ce n'est pas ton tour : c'est à {courant} "
+                    f"(joué par {pj.get('joueur')})."
+                )
+            )
+    ordre = etat["initiative"]
+    idx = next((i for i, e in enumerate(ordre) if e.get("nom") == courant), -1)
+    if idx == -1:
+        return ToolResult(text="❌ Combattant courant introuvable.")
+    idx += 1
+    if idx >= len(ordre):
+        idx = 0
+        etat["tour"] = (etat.get("tour", 0) or 0) + 1
+    vivant = _prochain_vivant(etat, ordre, idx)
+    if vivant == -1:
+        vivant = idx
+    etat["courant_tour_pour"] = ordre[vivant].get("nom", "")
+    etat["tour_depuis"] = _dt.now().isoformat()
+    err = state.save(etat)
+    if err:
+        return ToolResult(text=err)
+    return ToolResult(
+        text=(
+            f"➡️ Tour de {courant} terminé — au tour de "
+            f"**{etat['courant_tour_pour']}** (round {etat['tour']}). "
+            "_Le serveur joue maintenant les monstres et les tours "
+            "incapables automatiquement._"
+        ),
+        state_patch={
+            "tour": etat["tour"],
+            "courant_tour_pour": etat["courant_tour_pour"],
+        },
+    )

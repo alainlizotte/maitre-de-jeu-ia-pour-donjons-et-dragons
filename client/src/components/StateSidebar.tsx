@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/rest";
 import { useParty } from "../store";
 import type { Personnage } from "../api/types";
+import { XpBar, ChargeBar } from "./Bars";
 
 /** Slug identique au `_slug` serveur (server/tools/fiches.py) pour retrouver
  *  le portrait `portraits_cache/<slug>.png` d'un personnage. */
@@ -128,6 +129,20 @@ function PlayerCard({ pj, onOpen }: { pj: Personnage; onOpen: () => void }) {
           <div className="text-center text-xs tabular-nums text-stone-400 mt-0.5">
             {pj.pv}/{pj.pv_max} pv{pj.ca !== undefined ? ` · CA ${pj.ca}` : ""}
           </div>
+        </div>
+      )}
+      {(pj.xp !== undefined || pj.niveau !== undefined) && (
+        <div className="mt-1.5 rounded bg-stone-900/50 border border-stone-800 px-1.5 py-1">
+          <XpBar xp={Number(pj.xp ?? 0)} niveau={Number(pj.niveau ?? 1)} compact />
+        </div>
+      )}
+      {(pj.charge_max !== undefined || pj.poids_transporte !== undefined) && (
+        <div className="mt-1.5 rounded bg-stone-900/50 border border-stone-800 px-1.5 py-1">
+          <ChargeBar
+            poids={Number(pj.poids_transporte ?? 0)}
+            chargeMax={Number(pj.charge_max ?? 0)}
+            etat={typeof pj.etat_encumbrance === "string" ? pj.etat_encumbrance : undefined}
+          />
         </div>
       )}
       {(pj as { conditions?: string[] }).conditions?.length ? (
@@ -294,6 +309,21 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
             </div>
           )}
         </div>
+
+        {identite.niveau != null && (
+          <div className="mb-2 rounded bg-stone-800/40 border border-stone-800 p-2">
+            <XpBar xp={Number(f.xp ?? 0)} niveau={Number(identite.niveau ?? 1)} />
+          </div>
+        )}
+        {(f.poids_transporte !== undefined || f.charge_max !== undefined) && (
+          <div className="mb-2 rounded bg-stone-800/40 border border-stone-800 p-2">
+            <ChargeBar
+              poids={Number(f.poids_transporte ?? 0)}
+              chargeMax={Number(f.charge_max ?? 0)}
+              etat={typeof f.etat_encumbrance === "string" ? f.etat_encumbrance : undefined}
+            />
+          </div>
+        )}
 
         {ficheQuery.isLoading && <p className="text-stone-500 text-xs italic mb-2">Chargement de la fiche…</p>}
         {ficheQuery.isError && (

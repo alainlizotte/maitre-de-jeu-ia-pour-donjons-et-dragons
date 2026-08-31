@@ -233,6 +233,8 @@ export interface FichePerso {
   race: string;
   classe: string;
   niveau: number;
+  /** Points d'expérience courants (montée de niveau officielle 3.5). */
+  xp?: number;
   carac: CaracMap;
   pv: number;
   pv_max: number;
@@ -242,9 +244,13 @@ export interface FichePerso {
   initiative?: number;
   /** Charge maximale transportable en kg (Force × taille). */
   charge_max?: number;
+  /** Poids transporté actuel en kg (depuis le catalogue PHB 3.5). */
+  poids_transporte?: number;
+  /** Catégorie d'encombrement : Legere / Moyenne / Lourde / Depassee. */
+  etat_encumbrance?: "Legere" | "Moyenne" | "Lourde" | "Depassee" | string;
   competences?: Record<string, number>;
   dons?: string[];
-  equipement?: { nom: string; qte: number }[];
+  equipement?: { nom: string; qte: number; poids?: number }[];
   or?: number;
   alignement?: string;
   dieu?: string;
@@ -286,6 +292,8 @@ export interface ArmeModele {
   distance: boolean;
   degats: string;
   cout: number;
+  /** Poids d'une unité en kg (PHB 3.5). */
+  poids?: number;
 }
 
 export interface ArmureModele {
@@ -295,11 +303,15 @@ export interface ArmureModele {
   dex_max: number | null;
   malus: number;
   cout: number;
+  /** Poids d'une unité en kg (PHB 3.5, taille Moyenne). */
+  poids?: number;
 }
 
 export interface ObjetModele {
   nom: string;
   cout: number;
+  /** Poids d'une unité en kg (PHB 3.5). */
+  poids?: number;
 }
 
 export interface DonModele {

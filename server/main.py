@@ -733,6 +733,77 @@ def _normaliser_equipement(brut: Any) -> list[dict[str, Any]]:
     return resultat
 
 
+def _poids_catalogue(nom: str) -> Optional[float]:
+    """Poids (kg) d'une unité d'objets du catalogue de création (PHB 3.5).
+
+    Cherche d'abord dans armes/armures/équipement du catalogue ; se rabat sur
+    le catalogue de poids du moteur d'inventaire pour les objets synonymes.
+    Renvoie None si l'objet est inconnu (poids non compté, comme l'outil
+    d'inventaire le fait).
+    """
+    try:
+        from .tools import inventaire as inventaire_mod  # pylint: disable=import-outside-toplevel
+    except Exception:                                     # noqa: BLE001
+        inventaire_mod = None
+
+    def _norm(s: str) -> str:
+        import unicodedata as _u, re as _re
+        s = _u.normalize("NFKD", str(s or "").lower())
+        s = "".join(c for c in s if not _u.combining(c))
+        s = _re.sub(r"[^a-z0-9]+", " ", s).strip()
+        return s
+
+    cible = _norm(nom)
+    for entrepot in (*catalogue_mod.ARMES, *catalogue_mod.ARMURES, *catalogue_mod.EQUIPEMENT):
+        if isinstance(entrepot, dict) and _norm(str(entrepot.get("nom") or "")) == cible:
+            p = entrepot.get("poids")
+            if isinstance(p, (int, float)):
+                return float(p)
+    if inventaire_mod is not None:
+        info = inventaire_mod._POIDS_OFFICIELS.get(cible)  # noqa: SLF001
+        if info:
+            lot = int(info.get("lot") or 1)
+            return round(float(info["poids_kg"]) / lot, 4)
+    return None
+
+
+def _calculer_charge_equipement(equipement: list[dict[str, Any]],
+                                charge_max: float,
+                                or_pc: int = 0) -> dict[str, Any]:
+    """Calcule la charge portée depuis le catalogue (armes/armures/équipement).
+
+    Renvoie `{poids_transporte, etat_encumbrance, charge_max}`. Chaque objet
+    récupère son `poids` (kg/unité) s'il est connu du catalogue, auquel cas
+    son poids est compté ; sinon `poids` reste absent et l'objet n'est pas
+    compté (cohérent avec le moteur d'inventaire).
+    """
+    total = 0.0
+    for e in equipement:
+        if not isinstance(e, dict) or not e.get("nom"):
+            continue
+        qte = int(e.get("qte", 1) or 1)
+        pu = _poids_catalogue(str(e["nom"]))
+        if pu is None:
+            continue
+        e["poids"] = pu
+        total += pu * qte
+    # Monnaie : 50 pièces = 1 lb (PHB 3.5).
+    if or_pc:
+        total += or_pc / 50.0 * 0.4536
+    total = round(total, 2)
+    max_kg = max(1, int(charge_max or 0))
+    tiers = max_kg / 3.0
+    if total <= tiers:
+        cat = "Legere"
+    elif total <= 2 * tiers:
+        cat = "Moyenne"
+    elif total <= max_kg:
+        cat = "Lourde"
+    else:
+        cat = "Depassee"
+    return {"poids_transporte": total, "etat_encumbrance": cat, "charge_max": max_kg}
+
+
 @app.post("/api/persos")
 async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(utilisateur_courant)) -> dict[str, Any]:
     """Crée ou met à jour un personnage du compte connecté.
@@ -842,6 +913,7 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         "race": persos_mod.resoudre_race(race) or race,
         "classe": persos_mod.resoudre_classe(classe) or classe,
         "niveau": niveau,
+        "xp": 0,
         "carac": calculs["carac_final"],
         "pv": calculs["pv"],
         "pv_max": calculs["pv_max"],
@@ -869,6 +941,9 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
             "description": apparence_in.get("description") or "",
         },
     }
+    # Charge transportée (kg) et catégorie d'encombrement D&D 3.5, calculées
+    # depuis le catalogue de poids PHB 3.5.
+    fiche.update(_calculer_charge_equipement(equipement, fiche["charge_max"], fiche["or"]))
 
     chemin = persos_mod.chemin_fiche(data_dir, nom)
     try:

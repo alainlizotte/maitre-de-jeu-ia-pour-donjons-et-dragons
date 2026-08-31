@@ -110,6 +110,17 @@ function donDisponible(d: DonModele, final: CaracMap, bab: number): boolean {
 
 const fmtPo = (n: number) => (n === 0 ? "gratuit" : `${n} po`);
 
+/** Parse le champ libre « une ligne = un objet « Nom x2 » pour les quantités ». */
+const parseLibres = (texte: string): { nom: string; qte: number }[] =>
+  texte
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((ligne) => {
+      const mx = ligne.match(/^(.*?)\s+x(\d+)$/i);
+      return mx ? { nom: mx[1].trim(), qte: parseInt(mx[2], 10) } : { nom: ligne, qte: 1 };
+    });
+
 interface FormState {
   nom: string;
   race: string;
@@ -417,6 +428,41 @@ export function CharacterFormPage() {
     return total;
   }, [modele.data, form.armesChoisies, form.armuresChoisies, form.equipChoisi]);
   const soldeOr = (Number(form.or) || 0) - depenseEquipement;
+
+  // Poids total porté (kg) des armes/armures/équipements cochés + objets libres
+  // connus du catalogue → permet d'indiquer la charge par rapport à la capacité.
+  const poidsPorte = useMemo(() => {
+    const m = modele.data;
+    if (!m) return { poids: 0, inconnus: [] as string[] };
+    const poids = new Map<string, number>();
+    for (const a of m.armes) poids.set(a.nom, a.poids ?? 0);
+    for (const a of m.armures) poids.set(a.nom, a.poids ?? 0);
+    for (const o of m.equipement_aventurier) poids.set(o.nom, o.poids ?? 0);
+    let total = 0;
+    const inconnus: string[] = [];
+    for (const nom of [...form.armesChoisies, ...form.armuresChoisies, ...form.equipChoisi]) {
+      total += poids.get(nom) ?? 0;
+    }
+    for (const o of parseLibres(form.equipLibre)) {
+      const pu = poids.get(o.nom);
+      if (pu === undefined) {
+        inconnus.push(o.nom);
+        continue;
+      }
+      total += pu * (o.qte || 1);
+    }
+    if (form.or) total += (Number(form.or) || 0) / 50 * 0.4536;
+    return { poids: Math.round(total * 100) / 100, inconnus };
+  }, [modele.data, form.armesChoisies, form.armuresChoisies, form.equipChoisi, form.equipLibre, form.or]);
+  const etatCharge = useMemo(() => {
+    const max = calc.chargeMax || 1;
+    const p = poidsPorte.poids;
+    const tiers = max / 3;
+    if (p > max) return { cat: "Dépassée", depasse: true, max: false, pct: Math.min(100, (p / max) * 100) };
+    if (p > 2 * tiers) return { cat: "Lourde", depasse: false, max: true, pct: Math.min(100, (p / max) * 100) };
+    if (p > tiers) return { cat: "Moyenne", depasse: false, max: false, pct: Math.min(100, (p / max) * 100) };
+    return { cat: "Légère", depasse: false, max: false, pct: Math.min(100, (p / max) * 100) };
+  }, [poidsPorte.poids, calc.chargeMax]);
   const budgetRangs = useMemo(() => {
     const base = form.classe
       ? (modele.data?.points_competence?.[form.classe] ?? 0)
@@ -509,15 +555,6 @@ export function CharacterFormPage() {
 
   const enregistrer = useMutation({
     mutationFn: () => {
-      const parseLibres = (texte: string) =>
-        texte
-          .split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean)
-          .map((ligne) => {
-            const mx = ligne.match(/^(.*?)\s+x(\d+)$/i);
-            return mx ? { nom: mx[1].trim(), qte: parseInt(mx[2], 10) } : { nom: ligne, qte: 1 };
-          });
       // Le serveur recalcule PV/CA/BBA/sauvegardes et régénère le portrait.
       const payload: Record<string, unknown> = {
         nom: form.nom.trim(),
@@ -831,6 +868,85 @@ export function CharacterFormPage() {
               )}
             </section>
 
+            {/* -------------------- Charge transportée -------------------- */}
+            <section
+              className={`border rounded-lg p-4 ${
+                etatCharge.depasse
+                  ? "bg-rose-900/20 border-rose-500/60"
+                  : etatCharge.max
+                    ? "bg-amber-900/20 border-amber-700/40"
+                    : "bg-stone-800/40 border-stone-700/60"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="font-serif text-lg text-amber-200">Charge transportée</h2>
+                {calc.complet && (
+                  <span
+                    className={`ml-auto px-2 py-0.5 rounded text-xs font-semibold ${
+                      etatCharge.depasse
+                        ? "bg-rose-600 text-white"
+                        : etatCharge.max
+                          ? "bg-amber-600 text-black"
+                          : "bg-emerald-700 text-white"
+                    }`}
+                  >
+                    {etatCharge.cat}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-stone-500 mb-3">
+                Poids des armes, armures et objets choisis selon le PHB 3.5, rapporté à la
+                capacité de transport (Force × taille).
+              </p>
+              <div className="flex items-end justify-between mb-1">
+                <span className="text-xl text-stone-100 tabular-nums">
+                  {poidsPorte.poids.toFixed(2)} kg
+                  <span className="text-sm text-stone-500"> / {calc.chargeMax || "—"} kg</span>
+                </span>
+                <span className="text-xs text-stone-500">
+                  {etatCharge.pct.toFixed(0)}% de la charge max
+                </span>
+              </div>
+              {calc.complet ? (
+                <>
+                  <div className="h-2.5 w-full rounded-full bg-stone-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        etatCharge.depasse
+                          ? "bg-rose-500"
+                          : etatCharge.max
+                            ? "bg-amber-400"
+                            : etatCharge.cat === "Moyenne"
+                              ? "bg-yellow-300"
+                              : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${etatCharge.pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs mt-1 text-stone-500">
+                    Légère ≤ ⅓ · Moyenne ≤ ⅔ · Lourde ≤ max · Dépassée au-delà (PHB 3.5).
+                  </p>
+                  {poidsPorte.inconnus.length > 0 && (
+                    <p className="text-xs text-orange-500/90 mt-1">
+                      Objets hors catalogue (poids non compté) :{" "}
+                      {poidsPorte.inconnus.join(", ")}
+                    </p>
+                  )}
+                  {etatCharge.depasse && (
+                    <p className="text-xs text-rose-300 mt-2 font-medium">
+                      ⚠️ La charge dépasse la capacité maximale. Selon les règles PHB 3.5 le
+                      personnage ne peut pas avancer ainsi ; la création reste possible mais
+                      l'encombrement sera « Dépassée » en jeu.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-amber-500/80 mt-1 italic">
+                  Choisissez une race et une classe pour calculer la capacité de charge.
+                </p>
+              )}
+            </section>
+
             {/* ------------------------- Apparence ------------------------- */}
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4">
               <div className="flex flex-wrap items-center gap-3 mb-1">
@@ -986,6 +1102,7 @@ export function CharacterFormPage() {
                             {" "}
                             · {a.degats} · {a.groupe === "simple" ? "simple" : "martial"} ·{" "}
                             {fmtPo(a.cout)}
+                            {a.poids !== undefined && ` · ${a.poids} kg`}
                           </span>
                         </span>
                       </label>
@@ -1021,6 +1138,7 @@ export function CharacterFormPage() {
                             {" "}
                             · {a.categorie.toLowerCase()} · CA +{a.ca}
                             {a.malus > 0 ? ` · malus ${a.malus}` : ""} · {fmtPo(a.cout)}
+                            {a.poids !== undefined && ` · ${a.poids} kg`}
                           </span>
                         </span>
                       </label>
@@ -1044,7 +1162,11 @@ export function CharacterFormPage() {
                       />
                       <span>
                         {o.nom}
-                        <span className="text-stone-500"> · {fmtPo(o.cout)}</span>
+                        <span className="text-stone-500">
+                          {" "}
+                          · {fmtPo(o.cout)}
+                          {o.poids !== undefined && ` · ${o.poids} kg`}
+                        </span>
                       </span>
                     </label>
                   ))}

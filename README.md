@@ -50,18 +50,6 @@ connectent depuis leur navigateur sur le réseau local.
   sauvegardes, états flat-footed…).
 - Ingestion incrémentale : `docker compose exec dnd35 python -m server.rag --ingest`.
 
-## 📸 Captures d'écran
-
-| | |
-|---|---|
-| ![Connexion](screenshots/connexion.png) ![Menu](screenshots/menu.png) | |
-| ![Choix quête](screenshots/choix%20qu%C3%AAte.png) | ![Chat équipe](screenshots/chat%20%C3%A9quipe.png) |
-| ![Création personnage 1](screenshots/cr%C3%A9ation%20personnage%201.png) | ![Création personnage 2](screenshots/cr%C3%A9ation%20personnage%202.png) |
-| ![Création personnage 3](screenshots/cr%C3%A9ation%20personnage%203.png) | ![Sélection personnage](screenshots/s%C3%A9lection%20personnage%20et%20g%C3%A9n%C3%A9ration%20portrait.png) |
-| ![Fiche personnage](screenshots/fiche%20personnage.png) | ![Fiche monstre](screenshots/fiche%20monstre.png) |
-| ![Combat](screenshots/combat.png) | ![Bestiaire](screenshots/bestiaire.png) |
-| ![Carte interactive](screenshots/carte%20interactive.png) | ![Carte donjon](screenshots/carte%20donjon.png) |
-
 ## 🚀 Démarrage rapide (Docker)
 
 Prérequis : Docker Desktop, [Ollama](https://ollama.com) (ou llama.cpp) avec un modèle de chat,

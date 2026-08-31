@@ -193,9 +193,11 @@ def _load_fiche(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
         return None
 
 
-# Cache module-level du schéma JSON et de son validateur (lazy, chargé une fois).
-_SCHEMA_FICHE_CACHE: Optional[dict[str, Any]] = None
-_SCHEMA_VALIDATOR_CACHE: Any = None
+# Cache module-level des schémas JSON et validateurs par chemin (lazy).
+# Indexé par chemin de `schema_fiche.json` : deux parties avec des data_dir
+# différents (tests, multi-instance) ne partagent pas un validateur.
+_SCHEMA_JSON_BY_PATH: dict[str, dict[str, Any]] = {}
+_SCHEMA_VALIDATORS_BY_PATH: dict[str, Any] = {}
 
 
 def _load_schema_fiche(ctx: ToolContext) -> Optional[Any]:
@@ -205,23 +207,23 @@ def _load_schema_fiche(ctx: ToolContext) -> Optional[Any]:
     absent ou si `jsonschema` n'est pas installé — la validation est alors
     silencieusement ignorée (comportement pré-validation).
     """
-    global _SCHEMA_FICHE_CACHE, _SCHEMA_VALIDATOR_CACHE
-    if _SCHEMA_VALIDATOR_CACHE is not None:
-        return _SCHEMA_VALIDATOR_CACHE
     schema_path = os.path.join(_fiches_dir(ctx), "schema_fiche.json")
+    if schema_path in _SCHEMA_VALIDATORS_BY_PATH:
+        return _SCHEMA_VALIDATORS_BY_PATH[schema_path]
     if not os.path.isfile(schema_path):
         return None
     try:
-        if _SCHEMA_FICHE_CACHE is None:
+        if schema_path not in _SCHEMA_JSON_BY_PATH:
             with open(schema_path, "r", encoding="utf-8") as f:
-                _SCHEMA_FICHE_CACHE = json.load(f)
+                _SCHEMA_JSON_BY_PATH[schema_path] = json.load(f)
         try:
             import jsonschema                        # pylint: disable=import-outside-toplevel
             from jsonschema import Draft7Validator   # pylint: disable=import-outside-toplevel
         except ImportError:
             return None                              # jsonschema non installé → skip
-        _SCHEMA_VALIDATOR_CACHE = Draft7Validator(_SCHEMA_FICHE_CACHE)
-        return _SCHEMA_VALIDATOR_CACHE
+        validator = Draft7Validator(_SCHEMA_JSON_BY_PATH[schema_path])
+        _SCHEMA_VALIDATORS_BY_PATH[schema_path] = validator
+        return validator
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -348,6 +350,7 @@ async def fiche_perso_creer(
     :param joueur (str): nom du joueur humain.
     :param histoire (str): court historique/background du perso. Optionnel.
     """
+    joueur = _joueur_valide(joueur, ctx)
     try:
         carac = _parse_json(carac_json, "carac_json")
         sauv = _parse_json(sauvegardes_json, "sauvegardes_json")
@@ -357,6 +360,7 @@ async def fiche_perso_creer(
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
 
+    from ..game.xp import xp_min_niveau
     fiche = {
         "nom": nom,
         "joueur": joueur,
@@ -373,6 +377,8 @@ async def fiche_perso_creer(
         "dons": dons,
         "equipement": equip,
         "or": int(or_total),
+        "xp": xp_min_niveau(int(niveau)),
+        "niveaux_negatifs": 0,
         "alignement": alignement,
         "histoire": histoire or "",
         "conditions": [],
@@ -434,8 +440,7 @@ async def fiche_perso_creer_rapide(
     """
     import random as _rnd
 
-    if not joueur:
-        joueur = getattr(ctx, "joueur", "") or ""
+    joueur = _joueur_valide(joueur, ctx)
 
     # ---- Auto-génération des caractéristiques si non fournies ----
     def _mod(c: int) -> int:
@@ -565,6 +570,8 @@ async def fiche_perso_creer_rapide(
         "dons": [],
         "equipement": [],
         "or": 0,
+        "xp": 0,
+        "niveaux_negatifs": 0,
         "alignement": alignement,
         "histoire": "",
         "conditions": [],
@@ -668,6 +675,7 @@ async def fiche_perso_recuperer(ctx: ToolContext, nom: str) -> ToolResult:
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    from ..game.xp import ligne_xp_fiche
     return ToolResult(
         text=(
             f"📜 **Fiche de {fiche['nom']}** "
@@ -678,6 +686,7 @@ async def fiche_perso_recuperer(ctx: ToolContext, nom: str) -> ToolResult:
             f"- Caractéristiques : {fiche.get('carac','?')}\n"
             f"- PV : {fiche.get('pv','?')}/{fiche.get('pv_max','?')} — "
             f"CA : {fiche.get('ca','?')}\n"
+            + ligne_xp_fiche(fiche) + "\n"
             f"- Sauvegardes : {fiche.get('sauvegardes','?')}\n"
             f"- BBA : {fiche.get('bab','?')}\n"
             f"- Compétences : {fiche.get('competences','?')}\n"
@@ -804,6 +813,25 @@ def _norm_nom_simple(s: Any) -> str:
     return "".join(c for c in s if not unicodedata.combining(c))
 
 
+_PLACEHOLDER_JOUEUR = re.compile(
+    r"^[<{\[(]?\s*(pseudo[_ -]?joueur|nom[_ -]?du[_ -]?joueur|joueur"
+    r"|player|username|your[_ -]?name|<[^>]*>|\{[^}]*\})\s*[>}\])]?$",
+    re.IGNORECASE,
+)
+
+
+def _joueur_valide(joueur: Any, ctx: ToolContext) -> str:
+    """Sanitise le champ `joueur` : un petit LLM recopie parfois le
+    placeholder de la docstring (« <pseudo_joueur> », « {pseudo} »…).
+    Une telle valeur rendrait le verrouillage de tour impossible (plus
+    aucun joueur ne peut agir pour ce PJ). On retombe sur l'émetteur du
+    message (ctx.joueur), sinon chaîne vide (= tour libre)."""
+    j = str(joueur or "").strip()
+    if not j or _PLACEHOLDER_JOUEUR.match(j):
+        return str(getattr(ctx, "joueur", "") or "").strip()
+    return j
+
+
 def _infliger_degats_monstre(
     ctx: ToolContext, nom: str, d: int
 ) -> Optional[ToolResult]:
@@ -884,8 +912,17 @@ async def fiche_perso_infliger_degats(
     :param nom (str): nom du personnage ou du monstre.
     :param degats (int): nombre de points de dégâts (≥0).
     """
+    try:
+        d = max(0, int(float(str(degats).strip())))
+    except (TypeError, ValueError):
+        return ToolResult(
+            text=(
+                f"❌ Montant de dégâts invalide ({degats!r}) pour '{nom}' — "
+                "rappelle le tool avec degats=<nombre> (le total du jet de "
+                "lancer_degats)."
+            )
+        )
     fiche = _load_fiche(ctx, nom)
-    d = max(0, int(degats))
     if fiche is None:
         r = _infliger_degats_monstre(ctx, nom, d)
         if r is not None:
@@ -946,11 +983,20 @@ async def fiche_perso_soigner(
     :param nom (str): nom du personnage.
     :param soin (int): points de vie restaurés (≥0).
     """
+    try:
+        s = max(0, int(float(str(soin).strip())))
+    except (TypeError, ValueError):
+        return ToolResult(
+            text=(
+                f"❌ Montant de soin invalide ({soin!r}) pour '{nom}' — "
+                "rappelle le tool avec soin=<nombre> (le total du jet de "
+                "soins)."
+            )
+        )
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
     try:
-        s = max(0, int(soin))
         max_pv = int(fiche.get("pv_max", 0))
         nv = min(max_pv, int(fiche.get("pv", 0)) + s)
     except (TypeError, ValueError):

@@ -46,15 +46,36 @@ from .rag.store import RagStore
 from .tools.base import ToolContext
 from .tools.monstres import image_pour
 from .tools.registry import discover_tools
+from .game.combat import boucle_auto as _boucle_combat
 
 import re as _re_mod
 
 # Détection d'une invoquation / renfort annoncé par un joueur en combat :
-# déclenche le rattrapage 5bis-b si le MJ l'a narrée sans tool.
+# déclenche le rattrapage 5bis-b si le MJ l'a narré sans tool.
 _INVOKE_RE = _re_mod.compile(
     r"\b(invoqu\w*|convoqu\w*|invocation\w*|summon\w*|renforts?)\b",
     _re_mod.IGNORECASE,
 )
+
+# Détection d'une action de combat déclarée par le joueur mais non résolue
+# par le MJ (aucun jet) → rejeu correctif 5bis-a (comme pour les monstres).
+_ACTION_COMBAT_RE = _re_mod.compile(
+    r"\b(attaqu\w*|frapp\w*|assén\w*|lanc\w+|incant\w*|tir\w*|soign\w*"
+    r"|soins|guér\w*|charge\w*|degat\w*|dégâts?)\b",
+    _re_mod.IGNORECASE,
+)
+
+# Tools qui CONSOMMENT l'action standard du personnage courant : dès que le
+# joueur actif en a appelé un, le moteur serveur avance la rotation (le LLM
+# n'a plus à se souvenir de tour_suivant_combat).
+_ACTION_CONSOMMEE_TOOLS = {
+    "lancer_attaque", "lancer_degats", "lancer_sauvegarde",
+    "fiche_perso_infliger_degats", "fiche_perso_soigner",
+    "fiche_perso_niveau_negatif", "inventaire_consommer_munition",
+    "terminer_mon_tour",
+}
+
+
 
 
 # Logging : active le logger de l'orchestrateur (dnd35.orchestrator) qui trace
@@ -1066,6 +1087,175 @@ async def set_quest(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+#  ⚔️ Combat server-driven — routes REST (tests E2E réels, clients riches).
+#  Toute la mécanique (initiative, rotation, monstres, clôture, XP) est
+#  résolue par le moteur serveur SANS LLM ; le LLM ne fait que narrer.
+# --------------------------------------------------------------------------- #
+@app.post("/api/parties/{partie_id}/combat/engager")
+async def combat_engager(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Engage un combat (validation stricte du bestiaire + initiative
+    officielle) puis exécute immédiatement la boucle serveur (tours de
+    monstres, skips) jusqu'à un PJ actif ou la fin du combat."""
+    monstres = str(payload.get("monstres") or "").strip()
+    if not monstres:
+        raise HTTPException(status_code=400, detail="monstres requis.")
+    joueur = str(payload.get("joueur") or "")
+    ctx = _ctx(partie_id, joueur)
+    from .tools.base import _TOOL_REGISTRY, invoke_tool
+    spec = _TOOL_REGISTRY.get("engager_combat")
+    if spec is None:
+        raise HTTPException(status_code=500, detail="tool engager_combat absent.")
+    tr = await invoke_tool(spec, ctx, {"monstres": monstres})
+    res_boucle = await _boucle_combat(
+        ctx, timeout_secondes=cfg.game.combat_turn_timeout_seconds
+    )
+    etat = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    return {
+        "ok": not tr.text.startswith("⛔") and not tr.text.startswith("❌"),
+        "text": tr.text,
+        "events": res_boucle.events,
+        "patches": res_boucle.patches,
+        "phase": etat.get("phase"),
+        "courant": etat.get("courant_tour_pour"),
+        "combat_termine": res_boucle.combat_termine,
+    }
+
+
+@app.post("/api/parties/{partie_id}/combat/boucle")
+async def combat_boucle(partie_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Exécute une passe du moteur de combat serveur : joue les tours de
+    monstres, passe les incapables, clôture si victoire/défaite (avec XP
+    officielle + mémoire). `{"force": true}` termine le tour du PJ courant."""
+    payload = payload or {}
+    joueur = str(payload.get("joueur") or "")
+    ctx = _ctx(partie_id, joueur)
+    etat_avant = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    if etat_avant.get("phase") != "combat":
+        return {"ok": False, "detail": "Aucun combat en cours.", "events": []}
+    res = await _boucle_combat(
+        ctx,
+        force_avance=bool(payload.get("force")),
+        timeout_secondes=cfg.game.combat_turn_timeout_seconds,
+    )
+    etat = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    return {
+        "ok": True,
+        "events": res.events,
+        "patches": res.patches,
+        "phase": etat.get("phase"),
+        "courant": etat.get("courant_tour_pour"),
+        "tour": etat.get("tour"),
+        "combat_termine": res.combat_termine,
+    }
+
+
+@app.post("/api/parties/{partie_id}/combat/action")
+async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Résout DÉTERMINISTEMENT l'attaque du personnage courant contre un
+    monstre ennemi (jet officiel, dégâts de l'arme, application des PV),
+    puis avance la rotation via le moteur serveur. Aucun LLM impliqué.
+
+    Body: {"attaquant": "Brunhild", "cible": "Gobelin",
+           "arme": "Hache de guerre", "nb_des": 1, "faces": 8, "bonus": 3}
+    (arme/dés optionnels : arme improvisée 1d6, bonus = BBA + mod. FOR de la
+    fiche si absents)."""
+    from .tools.base import _TOOL_REGISTRY, invoke_tool
+
+    etat_avant = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    if etat_avant.get("phase") != "combat":
+        raise HTTPException(status_code=400, detail="Aucun combat en cours.")
+    attaquant = str(payload.get("attaquant") or etat_avant.get("courant_tour_pour") or "")
+    cible = str(payload.get("cible") or "").strip()
+    if not attaquant or not cible:
+        raise HTTPException(status_code=400, detail="attaquant et cible requis.")
+    joueur = str(payload.get("joueur") or attaquant)
+    ctx = _ctx(partie_id, joueur)
+
+    arme = str(payload.get("arme") or "arme improvisée")
+    nb_des = int(payload.get("nb_des") or 1)
+    faces = int(payload.get("faces") or 6)
+    bonus_degats = int(payload.get("bonus") or 0)
+
+    # Bonus d'attaque depuis la fiche (BBA + mod FOR/DEX) si non fourni.
+    bonus_attaque = payload.get("bonus_attaque")
+    if bonus_attaque is None:
+        bonus_attaque = 0
+        try:
+            from .tools.fiches import _load_fiche
+            fiche = _load_fiche(ctx, attaquant)
+            if fiche:
+                caracs = fiche.get("carac") or {}
+                arme_l = arme.lower()
+                a_distance = any(
+                    m in arme_l for m in
+                    ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard")
+                )
+                cle = "DEX" if a_distance else "FOR"
+                mod = (int(caracs.get(cle, 10) or 10) - 10) // 2
+                bonus_attaque = int(fiche.get("bab") or 0) + mod
+        except Exception:                                        # noqa: BLE001
+            bonus_attaque = 0
+
+    # CA de la cible depuis l'état de combat.
+    ca = 10
+    for mo in etat_avant.get("monstres_combat") or []:
+        if str(mo.get("nom") or "").lower() == cible.lower():
+            try:
+                ca = int(mo.get("ca") or 10)
+            except (TypeError, ValueError):
+                ca = 10
+            break
+
+    events: list[str] = []
+    async def _run(name: str, args: dict[str, Any]):
+        spec = _TOOL_REGISTRY.get(name)
+        if spec is None:
+            return None
+        tr = await invoke_tool(spec, ctx, args)
+        events.append(tr.text)
+        return tr
+
+    tr_atk = await _run("lancer_attaque", {
+        "nom_attaquant": attaquant, "arme": arme,
+        "bonus_attaque": int(bonus_attaque), "nom_cible": cible,
+        "ca_cible": ca,
+    })
+    touche = tr_atk is not None and (
+        "✅ **Touché**" in tr_atk.text or "⭐ **20 naturel**" in tr_atk.text
+    )
+    if touche:
+        tr_dm = await _run("lancer_degats", {
+            "nb_des": nb_des, "faces": faces, "bonus": bonus_degats,
+            "arme_ou_sort": arme, "cible": cible,
+        })
+        m_total = _re_mod.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr_dm.text)
+        if m_total:
+            await _run("fiche_perso_infliger_degats", {
+                "nom": cible, "degats": int(m_total.group(1)),
+            })
+
+    res = await _boucle_combat(ctx, force_avance=True)
+    events.extend(res.events)
+    etat = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    return {
+        "ok": True, "touche": touche, "events": events,
+        "patches": res.patches, "phase": etat.get("phase"),
+        "courant": etat.get("courant_tour_pour"),
+        "combat_termine": res.combat_termine,
+    }
+
+
+# --------------------------------------------------------------------------- #
 #  Routes RAG (admin) — ingestion et stats du vector store ChromaDB.
 # --------------------------------------------------------------------------- #
 @app.get("/api/rag/stats")
@@ -1324,7 +1514,9 @@ async def _delayed_unload_task(app: FastAPI, delay_s: float) -> None:
 
 def _extrait_arme_bonus(attaques: str) -> Optional[tuple[str, int]]:
     """Parse la première attaque du bestiaire : « Cimeterre +2 (corps à
-    corps) ; arc court +3 ». Renvoie (arme, bonus) ou None si injouable."""
+    corps) ; arc court +3 ». Renvoie (arme, bonus) ou None si injouable.
+    (Conservé pour compatibilité — le moteur de combat serveur
+    `game.combat` possède sa propre implémentation généralisée.)"""
     m = _re_mod.match(r"(.+?)\s*([+-]\d+)\s*(?:\(|$)", (attaques or "").strip())
     if not m:
         return None
@@ -1403,120 +1595,6 @@ async def _appliquer_degats_oublies(
     return "\n\n".join(lignes)
 
 
-async def _attaque_auto_monstre(
-    orch: Orchestrator,
-    result: Any,
-    ctx: ToolContext,
-    actif: str,
-    on_event: Optional[Any],
-) -> str:
-    """Joue mécaniquement le tour d'un monstre non résolu par le LLM :
-    attaque du premier PJ vivant, dégâts du bestiaire, application PV.
-    Renvoie le texte mécanique à ajouter à la narration ("" si non jouable —
-    l'avancement forcé 5bis-suite prend alors le relais)."""
-    from .tools.monstres import _find_monstre_with_fallback
-
-    state = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
-    etat = state.load()
-
-    # Garde : un monstre déjà « Détruit » (ou allié) ne doit pas auto-attaquer —
-    # son tour sera simplement avancé par le rattrapage existant.
-    mob_suivi = next(
-        (
-            mo for mo in (etat.get("monstres_combat") or [])
-            if mo.get("nom") == actif
-        ),
-        None,
-    )
-    if mob_suivi and ("Détruit" in (mob_suivi.get("conditions") or [])
-                      or mob_suivi.get("allie")):
-        return ""
-
-    m = _find_monstre_with_fallback(ctx, actif)
-    if not m:
-        return ""
-    arme_bonus = _extrait_arme_bonus(str(m.get("attaques") or ""))
-    if not arme_bonus:
-        return ""
-    arme, bonus_atk = arme_bonus
-
-    degs = str(m.get("degs") or "")
-    partie_arme = degs.lower().find(arme.lower())
-    bloc = degs[partie_arme + len(arme):] if partie_arme >= 0 else degs
-    m_dmg = _re_mod.search(r"(\d+)[dD](\d+)([+-]\d+)?", bloc)
-    if not m_dmg:
-        return ""
-    nb_des, faces = int(m_dmg.group(1)), int(m_dmg.group(2))
-    bonus_dmg = int(m_dmg.group(3) or 0)
-
-    # Cible : le premier PJ vivant (mort si condition « Mort » ou PV ≤ -10).
-    cible = ""
-    ca_cible = 0
-    for p in etat.get("pj") or []:
-        conds = [str(c).lower() for c in (p.get("conditions") or [])]
-        if "mort" in conds:
-            continue
-        pv = p.get("pv")
-        if pv is None or int(pv) > -10:
-            cible = str(p.get("nom") or "")
-            try:
-                ca_cible = int(p.get("ca") or 0)
-            except (TypeError, ValueError):
-                ca_cible = 0
-            break
-    if not cible:
-        return ""
-
-    lignes: list[str] = []
-    tr_atk = await orch.execute_tool_direct(
-        "lancer_attaque",
-        {
-            "nom_attaquant": actif,
-            "arme": arme,
-            "bonus_attaque": bonus_atk,
-            "nom_cible": cible,
-            "ca_cible": ca_cible,
-        },
-        ctx,
-        on_event,
-        result,
-    )
-    if tr_atk is None:
-        return ""
-    lignes.append(tr_atk.text)
-
-    if ("✅ **Touché**" in tr_atk.text) or ("⭐ **20 naturel**" in tr_atk.text):
-        tr_dm = await orch.execute_tool_direct(
-            "lancer_degats",
-            {
-                "nb_des": nb_des,
-                "faces": faces,
-                "bonus": bonus_dmg,
-                "arme_ou_sort": arme,
-                "cible": cible,
-            },
-            ctx,
-            on_event,
-            result,
-        )
-        if tr_dm is None:
-            return "\n\n".join(lignes)
-        lignes.append(tr_dm.text)
-        m_total = _re_mod.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr_dm.text)
-        total = int(m_total.group(1)) if m_total else None
-        if total is not None:
-            tr_inf = await orch.execute_tool_direct(
-                "fiche_perso_infliger_degats",
-                {"nom": cible, "degats": total},
-                ctx,
-                on_event,
-                result,
-            )
-            if tr_inf is not None:
-                lignes.append(tr_inf.text)
-    return "\n\n".join(lignes)
-
-
 async def _handle_say(
     initiator: WebSocket,
     session: PartySession,
@@ -1545,34 +1623,10 @@ async def _handle_say(
         "text": text,
     })
 
-    # 1bis. ⚔️ Application MÉCANIQUE du tour de jeu (D&D 3.5) : en phase de
-    # combat, seul le joueur dont c'est le tour peut déclencher le MJ. Les
-    # messages des autres joueurs sont diffusés mais n'invoquent PAS le LLM.
-    etat_avant = PartyState(
-        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
-    ).load()
-    actif_avant = str(etat_avant.get("courant_tour_pour") or "")
-    if etat_avant.get("phase") == "combat":
-        actif = actif_avant
-        pj_actif = next(
-            (p for p in (etat_avant.get("pj") or []) if p.get("nom") == actif),
-            None,
-        )
-        if pj_actif is not None:
-            joueur_actif = str(pj_actif.get("joueur") or "").strip().lower()
-            if joueur_actif and player.strip().lower() != joueur_actif:
-                await session.broadcast({
-                    "type": "sys",
-                    "event": "turn_blocked",
-                    "detail": (
-                        f"⏳ {player} doit attendre : en combat, c'est le tour "
-                        f"de {actif} (joué par {pj_actif.get('joueur')}) — "
-                        f"round {etat_avant.get('tour', 1)}."
-                    ),
-                })
-                return
-        # Si l'actif est un PNJ/monstre : le message passe, la bannière de tour
-        # injectée plus bas force le MJ à jouer le monstre puis avancer.
+    # 1bis. ⚔️ Garde de tour : DÉPLACÉE après le pre-run du moteur de combat
+    # (voir dans le verrou de session) — la rotation doit d'abord être
+    # corrigée par le serveur (skip des incapables, tours de monstres)
+    # AVANT de décider qui a le droit de parler.
 
     # 2. Statut "thinking" aux clients connectés.
     session.thinking = True
@@ -1587,6 +1641,74 @@ async def _handle_say(
     await _turn_begin()
     try:
         async with session.turn_lock:
+            # 2.pre ⚙️ MOTEUR DE COMBAT SERVEUR (pre-run) : avant toute
+            # décision de tour, le serveur fait avancer la mécanique —
+            # saute les combattants incapables (mourants…), joue les tours
+            # de monstres (attaque officielle du bestiaire), détecte
+            # victoire/défaite (clôture + XP officielle + mémoire). Aucun
+            # LLM n'intervient ici : c'est déterministe.
+            ctx_pre = _ctx(partie_id, player)
+            events_pre: list[str] = []
+            patches_pre: list[dict[str, Any]] = []
+            try:
+                etat_pre = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                if etat_pre.get("phase") == "combat":
+                    res_pre = await _boucle_combat(
+                        ctx_pre,
+                        timeout_secondes=cfg.game.combat_turn_timeout_seconds,
+                    )
+                    events_pre = res_pre.events
+                    patches_pre = res_pre.patches
+            except Exception as e:                                   # noqa: BLE001
+                print(f"[dnd35] Pre-run moteur de combat échoué (ignoré) : {e}")
+
+            # 1bis. ⚔️ Application MÉCANIQUE du tour de jeu (D&D 3.5) : en
+            # phase de combat, seul le joueur dont c'est le tour peut
+            # déclencher le MJ. Les messages des autres joueurs sont
+            # diffusés mais n'invoquent PAS le LLM.
+            etat_avant = PartyState(
+                data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+            ).load()
+            actif_avant = str(etat_avant.get("courant_tour_pour") or "")
+            if etat_avant.get("phase") == "combat":
+                actif = actif_avant
+                pj_actif = next(
+                    (p for p in (etat_avant.get("pj") or [])
+                     if p.get("nom") == actif),
+                    None,
+                )
+                if pj_actif is not None:
+                    joueur_actif = str(pj_actif.get("joueur") or "").strip().lower()
+                    if joueur_actif and player.strip().lower() != joueur_actif:
+                        # Les événements mécaniques du pre-run (monstres
+                        # joués, tours passés…) sont montrés à la table même
+                        # si le message n'ouvre pas un tour LLM.
+                        if events_pre:
+                            await session.broadcast({
+                                "type": "dm",
+                                "text": "⚙️ _Mécanique serveur :_\n\n"
+                                        + "\n\n".join(events_pre),
+                                "tool_events": [],
+                                "state_patches": patches_pre,
+                                "tool_calls_trace": [],
+                            })
+                        await session.broadcast({
+                            "type": "sys",
+                            "event": "turn_blocked",
+                            "detail": (
+                                f"⏳ {player} doit attendre : en combat, "
+                                f"c'est le tour de {actif} (joué par "
+                                f"{pj_actif.get('joueur')}) — round "
+                                f"{etat_avant.get('tour', 1)}."
+                            ),
+                        })
+                        return
+                # Si l'actif est un PNJ/monstre restant (rare après pre-run),
+                # le message passe : la boucle post-tour le gérera.
+
             # 3. Construit le message système (system prompt + récap + sections + RAG).
             rag_context = ""
             rag_store: Optional[RagStore] = getattr(app.state, "rag_store", None)
@@ -1601,8 +1723,11 @@ async def _handle_say(
                 partie_id, rag_context=rag_context
             )
 
-            # 3bis. ⚔️ Bannière de tour : rappel mécanique du combat en cours,
-            # injecté dans le message système à chaque invocation du MJ.
+            # 3bis. ⚔️ Bannière de tour : rappel mécanique du combat en
+            # cours, injecté dans le message système à chaque invocation du
+            # MJ. Le rôle du LLM est STRICTEMENT narratif + résolution de
+            # l'action du joueur actif : la rotation, les monstres, la
+            # clôture et l'XP sont SERVEUR.
             if etat.get("phase") == "combat":
                 actif = str(etat.get("courant_tour_pour") or "?")
                 ordre = ", ".join(
@@ -1615,46 +1740,50 @@ async def _handle_say(
                 )
                 if pj_actif is not None:
                     qui = (
-                        f"{actif} — JOUEUR {pj_actif.get('joueur')}. "
-                        "Résous UNIQUEMENT les actions de CE personnage "
-                        "(ne fais agir aucun autre PJ), puis appelle "
-                        "OBLIGATOIREMENT tour_suivant_combat."
+                        f"{actif} — JOUEUR {pj_actif.get('joueur')}. Résous "
+                        "UNIQUEMENT les actions que CE joueur déclare pour "
+                        f"{actif} (attaque, sort, soin…) avec les tools ; "
+                        "s'il ne déclare rien d'actif, contente-toi de "
+                        "narrer sa position/garde et rappelle-lui qu'il peut "
+                        "dire « je termine mon tour »."
                     )
                 else:
                     qui = (
-                        f"{actif} (MONSTRE/PNJ). C'est TOI, le MJ, qui "
-                        "décides et joues ses actions toi-même — n'attends "
-                        "AUCUNE instruction des joueurs et ne leur demande "
-                        "JAMAIS ce que fait le monstre. Ne t'adresse JAMAIS "
-                        f"au monstre (« {actif}, que faites-vous ? » est "
-                        "INTERDIT) : résous ses actions avec les tools puis "
-                        "raconte-les à la 3ᵉ personne. Son tour est un VRAI "
-                        "tour : aucune action résumée entre parenthèses — il "
-                        "attaque (lancer_attaque), se déplace ou agit "
-                        "clairement. Tactique simple : il attaque le héros "
-                        "le plus proche/mençant. Les dés et les règles "
-                        f"décident du résultat : lancer_attaque(attaquant="
-                        f"\"{actif}\", cible=<nom du PJ visé>) → "
-                        "lancer_degats → infliger_degats(nom=<PJ>, "
-                        "degats=N) si touché ; si le jet rate, narre "
-                        "l'échec. Puis appelle tour_suivant_combat. "
-                        "OBLIGATION ABSOLUE : Tu DOIS appeler lancer_attaque "
-                        "ET infliger_degats (si touché) AVANT de narrer quoi "
-                        "que ce soit. NE PAS écrire l'action en prose sans "
-                        "tool — chaque attaque MUST passer par les tools."
+                        f"{actif} (MONSTRE/PNJ) — le serveur joue déjà son "
+                        "tour automatiquement. N'invente PAS ses actions : "
+                        "reprends simplement les événements mécaniques "
+                        "listés ci-dessous dans ta narration."
                     )
                 system_text += (
                     f"\n\n⚔️ **TOUR EN COURS** — round {etat.get('tour', 1)}. "
-                    f"Ordre d'initiative : {ordre}. C'est AU TOUR DE {qui} "
-                    "Économie d'actions D&D 3.5 : max 1 action standard + 1 "
-                    "action de mouvement (+ actions libres) par round. Toute "
-                    "attaque passe par lancer_attaque, toute sauvegarde par "
-                    "lancer_sauvegarde, tout dégât appliqué par infliger_degats. "
-                    "Invoquation / renfort en cours de mêlée (sort "
-                    "d'invocation, squelettes, allié appelé) : appelle "
+                    f"Ordre d'initiative : {ordre}. C'est AU TOUR DE {qui}\n"
+                    "⚙️ **GÉRÉ PAR LE SERVEUR (n'y touche PAS)** : rotation "
+                    "des tours, attaques des monstres, stabilisation des "
+                    "mourants, fin de combat, expérience. N'appelle NI "
+                    "tour_suivant_combat NI finir_combat NI engager_combat "
+                    "pendant un combat en cours.\n"
+                    "🧭 Ton rôle : narrer ce qui vient de se passer "
+                    "(notamment les événements mécaniques serveur listés "
+                    "ci-dessous) puis, si c'est le tour d'un PJ, résoudre "
+                    "son action déclarée — attaque : lancer_attaque puis "
+                    "lancer_degats puis fiche_perso_infliger_degats ; soin : "
+                    "lancer_des puis fiche_perso_soigner ; sort offensif : "
+                    "lancer_degats (+ lancer_sauvegarde si la cible a droit "
+                    "à un jet). Économie d'actions D&D 3.5 : max 1 action "
+                    "standard + 1 mouvement par round.\n"
+                    "✨ Invoquation / renfort en cours de mêlée : "
                     "combat_ajouter_combattant(nom, allie) AVANT de narrer "
-                    "l'arrivée de la créature — jamais engager_combat."
+                    "l'arrivée — jamais engager_combat."
                 )
+                if events_pre:
+                    system_text += (
+                        "\n\n⚙️ **ÉVÉNEMENTS MÉCANIQUES RÉSOLUS PAR LE "
+                        "SERVEUR DEPUIS LE DERNIER MESSAGE** (déjà affichés "
+                        "aux joueurs — intègre-les à ta narration sans les "
+                        "répéter mot à mot, et tire-en les conséquences "
+                        "dramatiques) :\n"
+                        + "\n\n".join(events_pre)
+                    )
             # On re-construit la conversation à partir de l'historique (système
             # en tête), avec un budget en caractères : le message système et
             # les schémas de tools consomment déjà ~6 k tokens, un historique
@@ -1690,11 +1819,10 @@ async def _handle_say(
             orch = _orchestrator(app)
             result = await orch.run(messages, ctx, on_event=on_event, on_delta=on_delta)
 
-            # 5bis. ⚔️ Relance des tours monstres non résolus mécaniquement.
-            # Si c'est le tour d'un monstre et qu'aucun `lancer_attaque` ou
-            # `lancer_degats` n'a été appelé, le serveur Joue son tour lui-même
-            # (attaque automatique des PJ) ou, en secours, ré-invoque le MJ
-            # avec un message correctif.
+            # 5bis. ⚔️ Post-traitement du tour LLM. Les tours de monstres ne
+            # sont PLUS rejoués par le LLM : le moteur serveur (ci-dessous,
+            # bloc ⚙️) les joue de façon déterministe. Ne restent ici que
+            # les rattrapages liés à l'action DÉCLARÉE par le joueur actif.
             try:
                 apres = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
@@ -1713,132 +1841,90 @@ async def _handle_say(
                     )
                     est_monstre = pj_actif_apres is None
 
-                    monstre_a_attaque = False
-                    if est_monstre:
-                        for tc in result.tool_calls_trace:
-                            if tc.get("name") in (
+                    # 5bis-a. ⚔️ Tour de PJ annoncé mais NON résolu : le
+                    # joueur a déclaré une action de combat (attaque, sort,
+                    # soin…) mais le MJ a narré sans AUCUN jet de dés. On
+                    # ré-invoque le MJ une fois avec un correctif — sinon le
+                    # tour avance et l'action est perdue (très frustrant).
+                    if not est_monstre:
+                        pj_a_agi = any(
+                            tc.get("name") in (
                                 "lancer_attaque", "lancer_degats",
-                                "fiche_perso_infliger_degats",
-                            ):
-                                monstre_a_attaque = True
-                                break
-
-                    # Si le monstre n'a pas attaqué → on BOOSTE son tour.
-                    # En priorité : résolution automatique déterministe par le
-                    # serveur (le LLM bloque encore souvent à ce stade, un 2e
-                    # passage LLM échoue parfois aussi). En secours (monstre
-                    # allié, stats injouables, PJ absents) : rejeu LLM best
-                    # effort comme avant.
-                    mob_combat = next(
-                        (
-                            mo for mo in (apres.get("monstres_combat") or [])
-                            if mo.get("nom") == actif_avant
-                        ),
-                        None,
-                    )
-                    monstre_ennemi = (
-                        mob_combat is not None and not mob_combat.get("allie")
-                    )
-                    if est_monstre and not monstre_a_attaque:
-                        auto_msg = ""
-                        if monstre_ennemi:
+                                "lancer_sauvegarde", "lancer_d20",
+                                "lancer_des", "fiche_perso_infliger_degats",
+                                "fiche_perso_soigner",
+                            )
+                            for tc in result.tool_calls_trace
+                        )
+                        if (
+                            not pj_a_agi
+                            and _ACTION_COMBAT_RE.search(text or "")
+                        ):
                             print(
-                                f"[dnd35] Tour monstre {actif_avant} sans "
-                                "attaque outillée — résolution automatique"
+                                f"[dnd35] Tour PJ {actif_avant} : action "
+                                "annoncée sans aucun jet — rejeu correctif"
                             )
-                            auto_msg = await _attaque_auto_monstre(
-                                orch, result, ctx, actif_avant, on_event
-                            )
-                        if auto_msg:
-                            result.narration += "\n\n" + auto_msg
-                            print(
-                                f"[dnd35] Tour monstre {actif_avant} joué "
-                                "automatiquement (tools serveur)"
-                            )
-                            # On avance immédiatement vers l'actif suivant (au
-                            # lieu de dépendre de l'avancement forcé) ; si
-                            # l'outil échoue, 5bis-suite prendra le relais.
-                            try:
-                                tr_tour = await orch.execute_tool_direct(
-                                    "tour_suivant_combat",
-                                    {},
-                                    ctx,
-                                    on_event,
-                                    result,
-                                )
-                                if tr_tour and not tr_tour.text.startswith("❌"):
-                                    result.narration += "\n\n" + tr_tour.text
-                            except Exception as e:                   # noqa: BLE001
-                                print(
-                                    f"[dnd35] Auto-avance monstre échoué "
-                                    f"(ignoré) : {e}"
-                                )
-                        else:
-                            raison = (
-                                "Stats injouables pour"
-                                if monstre_ennemi
-                                else "Monstre allié/inconnu"
-                            )
-                            print(
-                                f"[dnd35] {raison} {actif_avant} — "
-                                "rejeu LLM avec correctif"
-                            )
-                            # Injecter un correctif dans l'historique conversationnel
-                            corrective = (
-                                "⚠️ ERREUR : tu n'as pas joué le tour de "
-                                f"**{actif_avant}**. C'est SON tour de combat. "
-                                "Tu DOIS jouer CE monstre maintenant. "
-                                "Choisis une action d'attaque et appelle les outils "
+                            corrective_pj = (
+                                "(Rappel système MJ — ⚠️ ERREUR : le joueur "
+                                "a annoncé une action de combat pour "
+                                f"**{actif_avant}** mais tu n'as résolu "
+                                "AUCUN jet de dés. Résous MAINTENANT cette "
+                                "action avec les outils : attaque → "
                                 "`lancer_attaque` puis `lancer_degats` puis "
-                                "`fiche_perso_infliger_degats` pour appliquer les "
-                                "dégâts. NE demandez PAS aux joueurs ce qu'ils "
-                                "font — c'est au tour du monstre d'agir. "
-                                "NE narrate PAS en prose sans d'abord appeler "
-                                "ces outils. Si le monstre rate, passez au "
-                                "tour suivant avec `tour_suivant_combat`."
+                                "`fiche_perso_infliger_degats` ; sort de "
+                                "soins → `lancer_des` puis "
+                                "`fiche_perso_soigner` ; sort offensif → "
+                                "`lancer_degats` (+ `lancer_sauvegarde` si "
+                                "la cible a droit à un jet de sauvegarde). "
+                                "NE narrate PAS un résultat sans jet — la "
+                                "rotation des tours est automatique.)"
                             )
-                            # Reconstituer les messages avec le correctif
-                            corrective_messages = list(messages) + [
-                                Message(role="assistant",
-                                        content=result.narration),
-                                Message(role="system",
-                                        content=corrective),
-                            ]
-                            result2 = await orch.run(
-                                corrective_messages, ctx,
-                                on_event=on_event, on_delta=None,
-                            )
-                            # Si la 2e tentative a réussi → fusionner les résultats
-                            has_attack2 = any(
-                                tc.get("name") in (
-                                    "lancer_attaque", "lancer_degats",
-                                    "fiche_perso_infliger_degats",
+                            try:
+                                corrective_messages = list(messages) + [
+                                    Message(role="assistant",
+                                            content=result.narration),
+                                    Message(role="user",
+                                            content=corrective_pj),
+                                ]
+                                result2 = await orch.run(
+                                    corrective_messages, ctx,
+                                    on_event=on_event, on_delta=None,
                                 )
-                                for tc in result2.tool_calls_trace
-                            )
-                            if has_attack2:
-                                # Fusionner les tool events et patches
-                                result.tool_calls_trace.extend(
-                                    result2.tool_calls_trace
+                                pj_a_agi2 = any(
+                                    tc.get("name") in (
+                                        "lancer_attaque", "lancer_degats",
+                                        "lancer_sauvegarde", "lancer_d20",
+                                        "lancer_des",
+                                        "fiche_perso_infliger_degats",
+                                        "fiche_perso_soigner",
+                                    )
+                                    for tc in result2.tool_calls_trace
                                 )
-                                result.tool_events.extend(
-                                    result2.tool_events
-                                )
-                                result.state_patches.extend(
-                                    result2.state_patches
-                                )
-                                result.narration = result2.narration
-                                result.iterations += result2.iterations
-                                print(
-                                    f"[dnd35] Rejeu monstre {actif_avant} "
-                                    f"réussi ({len(result2.tool_calls_trace)} "
-                                    f"tools appelés)"
-                                )
-                            else:
-                                print(
-                                    f"[dnd35] Rejeu monstre {actif_avant} "
-                                    f"toujours sans attaque — avancement forcé"
-                                )
+                                if pj_a_agi2:
+                                    result.tool_calls_trace.extend(
+                                        result2.tool_calls_trace
+                                    )
+                                    result.tool_events.extend(
+                                        result2.tool_events
+                                    )
+                                    result.state_patches.extend(
+                                        result2.state_patches
+                                    )
+                                    result.narration = result2.narration
+                                    result.iterations += result2.iterations
+                                    print(
+                                        f"[dnd35] Rejeu PJ {actif_avant} "
+                                        f"réussi ({len(
+                                            result2.tool_calls_trace)} "
+                                        f"tools appelés)"
+                                    )
+                                else:
+                                    print(
+                                        f"[dnd35] Rejeu PJ {actif_avant} "
+                                        "toujours sans jet — avancement forcé"
+                                    )
+                            except Exception as e:                   # noqa: BLE001
+                                print(f"[dnd35] Rejeu PJ failed: {e}")
             except Exception as e:
                 print(f"[dnd35] 5bis rejeu failed: {e}")
 
@@ -1861,20 +1947,22 @@ async def _handle_say(
                     print("[dnd35] Invoquation narrée sans "
                           "combat_ajouter_combattant — rejeu avec correctif")
                     corrective_inv = (
-                        "⚠️ ERREUR : le joueur vient d'annoncer une "
-                        "invoquation / un renfort, mais tu as narré "
-                        "l'arrivée de la créature SANS l'enregistrer "
-                        "mécaniquement. Appelle IMMÉDIATEMENT "
+                        "(Rappel système MJ — ⚠️ ERREUR : le joueur vient "
+                        "d'annoncer une invoquation / un renfort, mais tu "
+                        "as narré l'arrivée de la créature SANS "
+                        "l'enregistrer mécaniquement. Appelle "
+                        "IMMÉDIATEMENT "
                         "`combat_ajouter_combattant(nom=<créature invoquée>, "
                         "allie=true si elle combat pour les joueurs)` : "
                         "l'outil l'insère dans l'ordre d'initiative et suit "
                         "ses PV. N'appelle PAS engager_combat (il "
-                        "réinitialiserait le combat en cours). Reprends ensuite "
-                        "ta narration en t'appuyant sur le résultat de l'outil."
+                        "réinitialiserait le combat en cours). Reprends "
+                        "ensuite ta narration en t'appuyant sur le résultat "
+                        "de l'outil.)"
                     )
                     corrective_messages = list(messages) + [
                         Message(role="assistant", content=result.narration),
-                        Message(role="system", content=corrective_inv),
+                        Message(role="user", content=corrective_inv),
                     ]
                     result2 = await orch.run(
                         corrective_messages, ctx,
@@ -1914,84 +2002,68 @@ async def _handle_say(
             except Exception as e:
                 print(f"[dnd35] Rattrapage dégâts échoué (ignoré) : {e}")
 
-            # 5bis suite : avancement mécanique du tour
+            # ⚙️ MOTEUR DE COMBAT SERVEUR (post-tour).
+            # 1) Les événements mécaniques résolus AVANT le tour LLM
+            #    (pre-run : tours de monstres, skips…) sont ajoutés à la
+            #    narration finale pour que la table les voie TOUJOURS, même
+            #    si le LLM les a mal intégrés.
+            # 2) Si le PJ courant a consommé son action standard pendant ce
+            #    tour (attaque/soin/jet…), la rotation avance automatiquement ;
+            #    le moteur joue les tours suivants (monstres, incapables)
+            #    jusqu'au prochain PJ actif et clôture le combat
+            #    (victoire/défaite) avec XP officielle + mémoire. Le LLM
+            #    n'a PLUS à gérer la rotation : c'est garanti ici.
             try:
+                if events_pre:
+                    result.narration += (
+                        "\n\n⚙️ _Mécanique résolue par le serveur :_\n\n"
+                        + "\n\n".join(events_pre)
+                    )
+                    result.state_patches.extend(patches_pre)
+
                 apres = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
                     partie_id=partie_id,
                 ).load()
-                if (
-                    etat_avant.get("phase") == "combat"
-                    and apres.get("phase") == "combat"
-                    and str(apres.get("courant_tour_pour") or "")
-                    == actif_avant
-                    and actif_avant
-                ):
-                    ordre = apres.get("initiative") or []
-                    idx = next(
-                        (i for i, e2 in enumerate(ordre)
-                         if e2.get("nom") == actif_avant),
-                        -1,
-                    )
-                    if idx >= 0 and ordre:
-                        idx += 1
-                        if idx >= len(ordre):
-                            idx = 0
-                            apres["tour"] = (apres.get("tour", 1) or 1) + 1
-                        nouveau = ordre[idx].get("nom", "")
-                        apres["courant_tour_pour"] = nouveau
-                        PartyState(
-                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
-                            partie_id=partie_id,
-                        ).save(apres)
-                        result.state_patches.append({
-                            "tour": apres.get("tour"),
-                            "courant_tour_pour": nouveau,
-                        })
-                        result.narration += (
-                            f"\n\n➡️ _Fin du tour de {actif_avant} — "
-                            f"au tour de **{nouveau}** "
-                            f"(round {apres.get('tour', 1)})._"
-                        )
-                        print(f"[dnd35] Tour avancé automatiquement : "
-                              f"{actif_avant} → {nouveau}")
-
-                # 5ter. Clôture automatique : quand tous les monstres suivis
-                # par engager_combat sont détruits, le combat se termine
-                # mécaniquement (le modèle oublie souvent finir_combat).
-                # NB : les alliés invoqués (combat_ajouter_combattant
-                # allie=True) ne comptent pas — seuls les ennemis cloturent.
                 if apres.get("phase") == "combat":
-                    mons = apres.get("monstres_combat") or []
-                    ennemis = [
-                        m2 for m2 in mons if not m2.get("allie")
-                    ]
-                    if ennemis and all(
-                        "Détruit" in (m2.get("conditions") or [])
-                        for m2 in ennemis
-                    ):
-                        apres["phase"] = "exploration"
-                        apres["initiative"] = []
-                        apres["courant_tour_pour"] = None
-                        apres["tour"] = 0
-                        apres["monstres_combat"] = []
-                        PartyState(
-                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
-                            partie_id=partie_id,
-                        ).save(apres)
-                        result.state_patches.append({
-                            "phase": "exploration",
-                            "tour": 0,
-                            "courant_tour_pour": None,
-                            "initiative": [],
-                            "monstres_combat": [],
-                        })
+                    action_consommee = any(
+                        tc.get("name") in _ACTION_CONSOMMEE_TOOLS
+                        for tc in result.tool_calls_trace
+                    )
+                    courant_est_pj = any(
+                        str(p.get("nom") or "")
+                        == str(apres.get("courant_tour_pour") or "")
+                        for p in (apres.get("pj") or [])
+                    )
+                    force = bool(
+                        action_consommee
+                        and courant_est_pj
+                        and str(apres.get("courant_tour_pour") or "")
+                        == actif_avant
+                    )
+                    res_post = await _boucle_combat(
+                        ctx,
+                        force_avance=force,
+                        timeout_secondes=cfg.game.combat_turn_timeout_seconds,
+                    )
+                    if res_post.events:
                         result.narration += (
-                            "\n\n⚔️ _Tous les ennemis sont à terre — "
-                            "le combat est terminé !_"
+                            "\n\n⚙️ _Mécanique du tour (serveur) :_\n\n"
+                            + "\n\n".join(res_post.events)
                         )
-                        print("[dnd35] Combat clôturé automatiquement "
-                              "(tous les monstres détruits).")
+                    if res_post.patches:
+                        result.state_patches.extend(res_post.patches)
+                    if res_post.combat_termine:
+                        print(
+                            "[dnd35] Combat clôturé par le moteur serveur "
+                            f"({res_post.combat_termine})."
+                        )
+                    apres = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load()
+            except Exception as e:                                   # noqa: BLE001
+                print(f"[dnd35] Moteur de combat post-tour échoué (ignoré) : {e}")
 
                 # 5quater. 🖼️ Illustrations des monstres en jeu : le modèle
                 # oublie souvent d'appeler monstre_consulter à l'annonce d'une
@@ -2006,9 +2078,12 @@ async def _handle_say(
                 _vus: set[str] = set()
                 _img_persist = False
                 _nouvelles_rencontres: list[tuple[str, str]] = []
+                from .tools.monstres import _type_nom
                 for mo in apres.get("monstres_combat") or []:
                     nom_mo = str((mo or {}).get("nom") or "").strip()
-                    cle_mo = nom_mo.lower()
+                    # Clé de dédup = NOM DE TYPE (« Gobelin (2) » == « Gobelin ») :
+                    # un groupe de monstres identiques partage UNE seule illustration.
+                    cle_mo = _type_nom(nom_mo).lower()
                     if not nom_mo or cle_mo in _vus:
                         continue
                     _vus.add(cle_mo)
@@ -2022,11 +2097,15 @@ async def _handle_say(
                         print(f"[dnd35] Image {nom_mo} échouée (ignoré) : {e}")
                         continue
                     if url_img:
+                        # On applique la MÊME image à tous les monstres du même type
+                        # (Gobelin, Gobelin (2), Gobelin (3)…), pas seulement au premier.
+                        for mo2 in apres.get("monstres_combat") or []:
+                            if _type_nom(str((mo2 or {}).get("nom") or "")).lower() == cle_mo:
+                                if (mo2 or {}).get("image_url") != url_img:
+                                    mo2["image_url"] = url_img
+                                    _img_persist = True
                         result.state_patches.append({"image_monstre": url_img})
-                        if (mo or {}).get("image_url") != url_img:
-                            mo["image_url"] = url_img
-                            _img_persist = True
-                        _nouvelles_rencontres.append((nom_mo, url_img))
+                        _nouvelles_rencontres.append((_type_nom(nom_mo), url_img))
                 if _nouvelles_rencontres:
                     from .tools.monstres import _fusionner_rencontres
                     if _fusionner_rencontres(apres, _nouvelles_rencontres):
@@ -2037,7 +2116,8 @@ async def _handle_say(
                         partie_id=partie_id,
                     ).save(apres)
             except Exception as e:                                   # noqa: BLE001
-                print(f"[dnd35] Avancement de tour auto échoué (ignoré) : {e}")
+                print(f"[dnd35] Post-traitement combat (moteur/images) "
+                      f"échoué (ignoré) : {e}")
 
             # 5. On ajoute la narration finale à l'historique de la session.
             if result.narration:

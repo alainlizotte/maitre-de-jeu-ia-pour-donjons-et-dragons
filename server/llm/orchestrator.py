@@ -68,12 +68,15 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "carte_joueurs_get",
         "carte_joueurs_placer_ville",
         "carte_donjon_entrer",
+        "memoire_mission",
+        "memoire_lieu",
+        "memoire_personnage",
+        "memoire_position",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
     ),
     "exploration": (
         "etat_partie_get",
-        "etat_partie_patch",
         "fiche_perso_recuperer",
         "fiche_perso_mettre_a_jour",
         "carte_donjon_entrer",
@@ -90,37 +93,37 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_d20",
         "lancer_sauvegarde",
         "lancer_des",
-        # Transition exploration → combat : le MJ qui déclenche une rencontre
-        # doit pouvoir enchaîner initiative + démarrage du combat immédiatement.
-        # Les tools d'attaque restent aussi exposés en exploration : un petit
-        # modèle oublie souvent `demarrer_combat` — il doit quand même disposer
-        # des VRAIS tools de résolution plutôt que narrer les dégâts à la main.
+        # Transition exploration → combat : engager_combat déclenche la
+        # rencontre (initiative officielle) ; TOUTE la suite (rotation,
+        # attaques des monstres, clôture, XP) est gérée par le serveur.
         "engager_combat",
-        "calculer_initiative",
-        "demarrer_combat",
-        "lancer_attaque",
-        "lancer_degats",
-        "fiche_perso_infliger_degats",
-        "fiche_perso_soigner",
+        # Mémoire de campagne : missions, lieux, PNJ, position (la lecture
+        # est automatique via le récap, l'écriture passe par ces tools).
+        "memoire_mission",
+        "memoire_lieu",
+        "memoire_personnage",
+        "memoire_position",
+        "inventaire_consulter",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
     ),
+    # ⚔️ En combat, le LLM ne décide QUE l'action du personnage joueur
+    # courant. La rotation des tours, les monstres, la stabilisation des
+    # mourants, la clôture et l'XP sont SERVEUR (game/combat.py).
     "combat": (
         "etat_partie_get",
-        "etat_partie_patch",
         "lancer_attaque",
         "lancer_degats",
         "lancer_sauvegarde",
         "lancer_des",
-        "calculer_initiative",
-        "engager_combat",
-        "demarrer_combat",
         "combat_ajouter_combattant",
-        "tour_suivant_combat",
-        "finir_combat",
         "fiche_perso_recuperer",
         "fiche_perso_infliger_degats",
         "fiche_perso_soigner",
+        "fiche_perso_condition",
+        "fiche_perso_niveau_negatif",
+        "inventaire_consommer_munition",
+        "terminer_mon_tour",
         "monstre_consulter",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
@@ -508,6 +511,128 @@ _PROSE_PLACEHOLDER_RES = [
     re.compile(r"\*?\(\s*Le\s+jet\s+d['']attaque\s+est\s+lanc[ée][^)]*\)\*?", re.IGNORECASE),
     re.compile(r"\*?\(\s*Simulation[^)]*\)\*?", re.IGNORECASE),
 ]
+
+
+def _parse_args_blob_colon(blob: str) -> dict[str, Any]:
+    """Parse une liste d'arguments en syntaxe pseudo-JSON `clé: valeur`.
+
+    Gemma écrit parfois ses appels blocs avec deux-points et clés non
+    quotées : `<tool_call>engager_combat{monstres:"Gobelin, Gobelin"}`.
+    On découpe sur les virgules hors chaînes, puis on splitte sur le
+    premier `:` (ou `=`) pour retrouver clé/valeur, avec support des
+    valeurs quotées et des scalaires typés.
+    """
+    args: dict[str, Any] = {}
+    parts: list[str] = []
+    cur: list[str] = []
+    in_str: Optional[str] = None
+    for ch in blob:
+        if in_str:
+            cur.append(ch)
+            if ch == "\\":
+                cur.append("")
+                continue
+            if ch == in_str:
+                in_str = None
+            continue
+        if ch in "\"'":
+            in_str = ch
+            cur.append(ch)
+        elif ch == ",":
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    if cur:
+        parts.append("".join(cur))
+    for part in parts:
+        sep = None
+        in_s: Optional[str] = None
+        for i, ch in enumerate(part):
+            if in_s:
+                if ch == "\\":
+                    continue
+                if ch == in_s:
+                    in_s = None
+                continue
+            if ch in "\"'":
+                in_s = ch
+            elif ch in ":=":
+                sep = i
+                break
+        if sep is None:
+            continue
+        key = part[:sep].strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            continue
+        val = part[sep + 1:].strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            inner = val[1:-1]
+            inner = inner.replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
+            args[key] = inner
+            continue
+        if re.fullmatch(r"[+-]?\d+", val):
+            args[key] = int(val)
+            continue
+        if re.fullmatch(r"[+-]?\d+\.\d+", val):
+            args[key] = float(val)
+            continue
+        if val.lower() in ("true", "vrai"):
+            args[key] = True
+            continue
+        if val.lower() in ("false", "faux"):
+            args[key] = False
+            continue
+        args[key] = val
+    return args
+
+
+_BRACE_CALL_RE = re.compile(
+    r"(?:<tool_call\s*>)?\s*"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\s*{\s*(?P<blob>[^{}]*?)\s*}"
+    r"(?:\s*</tool_call\s*>)?"
+)
+
+
+def parse_prose_brace_calls(
+    text: str, tools: dict[str, Any]
+) -> tuple[list[dict[str, Any]], str]:
+    """Récupère les appels écrits en bloc accolade : `nom{clé: valeur, ...}`.
+
+    Format observé chez Gemma/llama.cpp : soit nu (`engager_combat{...}`),
+    soit enveloppé dans une balise `<tool_call>...{...}</tool_call>` (parfois
+    sans balise fermante, avec le nom de l'outil entre `<tool_call>` et `{`).
+    Ni le parseur `<tool>` (mode prompt), ni le parseur de blocs JSON stricts,
+    ni le parseur `outil(...)` ne couvrent cette variante — elle fuyait alors
+    telle quelle dans la narration (tour sans résolution).
+
+    Renvoie `(calls, texte_nettoyé)` au même format que les tool_calls natifs.
+    """
+    if not text or "{" not in text:
+        return [], text
+    calls: list[dict[str, Any]] = []
+    spans: list[tuple[int, int]] = []
+    for m in _BRACE_CALL_RE.finditer(text):
+        raw_name = m.group("name")
+        if not raw_name:
+            continue
+        resolved = resolve_tool_name(raw_name, tools)
+        if not resolved:
+            continue
+        args = _parse_args_blob_colon(m.group("blob"))
+        args, _notes = sanitize_tool_args(tools[resolved], args)
+        calls.append({"name": resolved, "arguments": args})
+        spans.append((m.start(), m.end()))
+    if not calls:
+        return [], text
+    cleaned = text
+    for s, e in reversed(spans):
+        cleaned = cleaned[:s] + cleaned[e:]
+    cleaned = _tidy_empty_lines(cleaned)
+    cleaned = re.sub(r"[ \t]*</tool_call\s*>", "", cleaned)
+    cleaned = re.sub(r"[ \t]*<tool_call[ \t]*>?", "", cleaned)
+    return calls, cleaned
 
 
 def _parse_args_blob(blob: str) -> dict[str, Any]:
@@ -920,6 +1045,31 @@ class Orchestrator:
             # Comportement observé avec Gemma/llama.cpp en mode natif : le
             # modèle « narre » l'appel au lieu de l'émettre — on l'exécute
             # réellement puis on boucle pour qu'il narrate le VRAI résultat.
+            brace_calls, brace_clean = parse_prose_brace_calls(
+                chat.content or "", self.tools)
+            if brace_calls:
+                _log.info(
+                    "%d appel(s) en bloc accolade récupéré(s) : %s",
+                    len(brace_calls),
+                    ", ".join(c["name"] for c in brace_calls),
+                )
+                clean = brace_clean.strip()
+                work.append(Message(role="assistant", content=clean))
+                work.append(Message(
+                    role="system",
+                    content=(
+                        "ℹ️ SYSTÈME : ton appel en bloc `nom{...}` a été "
+                        "INTERCEPTÉ et exécuté réellement. Les résultats "
+                        "officiels suivent dans les messages tool — ce sont "
+                        "les seules valeurs valides. À l'avenir, appelle les "
+                        "outils via le tool_calls natif ou la balise "
+                        "`<tool name=\"...\" key=\"value\">` seule sur sa "
+                        "ligne."
+                    ),
+                ))
+                await self._exec_tool_calls_prompt(brace_calls, ctx, work, result, on_event)
+                continue
+
             prose_calls, prose_clean = parse_prose_tool_calls(chat.content or "", self.tools)
             if prose_calls:
                 _log.info(

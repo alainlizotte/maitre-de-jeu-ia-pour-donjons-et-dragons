@@ -657,6 +657,62 @@ async def test_rattrapage_cible_inconnue_silencieux():
 
 
 # --------------------------------------------------------------------------- #
+#  Robustesse LLM : placeholders joueur, montants invalides
+# --------------------------------------------------------------------------- #
+async def test_joueur_placeholder_sanitise():
+    """Le LLM peut recopier « <pseudo_joueur> » de la docstring : la fiche
+    doit retomber sur l'émetteur réel (sinon verrouillage de tour mort)."""
+    d = _fresh_dir()
+    try:
+        r = await tool(d, "fiche_perso_creer_rapide", nom="Groth",
+                       race="Humain", classe="Barbare",
+                       joueur="<pseudo_joueur>")
+        assert r.text.startswith("✅")
+        etat = _etat(d)
+        assert etat["pj"][0]["joueur"] == "test", (
+            f"joueur placeholder non sanitise : {etat['pj'][0]['joueur']!r}"
+        )
+        # Variantes courantes et vide → toujours l'émetteur réel.
+        for ph in ("{pseudo}", "nom_du_joueur", "", "pseudo joueur"):
+            await tool(d, "fiche_perso_creer_rapide", nom="X", race="Humain",
+                       classe="Guerrier", joueur=ph)
+        etat = _etat(d)
+        assert all(p["joueur"] == "test" for p in etat["pj"]), (
+            f"joueurs non sanitises : {[p['joueur'] for p in etat['pj']]}"
+        )
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+async def test_montants_invalides_messages_clairs():
+    """infliger/soigner sans montant → message explicite (pas de crash),
+    pour que le LLM retente avec la bonne valeur."""
+    d = _fresh_dir()
+    try:
+        await _creer_equipe(d)
+        r = await tool(d, "fiche_perso_infliger_degats", nom="Groth",
+                       degats="")
+        assert r.text.startswith("❌") and "degats=" in r.text, r.text
+        r = await tool(d, "fiche_perso_infliger_degats", nom="Groth",
+                       degats=None)
+        assert r.text.startswith("❌")
+        r = await tool(d, "fiche_perso_soigner", nom="Groth", soin="")
+        assert r.text.startswith("❌") and "soin=" in r.text, r.text
+        # La fiche n'a pas été corrompue.
+        assert _fiche(d, "Groth")["pv"] == 15
+        # Et les formats tolérés fonctionnent toujours.
+        r = await tool(d, "fiche_perso_infliger_degats", nom="Groth",
+                       degats="3")
+        assert "subit 3 dégâts" in r.text
+        assert _fiche(d, "Groth")["pv"] == 12
+        r = await tool(d, "fiche_perso_soigner", nom="Groth", soin="2")
+        assert "récupère 2 PV" in r.text
+        assert _fiche(d, "Groth")["pv"] == 14
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+# --------------------------------------------------------------------------- #
 #  Exécution standalone (py tests/test_combats_complets.py)
 # --------------------------------------------------------------------------- #
 if __name__ == "__main__":

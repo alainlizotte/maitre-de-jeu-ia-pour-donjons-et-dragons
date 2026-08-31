@@ -20,7 +20,7 @@ class LLMConfig:
     model: str = "gemma-4-E4B-it-Q4_0"
     temperature: float = 0.75
     top_p: float = 0.9
-    max_context_tokens: int = 8192
+    max_context_tokens: int = 16384
     # Budget max de tokens générés par réponse (llama.cpp / Ollama).
     # 0 ou négatif = illimité (défaut serveur).
     max_tokens: int = 8192
@@ -74,6 +74,9 @@ class GameConfig:
     # travaille (réfléchit, écrit, génère une image). Empêche l'accumulation
     # de messages en attente quand le LLM est lent.
     block_messages_during_think: bool = False
+    # ⚔️ Combat server-driven : délai (secondes) après lequel le tour d'un
+    # joueur silencieux est passé automatiquement par le moteur (0 = jamais).
+    combat_turn_timeout_seconds: int = 300
 
 
 @dataclass

@@ -85,6 +85,13 @@ def _etat(data_dir: str) -> dict:
 
 def _setup_pj(data_dir: str) -> None:
     """PJ jouable sur disque (fiche + état) pour les jets sur fiche."""
+    # `engager_combat` refuse strictement tout monstre hors bestiaire : on
+    # copie donc le bestiaire officiel dans le répertoire de test.
+    shutil.copy2(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "data", "bestiaire.json"),
+        os.path.join(data_dir, "bestiaire.json"),
+    )
     os.makedirs(os.path.join(data_dir, "fiches"), exist_ok=True)
     with open(
         os.path.join(data_dir, "fiches", "fiche_brunhild.json"), "w",

@@ -300,9 +300,20 @@ class PromptBuilder:
                 )
                 lignes.append(f"C'est au tour de : {qui}")
                 lignes.append(
-                    "Résous UNIQUEMENT les actions de cet acteur puis appelle "
-                    "tour_suivant_combat."
+                    "Résous UNIQUEMENT les actions déclarées par CE joueur. "
+                    "La rotation des tours, les monstres, la clôture et l'XP "
+                    "sont gérées automatiquement par le serveur — n'appelle "
+                    "ni tour_suivant_combat ni finir_combat."
                 )
+        # Mémoire de campagne (missions, lieux, PNJ, combats, position) :
+        # injectée automatiquement — le MJ la CONNAÎT sans tool de lecture.
+        try:
+            from ..tools.memoire import memoire_resume
+            bloc_memoire = memoire_resume(etat)
+            if bloc_memoire:
+                lignes.append("\n=== MÉMOIRE DE CAMPAGNE ===\n" + bloc_memoire)
+        except Exception:                                       # noqa: BLE001
+            pass
         voyage = etat.get("voyage") or {}
         if voyage:
             lignes.append(

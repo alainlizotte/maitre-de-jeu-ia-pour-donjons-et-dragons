@@ -32,6 +32,7 @@ SCHEMA_PARTIE: dict[str, Any] = {
     "phase": "opening",
     "tour": 0,
     "courant_tour_pour": None,
+    "tour_depuis": None,
     "initiative": [],
     "pj": [],
     "pnj": [],
@@ -45,6 +46,15 @@ SCHEMA_PARTIE: dict[str, Any] = {
     # Journal des illustrations de monstres croisés ({nom, url}) — sert à
     # réhydrater la galerie « Monstres rencontrés » après rechargement.
     "rencontres_images": [],
+    # Mémoire de campagne longue (cohérence) : missions, lieux, PNJ,
+    # monstres combattus (rempli par le moteur de combat), position.
+    "memoire": {
+        "missions": [],
+        "lieux_visites": [],
+        "personnages_rencontres": [],
+        "monstres_combattus": [],
+        "position": {"lieu": "", "zone": "", "detail": ""},
+    },
 }
 
 

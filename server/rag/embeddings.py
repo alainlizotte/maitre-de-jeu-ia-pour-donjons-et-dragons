@@ -39,10 +39,13 @@ class Embedder:
         base_url: str = "http://localhost:8081/v1",
         api_key: str = "none",
         model: str = "embeddinggemma",
+        fallbacks: tuple[str, ...] = (),
     ):
         # `base_url` peut déjà pointer sur `/v1` (config llm.base_url) ;
-        # l'endpoint embeddings vit sous `/v1/embeddings`.
-        self.base_url = base_url.rstrip("/")
+        # l'endpoint embeddings vit sous `/v1/embeddings`. Les `fallbacks`
+        # sont tentées en cas d'échec réseau de base_url : permet de router
+        # un hostname Docker interne (« llamaembed:8080 ») vers le port hôte
+        # publié (localhost:8081) quand le code tourne hors conteneur.
         self.model = model
         # Préfixes de tâche selon la famille du modèle — requis pour un
         # retrieval de qualité (nomic et embeddinggemma), ignorés sinon (bge,
@@ -53,16 +56,50 @@ class Embedder:
             else "embeddinggemma" if "embeddinggemma" in m
             else ""
         )
+        self._candidates: list[str] = []
+        for u in (base_url, *fallbacks):
+            u = str(u or "").strip().rstrip("/")
+            if u and u not in self._candidates:
+                self._candidates.append(u)
+        if not self._candidates:
+            self._candidates = ["http://localhost:8081/v1"]
+        # Index du candidat actuellement actif (avancé après un échec réseau).
+        self._active = 0
+        self._api_key = api_key
+        self._client: httpx.AsyncClient = None
+        self._url = ""
+        self._bind(self._active)
+
+    def _bind(self, idx: int) -> None:
+        """(Ré)connecte le client httpx sur le candidat idx (base_url + /v1)."""
+        base = self._candidates[idx]
         self._url = (
-            self.base_url + "/embeddings"
-            if self.base_url.endswith("/v1")
-            else self.base_url + "/v1/embeddings"
+            base + "/embeddings"
+            if base.endswith("/v1")
+            else base + "/v1/embeddings"
         )
+        if self._client is not None:
+            # Le client précédent (candidat injoignable) est simplement
+            # écarté : il sera fermé par `aclose()` de l'instance.
+            self._client = None
         self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            headers={"Authorization": f"Bearer {api_key}"},
+            base_url=base,
+            headers={"Authorization": f"Bearer {self._api_key}"},
             timeout=httpx.Timeout(120.0, connect=10.0),
         )
+
+    def _switch_fallback(self) -> bool:
+        """Bascule sur le prochain candidat (ex : port hôte). True si possible."""
+        while self._active < len(self._candidates) - 1:
+            self._active += 1
+            self._bind(self._active)
+            log.info("embeddings : bascule vers '%s'", self._candidates[self._active])
+            return True
+        return False
+
+    @property
+    def base_url(self) -> str:
+        return self._candidates[self._active]
 
     def _with_task(self, text: str, kind: str) -> str:
         """Ajoute le préfixe de tâche requis par la famille du modèle.
@@ -98,7 +135,27 @@ class Embedder:
         return text[: cut if cut > 0 else self.MAX_INPUT_CHARS]
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def _post(self, payload: dict[str, Any]) -> httpx.Response:
+        """POST /embeddings avec bascule automatique vers un candidat de
+        secours (ex : port hôte) si le serveur configuré est injoignable."""
+        for try_count in range(len(self._candidates)):
+            try:
+                resp = await self._client.post(
+                    "/embeddings",                          # relatif à base_url
+                    json=payload,
+                )
+                return resp
+            except (httpx.RequestError, httpx.HTTPError) as e:
+                if try_count + 1 < len(self._candidates) and self._switch_fallback():
+                    continue
+                raise EmbeddingError(
+                    f"serveur d'embeddings indisponible ({self._candidates[self._active]}): {e}"
+                ) from e
+        raise EmbeddingError("serveur d'embeddings indisponible")
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embeds une liste de textes en un seul appel. Renvoie les vecteurs.
@@ -110,10 +167,7 @@ class Embedder:
             return []
         texts = [self._clip(self._with_task(t, "document")) for t in texts]
         try:
-            resp = await self._client.post(
-                "/embeddings",                              # relatif à base_url
-                json={"model": self.model, "input": texts},
-            )
+            resp = await self._post({"model": self.model, "input": texts})
             if resp.status_code != 200:
                 # Retombe sur le mode un-par-un si l'endpoint rejette la liste.
                 log.warning(
@@ -122,8 +176,10 @@ class Embedder:
                 )
                 return [v for t in texts for v in [await self._embed_one(t)]]
             data = resp.json()
-        except (httpx.RequestError, httpx.HTTPError) as e:
-            raise EmbeddingError(f"ollama embeddings indisponible: {e}") from e
+        except EmbeddingError:
+            # Un serveur injoignable : le repli un-par-un basculerait lui
+            # aussi de candidat à chaque appel — on propage l'erreur.
+            raise
 
         # Forme 0 (OpenAI standard, Ollama `/v1`) : `data: [{"embedding":[...]}]`.
         rows = data.get("data")
@@ -173,15 +229,9 @@ class Embedder:
             return await self._embed_one(text, kind)
 
     async def _embed_one_raw(self, text: str, kind: str = "document") -> list[float]:
-        try:
-            resp = await self._client.post(
-                "/embeddings",
-                json={"model": self.model, "input": text},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except (httpx.RequestError, httpx.HTTPError) as e:
-            raise EmbeddingError(f"ollama embeddings indisponible: {e}") from e
+        resp = await self._post({"model": self.model, "input": text})
+        resp.raise_for_status()
+        data = resp.json()
         emb = data.get("embedding") or data.get("embeddings")
         # Forme OpenAI standard (Ollama `/v1`) : `data[0].embedding`.
         if not isinstance(emb, list) or (emb and not isinstance(emb[0], (int, float))):

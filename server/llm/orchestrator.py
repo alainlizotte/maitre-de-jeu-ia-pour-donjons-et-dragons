@@ -72,6 +72,8 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "memoire_lieu",
         "memoire_personnage",
         "memoire_position",
+        "memoire_intrigue",
+        "memoire_evenement",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
     ),
@@ -103,6 +105,8 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "memoire_lieu",
         "memoire_personnage",
         "memoire_position",
+        "memoire_intrigue",
+        "memoire_evenement",
         "inventaire_consulter",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
@@ -125,6 +129,11 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "inventaire_consommer_munition",
         "terminer_mon_tour",
         "monstre_consulter",
+        # Fuite / retraite : le MJ clôt le combat quand le groupe décroche
+        # ou que les ennemis se rendent/fuient (aucune XP de victoire).
+        "retraite_combat",
+        "memoire_intrigue",
+        "memoire_evenement",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
     ),
@@ -250,6 +259,33 @@ _TOOL_TAG_RE = re.compile(
 _ARG_RE = re.compile(r'(?P<key>[A-Za-z_][A-Za-z0-9_]*)="(?P<val>(?:\\.|[^"\\])*)"')
 
 
+# --------------------------------------------------------------------------- #
+#  Normalisation des jetons canal-gemma dans les appels d'outils
+# --------------------------------------------------------------------------- #
+# Gemma 4 (fonction-calling natif sur llama.cpp) écrit parfois les valeurs
+# de chaîne avec le jeton spécial `<|"|>` à la place des guillemets réels :
+#   <tool_call>engager_combat{monstres:<|"|>Gobelin, Gobelin<|"|>}</tool_call>
+# Sans normalisation, ces jetons corrompent le découpage des arguments
+# (la virgule interne n'est plus protégée) et l'appel aboutit avec des
+# arguments VIDES — résolution sans effet. On les remplace par `"`.
+_GEM_QUOTE_TOKENS = ("<|\"|>",)
+
+
+def _norm_gemma_quote_tokens(text: Optional[str]) -> Optional[str]:
+    """Remplace les jetons canal-gemma (`<|"|>`) par de vrais guillemets.
+
+    Renvoie `text` inchangé quand aucun jeton n'est présent (rapide, sans
+    allocation supplémentaire sur le chemin nominal).
+    """
+    if not text:
+        return text
+    out = text
+    for tok in _GEM_QUOTE_TOKENS:
+        if tok in out:
+            out = out.replace(tok, '"')
+    return out
+
+
 def parse_prompt_tool_calls(text: str) -> list[dict[str, Any]]:
     """Extrait les balises `<tool name=".." key="value" ...>` du texte.
 
@@ -304,7 +340,7 @@ def extract_toolcall_blocks(text: str) -> tuple[list[dict[str, Any]], str]:
     cleaned = text
     for m in list(_TOOLCALL_BLOCK_RE.finditer(text)):
         try:
-            data = json.loads(m.group("json"))
+            data = json.loads(_norm_gemma_quote_tokens(m.group("json")))
         except json.JSONDecodeError:
             continue
         name = data.get("name") or (data.get("function") or {}).get("name") or ""
@@ -362,6 +398,7 @@ def extract_toolcall_attr_calls(text: str) -> tuple[list[dict[str, Any]], str]:
             for am in _ARG_RE.finditer(m.group("attrs")):
                 v = am.group("val")
                 v = v.replace('\\"', '"').replace("\\\\", "\\").replace("\\n", "\n").replace("\\t", "\t")
+                v = _norm_gemma_quote_tokens(v).replace('"', "")
                 args[am.group("key")] = v
             name = str(args.pop("name", "")).strip()
             if not name:
@@ -459,6 +496,15 @@ def sanitize_tool_args(
             ]
             if len(cands) == 1:
                 target = cands[0]
+            elif len(cands) > 1:
+                # Clé courte ambiguë (ex. `cible` → `ca_cible` ET `nom_cible`) :
+                # on préfère le paramètre « nom_<x> » (la cible/le sujet nommé),
+                # plus sémantiquement fidèle que la variante de CA/stat.
+                nk = _norm_arg_name(key)
+                nom_hits = [p for p in cands
+                            if _norm_arg_name(p).startswith("nom") and nk in _norm_arg_name(p)]
+                if len(nom_hits) == 1:
+                    target = nom_hits[0]
         if target is None:
             continue  # argument inconnu → ignoré (invoke_tool filtre aussi)
         # 2. Placeholders numériques (« N », « X », « Calculé sur la fiche »).
@@ -611,6 +657,7 @@ def parse_prose_brace_calls(
     """
     if not text or "{" not in text:
         return [], text
+    text = _norm_gemma_quote_tokens(text)
     calls: list[dict[str, Any]] = []
     spans: list[tuple[int, int]] = []
     for m in _BRACE_CALL_RE.finditer(text):
@@ -762,6 +809,7 @@ def parse_prose_tool_calls(
     """
     if not text or "(" not in text:
         return [], text
+    text = _norm_gemma_quote_tokens(text)
     calls: list[dict[str, Any]] = []
     spans: list[tuple[int, int]] = []
     for m in _IDENT_RE.finditer(text):
@@ -824,7 +872,12 @@ def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None)
     """
     if not text:
         return text
+    # Retire les jetons canal-gemma résiduels (`<|"|>`) : ce sont des
+    # délimiteurs de valeur internes qui ne doivent JAMAIS être montrés.
     out = text
+    for tok in _GEM_QUOTE_TOKENS:
+        if tok in out:
+            out = out.replace(tok, "")
     if tools:
         _calls, out = parse_prose_tool_calls(out, tools)
     out = strip_prompt_tool_calls(out)

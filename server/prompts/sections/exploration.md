@@ -64,3 +64,27 @@ Consignes pour les phases hors combat.
   ne se narre à la main. Toujours `lancer_attaque` (toucher), `lancer_degats`
   (dégâts), puis `fiche_perso_infliger_degats` (décrémenter les PV de la cible,
   PJ ou PNJ). Même pour une escarmouche rapide sans `demarrer_combat`.
+
+---
+
+### 🧠 Mémoire de campagne — garder le fil de l'histoire
+
+La mémoire de campagne est réinjectée à chaque tour : missions, lieux, PNJ,
+monstres combattus, position, **résumé de l'intrigue**, **objectif courant** et
+**événements récents**. Elle ne doit JAMAIS perdre le fil, même si
+l'historique de chat est long :
+
+- **`memoire_intrigue(resume=..., objectif=...)`** : appelle-le à chaque
+  tournant de l'histoire (début de scénario, découverte majeure, résolution
+  d'un chapitre). `resume` condense (2-4 phrases) ce qui s'est passé ;
+  `objectif` dit ce que le groupe doit faire MAINTENANT.
+- **`memoire_evenement(evenement=...)`** : après chaque événement marquant
+  (combat remporté, PNJ rencontré, secret découvert, trahison…), ajoute une
+  ligne au journal récent.
+- **`memoire_mission` / `memoire_lieu` / `memoire_personnage` /
+  `memoire_position`** : tiens-les à jour comme d'habitude.
+
+Ne remplace jamais le résumé en le raccourcissant de façon incomplète : garde
+l'essentiel du passé plus le nouveau développement. L'objectif courant se met à
+jour dès qu'une action importante change la priorité du groupe.
+

@@ -2,6 +2,7 @@
 // modèles, fiches). fetch relatif (proxy Vite ou même origine).
 
 import type {
+  CalepinNote,
   EncounterMonster,
   FichePerso,
   HealthStatus,
@@ -136,6 +137,32 @@ export const api = {
       method: "DELETE",
       headers: entetes(),
     }).then(jq<{ ok: boolean; partie_id: string; supprimes: string[] }>),
+
+  // -- Calepin (journal de notes du MJ) ----------------------------------- //
+  calepinLire: (partieId: string) =>
+    fetch(`${API}/parties/${encodeURIComponent(partieId)}/calepin`, {
+      headers: entetes(),
+    }).then(jq<{ partie_id: string; notes: CalepinNote[] }>),
+  calepinAjouter: (partieId: string, texte: string, fait = false) =>
+    post<{ ok: boolean; note_id: string; notes: CalepinNote[] }>(
+      `${API}/parties/${encodeURIComponent(partieId)}/calepin`,
+      { texte, fait },
+    ),
+  calepinMaj: (
+    partieId: string,
+    noteId: string,
+    payload: { texte?: string; fait?: boolean },
+  ) =>
+    fetch(`${API}/parties/${encodeURIComponent(partieId)}/calepin/${encodeURIComponent(noteId)}`, {
+      method: "PUT",
+      headers: entetes({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    }).then(jq<{ ok: boolean; notes: CalepinNote[] }>),
+  calepinSupprimer: (partieId: string, noteId: string) =>
+    fetch(`${API}/parties/${encodeURIComponent(partieId)}/calepin/${encodeURIComponent(noteId)}`, {
+      method: "DELETE",
+      headers: entetes(),
+    }).then(jq<{ ok: boolean; notes: CalepinNote[] }>),
 
   // -- Modèle IA (sélection à chaud) -------------------------------------- //
   listModels: () => fetch(`${API}/models`).then(jq<ModelsList>),

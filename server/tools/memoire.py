@@ -19,6 +19,7 @@ from typing import Any, Optional
 from .base import ToolContext, ToolResult, tool
 
 _MAX_LISTE = 100  # bornes mémoire (les plus récents en dernier)
+_MAX_EVENEMENTS = 12  # journal des événements récents consulté par le MJ
 
 
 def _memoire(etat: dict[str, Any]) -> dict[str, Any]:
@@ -28,6 +29,9 @@ def _memoire(etat: dict[str, Any]) -> dict[str, Any]:
     m.setdefault("personnages_rencontres", [])
     m.setdefault("monstres_combattus", [])
     m.setdefault("position", {"lieu": "", "zone": "", "detail": ""})
+    m.setdefault("intrigue_resume", "")
+    m.setdefault("objectif_courant", "")
+    m.setdefault("evenements_rencents", [])
     return m
 
 
@@ -201,6 +205,70 @@ async def memoire_position(
     )
 
 
+@tool
+async def memoire_evenement(
+    ctx: ToolContext, evenement: str
+) -> ToolResult:
+    """
+    Ajoute un événement marquant au journal récent de la mémoire de campagne
+    (ex. « Le groupe a délivré la prisonnière des mains des cultistes »).
+    Appelle-le en fin de scène ou après un événement notable : c'est ce qui
+    permet de retrouver le fil de l'histoire quand l'historique de chat est
+    tronqué. Chaque entrée est horodatée ; seuls les plus récents sont gardés.
+
+    :param evenement (str): description courte de l'événement marquant.
+    """
+    st, etat = _charger(ctx)
+    if st is None:
+        return ToolResult(text="❌ État de partie illisible.")
+    m = _memoire(etat)
+    ev = str(evenement or "").strip()
+    if not ev:
+        return ToolResult(text="❌ Décris l'événement marquant.")
+    m["evenements_rencents"].append({
+        "texte": ev,
+        "ts": datetime.now().isoformat(),
+    })
+    m["evenements_rencents"] = m["evenements_rencents"][-_MAX_EVENEMENTS:]
+    st.save(etat)
+    return ToolResult(
+        text=f"✅ Événement mémorisé : {ev}",
+        state_patch={"memoire": m},
+    )
+
+
+@tool
+async def memoire_intrigue(
+    ctx: ToolContext, resume: str = "", objectif: str = ""
+) -> ToolResult:
+    """
+    Met à jour le résumé continu de l'intrigue et l'objectif courant de la
+    campagne. `resume` condense ce qui s'est passé (2-4 phrases), `objectif`
+    indique ce que le groupe doit faire MAINTENANT. Ces deux champs sont
+    réinjectés à chaque tour du MJ — les tenir à jour garantit la cohérence
+    sur une longue partie. Appelle-le après un tournant de l'histoire.
+
+    :param resume (str): résumé succinct et à jour de l'intrigue (optionnel).
+    :param objectif (str): objectif/priorité actuel du groupe (optionnel).
+    """
+    st, etat = _charger(ctx)
+    if st is None:
+        return ToolResult(text="❌ État de partie illisible.")
+    m = _memoire(etat)
+    if str(resume or "").strip():
+        m["intrigue_resume"] = str(resume).strip()
+    if str(objectif or "").strip():
+        m["objectif_courant"] = str(objectif).strip()
+    st.save(etat)
+    return ToolResult(
+        text="✅ Intrigue mise à jour "
+             + ("(résumé) " if resume else "")
+             + ("(objectif) " if objectif else "")
+             + "— conservée pour le fil de l'histoire.",
+        state_patch={"memoire": m},
+    )
+
+
 # --------------------------------------------------------------------------- #
 #  Résumé injecté dans le prompt du MJ (aucun tool requis pour LIRE)
 # --------------------------------------------------------------------------- #
@@ -215,6 +283,10 @@ def memoire_resume(etat: dict[str, Any], max_chars: int = 1200) -> str:
             + (f" — {pos['zone']}" if pos.get("zone") else "")
             + (f" ({pos['detail']})" if pos.get("detail") else "")
         )
+    if m.get("objectif_courant"):
+        lignes.append("Objectif courant : " + m["objectif_courant"])
+    if m.get("intrigue_resume"):
+        lignes.append("Résumé de l'intrigue : " + m["intrigue_resume"])
     actives = [
         miss for miss in (m.get("missions") or [])
         if miss.get("statut") == "active"
@@ -258,6 +330,10 @@ def memoire_resume(etat: dict[str, Any], max_chars: int = 1200) -> str:
             + "contre " + ", ".join(c.get("noms") or [])
             for c in combats[-5:]
         )
+    evenements = m.get("evenements_rencents") or []
+    if evenements:
+        lignes.append("Événements récents (du plus ancien au plus récent) :")
+        lignes.extend(f"- {e.get('texte', '?')}" for e in evenements)
     if not lignes:
         return ""
     resume = "\n".join(lignes)

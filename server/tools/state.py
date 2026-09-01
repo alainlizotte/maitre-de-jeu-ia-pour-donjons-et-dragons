@@ -428,6 +428,31 @@ async def tour_suivant_combat(ctx: ToolContext) -> ToolResult:
     )
 
 
+def _clore_combat_etat(state: PartyState, raison: str) -> Optional[str]:
+    """Clôture un état en combat : phase→exploration, initiative/PV vidés,
+    mémoire du dénouement. Renvoie un message d'erreur ou None si ok."""
+    etat = state.load()
+    if "_erreur" in etat:
+        return f"❌ État illisible : {etat}"
+    if etat.get("phase") != "combat" or not etat.get("initiative"):
+        return "❌ Aucun combat en cours."
+    etat["phase"] = "exploration"
+    etat["initiative"] = []
+    etat["courant_tour_pour"] = None
+    etat["tour"] = 0
+    etat["monstres_combat"] = []
+    from datetime import datetime as _dt
+    etat.setdefault("histoire", []).append({
+        "ts": _dt.now().isoformat(),
+        "tour": "",
+        "evenement": f"Combat terminé : {raison}.",
+    })
+    etat.setdefault("memoire", {}).setdefault("monstres_combattus", []).append({
+        "issue": raison, "tour": 0, "ts": _dt.now().isoformat(),
+    })
+    return state.save(etat)
+
+
 @tool
 async def finir_combat(ctx: ToolContext) -> ToolResult:
     """
@@ -435,17 +460,38 @@ async def finir_combat(ctx: ToolContext) -> ToolResult:
     courant_tour_pour=None, tour=0.
     """
     state = _party(ctx)
-    etat = state.load()
-    etat["phase"] = "exploration"
-    etat["initiative"] = []
-    etat["courant_tour_pour"] = None
-    etat["tour"] = 0
-    etat["monstres_combat"] = []
-    err = state.save(etat)
+    err = _clore_combat_etat(state, "résolu")
     if err:
         return ToolResult(text=err)
     return ToolResult(
         text="🕊️ Combat terminé. Retour à l'exploration.",
+        state_patch={
+            "phase": "exploration",
+            "tour": 0,
+            "courant_tour_pour": None,
+            "initiative": [],
+            "monstres_combat": [],
+        },
+    )
+
+
+@tool
+async def retraite_combat(ctx: ToolContext) -> ToolResult:
+    """
+    Clôture le combat suite à une FUITE / RETRAITE ou à la capitulation des
+    ennemis : passe phase→"exploration" (initiative vidée, PV reset) SANS
+    distribuer d'XP. À n'appeler QUE quand les hostilités cessent réellement
+    (les ennemis fuient, se rendent, ou le groupe bat en retraite après
+    avoir décroché). Le désenclavement (retraite sous la menace, attaques
+    d'opportunité) reste narré par le MJ avant l'appel.
+    """
+    state = _party(ctx)
+    err = _clore_combat_etat(state, "retraite")
+    if err:
+        return ToolResult(text=err)
+    return ToolResult(
+        text="🏃 **Retraite effectuée — le combat se termine.** Retour à "
+             "l'exploration (aucune XP de victoire).",
         state_patch={
             "phase": "exploration",
             "tour": 0,

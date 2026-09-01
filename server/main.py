@@ -355,6 +355,68 @@ async def get_party(partie_id: str) -> dict[str, Any]:
     return {"partie_id": partie_id, "etat": etat}
 
 
+# --------------------------------------------------------------------------- #
+#  Calepin du MJ (journal de notes) — persistance dans l'état de la partie.
+# --------------------------------------------------------------------------- #
+def _party_state(partie_id: str) -> PartyState:
+    return PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+        partie_id=partie_id,
+        max_history=cfg.game.max_history_events,
+    )
+
+
+@app.get("/api/parties/{partie_id}/calepin")
+async def calepin_lire(partie_id: str) -> dict[str, Any]:
+    """Liste les notes du calepin de la partie (id, texte, fait)."""
+    return {"partie_id": partie_id, "notes": _party_state(partie_id).calepin_lire()}
+
+
+@app.post("/api/parties/{partie_id}/calepin")
+async def calepin_ajouter(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Ajoute une note au calepin. `texte` requis (str) ; `fait` (bool) optionnel."""
+    texte = str(payload.get("texte") or "").strip()
+    if not texte:
+        raise HTTPException(status_code=400, detail="Champ 'texte' requis.")
+    fait = bool(payload.get("fait", False))
+    st = _party_state(partie_id)
+    err, note_id = st.calepin_ajouter(texte, fait)
+    if err:
+        raise HTTPException(status_code=500, detail=err)
+    return {"ok": True, "note_id": note_id, "notes": st.calepin_lire()}
+
+
+@app.put("/api/parties/{partie_id}/calepin/{note_id}")
+async def calepin_maj(
+    partie_id: str, note_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Met à jour une note : `texte` (str) et/ou `fait` (bool)."""
+    st = _party_state(partie_id)
+    texte = payload.get("texte")
+    fait = payload.get("fait")
+    if texte is not None:
+        texte = str(texte).strip()
+        if not texte:
+            raise HTTPException(status_code=400, detail="Texte vide.")
+    if fait is not None:
+        fait = bool(fait)
+    err = st.calepin_maj(note_id, texte=texte, fait=fait)
+    if err:
+        raise HTTPException(status_code=404 if err == "Note introuvable" else 500,
+                            detail=err)
+    return {"ok": True, "notes": st.calepin_lire()}
+
+
+@app.delete("/api/parties/{partie_id}/calepin/{note_id}")
+async def calepin_supprimer(partie_id: str, note_id: str) -> dict[str, Any]:
+    st = _party_state(partie_id)
+    err = st.calepin_supprimer(note_id)
+    if err:
+        raise HTTPException(status_code=404 if err == "Note introuvable" else 500,
+                            detail=err)
+    return {"ok": True, "notes": st.calepin_lire()}
+
+
 @app.delete("/api/parties/{partie_id}")
 async def delete_party(partie_id: str) -> dict[str, Any]:
     """Supprime définitivement une partie : état persistant, historiques de

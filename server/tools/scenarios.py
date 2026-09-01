@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from typing import Any, Optional
 
 from .base import ToolContext, ToolResult, tool
@@ -17,6 +18,10 @@ from .base import ToolContext, ToolResult, tool
 
 _CATALOGUE_CACHE: Optional[dict[str, Any]] = None
 _FLAT_CACHE: Optional[list[dict[str, Any]]] = None
+
+
+def _now_iso() -> str:
+    return datetime.now().isoformat()
 
 
 def _catalogue_path(ctx: ToolContext) -> str:
@@ -97,6 +102,61 @@ def extraire_pdf(ctx: ToolContext, pdf_url: str) -> str:
         texte = f"(extraction impossible : {e})"
     _PDF_TEXT_CACHE[cle] = texte[:_PDF_MAX_CHARS + 120]
     return _PDF_TEXT_CACHE[cle]
+
+
+# --------------------------------------------------------------------------- #
+#  Enrichissement du bestiaire avec les monstres du scénario
+# --------------------------------------------------------------------------- #
+def _noms_monstres_scenario(s: dict[str, Any]) -> list[str]:
+    """Collecte les noms de monstres cités par un scénario.
+
+    Source fiable : la catégorie `artwork.monstres` du catalogue (le dossier
+    artwork classe explicitement ces images comme « Monstres »). On ignore les
+    doublons/cas vides. Les vrais stat-blocks des PDF ne sont pas fiables à
+    parser automatiquement — on ne fait ici que garantir la PRÉSENCE d'une
+    fiche pour chacun, qu'il sera possible d'enrichir ensuite.
+    """
+    noms: list[str] = []
+    vus: set[str] = set()
+    for m in (s.get("artwork") or {}).get("monstres") or []:
+        nom = str((m or {}).get("nom") or "").strip()
+        if not nom:
+            continue
+        cle = nom.lower().strip()
+        if cle in vus:
+            continue
+        vus.add(cle)
+        noms.append(nom)
+    return noms
+
+
+def _assurer_monstres_au_bestiaire(ctx: ToolContext, noms: list[str]) -> list[str]:
+    """Garantit qu'UNE fiche bestiaire existe pour chaque monstre de scénario.
+
+    Pour chaque nom absent du bestiaire, génère une fiche de secours
+    (stats D&D 3.5 de base marquées « générique ») et la persiste dans
+    `data/bestiaire.json`. Ainsi `engager_combat` (validation stricte) ne
+    bloque plus jamais le combat contre un monstre du scénario — le MJ peut
+    ensuite remplacer la fiche par les stats officielles.
+
+    Renvoie la liste des noms AJOUTÉS.
+    """
+    if not noms:
+        return []
+    try:
+        from .monstres import _find_monstre, _generer_monstre_genérique
+    except Exception:                                        # noqa: BLE001
+        return []
+    ajoutes: list[str] = []
+    for nom in noms:
+        try:
+            if _find_monstre(ctx, nom) is not None:
+                continue  # déjà présent ou résoluble (alias humain inclus)
+            if _generer_monstre_genérique(nom, ctx) is not None:
+                ajoutes.append(nom)
+        except Exception:                                    # noqa: BLE001
+            continue
+    return ajoutes
 
 
 # --------------------------------------------------------------------------- #
@@ -200,12 +260,45 @@ async def scenarios_laelith_charger(
         "pitch": str(s.get("pitch", "")),
         "source": f"[{s.get('id','')}] " + str(s.get("pdf") or s.get("_univers", "")),
     }
+    # ── Bestiaire : garantit une fiche pour chaque monstre du scénario ──
+    ajoutes = _assurer_monstres_au_bestiaire(ctx, _noms_monstres_scenario(s))
+    if ajoutes:
+        champs.append(
+            "\n### Bestiaire — monstres du scénario ajoutés (fiches de secours génériques)\n"
+            + ", ".join(ajoutes)
+        )
+
+    # ── Mémoire de campagne : quête/mission + position (+ résumé à remplir) ──
     try:
         if ctx.partie_id:
             from ..game.state import PartyState
-            PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id).patch(
-                "quete", json.dumps(quete, ensure_ascii=False)
-            )
+            st = PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id)
+            etat = st.load()
+            mem = etat.setdefault("memoire", {})
+            mem.setdefault("missions", [])
+            # Mission active (la quête du scénario devient la mission courante)
+            titre_mission = str(quete.get("titre") or "").strip()
+            if titre_mission and not any(
+                str(x.get("titre", "")).lower() == titre_mission.lower()
+                for x in mem["missions"]
+            ):
+                mem["missions"].append({
+                    "titre": titre_mission,
+                    "statut": "active",
+                    "notes": str(quete.get("pitch") or ""),
+                    "ts": _now_iso(),
+                })
+            # Position : l'univers/le scénario donne un point d'ancrage
+            unit = str(s.get("_univers") or "")
+            if unit and not mem["position"].get("lieu"):
+                mem["position"]["lieu"] = unit
+            mem.setdefault("objectif_courant", str(quete.get("pitch") or ""))
+            st.save(etat)
     except Exception:                                           # noqa: BLE001
         pass
+
+    champs.append(
+        "\nℹ️ Dans `memoire_resume`, mets à jour `memoire_intrigue` "
+        "(résumé + objectif) pour garder le fil de l'histoire."
+    )
     return ToolResult(text="\n".join(champs), state_patch={"quete": quete})

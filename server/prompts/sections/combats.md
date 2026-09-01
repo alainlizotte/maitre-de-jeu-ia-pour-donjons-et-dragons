@@ -105,9 +105,18 @@ règles structurelles.
    (`1d20 + mod. carac de lanceur + niveau`) contre DD = 10 + dégâts subis
    (ou 10 + niveau du sort pour distraction continue). Échec = sort perdu.
 
-10. **Fin de combat** : dès que le dernier ennemi est à terre (mort, invalide,
-    fuite ou capitulation) OU qu'un joueur annonce la fin des hostilités en
-    cohérence avec les résultats mécaniques, appelle IMMÉDIATEMENT
-    `finir_combat` (passe la phase à `exploration`) — puis distribue l'XP
-    selon FP du Manuel des Monstres. Un combat gagné reste « en phase combat »
-    tant que tu n'as PAS appelé `finir_combat`.
+10. **Fin de combat — victoire** : dès que le dernier ennemi est à terre
+     (mort, invalide) OU qu'un joueur annonce la fin des hostilités en
+     cohérence avec les résultats mécaniques, appelle IMMÉDIATEMENT
+     `finir_combat` (passe la phase à `exploration`) — puis distribue l'XP
+     selon FP du Manuel des Monstres. Un combat gagné reste « en phase
+     combat » tant que tu n'as PAS appelé `finir_combat`.
+
+11. **Évasion / retraite** : si le groupe choisit de fuir (ou que TOUS les
+     ennemis fuient / se rendent / capitulent), le combat prend fin SANS
+     distribution d'XP. Narre d'abord le décrochage (tentative, attaque
+     d'opportunité éventuelle, course-poursuite si pertinente), puis appelle
+     **`retraite_combat`** pour clôturer : phase→`exploration`, initiative
+     vidée. Ne laisse JAMAIS le combat « en phase combat » après une évasion
+     réussie — le mode combat ne se déverrouille que via `retraite_combat`
+     (ou la victoire/défaite détectée par le serveur).

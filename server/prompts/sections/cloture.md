@@ -12,7 +12,7 @@ Quand une quête s'achève, ou sur demande explicite, produit un bilan structur�
 
 2. **XP distribuée** selon la table 3.5 :
    - Pour chaque adversaire vaincu, prendre son **Facteur de Puissance (FP)** depuis
-     `rencontrer_monstre(nom)` (champ `FP`) et la **table d'XP 3.5** par niveau moyen
+     `monstre_consulter(nom=...)` (champ `FP`) et la **table d'XP 3.5** par niveau moyen
      du groupe.
    - FP 1/4 → ~100 XP / FP 1/2 → ~200 XP / FP 1 → ~300 XP (à niveau 1, vérifier
      dans le Manuel du Joueur si le niveau diffère).

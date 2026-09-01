@@ -43,17 +43,26 @@ SCHEMA_PARTIE: dict[str, Any] = {
     "quete": {"titre": "", "pitch": "", "source": ""},
     "histoire": [],
     "derniere_narration": "",
+    # Calepin du MJ : notes libres devant la table, avec cases à cocher.
+    # Chaque entrée : {"id": str, "texte": str, "fait": bool}.
+    "calepin": [],
     # Journal des illustrations de monstres croisés ({nom, url}) — sert à
     # réhydrater la galerie « Monstres rencontrés » après rechargement.
     "rencontres_images": [],
     # Mémoire de campagne longue (cohérence) : missions, lieux, PNJ,
     # monstres combattus (rempli par le moteur de combat), position.
+    # `intrigue_resume` (résumé continu), `objectif_courant` (ce qu'il faut
+    # faire maintenant) et `evenements_rencents` (journal récent) gardent le
+    # fil de l'histoire même quand l'historique chat est tronqué.
     "memoire": {
         "missions": [],
         "lieux_visites": [],
         "personnages_rencontres": [],
         "monstres_combattus": [],
         "position": {"lieu": "", "zone": "", "detail": ""},
+        "intrigue_resume": "",
+        "objectif_courant": "",
+        "evenements_rencents": [],
     },
 }
 
@@ -251,6 +260,55 @@ class PartyState:
             etat["histoire"] = etat["histoire"][-self.max_history:]
         err = self.save(etat)
         return err or f"✅ Événement ajouté au journal : « {evenement} »"
+
+    # ------------------------------------------------------------------ #
+    #  Calepin (journal de notes du MJ)
+    # ------------------------------------------------------------------ #
+    def calepin_lire(self) -> list[dict[str, Any]]:
+        etat = self.load()
+        if not isinstance(etat, dict):
+            return []
+        return list(etat.get("calepin") or [])
+
+    def calepin_ajouter(self, texte: str, fait: bool = False) -> tuple[Optional[str], str]:
+        """Ajoute une note. Renvoie (erreur, id)."""
+        etat = self.load()
+        if not isinstance(etat, dict):
+            return "État illisible", ""
+        from uuid import uuid4
+        note_id = uuid4().hex[:8]
+        etat.setdefault("calepin", []).append({
+            "id": note_id, "texte": texte.strip()[:500], "fait": bool(fait),
+        })
+        err = self.save(etat)
+        return err, note_id
+
+    def calepin_maj(self, note_id: str, texte: Optional[str] = None,
+                    fait: Optional[bool] = None) -> Optional[str]:
+        """Met à jour une note (texte et/ou case cochée). Renvoie erreur ou None."""
+        etat = self.load()
+        if not isinstance(etat, dict):
+            return "État illisible"
+        notes = etat.get("calepin") or []
+        for n in notes:
+            if n.get("id") == note_id:
+                if texte is not None:
+                    n["texte"] = texte.strip()[:500]
+                if fait is not None:
+                    n["fait"] = bool(fait)
+                return self.save(etat)
+        return "Note introuvable"
+
+    def calepin_supprimer(self, note_id: str) -> Optional[str]:
+        etat = self.load()
+        if not isinstance(etat, dict):
+            return "État illisible"
+        notes = etat.get("calepin") or []
+        avant = len(notes)
+        etat["calepin"] = [n for n in notes if n.get("id") != note_id]
+        if len(etat["calepin"]) == avant:
+            return "Note introuvable"
+        return self.save(etat)
 
     def set_derniere_narration(self, narration: str) -> str:
         etat = self.load()

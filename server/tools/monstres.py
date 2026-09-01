@@ -315,6 +315,51 @@ _MOTS_EN_FR: dict[str, str] = {
     "dragon": "dragon", "dragonne": "dragonne",
 }
 
+# Adversaires humains / PNJ « inventés » par un scénario → fiche officielle du
+# bestiaire. Le MJ ne doit JAMAIS inventer les stats d'un garde, bandit ou
+# chenapan de la foule : on les ramène à leur entrée canonique dans le
+# bestiaire (gardes, chenaille, bandits, hommes d'armes). Clés = variantes
+# génériques FR (normalisées), valeurs = clé canonique du bestiaire.
+_ALIAS_HUMAIN_GENERIQUE: dict[str, str] = {
+    # Gardes / soldats / surveillance
+    "gardes": "garde", "garde": "garde", "garde_de_la_ville": "garde",
+    "gardien_humain": "garde", "soldat_humain": "garde",
+    "milice_humaine": "garde", "homme_d_armes": "garde",
+    "hommes_d_armes": "garde", "guerrier_humain": "garde",
+    "sergent_humain": "garde",
+    # Foule / populace / chenapan
+    "chenaille": "chenaille", "cheneaille": "chenaille",
+    "chenapan": "chenaille", "chenapans": "chenaille",
+    "chenapane": "chenaille", "chenapanes": "chenaille",
+    "foule_humaine": "chenaille", "foule": "chenaille", "populace": "chenaille",
+    "paysan_humain": "chenaille", "paysan": "chenaille",
+    "paysans_humains": "chenaille", "paysans": "chenaille",
+    "paysanne": "chenaille", "paysannes": "chenaille",
+    "gredin_humain": "chenaille", "gredins_humains": "chenaille",
+    "gredin": "chenaille", "gredins": "chenaille",
+    "ruffian_humain": "chenaille", "ruffians_humains": "chenaille",
+    "ruffian": "chenaille", "ruffians": "chenaille",
+    "voyou_humain": "chenaille", "voyous_humains": "chenaille",
+    "voyou": "chenaille", "voyous": "chenaille",
+    "malfrat_humain": "chenaille", "malfrats_humains": "chenaille",
+    "malfrat": "chenaille", "malfrats": "chenaille",
+    # Bandits / brigands
+    "bandit": "bandit", "bandits": "bandit", "brigand_humain": "bandit",
+    "brigand": "bandit", "brigands_humains": "bandit", "brigands": "bandit",
+    "pillard_humain": "bandit", "pillard": "bandit", "pillards_humains": "bandit",
+    "pillards": "bandit", "maraudeur_humain": "bandit",
+    "maraudeur": "bandit", "maraudeurs_humains": "bandit",
+    "maraudeurs": "bandit", "voleur_humain": "bandit",
+    "voleur": "bandit", "voleurs_humains": "bandit", "voleurs": "bandit",
+    "assassin_humain": "bandit", "assassin": "bandit", "assassins": "bandit",
+    # Hommes d'armes aasimar / gardes d'élite
+    "aasimar": "aasimar_homme_d_armes_de_niveau_1",
+    "aasimar_homme_d_armes": "aasimar_homme_d_armes_de_niveau_1",
+    "homme_d_armes_aasimar": "aasimar_homme_d_armes_de_niveau_1",
+    "chevalier_aasimar": "aasimar_homme_d_armes_de_niveau_1",
+    "paladin_aasimar": "aasimar_homme_d_armes_de_niveau_1",
+}
+
 
 def _candidats_noms(nom: str) -> list[str]:
     """Noms candidats pour la recherche : original + alias EN→FR + traduction
@@ -325,6 +370,22 @@ def _candidats_noms(nom: str) -> list[str]:
     if alias:
         cands.append(alias)
         cands.append(_normalise_nom(alias))
+    # Alias « PNJ humains génériques » → fiche officielle du bestiaire
+    # (garde, chenaille, bandit, aasimar…). On ajoute la clique canonique pour
+    # que garde_de_la_ville → garde_humain_guerrier_2, etc. On balaie aussi
+    # chaque mot significatif du nom (« une meute de chenapans » → chenaille).
+    generique = _ALIAS_HUMAIN_GENERIQUE.get(n)
+    if generique:
+        cands.append(generique)
+        cands.append(_normalise_nom(generique))
+    else:
+        for w in n.split("_"):
+            if len(w) < 3:
+                continue
+            g = _ALIAS_HUMAIN_GENERIQUE.get(w)
+            if g:
+                cands.append(g)
+                cands.append(_normalise_nom(g))
     trad = "_".join(_MOTS_EN_FR.get(w, w) for w in n.split("_"))
     if trad != n:
         cands.append(trad)

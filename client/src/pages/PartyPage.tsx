@@ -228,7 +228,9 @@ export function PartyPage() {
           <ScenarioPicker partieId={partie_id} />
         </div>
       )}
-      <ChatPanel sendSay={sendSay} />
+      {/* Sur smartphone, avant le choix de quête, le sélecteur occupe toute
+          la hauteur (le chat est masqué pour ne pas le réduire de moitié). */}
+      {!(showPicker && isMobile) && <ChatPanel sendSay={sendSay} />}
     </div>
   );
 

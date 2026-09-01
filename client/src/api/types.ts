@@ -37,11 +37,19 @@ export interface PartyState {
   quete: { titre: string; pitch: string; source: string };
   histoire: string[];
   derniere_narration: string;
+  /** Calepin du MJ : notes libres avec case à cocher. */
+  calepin?: CalepinNote[];
   /** Combattants non-JJ suivis mécaniquement pendant le combat. */
   monstres_combat?: MonstreCombat[];
   /** Journal des illustrations de monstres croisés ({nom, url}). */
   rencontres_images?: { nom: string; url: string }[];
   _erreur?: string;
+}
+
+export interface CalepinNote {
+  id: string;
+  texte: string;
+  fait: boolean;
 }
 
 export interface MonstreCombat {

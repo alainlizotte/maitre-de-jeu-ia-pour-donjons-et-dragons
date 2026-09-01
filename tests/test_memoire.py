@@ -19,7 +19,7 @@ from server.game.state import PartyState  # noqa: E402
 from server.tools.base import ToolContext  # noqa: E402
 from server.tools.memoire import (  # noqa: E402
     memoire_lieu, memoire_mission, memoire_personnage, memoire_position,
-    memoire_resume,
+    memoire_resume, memoire_intrigue, memoire_evenement, _MAX_EVENEMENTS,
 )
 
 PID = "test_memoire"
@@ -116,5 +116,77 @@ def test_memoire_resume_vide_si_aucune_donnee():
     try:
         PartyState(data_dir=d, partie_id=PID).save({})
         assert memoire_resume({}) == ""
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+# --------------------------------------------------------------------------- #
+def test_intrigue_met_a_jour_resume_et_objectif():
+    d = _fresh_dir()
+    try:
+        tr = asyncio.run(memoire_intrigue(
+            _ctx(d), "Le groupe a délivré la prisonnière du culte de Xvim.",
+            "Se rendre à la citadelle de Myth Drannor."))
+        assert "résumé" in tr.text and "objectif" in tr.text
+        m = _mem(d)
+        assert "prisonnière" in m["intrigue_resume"]
+        assert m["objectif_courant"] == "Se rendre à la citadelle de Myth Drannor."
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_intrigue_met_a_jour_un_seul_champ():
+    d = _fresh_dir()
+    try:
+        asyncio.run(memoire_intrigue(_ctx(d), resume="Résumé de départ"))
+        m = _mem(d)
+        assert m["intrigue_resume"] == "Résumé de départ"
+        assert m["objectif_courant"] == ""
+        # Ne met à jour que l'objectif : le résumé doit rester.
+        asyncio.run(memoire_intrigue(_ctx(d), objectif="Nouvel objectif"))
+        m = _mem(d)
+        assert m["intrigue_resume"] == "Résumé de départ"
+        assert m["objectif_courant"] == "Nouvel objectif"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_evenement_horodate_et_borne():
+    d = _fresh_dir()
+    try:
+        for i in range(_MAX_EVENEMENTS + 5):
+            asyncio.run(memoire_evenement(_ctx(d), f"Événement {i}"))
+        ev = _mem(d)["evenements_rencents"]
+        assert len(ev) == _MAX_EVENEMENTS
+        assert "ts" in ev[0]
+        # Les plus récents sont conservés, les plus anciens purgés.
+        assert ev[0]["texte"] == f"Événement {5}"
+        assert ev[-1]["texte"] == f"Événement {_MAX_EVENEMENTS + 4}"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_resume_inclut_intrigue_objectif_evenements():
+    d = _fresh_dir()
+    try:
+        asyncio.run(memoire_intrigue(
+            _ctx(d), "Résumé d'intrigue de test.", "Objectif de test"))
+        asyncio.run(memoire_evenement(_ctx(d), "Un événement marquant."))
+        etat = PartyState(data_dir=d, partie_id=PID).load()
+        resume = memoire_resume(etat)
+        assert "Objectif courant : Objectif de test" in resume
+        assert "Résumé de l'intrigue : Résumé d'intrigue de test." in resume
+        assert "Événements récents" in resume
+        assert "Un événement marquant." in resume
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_resume_vide_si_seuls_champs_vides():
+    d = _fresh_dir()
+    try:
+        asyncio.run(memoire_intrigue(_ctx(d)))
+        etat = PartyState(data_dir=d, partie_id=PID).load()
+        assert memoire_resume(etat) == ""
     finally:
         shutil.rmtree(d, ignore_errors=True)

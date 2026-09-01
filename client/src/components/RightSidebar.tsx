@@ -5,11 +5,12 @@ import { DungeonView } from "./DungeonView";
 import { WorldMap } from "./WorldMap";
 import { Bestiary, MonsterSheetModal } from "./Bestiary";
 import { TeamChat } from "./TeamChat";
+import { Journal } from "./Journal";
 import { useParty } from "../store";
 import { api } from "../api/rest";
 import type { EncounterMonster } from "../api/types";
 
-type Tab = "des" | "equipe" | "monde" | "donjon" | "bestiaire";
+type Tab = "des" | "equipe" | "monde" | "donjon" | "bestiaire" | "journal";
 
 const TAB_LABELS: Record<Tab, string> = {
   des: "Dés",
@@ -17,6 +18,7 @@ const TAB_LABELS: Record<Tab, string> = {
   monde: "Monde",
   donjon: "Donjon",
   bestiaire: "Bestiaire",
+  journal: "Journal",
 };
 
 interface RightSidebarProps {
@@ -299,6 +301,7 @@ export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps
         {tab === "monde" && <WorldMap />}
         {tab === "donjon" && <DungeonView sendSay={sendSay} />}
         {tab === "bestiaire" && <Bestiary />}
+        {tab === "journal" && <Journal />}
       </div>
       <EncounterGallery />
     </aside>

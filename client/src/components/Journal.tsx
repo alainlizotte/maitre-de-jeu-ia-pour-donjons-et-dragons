@@ -60,7 +60,7 @@ export function Journal() {
   return (
     <div className="flex flex-col h-full min-h-0">
       <p className="text-stone-400 text-xs mb-3 italic shrink-0">
-        📓 Notes du Maître du Jeu — cochez pour rayer les tâches accomplies.
+        📓 Notes du joueur — cochez pour rayer les tâches accomplies.
       </p>
 
       {/* Saisie d'une note */}

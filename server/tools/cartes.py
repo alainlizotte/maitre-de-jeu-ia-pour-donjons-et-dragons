@@ -36,6 +36,7 @@ TYPES_SALLES = [
     "antichambre", "couloir", "salle vide", "garde", "crypte",
     "tableau", "trésor", "piège", "autel", "cellules", "puits",
     "abattoir", "bibliothèque", "entrée", "salle du trône", "laboratoire",
+    "escaliers",
 ]
 
 DIRECTIONS = {
@@ -204,6 +205,15 @@ def _rendre_svg_donjon(donjon: dict[str, Any], taille_cell: int = 64) -> str:
         f'aria-label="Carte du donjon">',
         f'<rect width="{w+2*pad}" height="{h+2*pad}" fill="#0e0e14" />',
     ]
+    # Étiquette d'étage dans la bande vide du bas (les salles s'arrêtent à
+    # h+pad ; la bande inférieure de `pad` pixels reste libre).
+    etage = int(donjon.get("etage", 0) or 0)
+    parts.append(
+        f'<text x="{pad}" y="{h+2*pad-6}" font-family="Georgia, serif" '
+        f'font-size="11" fill="#c4a96a" stroke="#0e0e14" stroke-width="3" '
+        f'paint-order="stroke" stroke-linejoin="round">'
+        f"Étage : {_nom_etage(etage)}</text>"
+    )
 
     def _coords(x: int, y: int) -> tuple[int, int]:
         return (
@@ -539,6 +549,9 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
         donjon.setdefault("salles_visitees", [])
         donjon.setdefault("portes_bloquees", [])
         donjon.setdefault("courant", [0, 0])
+        donjon.setdefault("etage", 0)
+        donjon.setdefault("etages", {})
+        _sync_etage(donjon)
         courant = donjon["courant"]
         cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
         msg_restore = (
@@ -559,10 +572,13 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             "salles_visitees": ["0,0"],
             "portes_bloquees": [],
             "courant": [0, 0],
+            "etage": 0,
+            "etages": {},
         }
+        _sync_etage(donjon)
         msg_restore = (
-            f"🚪 Vous entrez dans **{donjon_id}**. Salle d'entrée (0,0). "
-            f"Portes visibles : nord, est, ouest."
+            f"🚪 Vous entrez dans **{donjon_id}** (rez-de-chaussée). "
+            f"Salle d'entrée (0,0). Portes visibles : nord, est, ouest."
         )
     etat["donjon"] = donjon
     etat["phase"] = "exploration"
@@ -595,6 +611,124 @@ def _nouvelle_salle(x: int, y: int) -> dict[str, Any]:
         "visitee": True,
         "portes": portes,
     }
+
+
+# --------------------------------------------------------------------------- #
+#  Étages du donjon
+# --------------------------------------------------------------------------- #
+# Modèle en mémoire : `donjon["etage"]` (int, 0 = rez-de-chaussée) désigne
+# l'étage VISIBLE ; les données de l'étage courant sont TOUJOURS répliquées
+# dans les clés de premier niveau `grille` / `salles_visitees` /
+# `portes_bloquees` / `courant` (tous les outils existants et le rendu SVG
+# continuent de fonctionner sans rien savoir des étages). Chaque étage est
+# aussi archivé dans `donjon["etages"] = {"0": {grille, salles_visitees,
+# portes_bloquees, courant}, …}` pour être restauré lors d'un changement.
+_ETAGE_NOM = ["Rez-de-chaussée", "Sous-sol I", "Sous-sol II", "Sous-sol III",
+              "Sous-sol IV", "Sous-sol V", "Sous-sol VI", "Sous-sol VII",
+              "Sous-sol VIII", "Sous-sol IX", "Sous-sol X"]
+_TYPES_ESCALIER = {"escaliers", "escalier", "escalier du donjon", "escaliers du donjon"}
+
+
+def _nom_etage(etage: int) -> str:
+    if 0 <= etage < len(_ETAGE_NOM):
+        return _ETAGE_NOM[etage]
+    return f"Étage {etage}"
+
+
+def _sync_etage(donjon: dict[str, Any]) -> None:
+    """Archive l'étage courant (grille/courant…) dans `donjon["etages"]`."""
+    etages = donjon.setdefault("etages", {})
+    etage = int(donjon.get("etage", 0) or 0)
+    etages[str(etage)] = {
+        "grille": donjon.get("grille", []),
+        "salles_visitees": donjon.get("salles_visitees", []),
+        "portes_bloquees": donjon.get("portes_bloquees", []),
+        "courant": donjon.get("courant", [0, 0]),
+    }
+
+
+def _charger_etage(donjon: dict[str, Any], etage: int) -> None:
+    """Bascule `donjon` sur l'étage demandé.
+
+    Un étage jamais visité démarre avec une unique salle d'escaliers en (0,0)
+    (le groupe arrive par l'escalier, les portes restent à découvrir).
+    """
+    etages = donjon.setdefault("etages", {})
+    cle = str(etage)
+    if cle not in etages:
+        escaliers = {
+            "x": 0, "y": 0, "type": "escaliers",
+            "description": "Un escalier sombre qui relie les étages du donjon.",
+            "visitee": True,
+            "portes": {"nord": True, "sud": False, "est": True, "ouest": True},
+        }
+        etages[cle] = {
+            "grille": _dict_vers_grille({(0, 0): escaliers}),
+            "salles_visitees": ["0,0"],
+            "portes_bloquees": [],
+            "courant": [0, 0],
+        }
+    d = etages[cle]
+    donjon["etage"] = int(etage)
+    donjon["grille"] = d["grille"]
+    donjon["salles_visitees"] = d["salles_visitees"]
+    donjon["portes_bloquees"] = d["portes_bloquees"]
+    donjon["courant"] = d["courant"]
+
+
+async def _illustrer_salle(
+    ctx: ToolContext,
+    donjon: dict[str, Any],
+    salles: dict[tuple[int, int], dict[str, Any]],
+    nx: int,
+    ny: int,
+) -> str:
+    """Illustre la salle (nx, ny) via ComfyUI (cache `images_salles/`).
+
+    Renvoie `"comfyui"`, `"cache"` ou `"—"` en cas d'échec silencieux.
+    Persiste l'URL d'image dans l'état et émet l'événement temps réel comme
+    `illustration_scene` (galerie « Scènes » du front).
+    """
+    if (nx, ny) not in salles:
+        return "—"
+    from ..image.helpers import generer_averti, lieu_prompt
+    salle = salles[(nx, ny)]
+    slug = (str(donjon.get("id", "salle")) or "salle").lower().replace(" ", "_")
+    cache_dir = os.path.join(ctx.data_dir, "images_salles")
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+    except OSError:
+        return "—"
+    dest = os.path.join(cache_dir, f"{slug}_{nx}_{ny}.png")
+    if os.path.isfile(dest):
+        img_src = "cache"
+    else:
+        salle_type = salle.get("type", "room")
+        prompt = lieu_prompt(salle_type, donjon.get("id", ""))
+        r = await generer_averti(ctx, "lieu", prompt, dest)
+        img_src = "comfyui" if r else "—"
+    if img_src != "—":
+        salle["image_url"] = _url_for(dest, ctx.data_dir)
+        # Re-sauve l'état avec l'URL d'image
+        donjon["grille"] = _dict_vers_grille(salles)
+        _sync_etage(donjon)
+        etat = _charger_etat(ctx)
+        etat["donjon"] = donjon
+        _sauver_etat(ctx, etat)
+        # Événement temps réel → la galerie « Scènes » du front affiche
+        # l'illustration dès qu'elle est prête (ou sortie du cache).
+        cb = getattr(ctx, "on_event", None)
+        if cb is not None:
+            try:
+                await cb({
+                    "type": "image",
+                    "usage": "lieu",
+                    "image": salle["image_url"],
+                    "msg": f"🖼️ Illustration : salle ({nx},{ny}).",
+                })
+            except Exception:
+                pass
+    return img_src
 
 
 @tool
@@ -633,6 +767,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     donjon["grille"] = _dict_vers_grille(salles)
     salles_vis = list(set(donjon.get("salles_visitees", []) + [f"{nx},{ny}"]))
     donjon["salles_visitees"] = salles_vis
+    _sync_etage(donjon)
     etat["donjon"] = donjon
     err = _sauver_etat(ctx, etat)
     if err:
@@ -649,39 +784,17 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     salle = salles[(nx, ny)]
     # Illustration de salle : PNG ComfyUI en arrière-plan si dispo
     # (fallback silencieux — on garde le SVG carte principale).
+    # Respecte le toggle `image.scenes_enabled` (tableau de bord) comme
+    # `illustration_scene` : sans lui, les images de salle repartaient en
+    # cache/ComfyUI alors que l'utilisateur les avait désactivées.
     img_src = "—"
     try:
-        from ..image.helpers import generer_averti, lieu_prompt
-        slug = (str(donjon.get("id", "salle")) or "salle").lower().replace(" ", "_")
-        cache_dir = os.path.join(ctx.data_dir, "images_salles")
-        os.makedirs(cache_dir, exist_ok=True)
-        dest = os.path.join(cache_dir, f"{slug}_{nx}_{ny}.png")
-        if not os.path.isfile(dest):
-            salle_type = salle.get("type", "room")
-            prompt = lieu_prompt(salle_type, donjon.get("id", ""))
-            r = await generer_averti(ctx, "lieu", prompt, dest)
-            img_src = "comfyui" if r else "—"
-        else:
-            img_src = "cache"
-        if img_src != "—":
-            salle["image_url"] = _url_for(dest, ctx.data_dir)
-            # Re-sauve l'état avec l'URL d'image
-            donjon["grille"] = _dict_vers_grille(salles)
-            etat["donjon"] = donjon
-            _sauver_etat(ctx, etat)
-            # Événement temps réel → la galerie « Scènes » du front affiche
-            # l'illustration dès qu'elle est prête (ou sortie du cache).
-            cb = getattr(ctx, "on_event", None)
-            if cb is not None:
-                try:
-                    await cb({
-                        "type": "image",
-                        "usage": "lieu",
-                        "image": salle["image_url"],
-                        "msg": f"🖼️ Illustration : salle ({nx},{ny}).",
-                    })
-                except Exception:
-                    pass
+        from ..config import get_config
+        if get_config().image.scenes_enabled:
+            try:
+                img_src = await _illustrer_salle(ctx, donjon, salles, nx, ny)
+            except Exception:
+                pass
     except Exception:
         pass
     img_line = ""
@@ -696,6 +809,77 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
             f"Portes visibles : "
             + ", ".join([k for k, v in salle.get("portes", {}).items() if v])
             + f".\n\n🖼️ Carte : {url}{img_line}"
+        ),
+        state_patch={"donjon": donjon, "carte_donjon": url},
+    )
+
+
+@tool
+async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
+    """
+    Monte ou descend d'un étage du donjon. N'est possible QUE depuis une salle
+    contenant un escalier (type « escaliers »). Change l'étage actif
+    (`donjon.etage`) ; les étages explorés restent mémorisés et reprennent
+    exactement où le groupe les a quittés.
+
+    :param direction (str): "monter" (vers le rez-de-chaussée) ou
+        "descendre" (vers le sous-sol).
+    """
+    d = (direction or "").strip().lower()
+    descendre = d in ("descendre", "desc", "descends")
+    monter = d in ("monter", "monte", "m")
+    if not descendre and not monter:
+        return ToolResult(
+            text=f"❌ Direction invalide '{direction}'. Attendu : « monter » ou « descendre »."
+        )
+    etat = _charger_etat(ctx)
+    donjon = etat.get("donjon") or {}
+    if not donjon.get("id"):
+        return ToolResult(
+            text="❌ Aucun donjon actif — appelez d'abord `carte_donjon_entrer`."
+        )
+    courant = list(donjon.get("courant", [0, 0]))
+    cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
+    salles = _grille_vers_dict(donjon.get("grille", []))
+    cour = salles.get((cx, cy)) or {}
+    if (cour.get("type") or "").strip().lower() not in _TYPES_ESCALIER:
+        return ToolResult(
+            text=(
+                f"🚫 Pas d'escalier dans la salle actuelle "
+                f"({cour.get('type', '?')}) — cherchez une salle "
+                f"**escaliers** (`carte_donjon_explorer`)."
+            )
+        )
+    etage_actuel = int(donjon.get("etage", 0) or 0)
+    if descendre:
+        nouvel_etage = etage_actuel + 1
+    else:
+        if etage_actuel <= 0:
+            return ToolResult(
+                text="🚫 Vous êtes déjà au rez-de-chaussée — pas d'étage au-dessus."
+            )
+        nouvel_etage = etage_actuel - 1
+    _sync_etage(donjon)           # archive l'étage qu'on quitte
+    _charger_etage(donjon, nouvel_etage)
+    etat["donjon"] = donjon
+    err = _sauver_etat(ctx, etat)
+    if err:
+        return ToolResult(text=f"❌ {err}")
+    path = _svg_path(ctx, "donjon")
+    svg = _rendre_svg_donjon(donjon)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(svg)
+    except OSError as e:
+        return ToolResult(text=f"❌ Erreur SVG : {e}")
+    url = _url_for(path, ctx.data_dir)
+    pos = list(donjon.get("courant", [0, 0]))
+    return ToolResult(
+        text=(
+            f"🪜 Vous empruntez l'escalier "
+            f"({'descendez vers le sous-sol' if descendre else 'remontez'} → "
+            f"**{_nom_etage(nouvel_etage)}**). Salle actuelle ({pos[0]},{pos[1]}). "
+            f"Le groupe poursuit son exploration du donjon.\n\n🖼️ Carte : {url}"
         ),
         state_patch={"donjon": donjon, "carte_donjon": url},
     )

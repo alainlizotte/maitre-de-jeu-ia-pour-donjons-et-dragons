@@ -22,6 +22,23 @@ interface DonjonState {
   current_room?: string;
   current_x?: number;
   current_y?: number;
+  /** Étage actif (0 = rez-de-chaussée). */
+  etage?: number;
+}
+
+const NOMS_ETAGES = [
+  "Rez-de-chaussée",
+  "Sous-sol I",
+  "Sous-sol II",
+  "Sous-sol III",
+  "Sous-sol IV",
+  "Sous-sol V",
+  "Sous-sol VI",
+];
+
+function etageLibelle(e: number | undefined): string {
+  if (typeof e !== "number" || e <= 0) return "Rez-de-chaussée";
+  return NOMS_ETAGES[e] ?? `Étage ${e}`;
 }
 
 interface DungeonViewProps {
@@ -122,11 +139,34 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* En-tête : titre + compteur de salles */}
-      <div className="flex items-center justify-between mb-1.5">
+      {/* En-tête : titre + étage + boutons escalier + compteur de salles */}
+      <div className="flex items-center justify-between mb-1.5 gap-2">
         <span className="text-sm text-amber-200 font-serif">Carte du donjon</span>
-        <span className="text-[10px] text-stone-500">
-          {visitees.length} salle{visitees.length !== 1 ? "s" : ""}
+        <span className="flex items-center gap-1 shrink-0">
+          {sendSay && (
+            <>
+              <button
+                className={btnZoom}
+                title="Remonter d'un étage (escalier)"
+                onClick={() => sendSay("Nous montons l'escalier vers l'étage supérieur")}
+              >
+                ↑
+              </button>
+              <button
+                className={btnZoom}
+                title="Descendre d'un étage (escalier)"
+                onClick={() => sendSay("Nous descendons l'escalier vers l'étage inférieur")}
+              >
+                ↓
+              </button>
+            </>
+          )}
+          <span className="px-1.5 h-6 rounded bg-stone-900/90 border border-stone-700 text-[10px] text-amber-300 flex items-center tabular-nums">
+            {etageLibelle(donjon?.etage)}
+          </span>
+          <span className="text-[10px] text-stone-500">
+            {visitees.length} salle{visitees.length !== 1 ? "s" : ""}
+          </span>
         </span>
       </div>
 

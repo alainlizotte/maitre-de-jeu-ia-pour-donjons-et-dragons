@@ -39,7 +39,10 @@ Consignes pour les phases hors combat.
   direction, `carte_donjon_explorer(direction)` révèle la salle suivante, puis
   `carte_donjon_get` affiche la carte visuelle mise à jour. Les salles non visitées
   sont masquées. Propose toujours 2-3 directions visibles au joueur pour qu'il
-  choisisse.
+  choisisse. **Étages** : certaines salles sont des **escaliers** ; quand un
+  joueur décide de monter ou descendre, appelle `carte_donjon_etage("monter"|
+  "descendre")` — un nouvel étage démarre à sa salle d'escaliers et les étages
+  déjà explorés reprennent exactement où le groupe les a laissés.
 
 - **Découverte de piège** : décris le piège, fais-le déclencher, **affiche le jet de
   sauvegarde** via `lancer_sauvegarde(type, mod, DD, source)` et annonce l'issue +

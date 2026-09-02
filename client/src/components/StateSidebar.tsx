@@ -201,6 +201,14 @@ function fieldText(value: unknown): string {
   return String(value);
 }
 
+function sexeLibelle(sexe: string): string | undefined {
+  const s = (sexe || "").trim().toLowerCase();
+  if (s === "m") return "Masculin";
+  if (s === "f") return "Féminin";
+  if (s === "autre") return "Autre";
+  return s || undefined;
+}
+
 function Field({ label, value }: { label: string; value: unknown }) {
   if (value === undefined || value === null || value === "" || value === "—") return null;
   const text = fieldText(value);
@@ -252,8 +260,12 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
     "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
     "ca", "carac", "sauvegardes", "bab", "competences", "dons", "equipement",
     "or", "histoire", "conditions", "sorts", "sorts_connus", "charge_max",
+    "apparence",
   ]);
   const extras = Object.entries(f).filter(([k]) => !connus.has(k));
+  const apparence = (f.apparence ?? pj?.apparence) as
+    | Record<string, unknown>
+    | undefined;
 
   return (
     <div
@@ -333,6 +345,25 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
         )}
 
         <Field label="Alignement" value={identite.alignement} />
+        {apparence && (
+          <div className="mt-2 rounded bg-stone-800/40 border border-stone-800 p-2">
+            <div className="text-xs text-stone-500 mb-1">Apparence</div>
+            <div className="grid grid-cols-2 gap-x-3">
+              <Field label="Genre" value={sexeLibelle(String(apparence.sexe ?? ""))} />
+              <Field label="Âge" value={apparence.age} />
+              <Field label="Taille" value={apparence.taille ?? apparence.taille_physique} />
+              <Field label="Poids" value={apparence.poids} />
+              <Field label="Yeux" value={apparence.yeux} />
+              <Field label="Cheveux" value={apparence.cheveux} />
+              <Field label="Peau" value={apparence.peau} />
+            </div>
+            {apparence.description ? (
+              <p className="text-xs text-stone-400 italic mt-1">
+                {String(apparence.description)}
+              </p>
+            ) : null}
+          </div>
+        )}
         <Field label="Caractéristiques" value={f.carac} />
         <Field label="Sauvegardes" value={f.sauvegardes} />
         <Field label="Compétences" value={f.competences} />

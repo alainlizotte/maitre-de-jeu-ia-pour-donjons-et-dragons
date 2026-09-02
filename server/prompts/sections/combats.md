@@ -51,6 +51,15 @@ règles structurelles.
    est mort. Les tools `infliger_degats` appliquent ces conditions
    automatiquement : respecte-les dans la narration (pas de héros debout
    avec 0 PV).
+7. **Narration des frappes sur un ennemi** : applique l'attaque d'un PJ avec
+   `lancer_attaque` + `lancer_degats` + `fiche_perso_infliger_degats`, PUIS
+   narre le résultat en citant **le jet d'attaque (résultat vs CA de la
+   cible)**, **les dégâts infligés** et **les PV restants de l'ennemi**
+   d'après le résultat de l'outil — ex. « Le gobelin encaisse 7 dégâts
+   (jet 18 vs CA 15) — il lui reste 3 PV et tient encore debout. » Ne conclus
+   JAMAIS « il est mort » sans l'avoir vérifié : le champ « Ennemis : … PV/… »
+   renvoyé par l'outil est la source de vérité ; tant qu'il reste ≥ 1 PV,
+   l'ennemi est debout et peut agir à son tour.
 
 ---
 

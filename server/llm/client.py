@@ -55,6 +55,70 @@ def _safe_split(buf: str) -> tuple[str, str]:
     return buf, ""
 
 
+def _normaliser_messages(messages: list[Message]) -> list[Message]:
+    """Rend la conversation compatible avec les templates strictes (Qwen 3.5).
+
+    La template Jinja du Qwen 3.5 lève une exception dès qu'un message
+    `role="system"` n'est pas à l'index 0 (« System message must be at the
+    beginning »). Or le serveur injecte des correctifs `role="system"` en fin
+    de conversation (reformulation des simulations de tools, narration finale
+    forcée…), ce qui faisait planter l'appel.
+
+    Règles appliquées (sans modifier la liste passée en entrée) :
+    - tout message `system` hors index 0 → transformé en `role="user"` (le
+      texte reste présent dans le contexte, seul le rôle change) ;
+    - tout message `role="tool"` « orphelin » (pas immédiatement précédé d'un
+      `assistant` avec `tool_calls` — rencontré en mode prompt/compat) →
+      transformé en `role="user"` pour que la template puisse le rendre.
+    """
+    if not messages:
+        return messages
+    out: list[Message] = []
+    precedente_avait_tool_calls = False
+    for i, m in enumerate(messages):
+        if m.role == "system":
+            if i == 0:
+                out.append(m)
+            else:
+                content = m.content or ""
+                out.append(
+                    Message(
+                        role="user",
+                        content=(
+                            "⚠️ Consigne du Maître du Jeu (contexte) : " + content
+                            if content
+                            else "⚠️ (Consigne du Maître du Jeu vide.)"
+                        ),
+                    )
+                )
+            precedente_avait_tool_calls = False
+        elif m.role == "tool":
+            if precedente_avait_tool_calls:
+                # Résultat natif de function-calling : la template le rattache
+                # au tool_call correspondant. On reste « ouvert » car un même
+                # message assistant peut déclencher plusieurs tool_calls.
+                out.append(m)
+            else:
+                content = m.content or ""
+                out.append(
+                    Message(
+                        role="user",
+                        content=(
+                            "📎 Résultat d'outil : " + content
+                            if content
+                            else "📎 (Résultat d'outil vide.)"
+                        ),
+                    )
+                )
+        elif m.role == "assistant":
+            precedente_avait_tool_calls = bool(m.tool_calls)
+            out.append(m)
+        else:  # "user" — l'assistant (rare) reste tel quel
+            precedente_avait_tool_calls = False
+            out.append(m)
+    return out
+
+
 # --------------------------------------------------------------------------- #
 #  Modèles de messages
 # --------------------------------------------------------------------------- #
@@ -114,6 +178,7 @@ class OllamaClient:
     ) -> ChatResult:
         """Appel non-streaming. `tools` est le schéma JSON des fonctions."""
         await self.ensure_model_loaded()
+        messages = _normaliser_messages(messages)
         payload: dict[str, Any] = {
             "model": self.cfg.model,
             "messages": [m.to_openai() for m in messages],
@@ -183,6 +248,7 @@ class OllamaClient:
         la boucle non-streaming de l'orchestrateur).
         """
         await self.ensure_model_loaded()
+        messages = _normaliser_messages(messages)
         payload: dict[str, Any] = {
             "model": self.cfg.model,
             "messages": [m.to_openai() for m in messages],

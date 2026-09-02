@@ -50,6 +50,37 @@ _DEBUT_AVENTURE = (
 )
 
 
+def _sexe_libelle(sexe_brut: str) -> str:
+    """Normalise un sexe stocké (« M », « F », « Autre », « f »…) en libellé."""
+    s = (sexe_brut or "").strip().lower()
+    if s.startswith("m"):
+        return "Masculin"
+    if s.startswith("f"):
+        return "Féminin"
+    if s.startswith("a"):
+        return "Autre"
+    return ""
+
+
+def _genre_pj(data_dir: str, p: dict[str, Any]) -> str:
+    """Genre d'un PJ : d'abord dans l'entrée d'état (`apparence.sexe`), sinon
+    lu dans la fiche sur disque — le récapitulatif des PJ (`etat["pj"]`) ne
+    transporte pas l'apparence. Retourne un libellé ou une chaîne vide."""
+    app = p.get("apparence")
+    sexe_brut = str(app.get("sexe") or "") if isinstance(app, dict) else ""
+    if not sexe_brut:
+        nom = str(p.get("nom") or "").strip()
+        if nom and data_dir:
+            try:
+                from ..persos import charger_fiche
+                fiche = charger_fiche(data_dir, nom) or {}
+                app = fiche.get("apparence") or {}
+                sexe_brut = str(app.get("sexe") or "")
+            except Exception:                                   # noqa: BLE001
+                return ""
+    return _sexe_libelle(sexe_brut)
+
+
 # --------------------------------------------------------------------------- #
 #  Extraction du SystemPrompt
 # --------------------------------------------------------------------------- #
@@ -215,6 +246,8 @@ class PromptBuilder:
                 "========================"
             )
 
+        data_dir = str(self.cfg.abs(self.cfg.paths.data_dir))
+
         # État neuf en phase d'opening : récap minimal (allègement Gemma).
         phase = (etat.get("phase") or "").strip().lower()
         pj = etat.get("pj") or []
@@ -235,7 +268,8 @@ class PromptBuilder:
                 else f"{len(pj)} PJ créé(s) : "
                      + ", ".join(
                          f"{p.get('nom','?')} ({p.get('race','?')} "
-                         f"{p.get('classe','?')})" for p in pj
+                         f"{p.get('classe','?')}, genre "
+                         f"{_genre_pj(data_dir, p) or '?'})" for p in pj
                      )
             )
             lignes = [
@@ -324,11 +358,12 @@ class PromptBuilder:
 
         pjs = etat.get("pj", []) or []
         if pjs:
-            lignes.append("\nPersonnages Joueurs (nom — joueur qui le joue) :")
+            lignes.append("\nPersonnages Joueurs (nom — genre — joueur qui le joue) :")
             for p in pjs:
                 lignes.append(
                     f"  - {p.get('nom','?')}: {p.get('race','?')} "
                     f"{p.get('classe','?')} niv.{p.get('niveau','?')} — "
+                    f"genre {_genre_pj(data_dir, p) or '?'} — "
                     f"PV {p.get('pv','?')}/{p.get('pv_max','?')} — "
                     f"CA {p.get('ca','?')} — joueur: {p.get('joueur','?')} — "
                     f"conditions: {p.get('conditions') or 'aucune'}"

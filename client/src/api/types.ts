@@ -26,6 +26,18 @@ export interface PartyState {
     grille: unknown[];
     /** Coordonnées [x, y] de la salle où se trouve le groupe. */
     courant?: number[];
+    /** Étage actif (0 = rez-de-chaussée). */
+    etage?: number;
+    /** Archive des étages explorés : "0" → {grille, salles_visitees, …}. */
+    etages?: Record<
+      string,
+      {
+        grille: unknown[];
+        salles_visitees: string[];
+        portes_bloquees: string[];
+        courant?: number[];
+      }
+    >;
   };
   donjons_exploreres?: Record<string, {
     id: string | null;
@@ -33,6 +45,8 @@ export interface PartyState {
     portes_bloquees: string[];
     grille: unknown[];
     courant?: number[];
+    etage?: number;
+    etages?: Record<string, unknown>;
   }>;
   quete: { titre: string; pitch: string; source: string };
   histoire: string[];

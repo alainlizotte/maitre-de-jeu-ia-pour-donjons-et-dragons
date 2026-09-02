@@ -569,6 +569,11 @@ async def boucle_auto(
                 pass  # déjà mort : skip silencieux
             else:
                 await _attaque_auto(ctx, res, actif, ennemi=not est_allie)
+            # L'attaque auto a écrit les nouveaux PV/conditions sur disque et
+            # émis le patch WS — recharger l'état AVANT d'avancer le curseur,
+            # sinon le snapshot ci-dessus resauvegardé écrase les PV à l'ancienne
+            # valeur (le client les voit revenir en arrière au poll suivant).
+            etat = state.load()
             etat["tour_depuis"] = datetime.now().isoformat()
             _avancer_curseur(etat)
             state.save(etat)
@@ -603,6 +608,9 @@ async def boucle_auto(
         res.events.append(
             f"⏭️ Tour de {actif} passé ({raison} — incapable d'agir)."
         )
+        # La stabilisation a pu écrire PV/conditions sur disque (mort, etc.) :
+        # recharger avant de resauvegarder pour ne pas écraser ces écritures.
+        etat = state.load()
         _avancer_curseur(etat)
         state.save(etat)
 

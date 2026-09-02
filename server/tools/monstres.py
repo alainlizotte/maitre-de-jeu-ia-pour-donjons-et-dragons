@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import unicodedata
@@ -23,6 +24,8 @@ from typing import Any, Optional
 
 from .base import ToolContext, ToolResult, tool
 from ..image.helpers import generer_averti, monstre_prompt
+
+_log = logging.getLogger("dnd35.monstres")
 
 
 # --------------------------------------------------------------------------- #
@@ -789,6 +792,20 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
     recours), None seulement si même le placeholder est impossible.
     """
     m = _find_monstre(ctx, nom)
+    if m is None:
+        # Nom non résolu dans le bestiaire → PAS de génération ComfyUI : la
+        # requête RAG renverrait le portrait d'un AUTRE monstre (bug
+        # « Goule » affichée avec l'image d'un golem…). On purge l'éventuelle
+        # image erronée du cache et on sert un placeholder clair.
+        stale = _find_image(ctx, nom)
+        if stale is not None:
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
+        _log.warning("bestiaire : monstre inconnu « %s » — image placeholder", nom)
+        img_path = _write_placeholder(ctx, nom)
+        return _url_for(img_path, ctx.data_dir)
     slug = _cache_key(nom)
     dest = os.path.join(_cache_dir(ctx), f"{slug}.png")
     meta_path = _meta_path_for(ctx, slug)
@@ -911,6 +928,17 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
         "Goule"/"Ghoul", "Dragon rouge jeune").
     """
     m = _find_monstre(ctx, nom)
+    if m is None:
+        # Nom non résolu dans le bestiaire → PAS de génération rétro :
+        # le RAG renverrait un portrait d'un AUTRE monstre (goule montrée
+        # en golem…). On purge l'éventuelle image erronée du cache ; le bloc
+        # « img_path is None » ci-dessous servira alors un placeholder clair.
+        stale = _find_image(ctx, nom)
+        if stale is not None:
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
     # Image : priorité PNG en cache à jour, sinon génération ComfyUI, sinon
     # placeholder SVG. « À jour » = le hash de la description stocké dans
     # <slug>.meta.json correspond à la description courante — un vieux PNG
@@ -948,27 +976,33 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
                 img_path = None  # image périmée → régénération
     if img_path is None:
         gen_ok = False
-        try:
-            nom_canonique = str((m or {}).get("nom") or nom)
-            if not description:
-                description = await _description_monstre(m, nom)
-            prompt_text = monstre_prompt(nom_canonique, description)
-            r = await generer_averti(ctx, "monstre", prompt_text, dest)
-            if r is not None and os.path.isfile(r):
-                img_path = r
-                src = "comfyui"
-                gen_ok = True
-                _write_desc_hash(meta_path, _hash_desc(description), nom_canonique)
-        except Exception as e:
-            # On ne casse pas le tour si ComfyUI échoue — fallback SVG.
-            src = f"comfyui_echec({type(e).__name__})"
-        if not gen_ok:
-            if img_path is None:
-                img_path = _find_image(ctx, nom)
-            if img_path is None:
-                img_path = _write_placeholder(ctx, nom)
-                if "comfyui" not in src:
-                    src = "placeholder"
+        if m is None:
+            # Aucun match bestiaire : pas de génération (RAG = portrait d'un
+            # autre monstre) → placeholder SVG direct.
+            img_path = _write_placeholder(ctx, nom)
+            src = "placeholder"
+        else:
+            try:
+                nom_canonique = str((m or {}).get("nom") or nom)
+                if not description:
+                    description = await _description_monstre(m, nom)
+                prompt_text = monstre_prompt(nom_canonique, description)
+                r = await generer_averti(ctx, "monstre", prompt_text, dest)
+                if r is not None and os.path.isfile(r):
+                    img_path = r
+                    src = "comfyui"
+                    gen_ok = True
+                    _write_desc_hash(meta_path, _hash_desc(description), nom_canonique)
+            except Exception as e:
+                # On ne casse pas le tour si ComfyUI échoue — fallback SVG.
+                src = f"comfyui_echec({type(e).__name__})"
+            if not gen_ok:
+                if img_path is None:
+                    img_path = _find_image(ctx, nom)
+                if img_path is None:
+                    img_path = _write_placeholder(ctx, nom)
+                    if "comfyui" not in src:
+                        src = "placeholder"
     url = _url_for(img_path, ctx.data_dir)
     # Persiste la rencontre (journal + combat éventuel) pour que le portrait
     # survive aux rechargements de page, jusqu'à la mort du monstre.

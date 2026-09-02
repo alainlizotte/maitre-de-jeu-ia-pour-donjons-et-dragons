@@ -69,8 +69,17 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
   const thinking = useParty((s) => s.thinking);
   const participants = useParty((s) => s.participants);
   const player = useParty((s) => s.player);
+  const state = useParty((s) => s.state);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // En combat, pendant le tour d'un ennemi (pas un PJ), le champ indique au
+  // joueur que c'est l'ennemi qui agit.
+  const courant = state?.courant_tour_pour;
+  const tourEnnemi =
+    state?.phase === "combat" &&
+    !!courant &&
+    !(state.pj ?? []).some((p) => p.nom === courant);
 
   // Auto-scroll en bas à chaque nouveau message.
   useEffect(() => {
@@ -113,9 +122,11 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
           placeholder={
             thinking
               ? "Le MJ réfléchit…"
-              : player
-                ? "Que faites-vous ?"
-                : "Saisissez votre pseudo à l'accueil d'abord…"
+              : !player
+                ? "Saisissez votre pseudo à l'accueil d'abord…"
+                : tourEnnemi
+                  ? "Action de l'ennemi"
+                  : "Que faites-vous ?"
           }
           disabled={!player || thinking}
         />

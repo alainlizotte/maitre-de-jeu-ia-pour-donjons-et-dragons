@@ -272,6 +272,12 @@ export interface FichePerso {
   etat_encumbrance?: "Legere" | "Moyenne" | "Lourde" | "Depassee" | string;
   competences?: Record<string, number>;
   dons?: string[];
+  /** Magie 3.5 : connus (liste), prepares (nom → nb du jour), depenses (niveau de sort → slots utilisés). */
+  sorts?: {
+    connus?: string[];
+    prepares?: Record<string, number>;
+    depenses?: Record<string, number>;
+  };
   equipement?: { nom: string; qte: number; poids?: number }[];
   or?: number;
   alignement?: string;
@@ -359,6 +365,31 @@ export interface OrDepartFormule {
   mult: number;
 }
 
+/** Sort du catalogue PHB 3.5 (miroir de server/sorts.py). */
+export interface SortModele {
+  nom: string;
+  niveau: number;
+  ecole: string;
+  classes: string[];
+  incantation: string;
+  portee: string;
+  composantes: string;
+  duree: string;
+  sauvegarde: string;
+  description: string;
+}
+
+/** État de magie d'un personnage (calculé côté client depuis la fiche). */
+export interface SortsEtat {
+  connus: string[];
+  prepares: Record<string, number>;
+  depenses: Record<string, number>;
+  /** Emplacements par jour : { niveau de sort: total } (bonus de carac inclus). */
+  slots: Record<number, number>;
+  /** Emplacements restants = total − dépenses du jour. */
+  restants: Record<number, number>;
+}
+
 export interface ModelePerso {
   races: RaceModele[];
   classes: ClasseModele[];
@@ -373,4 +404,10 @@ export interface ModelePerso {
   competences_classe: Record<string, string[]>;
   points_competence: Record<string, number>;
   or_depart: Record<string, OrDepartFormule>;
+  /** Magie 3.5 : catalogue + tables d'emplacements (miroir de server/sorts.py). */
+  sorts?: SortModele[];
+  sorts_emplacements?: Record<string, (number | 0)[][]>;
+  sorts_connus_max?: Record<string, (number | 0)[][]>;
+  sorts_carac?: Record<string, string>;
+  sorts_prepare?: string[];
 }

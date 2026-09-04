@@ -541,7 +541,9 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     # Vérifier si ce donjon a déjà été exploré dans cette partie.
     archive = (etat.get("donjons_exploreres") or {}).get(donjon_id)
     if archive and archive.get("grille"):
-        # Restaurer l'état antérieur du donjon.
+        # Restaurer l'état antérieur du donjon (grille + descriptions/états
+        # des salles, étages explorés, position) : le groupe retrouve les
+        # salles EXACTEMENT comme il les avait quittées.
         donjon = dict(archive)
         donjon["id"] = donjon_id
         # S'assurer que les champs requis existent.
@@ -611,6 +613,98 @@ def _nouvelle_salle(x: int, y: int) -> dict[str, Any]:
         "visitee": True,
         "portes": portes,
     }
+
+
+# --------------------------------------------------------------------------- #
+#  Constance des salles visitées
+# --------------------------------------------------------------------------- #
+# Chaque salle visitée porte désormais :
+# - `description` : la description canonique FIGÉE par le MJ au premier
+#   passage (via `carte_donjon_decrire_salle`) — reprise telle quelle à
+#   chaque retour ;
+# - `etat_des_lieux` : l'état dans lequel la salle a été quittée (monstres
+#   vaincus, coffres vidés, piège désamorcé…) — idem, repris au retour.
+# Si le MJ n'a rien figé, une description de SECOURS déterministe est
+# dérivée par hash de (donjon, x, y, type) : identique à chaque visite, donc
+# jamais de salle réinventée — même sans coopération du LLM.
+_GABARITS_SECOURS = [
+    "Une {typ} voûtée de pierre froide. La poussière recouvre les dalles et "
+    "l'air y est immobile, chargé d'ancienneté.",
+    "Une {typ} aux murs suintants d'humidité ; des torches éteintes "
+    "attendent dans des supports de fer forgé.",
+    "Une {typ} à demi effondrée, dont les gravats barrent partiellement le "
+    "sol craquelé ; l'ombre y garde une fraîcheur de tombe.",
+    "Une {typ} en enfilade, éclairée par une faible lueur grise qui filtre "
+    "des meurtrières ; le silence y semble pesant.",
+    "Une {typ} pavée de dalles usées par les pas, où traîne une odeur "
+    "de moisi et de pierre mouillée.",
+]
+
+
+def _description_secours(donjon_id: str, x: int, y: int, typ: str) -> str:
+    """Description de secours DÉTERMINISTE pour une salle — le même (donjon,
+    x, y, type) produit TOUJOURS le même texte, donc une salle revisitée sans
+    description figée reste décrite à l'identique."""
+    import hashlib
+    seed = f"{donjon_id}|{x}|{y}|{typ}".encode("utf-8")
+    idx = int(hashlib.md5(seed).hexdigest(), 16)
+    return _GABARITS_SECOURS[idx % len(_GABARITS_SECOURS)].format(
+        typ=(typ or "salle").lower()
+    )
+
+
+@tool
+async def carte_donjon_decrire_salle(
+    ctx: ToolContext, description: str, etat_des_lieux: str = ""
+) -> ToolResult:
+    """
+    FIGE la description canonique de la salle courante (et l'état dans lequel
+    le groupe la quitte). À appeler après avoir narré une salle NOUVELLE, et à
+    chaque fois que l'état d'une salle change (combat gagné, coffre vidé,
+    piège désamorcé, porte enfoncée). Au retour du groupe, `carte_donjon_explorer`
+    restituera exactement cette description et cet état — la salle ne sera
+    JAMAIS réinventée.
+
+    :param description (str): description physique stable de la salle
+        (décor, dimensions, détails marquants).
+    :param etat_des_lieux (str): état laissé / changements marquants
+        (ex. « 3 squelettes détruits, coffre vidé, porte nord descellée »).
+    """
+    etat = _charger_etat(ctx)
+    donjon = etat.get("donjon") or {}
+    if not donjon.get("id"):
+        return ToolResult(
+            text="❌ Aucun donjon actif — appelez d'abord `carte_donjon_entrer`."
+        )
+    courant = list(donjon.get("courant", [0, 0]))
+    cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
+    salles = _grille_vers_dict(donjon.get("grille", []))
+    salle = salles.get((cx, cy))
+    if salle is None:
+        return ToolResult(
+            text=f"❌ Salle courante ({cx},{cy}) introuvable dans la grille."
+        )
+    description = (description or "").strip()
+    if not description:
+        return ToolResult(text="❌ Donne une description de la salle.")
+    salle["description"] = description[:600]
+    if (etat_des_lieux or "").strip():
+        salle["etat_des_lieux"] = etat_des_lieux.strip()[:400]
+    donjon["grille"] = _dict_vers_grille(salles)
+    _sync_etage(donjon)
+    etat["donjon"] = donjon
+    err = _sauver_etat(ctx, etat)
+    if err:
+        return ToolResult(text=f"❌ {err}")
+    return ToolResult(
+        text=(
+            f"📌 Salle ({cx},{cy}) — description figée"
+            + (" + état des lieux à jour." if (etat_des_lieux or "").strip() else ".")
+            + " Au retour du groupe, cette salle sera restituée à "
+            "l'IDENTIQUE (même décor, même état)."
+        ),
+        state_patch={"donjon": donjon},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -738,6 +832,12 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     Dévoile la salle adjacente (et la génère si inconnue). Renvoie sa
     description et une nouvelle carte mise à jour.
 
+    Cohérence des retours : si la salle cible a DÉJÀ été visitée, le tool
+    restitue sa description enregistrée et l'état dans lequel le groupe
+    l'avait quittée — le MJ doit la re-narrer à l'identique, jamais la
+    réinventer. Pour une salle NOUVELLE, le MJ fige sa description via
+    `carte_donjon_decrire_salle` juste après l'avoir narrée.
+
     :param direction (str): "nord", "sud", "est", "ouest" (ou n/s/e/o).
     """
     d = _normalise_dir(direction)
@@ -757,6 +857,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     if cour and not cour.get("portes", {}).get(d):
         return ToolResult(text=f"🚫 Pas de porte au {d} depuis la salle courante.")
     nx, ny = cx + dx, cy + dy
+    deja_visitee = (nx, ny) in salles and salles[(nx, ny)].get("visitee")
     if (nx, ny) not in salles:
         salles[(nx, ny)] = _nouvelle_salle(nx, ny)
     salles[(nx, ny)]["visitee"] = True
@@ -782,6 +883,43 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         return ToolResult(text=f"❌ Erreur SVG : {e}")
     url = _url_for(path, ctx.data_dir)
     salle = salles[(nx, ny)]
+    porte_ligne = (
+        f"Portes visibles : "
+        + ", ".join([k for k, v in salle.get("portes", {}).items() if v])
+        + "."
+    )
+    if deja_visitee:
+        # ── Salle déjà visitée : restituer la description et l'état figés ──
+        # (description MJ, ou secours déterministe si jamais figée).
+        desc_stockee = str(salle.get("description") or "").strip()
+        if not desc_stockee:
+            desc_stockee = _description_secours(
+                str(donjon.get("id") or ""), nx, ny, str(salle.get("type") or "")
+            )
+        etat_stocke = str(salle.get("etat_des_lieux") or "").strip()
+        texte = (
+            f"↩️ Vous REPARCOURREZ la salle ({nx},{ny}) — type : "
+            f"**{salle.get('type','?')}** — DÉJÀ VISITÉE.\n"
+            f"Description enregistrée : « {desc_stockee} »\n"
+        )
+        if etat_stocke:
+            texte += f"État tel que laissé : « {etat_stocke} »\n"
+        texte += (
+            f"{porte_ligne}\n\n"
+            "⚠️ NE RÉINVENTE PAS cette salle : reprends FIDÈLEMENT la "
+            "description et l'état ci-dessus (ce qui a été fait reste fait : "
+            "monstres vaincus, coffres vidés…), puis narre seulement ce que "
+            "le groupe y trouve maintenant."
+        )
+    else:
+        texte = (
+            f"🚶 Vous avancez au {d} → salle ({nx},{ny}) — type : "
+            f"**{salle.get('type','?')}**. {porte_ligne}\n\n"
+            "📌 Salle NOUVELLE : narre-la, puis FIGE sa description via "
+            "`carte_donjon_decrire_salle(description=…, etat_des_lieux=…)` — "
+            "ce fil garantit qu'en revenant ici, la salle sera retrouvée "
+            "identique."
+        )
     # Illustration de salle : PNG ComfyUI en arrière-plan si dispo
     # (fallback silencieux — on garde le SVG carte principale).
     # Respecte le toggle `image.scenes_enabled` (tableau de bord) comme
@@ -803,13 +941,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         if salle_img:
             img_line = f"\n\n🖼️ Illustration salle ({img_src}) : {salle_img}"
     return ToolResult(
-        text=(
-            f"🚶 Vous avancez au {d} → salle ({nx},{ny}) — type : "
-            f"**{salle.get('type','?')}**. "
-            f"Portes visibles : "
-            + ", ".join([k for k, v in salle.get("portes", {}).items() if v])
-            + f".\n\n🖼️ Carte : {url}{img_line}"
-        ),
+        text=texte + img_line,
         state_patch={"donjon": donjon, "carte_donjon": url},
     )
 
@@ -904,12 +1036,25 @@ async def carte_donjon_get(ctx: ToolContext) -> ToolResult:
     url = _url_for(path, ctx.data_dir)
     salles = _grille_vers_dict(donjon.get("grille", []))
     courant = tuple(donjon.get("courant", [0, 0]))
+    # Aperçu des descriptions figées : le MJ vérifie d'un coup d'œil quelles
+    # salles ont une description canonique (et lesquelles restent à figer).
+    lignes_salles = []
+    for xy in sorted(salles):
+        s = salles[xy]
+        desc = str(s.get("description") or "").strip()
+        ligne = f"  - ({xy[0]},{xy[1]}) {s.get('type','?')}"
+        if desc:
+            ligne += f" — {desc[:100]}" + ("…" if len(desc) > 100 else "")
+        else:
+            ligne += " — (description à figer via carte_donjon_decrire_salle)"
+        lignes_salles.append(ligne)
     return ToolResult(
         text=(
             f"🗺️ **{donjon['id']}** — {len(salles)} salles, "
             f"courante ({courant[0]},{courant[1]}). "
             f"Salles visitées : {len(donjon.get('salles_visitees',[]))}\n"
-            f"🖼️ Carte : {url}"
+            + "\n".join(lignes_salles)
+            + f"\n\n🖼️ Carte : {url}"
         ),
         state_patch={"donjon": donjon, "carte_donjon": url},
     )
@@ -926,7 +1071,9 @@ async def carte_donjon_sortir(ctx: ToolContext) -> ToolResult:
     etat = _charger_etat(ctx)
     donjon = etat.get("donjon") or {}
     donjon_id = donjon.get("id")
-    # Archiver le donjon courant avant de le vider.
+    # Archiver le donjon courant avant de le vider — y compris les étages
+    # (`etages`/`etage`) et les descriptions/états des salles portés par la
+    # grille : le progrès ET la constance des salles survivent à la sortie.
     if donjon_id and donjon.get("grille"):
         etat.setdefault("donjons_exploreres", {})[donjon_id] = {
             "id": donjon_id,
@@ -934,6 +1081,8 @@ async def carte_donjon_sortir(ctx: ToolContext) -> ToolResult:
             "salles_visitees": donjon.get("salles_visitees", []),
             "portes_bloquees": donjon.get("portes_bloquees", []),
             "courant": donjon.get("courant", [0, 0]),
+            "etage": donjon.get("etage", 0),
+            "etages": donjon.get("etages", {}),
         }
     etat["donjon"] = {"id": None, "salles_visitees": [], "portes_bloquees": [], "grille": []}
     etat["phase"] = "exploration"

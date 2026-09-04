@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime
 from typing import Any, Optional
 
@@ -130,6 +131,126 @@ def _noms_monstres_scenario(s: dict[str, Any]) -> list[str]:
     return noms
 
 
+# --------------------------------------------------------------------------- #
+#  Bible de scénario — construit une fiche structurée à partir du PDF pour
+#  que le MJ puisse suivre la trame (et la difficulté) d'un scénario, même
+#  après que l'historique de chat ait été tronqué.
+# --------------------------------------------------------------------------- #
+# Marqueurs (« signatures ») repérant l'édition du scénario dans le texte du
+# PDF. Utile pour prévenir les incohérences (ex. un scénario Adventurers
+# League 5e lancé dans une partie 3.5).
+_SIGNATURES_5E = [
+    "adventurers league", "organized play", "basic rules",
+    "passive wisdom", "downtime", "background", "5th level",
+    "4th level characters", "1st level character", "logsheet",
+    "spellcasting services", "raise dead", "adventurers",
+    # Modules français/custom marquent souvent l'édition explicitement.
+    "d&d 5", "d&d5", "d&d 5e", "rules of d&d 5", "règles de d&d 5",
+]
+_SIGNATURES_35 = [
+    "srd 3.5", "dungeon master's guide", "tome of horros",
+    "3rd edition", "v3.5", "3.5", "d&d 3.5", "d&d3.5",
+]
+
+_ED5_RE = re.compile(r"\b(?:5e|dnd5|d&d\s?5e?)\b", re.IGNORECASE)
+_ED35_RE = re.compile(r"\b3\.5\b")
+
+
+def _detecter_edition(texte: str) -> str:
+    """Détecte l'édition probable d'un scénario à partir de son texte PDF.
+    Renvoie '5e', '3.5' ou 'inconnue' (signatures + marqueurs autonomes)."""
+    bas = (texte or "")
+    score5 = sum(1 for s in _SIGNATURES_5E if s in bas.lower())
+    score3 = sum(1 for s in _SIGNATURES_35 if s in bas.lower())
+    # Marqueurs autonomes « 5e » et « 3.5 » (robustes, non noyés dans les
+    # signatures). On compte les occurrences uniques.
+    score5 += len(_ED5_RE.findall(bas))
+    score3 += len(_ED35_RE.findall(bas))
+    if score5 > score3:
+        return "5e"
+    if score3 > score5:
+        return "3.5"
+    return "inconnue"
+
+
+_NIV_PATTERN = re.compile(
+    r"(\d+)\s*(?:st|nd|rd|th)?\s*(?:[-–—]\s*(\d+)\s*(?:st|nd|rd|th)?|to\s*(\d+))"
+    r"\s*(?:level|niveau|level characters)|"
+    r"(\d+)\s*(?:st|nd|rd|th)?\s*(?:level|niveau|level characters)",
+    re.IGNORECASE,
+)
+
+
+def _extraire_niveau(texte: str) -> str:
+    """Extrait la fourchette de niveaux recommandée (« 1st-4th level …
+    characters ») depuis le texte du scénario. Heuristique : préfère une
+    fourchette (1-4) sinon le niveau simple (1)."""
+    m = _NIV_PATTERN.search(texte or "")
+    if not m:
+        return ""
+    a, b, c = m.group(1), m.group(2), m.group(3)
+    if b:
+        return f"{a}-{b}"
+    if c:
+        return f"{a}-{c}"
+    return a or str(m.group(4) or "")
+
+
+def _resume_texte(texte: str, cible: int = 2200) -> str:
+    """Condensé du début du scénario (synopsis/background/hook) pour la
+    bible — suffisant au MJ sans noyer le contexte (~2 ko)."""
+    if not texte:
+        return ""
+    # On privilégie les sections les plus utiles du livret si présentes.
+    propre = texte.replace("\r", "")
+    for section in ("Overview", "Adventure Background", "Adventure Hook",
+                    "Introduction", "Background"):
+        idx = propre.lower().find(section.lower())
+        if idx != -1:
+            debut = propre[idx: idx + cible]
+            if len(debut) >= 200:
+                return debut
+    return propre[:cible] + ("…" if len(propre) > cible else "")
+
+
+def _construire_bible(
+    s: dict[str, Any], pdf_texte: str, edition_partie: str
+) -> dict[str, Any]:
+    """Construit la bible structurée d'un scénario (persistée dans
+    `quete.bible` puis injectée au MJ à chaque tour)."""
+    detectee = _detecter_edition(pdf_texte)
+    niveau = str(s.get("niveau") or "") or _extraire_niveau(pdf_texte)
+    bible: dict[str, Any] = {
+        "titre": str(s.get("titre") or ""),
+        "univers": str(s.get("_univers") or ""),
+        "source_pdf": str(s.get("pdf") or ""),
+        "edition_detectee": detectee,
+        "edition_partie": edition_partie,
+        "niveau_recommande": niveau,
+        "joueurs_recommandes": str(s.get("joueurs") or ""),
+        "resume": _resume_texte(pdf_texte),
+        "etapes": [],              # étapes du scénario (voir scenario_etape)
+        "etape_courante": "",
+        "objectifs": [],           # objectifs/enjeux principaux
+    }
+    # Avertissement d'édition : un scénario clairement d'une AUTRE édition
+    # que la partie risque de produire des monstres/difficultés incohérents.
+    det = detectee.lower()
+    partie_ok = "3.5" in edition_partie.lower()
+    if det == "5e" and partie_ok:
+        bible["avertissement"] = (
+            "⚠️ Ce scénario est un module Adventurers League 5e : ses "
+            "monstres, DD et niveaux d'XP sont calibrés 5e. Réinterprète "
+            "les créatures avec les stats D&D 3.5 du bestiaire et ajuste "
+            "la difficulté au niveau réel du groupe (ne copie pas les CR "
+            "5e tels quels)."
+        )
+    else:
+        bible["avertissement"] = ""
+    return bible
+
+
+# --------------------------------------------------------------------------- #
 def _assurer_monstres_au_bestiaire(ctx: ToolContext, noms: list[str]) -> list[str]:
     """Garantit qu'UNE fiche bestiaire existe pour chaque monstre de scénario.
 
@@ -234,6 +355,32 @@ async def scenarios_laelith_charger(
         # Extraire texte pour le MJ
         texte = extraire_pdf(ctx, s["pdf"])
         champs.append(f"\n=== TEXTE DU SCÉNARIO (extrait) ===\n{texte}")
+    else:
+        texte = ""
+    # ── Bible du scénario : fiche structurée (édition, niveaux, résumé)      ──
+    # Persistée dans `quete.bible`, réinjectée au MJ à chaque tour — il garde
+    # ainsi la trame du scénario même quand l'historique de chat est tronqué.
+    edition_partie = "D&D 3.5"
+    try:
+        if ctx.partie_id:
+            from ..game.state import PartyState
+            _st0 = PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id)
+            _et0 = _st0.load()
+            edition_partie = str(_et0.get("meta", {}).get("regles") or "D&D 3.5")
+    except Exception:                                            # noqa: BLE001
+        pass
+    bible = _construire_bible(s, texte, edition_partie)
+    champs.append(
+        "\n### 📖 Bible du scénario (réinjectée au MJ à chaque tour)\n"
+        f"- Édition détectée : {bible['edition_detectee']} "
+        f"(partie : {edition_partie})"
+        + (f"\n- Niveaux recommandés : {bible['niveau_recommande']}"
+           if bible["niveau_recommande"] else "")
+        + (f"\n- Nombre de joueurs : {bible['joueurs_recommandes']}"
+           if bible["joueurs_recommandes"] else "")
+    )
+    if bible.get("avertissement"):
+        champs.append(f"\n{bible['avertissement']}")
     # Assets
     for label, cle in [("Cartes", "cartes"), ("Objets", "objets"),
                        ("Énigmes", "enigmes")]:
@@ -254,11 +401,13 @@ async def scenarios_laelith_charger(
         champs.append(f"\n### Annexes ({len(s['annexes'])})")
         for a in s["annexes"]:
             champs.append(f"- {a.get('nom', '?')} : {a.get('fichier', '?')}")
-    # Auto-patch quête
+    # Auto-patch quête (titre + pitch + source + Bible — conservée en l'état
+    # à travers `quete.bible`, y compris les étapes/objectifs suivis).
     quete = {
         "titre": str(s.get("titre", "")),
         "pitch": str(s.get("pitch", "")),
         "source": f"[{s.get('id','')}] " + str(s.get("pdf") or s.get("_univers", "")),
+        "bible": bible,
     }
     # ── Bestiaire : garantit une fiche pour chaque monstre du scénario ──
     ajoutes = _assurer_monstres_au_bestiaire(ctx, _noms_monstres_scenario(s))
@@ -290,9 +439,18 @@ async def scenarios_laelith_charger(
                 })
             # Position : l'univers/le scénario donne un point d'ancrage
             unit = str(s.get("_univers") or "")
+            mem.setdefault("position", {"lieu": "", "zone": "", "detail": ""})
             if unit and not mem["position"].get("lieu"):
                 mem["position"]["lieu"] = unit
             mem.setdefault("objectif_courant", str(quete.get("pitch") or ""))
+            # Persiste la quête avec sa bible (étapes/objectifs suivis) — que
+            # la phase suivante retrouve la trame même sans l'historique.
+            etat["quete"] = {
+                "titre": str(s.get("titre", "")),
+                "pitch": str(s.get("pitch", "")),
+                "source": quete.get("source", ""),
+                "bible": quete.get("bible", {}),
+            }
             st.save(etat)
     except Exception:                                           # noqa: BLE001
         pass
@@ -302,3 +460,64 @@ async def scenarios_laelith_charger(
         "(résumé + objectif) pour garder le fil de l'histoire."
     )
     return ToolResult(text="\n".join(champs), state_patch={"quete": quete})
+
+
+@tool
+async def scenario_etape(
+    ctx: ToolContext,
+    etape: str = "",
+    avancement: str = "",
+    objectif: str = "",
+    terminée: bool = False,
+) -> ToolResult:
+    """
+    Suit l'avancement du scénario en cours : enregistre l'étape ACTUELLE de
+    la trame et (optionnellement) une étape nouvellement ACCOMPLIE. À appeler
+    dès qu'un objectif du scénario est atteint ou que le groupe change
+    d'étape. Ces informations sont réinjectées au MJ à chaque tour : c'est ce
+    qui garantit qu'on reste sur la trame du scénario malgré l'improvisation
+    et la troncature de l'historique.
+
+    :param etape (str): l'étape de la trame que le groupe est EN TRAIN de
+        vivre (ex. « explorer les catacombes pour trouver l'origine des
+        morts-vivants »).
+    :param avancement (str): état/notes courtes sur l'avancement (optionnel).
+    :param objectif (str): l'objectif immédiat du groupe (optionnel).
+    :param terminée (bool): si `True`, enregistre `etape` comme étape
+        accomplie (déplacée dans la liste des étapes réalisées).
+    """
+    from ..game.state import PartyState
+    st = PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id)
+    etat = st.load()
+    if "_erreur" in etat:
+        return ToolResult(text="❌ État de partie illisible.")
+    quete = etat.setdefault("quete", {})
+    bible = quete.setdefault("bible", {})
+    bible.setdefault("etapes", [])
+    bible.setdefault("etapes_terminees", [])
+    etape = str(etape or "").strip()
+    if not etape:
+        return ToolResult(text="❌ Décris l'étape courante.")
+    if bool(terminée):
+        if etape and str(etape).lower() not in [
+            str(x).lower() for x in (bible.get("etapes_terminees") or [])
+        ]:
+            bible["etapes_terminees"] = (bible.get("etapes_terminees") or []) + [etape][-40:]
+        bible["etape_courante"] = ""
+    else:
+        bible["etape_courante"] = etape
+    if str(avancement or "").strip():
+        bible["avancement"] = str(avancement).strip()[:600]
+    if str(objectif or "").strip():
+        bible["objectif"] = str(objectif).strip()[:600]
+    elif not bool(terminée):
+        bible["objectif"] = etape[:600]
+    st.save(etat)
+    texte = (
+        f"📌 Étape scénario : « {etape} »"
+        + (" — accomplie ✅" if bool(terminée) else " — en cours")
+    )
+    if (bible.get("etapes_terminees")):
+        texte += "\nÉtapes accomplies : " + ", ".join(
+            bible["etapes_terminees"][-6:])
+    return ToolResult(text=texte, state_patch={"quete": quete})

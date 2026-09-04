@@ -111,6 +111,61 @@ def _mod_con(fiche: dict[str, Any]) -> int:
     return (con - 10) // 2
 
 
+def _bonus_dons_pv(dons: Any, niveau: int) -> int:
+    """Bonus de PV apporté par les dons d'un personnage (PHB 3.5 finales).
+
+    - « Dur à cuire » / Toughness : +3 PV (flat).
+    - « Vigueur surhumaine » / Improved Toughness : +1 PV par niveau.
+    - « Robustesse » : +1 PV par niveau.
+    Déjà appliqué à la création ; cette fonction sert à re-synchroniser
+    `pv_max` quand le niveau change (montée ou perte).
+    """
+    if not dons:
+        return 0
+    if isinstance(dons, str):
+        import json as _json
+        try:
+            dons = _json.loads(dons)
+        except _json.JSONDecodeError:
+            dons = [x.strip() for x in dons.split(",")]
+    if not isinstance(dons, (list, tuple)):
+        return 0
+    import unicodedata as _u
+    def _norm(s: str) -> str:
+        s = _u.normalize("NFKD", (s or "").lower())
+        s = "".join(c for c in s if not _u.combining(c))
+        return s.replace("-", " ").replace("'", " ").strip()
+    lvl = max(1, int(niveau or 1))
+    bonus = 0
+    for d in dons:
+        nom = _norm(str(d or ""))
+        if not nom:
+            continue
+        if any(k in nom for k in ("dur a cuire", "toughness", "resilient", "endurci", "coriace")):
+            bonus += 3
+        elif any(k in nom for k in ("vigueur surhumaine", "improved toughness", "grande robustesse", "vigueur")):
+            bonus += lvl
+        elif any(k in nom for k in ("robustesse",)):
+            bonus += lvl
+    return bonus
+
+
+def _resync_dons_pv(fiche: dict[str, Any], new_niveau: int, old_bonus: int) -> tuple[int, int]:
+    """Recalcule le bonus de PV des dons après un changement de niveau.
+
+    Renvoie (pv_max, pv) recalibrés pour tenir compte des dons qui évoluent
+    avec le niveau (ex. Vigueur surhumaine +1/niveau). `old_bonus` est le bonus
+    déjà compté dans pv_max (avant remontée/descente).
+    """
+    new_bonus = _bonus_dons_pv(fiche.get("dons"), new_niveau)
+    delta = new_bonus - old_bonus
+    if not delta:
+        return int(fiche.get("pv_max", 1)), int(fiche.get("pv", 1))
+    pv_max = max(1, int(fiche.get("pv_max", 1)) + delta)
+    pv = min(int(fiche.get("pv", 1)) + delta, pv_max)
+    return pv_max, pv
+
+
 def appliquer_gain(
     fiche: dict[str, Any], montant: int, rng: Optional[random.Random] = None
 ) -> list[str]:
@@ -142,6 +197,9 @@ def appliquer_gain(
             fiche["niveau"] = niveau
             fiche["pv_max"] = max(1, int(fiche.get("pv_max", dv)) - perte)
             fiche["pv"] = min(int(fiche.get("pv", 1)), fiche["pv_max"])
+            pv_max_new, pv_new = _resync_dons_pv(fiche, niveau, _bonus_dons_pv(fiche.get("dons"), niveau + 1))
+            fiche["pv_max"] = pv_max_new
+            fiche["pv"] = pv_new
             logs.append(
                 f"⚠️ {fiche.get('nom', '?')} tombe au niveau {niveau} "
                 f"(XP sous le minimum) : -{perte} PV max."
@@ -154,6 +212,9 @@ def appliquer_gain(
         f"{fiche.get('nom', '?')} gagne {montant} XP → {xp} XP "
         f"(niveau {niveau}, prochain niveau à {xp_min_niveau(niveau + 1)})."
     )
+    # Bonus de PV des dons au niveau courant (avant montées), pour recaler les
+    # dons qui évoluent avec le niveau (Vigueur surhumaine/Robustesse +1/niv.).
+    bonus_dons_avant = _bonus_dons_pv(fiche.get("dons"), niveau)
     # Montées de niveau successives (XP peut franchir plusieurs niveaux).
     while niveau < 40 and xp >= xp_min_niveau(niveau + 1):
         niveau += 1
@@ -163,6 +224,11 @@ def appliquer_gain(
         fiche["niveau"] = niveau
         fiche["pv_max"] = int(fiche.get("pv_max", dv)) + gain_pv
         fiche["pv"] = int(fiche.get("pv", 1)) + gain_pv
+        # Recaler le bonus de PV des dons qui évoluent avec le niveau
+        pv_max_new, pv_new = _resync_dons_pv(fiche, niveau, bonus_dons_avant)
+        bonus_dons_avant = _bonus_dons_pv(fiche.get("dons"), niveau)
+        fiche["pv_max"] = pv_max_new
+        fiche["pv"] = pv_new
         logs.append(
             f"🎉 {fiche.get('nom', '?')} monte au NIVEAU {niveau} ! "
             f"+{gain_pv} PV (1d{dv}={jet} + CON {_mod_con(fiche):+d}) → "
@@ -203,6 +269,9 @@ def appliquer_perte_niveau(fiche: dict[str, Any], nb: int = 1) -> list[str]:
         fiche["xp"] = milieu
         fiche["pv_max"] = max(1, int(fiche.get("pv_max", dv)) - perte)
         fiche["pv"] = min(int(fiche.get("pv", 1)), fiche["pv_max"])
+        pv_max_new, pv_new = _resync_dons_pv(fiche, nouveau, _bonus_dons_pv(fiche.get("dons"), niveau))
+        fiche["pv_max"] = pv_max_new
+        fiche["pv"] = pv_new
         logs.append(
             f"⚠️ {fiche.get('nom', '?')} perd un niveau : niveau {nouveau}, "
             f"XP ramenée au milieu du niveau ({milieu}), -{perte} PV max."

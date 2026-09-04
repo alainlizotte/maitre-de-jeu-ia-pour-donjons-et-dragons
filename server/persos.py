@@ -603,6 +603,43 @@ def charger_fiche(data_dir: str, nom: str) -> Optional[dict[str, Any]]:
         return None
 
 
+def resume_dons_competences(fiche: dict[str, Any]) -> str:
+    """Résumé compact « Dons : … · Compétences : … » d'une fiche.
+
+    Sert au récapitulatif injecté dans le prompt du MJ : sans lui, l'IA
+    ignore les dons et rangs choisis à la création (l'entrée `pj` de l'état
+    ne transporte que nom/race/classe/PV/CA…). Les compétences à rang nul
+    sont omises ; la liste est triée par rang décroissant et plafonnée à 8
+    entrées pour ne pas gonfler le prompt.
+
+    Renvoie une chaîne vide si la fiche n'a ni dons ni rangs.
+    """
+    dons = fiche.get("dons") or []
+    if isinstance(dons, str):
+        dons = [d.strip() for d in dons.split(",") if d.strip()]
+    dons_txt = ", ".join(str(d) for d in dons if str(d).strip())
+
+    comp_items: list[tuple[str, int]] = []
+    comps = fiche.get("competences") or {}
+    if isinstance(comps, dict):
+        for c, r in comps.items():
+            try:
+                r = int(r or 0)
+            except (TypeError, ValueError):
+                continue
+            if r > 0:
+                comp_items.append((str(c), r))
+    comp_items.sort(key=lambda x: (-x[1], x[0]))
+    comp_txt = ", ".join(f"{c} {r}" for c, r in comp_items[:8])
+
+    parties = []
+    if dons_txt:
+        parties.append(f"Dons : {dons_txt}")
+    if comp_txt:
+        parties.append(f"Compétences : {comp_txt}")
+    return " · ".join(parties)
+
+
 def lister_fiches(data_dir: str, proprietaire: Optional[str] = None) -> list[dict[str, Any]]:
     """Liste toutes les fiches (ou celles d'un propriétaire), triées par nom."""
     dossier = fiches_dir(data_dir)
@@ -828,6 +865,9 @@ async def generer_portrait_async(data_dir: str, fiche: dict[str, Any]) -> Option
     Renvoie le chemin écrit, ou None si ComfyUI est indisponible (fallback
     silencieux — le monogramme côté front reste affiché).
     """
+    from .config import get_config
+    if not get_config().image.portraits_enabled:
+        return None
     from .image.helpers import generer_si_dispo
 
     nom = str(fiche.get("nom", ""))

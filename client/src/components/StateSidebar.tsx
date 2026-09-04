@@ -9,6 +9,7 @@ import { api } from "../api/rest";
 import { useParty } from "../store";
 import type { Personnage } from "../api/types";
 import { XpBar, ChargeBar } from "./Bars";
+import { sortsEtat } from "../lib/sorts";
 
 /** Slug identique au `_slug` serveur (server/tools/fiches.py) pour retrouver
  *  le portrait `portraits_cache/<slug>.png` d'un personnage. */
@@ -221,12 +222,112 @@ function Field({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+/** Panneau magie d'une fiche : emplacements restants (X/Y) + sorts prêts.
+ *  Badge vert = prêt, barré = épuisé. Miroir des règles de server/sorts.py. */
+function PanneauSorts({
+  modele,
+  fiche,
+}: {
+  modele: Parameters<typeof sortsEtat>[0];
+  fiche: Parameters<typeof sortsEtat>[1];
+}) {
+  const etat = sortsEtat(modele, fiche);
+  if (!etat) return null;
+  const sortsCat = modele?.sorts ?? [];
+  const niveauDe = (n: string) => sortsCat.find((s) => s.nom === n)?.niveau;
+  const spontane = Boolean(
+    modele?.sorts_prepare && !modele.sorts_prepare.includes(fiche.classe),
+  );
+  // Liste affichée : sorts connus (spontané) ou préparés du jour (préparateur).
+  const badges = spontane
+    ? etat.connus.map((nom) => ({ nom, nb: 1 }))
+    : Object.entries(etat.prepares)
+        .filter(([, nb]) => nb > 0)
+        .map(([nom, nb]) => ({ nom, nb }));
+  return (
+    <div className="mt-2 rounded bg-purple-950/20 border border-purple-900/50 p-2">
+      <div className="text-xs text-purple-300 mb-1">
+        Sorts — {fiche.classe} ({spontane ? "spontané" : "préparé"})
+      </div>
+      <div className="flex flex-wrap gap-1 mb-1.5">
+        {Object.entries(etat.slots).map(([lvl, total]) => {
+          const restant = etat.restants[Number(lvl)] ?? 0;
+          const epuise = restant <= 0;
+          return (
+            <span
+              key={lvl}
+              title={`Emplacements de sorts de niveau ${lvl}`}
+              className={`text-[11px] px-1.5 py-0.5 rounded tabular-nums ${
+                epuise
+                  ? "bg-stone-800 text-stone-500"
+                  : "bg-purple-900/40 text-purple-200"
+              }`}
+            >
+              niv. {lvl} : {restant}/{total}
+            </span>
+          );
+        })}
+      </div>
+      {badges.length === 0 ? (
+        <p className="text-[11px] text-stone-500 italic">
+          {spontane
+            ? "Aucun sort connu — choisissez-les à la création."
+            : "Aucun sort préparé aujourd'hui (repos + mémorisation avec le MJ)."}
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {badges.map(({ nom, nb }) => {
+            const lvl = niveauDe(nom);
+            const restant = lvl != null ? (etat.restants[lvl] ?? 0) : 1;
+            const pret = restant > 0;
+            return (
+              <span
+                key={nom}
+                title={lvl != null ? `Niveau de sort ${lvl}` : nom}
+                className={`text-[11px] px-1.5 py-0.5 rounded ${
+                  pret
+                    ? "bg-emerald-900/40 text-emerald-200"
+                    : "bg-stone-800 text-stone-500 line-through"
+                }`}
+              >
+                {nom}
+                {nb > 1 ? ` x${nb}` : ""}
+                {lvl != null ? ` · n${lvl}` : ""}
+                {!pret && " — épuisé"}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void }) {
+  const stateRev = useParty((s) => s.stateRev);
   const ficheQuery = useQuery({
     queryKey: ["fiche", nom],
     queryFn: () => api.getFiche(nom),
     retry: false,
     staleTime: 15_000,
+    // La fiche évolue en jeu (préparation de sorts, dégâts, conditions…) :
+    // léger polling tant que la modale est ouverte.
+    refetchInterval: 10_000,
+  });
+  // Signal serveur « une fiche a changé » (pj_updated, incrémenté dans
+  // stateRev) → re-fetch immédiat : l'encadré Sorts (préparés / emplacements)
+  // se met à jour dès que le MJ mémorise ou lance un sort.
+  const ficheRefetch = ficheQuery.refetch;
+  useEffect(() => {
+    if (stateRev > 0) void ficheRefetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateRev]);
+  // Catalogues (tables de sorts) — partagés avec le formulaire de création.
+  const modeleQuery = useQuery({
+    queryKey: ["modelePerso"],
+    queryFn: api.modelePerso,
+    staleTime: Infinity,
   });
   // Repli : l'état de partie connaît déjà nom/race/classe/PV/CA même sans fiche.
   const pj = useParty((s) => s.state)?.pj?.find((p) => p.nom === nom);
@@ -254,7 +355,6 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
   const ca = (f.ca as number) ?? pj?.ca;
   const chargeMax = f.charge_max;
   const portraitUrl = ficheQuery.data?.portrait;
-  const sorts = f.sorts ?? f.sorts_connus;
   // Champs non rendus explicitement ci-dessous (extension libre de la fiche).
   const connus = new Set([
     "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
@@ -368,8 +468,17 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
         <Field label="Sauvegardes" value={f.sauvegardes} />
         <Field label="Compétences" value={f.competences} />
         <Field label="Dons" value={f.dons} />
-        {/* Sorts : champ optionnel de la fiche (lanciers) — absent des persos martiaux. */}
-        {sorts ? <Field label="Sorts" value={sorts} /> : null}
+        <PanneauSorts
+          modele={modeleQuery.data}
+          fiche={{
+            classe: String(identite.classe ?? ""),
+            niveau: Number(identite.niveau ?? 1),
+            carac: (f.carac as Record<string, number>) ?? {},
+            sorts: f.sorts as
+              | { connus?: string[]; prepares?: Record<string, number>; depenses?: Record<string, number> }
+              | undefined,
+          }}
+        />
         <Field label="Équipement" value={f.equipement} />
         {f.or != null && f.or !== 0 && <Field label="Or" value={`${f.or} pc`} />}
         <Field label="Conditions" value={f.conditions} />

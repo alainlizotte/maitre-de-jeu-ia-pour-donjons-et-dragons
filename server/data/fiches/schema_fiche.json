@@ -40,8 +40,8 @@
     "dons": {"type": "array", "items": {"type": "string"}, "description": "Liste des dons acquis."},
     "sorts": {
       "type": "object",
-      "description": "Sorts connus/prepares selon classe : { 'niveau1': [...] }.",
-      "additionalProperties": {"type": "array", "items": {"type": "string"}}
+      "description": "Magie du personnage : connus (liste de noms), prepares (dict nom -> nombre prépare du jour), depenses (dict niveau de sort -> emplacements utilisés).",
+      "additionalProperties": true
     },
     "equipement": {
       "type": "array",

@@ -21,8 +21,10 @@ import type {
   ModelePerso,
   ProficiencesClasse,
   RaceModele,
+  SortModele,
 } from "../api/types";
 import { slugify } from "../utils/slug";
+import * as sortsLib from "../lib/sorts";
 
 const CARACS: CaracCle[] = ["FOR", "DEX", "CON", "INT", "SAG", "CHA"];
 const LIBELLES_CARACS: Record<CaracCle, string> = {
@@ -108,6 +110,43 @@ function donDisponible(d: DonModele, final: CaracMap, bab: number): boolean {
   return true;
 }
 
+/** Miroir de fiches._bonus_dons_pv() : bonus de PV apporté par les dons
+ *  (« Dur à cuire » = +3 PV ; « Vigueur surhumaine » / « Robustesse » =
+ *  +1 PV par niveau), insensible à la casse et aux accents. */
+function bonusPvDons(dons: string[], niveau: number): number {
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[-']/g, " ")
+      .trim();
+  let bonus = 0;
+  for (const d of dons) {
+    const nom = norm(d || "");
+    if (!nom) continue;
+    if (
+      ["dur a cuire", "toughness", "resilient", "endurci", "coriace"].some(
+        (k) => nom.includes(k),
+      )
+    ) {
+      bonus += 3;
+    } else if (
+      [
+        "vigueur surhumaine",
+        "improved toughness",
+        "grande robustesse",
+        "vigueur",
+        "robustesse",
+        "endurance supreme",
+      ].some((k) => nom.includes(k))
+    ) {
+      bonus += Math.max(1, niveau);
+    }
+  }
+  return bonus;
+}
+
 const fmtPo = (n: number) => (n === 0 ? "gratuit" : `${n} po`);
 
 /** Parse le champ libre « une ligne = un objet « Nom x2 » pour les quantités ». */
@@ -136,6 +175,7 @@ interface FormState {
   equipLibre: string;       // objets hors catalogue, une ligne = un objet
   donsChoisis: string[];
   donsLibre: string;        // dons libres hérités / personnalisés
+  sortsConnus: string[];    // sorts connus / grimoire (classes lanceuses)
   competencesRangs: Record<string, number>;
   histoire: string;
   sexe: string;
@@ -163,6 +203,7 @@ const FORM_VIDE: FormState = {
   equipLibre: "",
   donsChoisis: [],
   donsLibre: "",
+  sortsConnus: [],
   competencesRangs: {},
   histoire: "",
   sexe: "",
@@ -279,6 +320,7 @@ export function CharacterFormPage() {
       equipLibre: libres.join("\n"),
       donsChoisis,
       donsLibre: donsLibres.join("\n"),
+      sortsConnus: [...(f.sorts?.connus ?? [])],
       competencesRangs: { ...(f.competences ?? {}) },
       histoire: f.histoire ?? "",
       sexe: f.apparence?.sexe ?? "",
@@ -345,7 +387,13 @@ export function CharacterFormPage() {
     const modCon = mods.CON;
     const pvNiveauxSuivants =
       Math.max(0, form.niveau - 1) * (Math.floor(dv / 2) + 1 + modCon);
-    const pvMax = Math.max(1, dv + modCon + pvNiveauxSuivants);
+    // Dons choisis + libres : certains (« Dur à cuire »…) ajoutent des PV.
+    const donsTous = [
+      ...form.donsChoisis,
+      ...form.donsLibre.split("\n").map((l) => l.trim()).filter(Boolean),
+    ];
+    const bonusDons = bonusPvDons(donsTous, form.niveau);
+    const pvMax = Math.max(1, dv + modCon + pvNiveauxSuivants + bonusDons);
 
     // CA 3.5 : 10 + meilleure armure portée + meilleur bouclier + Dex
     // plafonnée par le dex_max de l'armure (miroir de persos.calculer_ca_armure).
@@ -380,6 +428,7 @@ export function CharacterFormPage() {
       mods,
       modsRace,
       pvMax,
+      bonusDons,
       ca,
       bab: babParNiveau(classeModele?.bab ?? "moyen", form.niveau),
       sauves,
@@ -387,7 +436,51 @@ export function CharacterFormPage() {
       chargeMax: chargeMaximale(final.FOR, raceModele?.taille ?? "M"),
       complet: Boolean(raceModele && classeModele),
     };
-  }, [raceModele, classeModele, form.carac, form.niveau, form.armuresChoisies, modele.data]);
+  }, [raceModele, classeModele, form.carac, form.niveau, form.armuresChoisies, form.donsChoisis, form.donsLibre, modele.data]);
+
+  // ------------------------- Magie (sorts 3.5) ----------------------------
+  // Miroir de server/sorts.py : castable, emplacements/jour, budgets connus.
+  const magie = useMemo(() => {
+    const tables = modele.data;
+    const lanceur = sortsLib.estLanceur(tables, form.classe);
+    const nls = lanceur ? sortsLib.niveauSortMax(tables, form.classe, form.niveau) : -1;
+    const cle = tables?.sorts_carac?.[form.classe] ?? "INT";
+    const mod = sortsLib.modCarac(calc.final[cle as CaracCle] ?? 10);
+    const slots = lanceur
+      ? sortsLib.emplacements(tables, form.classe, form.niveau, mod)
+      : ({} as Record<number, number>);
+    const budgetConnus = sortsLib.sortsConnusMax(tables, form.classe, form.niveau);
+    const liste = lanceur ? sortsLib.sortsDisponibles(tables, form.classe, nls) : [];
+    // Grimoire de départ du magicien niv.1 : 3 + mod INT sorts de niveau 1
+    // (tous les tours de magicien sont connus automatiquement).
+    const budgetGrimoire1 =
+      form.classe === "Magicien" ? 3 + sortsLib.modCarac(calc.final.INT) : 0;
+    return { lanceur, nls, cle, slots, budgetConnus, liste, budgetGrimoire1 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modele.data, form.classe, form.niveau, calc]);
+
+  // Excès de sorts connus (ex. édition d'une fiche contenant plus de sorts
+  // que le budget de son niveau) — avertissement en direct au-dessus de la
+  // validation à l'enregistrement.
+  const excedentSorts = useMemo(() => {
+    if (!magie.lanceur) return 0;
+    const comptes: Record<number, number> = {};
+    for (const nomS of form.sortsConnus) {
+      const s = magie.liste.find((x) => x.nom === nomS);
+      if (s) comptes[s.niveau] = (comptes[s.niveau] ?? 0) + 1;
+    }
+    let exces = 0;
+    for (const [lvlStr, mx] of Object.entries(magie.budgetConnus)) {
+      exces += Math.max(0, (comptes[Number(lvlStr)] ?? 0) - mx);
+    }
+    if (form.classe === "Magicien" && form.niveau === 1) {
+      const niv1 = form.sortsConnus.filter(
+        (n) => magie.liste.find((x) => x.nom === n)?.niveau === 1,
+      ).length;
+      exces += Math.max(0, niv1 - magie.budgetGrimoire1);
+    }
+    return exces;
+  }, [magie, form.sortsConnus, form.classe, form.niveau]);
 
   // ------------------- Disponibilités selon la classe --------------------- //
   const profClasse = form.classe ? modele.data?.proficiences?.[form.classe] : undefined;
@@ -489,7 +582,7 @@ export function CharacterFormPage() {
   const donsPlein = donsTotal >= budgetDons;
 
   const toggleListe = (
-    cle: "armesChoisies" | "armuresChoisies" | "equipChoisi" | "donsChoisis",
+    cle: "armesChoisies" | "armuresChoisies" | "equipChoisi" | "donsChoisis" | "sortsConnus",
     valeur: string,
   ) =>
     setForm((f) => ({
@@ -575,6 +668,19 @@ export function CharacterFormPage() {
           ...form.donsChoisis,
           ...form.donsLibre.split("\n").map((l) => l.trim()).filter(Boolean),
         ],
+        // Magie : connus/grimoire (la préparation quotidienne se fait en jeu).
+        sorts: magie.lanceur
+          ? {
+              connus: [
+                // Magicien : tous les tours de magicien sont connus d'office.
+                ...(form.classe === "Magicien"
+                  ? magie.liste.filter((s) => s.niveau === 0).map((s) => s.nom)
+                  : []),
+                ...form.sortsConnus,
+              ],
+              prepares: {},
+            }
+          : undefined,
         competences: Object.fromEntries(
           Object.entries(form.competencesRangs).filter(([, r]) => (r || 0) > 0),
         ),
@@ -635,10 +741,39 @@ export function CharacterFormPage() {
     if (donsTotal > budgetDons) {
       setErreur(
         `Trop de dons (${donsTotal}) : maximum ${budgetDons} au niveau ${form.niveau}` +
-          (form.race === "Humain" ? ", bonus humain inclus" : "") +
-          ".",
+        (form.race === "Humain" ? ", bonus humain inclus" : "") +
+        ".",
       );
       return;
+    }
+    // Sorts connus : budgets PHB (Sorcier/Barde par niveau, grimoire magicien).
+    if (magie.lanceur && (form.classe === "Sorcier" || form.classe === "Barde")) {
+      const comptes: Record<number, number> = {};
+      for (const nomS of form.sortsConnus) {
+        const s = magie.liste.find((x) => x.nom === nomS);
+        if (s) comptes[s.niveau] = (comptes[s.niveau] ?? 0) + 1;
+      }
+      for (const [lvl, mx] of Object.entries(magie.budgetConnus)) {
+        if ((comptes[Number(lvl)] ?? 0) > mx) {
+          setErreur(
+            `Trop de sorts connus de niveau ${lvl} (${comptes[Number(lvl)]}) : ` +
+            `maximum ${mx} pour ${form.classe} niv. ${form.niveau}.`,
+          );
+          return;
+        }
+      }
+    }
+    if (magie.lanceur && form.classe === "Magicien" && form.niveau === 1) {
+      const niv1 = form.sortsConnus.filter(
+        (n) => magie.liste.find((x) => x.nom === n)?.niveau === 1,
+      ).length;
+      if (niv1 > magie.budgetGrimoire1) {
+        setErreur(
+          `Grimoire de départ : maximum ${magie.budgetGrimoire1} sorts de ` +
+          `niveau 1 (3 + mod INT) — ${niv1} sélectionnés.`,
+        );
+        return;
+      }
     }
     // Compétences : impossible de dépasser le budget de points.
     if (rangsUtilises > budgetRangs) {
@@ -843,7 +978,13 @@ export function CharacterFormPage() {
               </p>
               <div className="grid grid-cols-3 md:grid-cols-4 gap-2 text-center">
                 {[
-                  { label: "Points de vie", valeur: calc.pvMax },
+                  {
+                    label:
+                      calc.bonusDons > 0
+                        ? `Points de vie (dons +${calc.bonusDons})`
+                        : "Points de vie",
+                    valeur: calc.pvMax,
+                  },
                   { label: "CA", valeur: calc.ca },
                   { label: "BBA", valeur: fmtBonus(calc.bab) },
                   { label: "Initiative", valeur: fmtBonus(calc.initiative) },
@@ -1246,6 +1387,133 @@ export function CharacterFormPage() {
                 />
               </label>
             </section>
+
+            {/* ------------------------------ Sorts ----------------------------- */}
+            {magie.lanceur && (
+              <section className="bg-stone-800/40 border border-purple-700/40 rounded-lg p-4 space-y-3">
+                <h2 className="font-serif text-lg text-purple-200">
+                  Sorts
+                  <span className="text-xs font-sans ml-2 text-stone-500">
+                    {form.classe} — incantation{" "}
+                    {sortsLib.typeLancement(modele.data, form.classe)} · carac.{" "}
+                    {magie.cle} · niveau de sort max : {magie.nls}
+                  </span>
+                </h2>
+                {/* Emplacements de sorts par jour (slots). */}
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(magie.slots).map(([lvl, total]) => (
+                    <div
+                      key={lvl}
+                      className="bg-stone-900/60 border border-stone-700 rounded px-2 py-1 text-xs"
+                    >
+                      niv. {lvl} :{" "}
+                      <span className="text-purple-300">{total}</span> empl./jour
+                    </div>
+                  ))}
+                </div>
+                {form.classe === "Magicien" && form.niveau === 1 && (
+                  <p className="text-xs text-stone-400">
+                    Grimoire de départ : tous les tours de magicien (inclus
+                    ci-dessous, grisés) + {magie.budgetGrimoire1} sort(s) de
+                    niveau 1. La mémorisation quotidienne se fera en jeu (repos +
+                    préparation avec le MJ).
+                  </p>
+                )}
+                {(form.classe === "Sorcier" || form.classe === "Barde") && (
+                  <p className="text-xs text-stone-400">
+                    Choisissez vos sorts connus — budget par niveau indiqué entre
+                    parenthèses.
+                  </p>
+                )}
+                {["Clerc", "Druide", "Paladin", "Rodeur"].includes(form.classe) && (
+                  <p className="text-xs text-stone-400">
+                    Lanceur divin préparé : la liste complète de votre classe est
+                    disponible — vous mémoriserez vos sorts du jour en jeu (repos
+                    + préparation avec le MJ). Rien à choisir ici.
+                  </p>
+                )}
+                {(form.classe === "Magicien" ||
+                  form.classe === "Sorcier" ||
+                  form.classe === "Barde") && (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {Object.entries(
+                      magie.liste.reduce<Record<number, SortModele[]>>(
+                        (acc, s) => {
+                          (acc[s.niveau] ??= []).push(s);
+                          return acc;
+                        },
+                        {},
+                      ),
+                    ).map(([lvl, sorts]) => {
+                      // Budget du niveau : table PHB (Sorcier/Barde) ou
+                      // grimoire de départ (Magicien niv.1 : 3 + mod INT).
+                      const budget =
+                        magie.budgetConnus[Number(lvl)] ??
+                        (form.classe === "Magicien" && Number(lvl) === 1
+                          ? magie.budgetGrimoire1
+                          : undefined);
+                      const choisis = form.sortsConnus.filter(
+                        (n) => sorts.some((s) => s.nom === n),
+                      ).length;
+                      const plein = budget !== undefined && choisis >= budget;
+                      const autoMagicien =
+                        form.classe === "Magicien" && Number(lvl) === 0;
+                      return (
+                        <div key={lvl}>
+                          <div className="text-[11px] text-purple-300/80 mb-1">
+                            Niveau {lvl}
+                            {budget !== undefined &&
+                              ` (max ${budget} connus — ${choisis} choisis${plein ? " — complet" : ""})`}
+                            {autoMagicien && " (inclus au grimoire)"}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1">
+                            {sorts.map((s) => {
+                              const coche = form.sortsConnus.includes(s.nom);
+                              // Budget plein → on ne peut cocher davantage
+                              // (les cases déjà cochées restent décochables).
+                              const ok = !autoMagicien && (coche || !plein);
+                              return (
+                                <label
+                                  key={s.nom}
+                                  className={`flex items-start gap-2 text-xs rounded px-1 py-0.5 ${
+                                    ok ? "" : "opacity-40 cursor-not-allowed"
+                                  }`}
+                                  title={`${s.ecole} · ${s.incantation} · portée ${s.portee} · ${s.composantes} · ${s.duree}${s.sauvegarde ? ` · sauvegarde : ${s.sauvegarde}` : ""}\n${s.description}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="accent-purple-500 mt-0.5"
+                                    disabled={!ok}
+                                    checked={autoMagicien || coche}
+                                    onChange={() =>
+                                      toggleListe("sortsConnus", s.nom)
+                                    }
+                                  />
+                                  <span>
+                                    {s.nom}
+                                    <span className="text-stone-500">
+                                      {" "}
+                                      · {s.ecole}
+                                      {s.sauvegarde ? ` · ${s.sauvegarde}` : ""}
+                                    </span>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {excedentSorts > 0 && (
+                  <p className="text-rose-400 text-xs">
+                    Trop de sorts connus ({excedentSorts}) pour {form.classe} niv.{" "}
+                    {form.niveau} — décochez avant d'enregistrer.
+                  </p>
+                )}
+              </section>
+            )}
 
             {/* ----------------------- Compétences -------------------------- */}
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4 space-y-3">

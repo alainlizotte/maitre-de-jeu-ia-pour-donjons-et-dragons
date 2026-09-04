@@ -105,6 +105,10 @@ class ImageConfig:
     # data/settings.json). Monstres, portraits et illustrations de donjon
     # restent générés quoi qu'il arrive.
     scenes_enabled: bool = True
+    # Génération des portraits PJ via ComfyUI. Peut être coupé seul (par ex.
+    # sur GPU à VRAM limitée où le LLM 9B et ComfyUI se disputent la mémoire) :
+    # la fiche se crée quand même, seul le portrait PNG n'est pas généré.
+    portraits_enabled: bool = True
     # Verrou dur = valeur BRUTE de `image.scenes_enabled` dans config.yaml,
     # capturée avant l'override du bouton GUI (settings.json). À false, les
     # scènes sont coupées, l'onglet « Scènes » et son bouton disparaissent

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import random
+import unicodedata
 from typing import Optional
 
 from .base import ToolContext, ToolResult, tool
@@ -103,7 +104,7 @@ async def lancer_d20(
     note_mod = ""
     if nom_personnage and competence:
         try:
-            from .fiches import _chemin  # pylint: disable=import-outside-toplevel
+            from .fiches import _chemin, bonus_dons_effet  # pylint: disable=import-outside-toplevel
             import os as _os                             # noqa: I001
             import unicodedata as _uni
 
@@ -121,21 +122,31 @@ async def lancer_d20(
                     if _norm(nom_c) == _norm(competence):
                         rangs = int(r or 0)
                         break
-                if rangs > 0:
+                # Dons passifs sur cette compétence (ex. Alerte → +2
+                # Détection / Perception auditive) : s'applique même à
+                # rang nul (guerrier avec Alerte et 0 rang en Détection).
+                bonus_don = bonus_dons_effet(
+                    fiche.get("dons"), "comp_" + _norm(competence)
+                )
+                if rangs > 0 or bonus_don:
                     from ..catalogue import COMPETENCES  # pylint: disable=import-outside-toplevel
                     cara_cle = next(
                         (c["cara"] for c in COMPETENCES
                          if _norm(c["nom"]) == _norm(competence)), "DEX",
                     )
                     val = int((fiche.get("carac") or {}).get(cara_cle, 10) or 10)
-                    calc = rangs + (val - 10) // 2
+                    calc = rangs + (val - 10) // 2 + bonus_don
                     if calc != modificateur:
                         mod_final = calc
+                        detail = (
+                            f"{competence} {rangs} rangs + "
+                            f"{cara_cle} {val} ({(val - 10) // 2:+d})"
+                        )
+                        if bonus_don:
+                            detail += f" + {bonus_don} (dons)"
                         note_mod = (
                             f"\n- ⚠️ Modificateur recalculé {modificateur:+d} → "
-                            f"{calc:+d} (fiche de {nom_personnage} : "
-                            f"{competence} {rangs} rangs + "
-                            f"{cara_cle} {val} ({(val - 10) // 2:+d}))."
+                            f"{calc:+d} (fiche de {nom_personnage} : {detail})."
                         )
         except Exception:                                       # noqa: BLE001
             pass  # fiche/compétence indisponible → modificateur fourni
@@ -186,6 +197,40 @@ async def calculer_initiative(ctx: ToolContext, participants: str) -> ToolResult
             text=f"⚠️ Format invalide : {e}\nAttendu : 'Nom1:+Mod, Nom2:-Mod, …'"
         )
 
+    # --- Recoupement fiches PJ ---------------------------------------------
+    # Pour un PJ (fiche présente), l'initiative officielle = mod. DEX + dons
+    # (Initiative améliorée = +4). La valeur du LLM est ignorée si elle
+    # diffère ; les monstres (sans fiche) gardent le modificateur fourni.
+    notes: list[str] = []
+    try:
+        from .fiches import bonus_dons_effet  # pylint: disable=import-outside-toplevel
+        ajustes: list[tuple[str, int]] = []
+        for name, mod in items:
+            fiche = _fiche_pj(ctx, name)
+            if fiche is None:
+                ajustes.append((name, mod))
+                continue
+            caracs = fiche.get("carac") or {}
+            try:
+                dex = int(caracs.get("DEX", 10) or 10)
+            except (TypeError, ValueError):
+                dex = 10
+            bonus_don = bonus_dons_effet(fiche.get("dons"), "initiative")
+            mod_off = (dex - 10) // 2 + bonus_don
+            if mod_off != mod:
+                detail = f"DEX {dex} ({(dex - 10) // 2:+d})"
+                if bonus_don:
+                    detail += f" + {bonus_don} (dons)"
+                notes.append(
+                    f"- ⚠️ {name} : initiative recalculée {mod:+d} → "
+                    f"{mod_off:+d} (fiche : {detail})."
+                )
+                mod = mod_off
+            ajustes.append((name, mod))
+        items = ajustes
+    except Exception:                                            # noqa: BLE001
+        pass  # fiches indisponibles → modificateurs fournis
+
     jets = []
     for name, mod in items:
         jet = random.randint(1, 20)
@@ -199,6 +244,7 @@ async def calculer_initiative(ctx: ToolContext, participants: str) -> ToolResult
             f"{i}. **{e['nom']}** — Initiative "
             f"{e['init']} (d20={e['jet_brut']}, mod={e['mod']:+d})"
         )
+    lignes.extend(notes)
     lignes.append("\nOrdre : " + " → ".join(e["nom"] for e in jets))
     lignes.append("\n_C'est à la plus haute initiative d'agir la première._")
     return ToolResult(
@@ -376,7 +422,15 @@ async def lancer_sauvegarde(
     :param source (str): source du danger (sort, piège, poison…).
     """
     t = str(type_sauvegarde or "").lower().strip()
-    if t not in ("vigueur", "réflexes", "reflexes", "volonté", "volonte"):
+    # Normalisation accents : « Volonté » → « volonte », « Réflexes » →
+    # « reflexes » — sans cela, la forme accentuée (documentée ci-dessus !)
+    # ne matchait JAMAIS les clés de fiche « Volonte »/« Reflexes » et le
+    # recoupement fiche échouait en silence.
+    t = "".join(
+        c for c in unicodedata.normalize("NFKD", t)
+        if not unicodedata.combining(c)
+    )
+    if t not in ("vigueur", "reflexes", "volonte"):
         return ToolResult(
             text=(
                 f"⚠️ type_sauvegarde invalide : '{type_sauvegarde}'. "
@@ -391,7 +445,9 @@ async def lancer_sauvegarde(
 
     # --- Recoupement fiche PJ ----------------------------------------------
     # La fiche stocke les totaux officiels (base de classe + mod. carac) :
-    # on les utilise plutôt que le chiffre approximatif du LLM.
+    # on les utilise plutôt que le chiffre approximatif du LLM, puis on
+    # ajoute les dons passifs de sauvegarde (Volonté de fer +2 Volonté,
+    # Grande Fortitude +2 Vigueur, Réflexes surprenants +2 Réflexes).
     mod_final = int(modificateur)
     note_mod = ""
     fiche = _fiche_pj(ctx, nom_personnage)
@@ -401,12 +457,24 @@ async def lancer_sauvegarde(
             if str(k).strip().lower().rstrip("s") == cle.strip().lower().rstrip("s"):
                 try:
                     off = int(v)
-                    if off != mod_final:
+                    try:
+                        from .fiches import bonus_dons_effet  # pylint: disable=import-outside-toplevel
+                        bonus_don = bonus_dons_effet(
+                            fiche.get("dons"), "sauvegarde_" + cle.lower()
+                        )
+                    except Exception:                        # noqa: BLE001
+                        bonus_don = 0
+                    off_total = off + bonus_don
+                    if off_total != mod_final:
+                        detail = f"{label} {off:+d}"
+                        if bonus_don:
+                            detail += f" + {bonus_don} (dons)"
                         note_mod = (
                             f"\n- ⚠️ Modificateur recalculé {modificateur:+d} → "
-                            f"{off:+d} (fiche de {nom_personnage} : {label} {off:+d})."
+                            f"{off_total:+d} (fiche de {nom_personnage} : "
+                            f"{detail})."
                         )
-                        mod_final = off
+                        mod_final = off_total
                     break
                 except (TypeError, ValueError):
                     break

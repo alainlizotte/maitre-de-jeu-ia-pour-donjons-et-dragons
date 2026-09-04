@@ -65,6 +65,16 @@ règles structurelles.
 
 ### Rappels de combat (D&D 3.5)
 
+- **Sorts en combat** : l'incantation d'un PJ passe par
+  `incanter_sort(nom_personnage=..., nom_sort=..., cible=...)` — validation
+  automatique (classe, niveau de sort castable, sort préparé/connu,
+  emplacement disponible) et résolution mécanique de l'effet (dégâts,
+  soins, condition). Un emplacement = UNE incantation : quand le tool
+  annonce « Plus aucun emplacement », le sort est indisponible pour la
+  journée — propose une autre action. Le temps d'incantation indiqué par
+  le tool respecte l'économie d'actions (1 action standard/round pour un
+  sort à « 1 action simple »).
+
 0. **Illustration à l'annonce** : dès qu'un monstre apparaît pour la première
    fois (rencontre, embuscade, début de combat), appelle
    `monstre_consulter(nom=...)` pour afficher son portrait à la table.

@@ -34,11 +34,18 @@ import re
 _THINK_RE = re.compile(r"<\|channel>thought\b.*?<channel\|>", re.DOTALL)
 
 
-def _strip_thinking(text: str) -> str:
-    """Supprime les blocs de réflexion Gemma 4 du texte de réponse."""
+def _strip_thinking(text: str, strip_spaces: bool = True) -> str:
+    """Supprime les blocs de réflexion Gemma 4 du texte de réponse.
+
+    `strip_spaces=False` : variante pour le streaming par delta — on ne
+    touche PAS aux espaces/retours à la ligne en début/fin de fragment,
+    sinon chaque token est dénudé et les mots arrivent collés à l'écran
+    (les espaces entre deux tokens étant périphériques, ils disparaissent).
+    """
     if not text:
         return text
-    return _THINK_RE.sub("", text).strip()
+    out = _THINK_RE.sub("", text)
+    return out.strip() if strip_spaces else out
 
 
 def _safe_split(buf: str) -> tuple[str, str]:
@@ -162,7 +169,7 @@ class OllamaClient:
         self._client = httpx.AsyncClient(
             base_url=config.base_url,
             headers={"Authorization": f"Bearer {config.api_key}"},
-            timeout=httpx.Timeout(180.0, connect=10.0),
+            timeout=httpx.Timeout(600.0, connect=10.0),
         )
 
     async def aclose(self) -> None:

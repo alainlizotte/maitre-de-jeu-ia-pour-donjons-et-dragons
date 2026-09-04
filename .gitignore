@@ -47,3 +47,4 @@ server/data/*.bak
 # Import brut de scénarios (doublons de server/data/scenarios/) + runtime
 nouveaux scénarios/
 server/data/settings.json
+server/data/bestiaire.json.bak_enrich*

@@ -250,14 +250,153 @@ def monstre_prompt(nom: str, description: str = "") -> str:
 
 def lieu_prompt(salle_type: str, donjon_id: str = "dungeon") -> str:
     """Prompt pour une salle de donjon. On reste générique côté contenu
-    pour éviter un sur-spécification que Qwen-Image digère mal."""
+    pour éviter un sur-spécification que Qwen-Image digère mal.
+
+    ⚠️ Traduction FR→EN obligatoire : le template est anglais et Qwen-Image
+    lit le mot à mot — un « entrée » français donne un PLAT de nourriture
+    (false friend), un nom de donjon en underscore casse la phrase. Tout
+    terme non mappé bascule sur un descripteur générique sûr."""
+    salle_en = _salle_en(salle_type)
+    donjon_en = _donjon_en(donjon_id)
     return (
-        f"interior illustration of a {salle_type} in a {donjon_id}, "
+        f"interior illustration of {_article(salle_en)} {salle_en} in "
+        f"{_article(donjon_en)} {donjon_en}, "
         "dungeon fantasy concept art, atmospheric lighting, "
         "detailed digital painting, no characters, "
         "video game environment, "
         + _ANTI_TEXT
     )
+
+
+# ── Traduction FR→EN des types de salle (cf. TYPES_SALLES dans tools/cartes)
+_SALLES_FR_EN: dict[str, str] = {
+    "antichambre": "antechamber",
+    "couloir": "corridor",
+    "salle vide": "empty hall",
+    "garde": "guard room",
+    "salle de garde": "guard room",
+    "crypte": "crypt",
+    "tableau": "picture gallery",
+    "galerie de tableaux": "picture gallery",
+    "tresor": "treasure vault",
+    "salle du tresor": "treasure vault",
+    "piege": "trap room",
+    "salle piegee": "trap room",
+    "autel": "altar room",
+    "salle de l autel": "altar room",
+    "cellules": "prison cells",
+    "cachot": "dungeon cell",
+    "puits": "well shaft",
+    "abattoir": "slaughterhouse",
+    "bibliotheque": "library",
+    "entree": "entrance hall",
+    "hall d entree": "entrance hall",
+    "salle du trone": "throne room",
+    "laboratoire": "laboratory",
+    "escaliers": "staircase",
+    "escalier": "staircase",
+    "sanctuaire": "sanctuary",
+    "ossuaire": "ossuary",
+    "chapelle": "chapel",
+    "caveau": "burial vault",
+    "refectoire": "refectory",
+    "armurerie": "armory",
+    "cuisine": "kitchen",
+    "citerne": "cistern room",
+    "tombe": "tomb chamber",
+    "temple": "temple",
+    "salle": "hall",
+    "salle de rituel": "ritual chamber",
+}
+
+# Mots de noms de donjons (slug → anglais) ; « des/du » → « of the » donne
+# des tournures un peu raides mais sans ambiguïté visuelle pour l'image.
+_MOTS_FR_EN: dict[str, str] = {
+    "sanctuaire": "sanctuary",
+    "ombre": "shadow",
+    "ombres": "shadows",
+    "des": "of the",
+    "du": "of the",
+    "de": "of",
+    "la": "the",
+    "le": "the",
+    "les": "the",
+    "l": "the",
+    "d": "of",
+    "tombe": "tomb",
+    "tombeau": "tomb",
+    "temple": "temple",
+    "crypte": "crypt",
+    "tour": "tower",
+    "grotte": "cave",
+    "caverne": "cavern",
+    "mine": "mine",
+    "forteresse": "fortress",
+    "chateau": "castle",
+    "palais": "palace",
+    "donjon": "keep",
+    "dragon": "dragon",
+    "rois": "kings",
+    "roi": "king",
+    "serpent": "serpent",
+    "serpents": "serpents",
+    "crane": "skull",
+    "mort": "death",
+    "sang": "blood",
+    "os": "bones",
+    "lune": "moon",
+    "soleil": "sun",
+    "froid": "frozen",
+    "glace": "ice",
+    "feu": "fire",
+    "eau": "water",
+    "pierre": "stone",
+    "fer": "iron",
+    "or": "gold",
+}
+
+
+def _norm_fr(texte: str) -> str:
+    """Minuscules, sans accents, espaces/apostrophes → espace unique."""
+    import unicodedata as _ud
+    t = (texte or "").strip().lower()
+    t = _ud.normalize("NFKD", t)
+    t = "".join(c for c in t if not _ud.combining(c))
+    t = t.replace("_", " ").replace("-", " ").replace("'", " ").replace("’", " ")
+    return " ".join(t.split())
+
+
+def _salle_en(salle_type: str) -> str:
+    """Type de salle FR (ou déjà EN) → terme anglais sûr pour le prompt."""
+    t = _norm_fr(salle_type)
+    if not t:
+        return "room"
+    if t in _SALLES_FR_EN:
+        return _SALLES_FR_EN[t]
+    # Composé inconnu : mot à mot ; un seul mot non mappé → générique.
+    parts = [_SALLES_FR_EN.get(m) for m in t.split()]
+    if parts and all(parts):
+        return " ".join(parts)
+    return "room"
+
+
+def _donjon_en(donjon_id: str) -> str:
+    """Identifiant/nom de donjon (souvent un slug FR) → description anglaise.
+    Tout mot non mappé → « ancient dungeon » (sûr, évite le franglais).
+    Le « the » initial est retiré : le template fournit déjà l'article « a »."""
+    d = _norm_fr(donjon_id)
+    if not d or d == "dungeon":
+        return "ancient dungeon"
+    parts = [_MOTS_FR_EN.get(m) for m in d.split()]
+    if parts and all(parts):
+        nom = " ".join(parts)
+        return nom[4:] if nom.startswith("the ") else nom
+    return "ancient dungeon"
+
+
+def _article(nom: str) -> str:
+    """« a » ou « an » selon l'initiale du nom anglais qui suit."""
+    return "an" if nom[:1].lower() in "aeiou" else "a"
 
 
 def scene_prompt(description: str) -> str:

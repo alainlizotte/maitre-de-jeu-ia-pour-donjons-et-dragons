@@ -21,6 +21,7 @@ Spécificité de l'app standalone :
 
 from __future__ import annotations
 
+import asyncio
 import os
 import random
 from typing import Any, Optional
@@ -797,10 +798,49 @@ async def _illustrer_salle(
     if os.path.isfile(dest):
         img_src = "cache"
     else:
-        salle_type = salle.get("type", "room")
-        prompt = lieu_prompt(salle_type, donjon.get("id", ""))
-        r = await generer_averti(ctx, "lieu", prompt, dest)
-        img_src = "comfyui" if r else "—"
+        # Scène prégénérée (scripts/pregen_scenes.py) : sert l'image
+        # instantanément sans solliciter ComfyUI — évite le blocage du jeu
+        # quand la file de génération est saturée.
+        pregen = _scene_pregen_cache(ctx, str(donjon.get("id") or ""), str(salle.get("type") or ""))
+        if pregen:
+            try:
+                salle["image_url"] = _url_for(pregen, ctx.data_dir)
+                donjon["grille"] = _dict_vers_grille(salles)
+                _sync_etage(donjon)
+                etat = _charger_etat(ctx)
+                etat["donjon"] = donjon
+                _sauver_etat(ctx, etat)
+                cb = getattr(ctx, "on_event", None)
+                if cb is not None:
+                    try:
+                        await cb({
+                            "type": "image",
+                            "usage": "lieu",
+                            "image": salle["image_url"],
+                            "msg": f"🖼️ Illustration salle ({nx},{ny}) (cache prégénéré).",
+                        })
+                    except Exception:
+                        pass
+                return "cache"
+            except Exception:
+                pass
+        # Pas de cache ni de prégénéré → génération ComfyUI EN ARRIÈRE-PLAN
+        # (non-bloquant). Le tool renvoie immédiatement ; l'illustration, une
+        # fois prête, est persistée dans l'état et poussée à la galerie via
+        # l'événement temps réel. Le jeu ne bloque JAMAIS sur ComfyUI.
+        _lancer_generation_salle(
+            ctx,
+            donjon={
+                "id": donjon.get("id"),
+                "grille": _dict_vers_grille(salles),
+                "etage": donjon.get("etage"),
+            },
+            nx=nx,
+            ny=ny,
+            dest=dest,
+            slug=slug,
+        )
+        img_src = "—"
     if img_src != "—":
         salle["image_url"] = _url_for(dest, ctx.data_dir)
         # Re-sauve l'état avec l'URL d'image
@@ -823,6 +863,83 @@ async def _illustrer_salle(
             except Exception:
                 pass
     return img_src
+
+
+_BACKGROUND_TASKS: set[Any] = set()
+
+
+def _lancer_generation_salle(
+    ctx: ToolContext,
+    *,
+    donjon: dict[str, Any],
+    nx: int,
+    ny: int,
+    dest: str,
+    slug: str,
+) -> None:
+    """Lance la génération ComfyUI de l'illustration de salle en arrière-plan.
+
+    Non-bloquant (fire-and-forget) : crée une tâche asyncio qui, une fois
+    l'image prête, met à jour l'état du donjon et pousse l'événement temps
+    réel. La tâche est conservée dans `_BACKGROUND_TASKS` pour éviter le
+    garbage-collection prématuré, et se retire du set à la fin.
+    """
+
+    async def _gen() -> None:
+        try:
+            from ..image.helpers import generer_averti, lieu_prompt
+            salle_type = "room"
+            try:
+                etat = _charger_etat(ctx)
+                salle = next(
+                    (s for s in (etat.get("donjon") or {}).get("grille", [])
+                     if s.get("x") == nx and s.get("y") == ny),
+                    None,
+                )
+                if salle:
+                    salle_type = str(salle.get("type") or "room")
+            except Exception:
+                pass
+            prompt = lieu_prompt(salle_type, str(donjon.get("id") or ""))
+            r = await generer_averti(ctx, "lieu", prompt, dest)
+            if not r or not os.path.isfile(dest):
+                return
+            # Persist l'URL d'image sur la salle correspondante.
+            try:
+                etat = _charger_etat(ctx)
+                dj = etat.setdefault("donjon", {}) or {}
+                salle = next(
+                    (s for s in dj.get("grille", [])
+                     if s.get("x") == nx and s.get("y") == ny),
+                    None,
+                )
+                if salle is not None:
+                    salle["image_url"] = _url_for(dest, ctx.data_dir)
+                    _sauver_etat(ctx, etat)
+            except Exception:
+                pass
+            cb = getattr(ctx, "on_event", None)
+            if cb is not None:
+                try:
+                    await cb({
+                        "type": "image",
+                        "usage": "lieu",
+                        "image": _url_for(dest, ctx.data_dir),
+                        "msg": f"🖼️ Illustration salle ({nx},{ny}).",
+                    })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    try:
+        task = asyncio.create_task(_gen())
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
+    except RuntimeError:
+        # Pas d'event loop actif (ex. appel sync hors asyncio) : on renonce
+        # silencieusement — l'illustration sera générée à la prochaine visite.
+        pass
 
 
 @tool
@@ -1107,6 +1224,54 @@ def _slug_image(texte: str) -> str:
     return slug or "scene"
 
 
+def _scene_pregen_cache(ctx: ToolContext, titre: str, description: str) -> Optional[str]:
+    """Renvoie le chemin d'une image de scène PRÉ-GÉNÉRÉE en cache, sinon None.
+
+    Les scènes pré-générées (scripts/pregen_scenes.py) sont stockées dans
+    `data/images_scenes/pregen/` avec un manifest par scénario
+    (`pregen/<scenario_id>.json`) mappant un slug `_slug_image(titre|desc)` vers
+    son fichier PNG. Ici on recherche ce manifest (scénario courant puis tous
+    les manifests) : si le slug correspond ET que le PNG existe, `illustration_scene`
+    servira l'image instantanément sans solliciter ComfyUI.
+    """
+    import json as _json
+    try:
+        base = os.path.join(ctx.data_dir, "images_scenes", "pregen")
+        if not os.path.isdir(base):
+            return None
+        slug = _slug_image(titre or description)
+        manifests: list[str] = []
+        # Manifest du scénario courant d'abord (source quete) — on le charge en
+        # premier pour prioriser les scènes du scénario actif.
+        try:
+            from ..game.state import PartyState
+            etat = PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id).load()
+            source = str((etat.get("quete") or {}).get("source") or "")
+            sid = source.split("]", 1)[0].lstrip("[").strip() or ""
+            if sid and os.path.isfile(os.path.join(base, f"{sid}.json")):
+                manifests.append(os.path.join(base, f"{sid}.json"))
+        except Exception:                                           # noqa: BLE001
+            pass
+        for name in sorted(os.listdir(base)):
+            if name.endswith(".json"):
+                p = os.path.join(base, name)
+                if p not in manifests:
+                    manifests.append(p)
+        for mp in manifests:
+            try:
+                with open(mp, encoding="utf-8") as f:
+                    manifest = _json.load(f)
+            except (OSError, _json.JSONDecodeError):
+                continue
+            if slug in manifest and manifest[slug].get("file"):
+                fpath = os.path.join(base, str(manifest[slug]["file"]))
+                if os.path.isfile(fpath):
+                    return fpath
+    except Exception:                                               # noqa: BLE001
+        return None
+    return None
+
+
 @tool
 async def illustration_scene(ctx: ToolContext, description: str, titre: str = "") -> ToolResult:
     """
@@ -1144,6 +1309,28 @@ async def illustration_scene(ctx: ToolContext, description: str, titre: str = ""
         return ToolResult(text=f"❌ Dossier images inaccessible : {e}")
     dest = os.path.join(cache_dir, f"{_slug_image(titre or description)}.png")
     url = _url_for(dest, ctx.data_dir)
+
+    # Scène PRÉ-GÉNÉRÉE ? (scripts/pregen_scenes.py) → cache hit instantané,
+    # on sert l'image sans solliciter ComfyUI.
+    pregen = _scene_pregen_cache(ctx, titre, description)
+    if pregen:
+        used_url = _url_for(pregen, ctx.data_dir)
+        libelle = titre or (description[:60] + ("…" if len(description) > 60 else ""))
+        cb = getattr(ctx, "on_event", None)
+        if cb is not None:
+            try:
+                await cb({
+                    "type": "image",
+                    "usage": "lieu",
+                    "image": used_url,
+                    "msg": f"🖼️ Scène illustrée (cache) : {libelle}",
+                })
+            except Exception:                                       # noqa: BLE001
+                pass
+        return ToolResult(
+            text=f"🖼️ Scène illustrée (cache prégénérité) (« {libelle} ») : {used_url}",
+            state_patch={"image_scene": used_url},
+        )
 
     from ..image.helpers import generer_averti, scene_prompt
     r = await generer_averti(ctx, "lieu", scene_prompt(description), dest)

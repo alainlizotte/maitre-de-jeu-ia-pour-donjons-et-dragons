@@ -54,6 +54,36 @@ def _norm(texte: str) -> str:
     return "".join(c for c in nf if not unicodedata.combining(c))
 
 
+def _scenes_catalogue(sid: str) -> list[tuple[str, str]]:
+    """Charge les scènes curées (lieux, événements, PNJ, trésor) pour `sid`.
+
+    Cherche `data/scenes_catalogue_<univers>.py` puis les modules
+    `scenes_catalogue_*.py` proches du scénario ; renvoie la liste de
+    (titre, description) si le scénario y figure, sinon [].
+    """
+    import importlib.util
+    scenes_dir = os.path.join(DATA_DIR, "scenes_catalogue_laelith.py")
+    # Le catalogue curé est un dict : {scenario_id: [(titre, desc), ...]}
+    for path in (
+        os.path.join(os.path.dirname(DATA_DIR), "data", "scenes_catalogue_laelith.py"),
+        scenes_dir,
+    ):
+        if not os.path.isfile(path):
+            continue
+        spec = importlib.util.spec_from_file_location("_scenes_cat", path)
+        if spec is None or spec.loader is None:
+            continue
+        mod = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(mod)
+        except Exception:                                   # noqa: BLE001
+            continue
+        data = getattr(mod, "SCENES_LAELITH", {})
+        if sid in data:
+            return list(data[sid])
+    return []
+
+
 # --------------------------------------------------------------------------- #
 #  Dérivation de candidats scènes depuis le texte du PDF
 # --------------------------------------------------------------------------- #
@@ -154,6 +184,9 @@ async def main() -> int:
     ap.add_argument("--pdf", action="store_true",
                     help="dériver aussi des scènes depuis le texte PDF")
     ap.add_argument("--max-pdf", type=int, default=4, help="nb max de scènes dérivées du PDF")
+    ap.add_argument("--catalogue", action="store_true",
+                    help="ajouter les scènes curées du catalogue (salles/événements/PNJ/trésor) "
+                         "pour les scénarios dispos (data/scenes_catalogue_*.py)")
     args = ap.parse_args()
 
     ctx = ToolContext(partie_id="pregen", joueur="admin", data_dir=DATA_DIR)
@@ -208,9 +241,16 @@ async def main() -> int:
                         scenes.append(("", b))
                 if bruts:
                     print(f"  {sid} — {len(bruts)} scène(s) dérivées du PDF déduites")
+        if args.catalogue:
+            cat = _scenes_catalogue(sid)
+            _titles = { _norm(t) for t, _ in scenes }
+            for titre, desc in cat:
+                if _norm(titre) not in _titles:
+                    scenes.append((titre, desc))
+            if cat:
+                print(f"  {sid} — {len(cat)} scène(s) curées du catalogue ajoutées")
         if not scenes:
             print(f"  {sid} — aucune scène (fournis --scenes et/ou --pdf)")
-            continue
         print(f"[{sid}] {len(scenes)} scène(s)")
         total += await _pregen(backend, sid, scenes)
 

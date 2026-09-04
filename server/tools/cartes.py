@@ -1272,6 +1272,80 @@ def _scene_pregen_cache(ctx: ToolContext, titre: str, description: str) -> Optio
     return None
 
 
+def _norm_slug(text: str) -> str:
+    """Normalisation accent/casse-insensible pour comparer des libellés
+    de lieux/étapes entre le manifest prégénéré et le texte de narration.
+
+    On conserve les espaces (et on convertit `_` des slugs en espace) pour
+    permettre une recherche par sous-chaîne de mots, insensible aux accents,
+    à la casse et aux apostrophes."""
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", (text or "").lower())
+    nf = nf.replace("_", " ").replace("'", " ").replace("’", " ")
+    nf = "".join(c for c in nf if not _ud.combining(c))
+    return " ".join(nf.split())
+
+
+def _manifest_scenario(ctx: ToolContext, sid: str) -> dict:
+    """Renvoie le manifest prégénéré du scénario `sid` (ou {} absent/corrompu)."""
+    import json as _json
+    try:
+        base = os.path.join(ctx.data_dir, "images_scenes", "pregen")
+        p = os.path.join(base, f"{sid}.json")
+        if not os.path.isfile(p):
+            return {}
+        with open(p, encoding="utf-8") as f:
+            data = _json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:                                               # noqa: BLE001
+        return {}
+
+
+def serve_scene_si_pregen(
+    ctx: ToolContext,
+    titre: str,
+    description: str = "",
+    sid: str = "",
+) -> Optional[str]:
+    """Sert en cache une scène prégénérée correspondant à `titre`/`description`.
+
+    Variante « hook post-tour » : d'abord un match EXACT par slug
+    (`_scene_pregen_cache`), sinon un match FUZZY (normalisé accent/casse,
+    sous-chaîne) sur le manifest du scénario `sid`. Sert l'image prégénérée
+    et renvoie son URL publique, ou None. N'appelle JAMAIS ComfyUI (cache
+    uniquement) — d'où la sécurité d'un hook automatique post-tour.
+    """
+    if not (titre or description):
+        return None
+    # 1) Exact (comportement historique : illustration_scene / _scene_pregen_cache)
+    pregen = _scene_pregen_cache(ctx, titre, description)
+    if pregen:
+        return _url_for(pregen, ctx.data_dir)
+    # 2) Fuzzy : on cherche dans le manifest du scénario courant une clé dont
+    #    le libellé normalisé est inclus dans le lieu narré (ou l'inverse).
+    if not sid:
+        try:
+            from ..game.state import PartyState
+            etat = PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id).load()
+            src = str((etat.get("quete") or {}).get("source") or "")
+            sid = src.split("]", 1)[0].lstrip("[").strip() or ""
+        except Exception:                                           # noqa: BLE001
+            pass
+    if sid:
+        manifest = _manifest_scenario(ctx, sid)
+        if manifest:
+            tgt = _norm_slug(titre or description)
+            for key, val in manifest.items():
+                cand = _norm_slug(key)
+                if cand and (cand in tgt or tgt in cand):
+                    fpath = os.path.join(
+                        ctx.data_dir, "images_scenes", "pregen", str(val.get("file") or "")
+                    )
+                    if os.path.isfile(fpath):
+                        return _url_for(fpath, ctx.data_dir)
+    return None
+
+
 @tool
 async def illustration_scene(ctx: ToolContext, description: str, titre: str = "") -> ToolResult:
     """

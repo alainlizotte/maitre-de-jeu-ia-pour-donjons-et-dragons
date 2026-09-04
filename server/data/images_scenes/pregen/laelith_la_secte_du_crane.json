@@ -1,0 +1,32 @@
+{
+  "les_quais_de_laelith": {
+    "titre": "Les quais de Laelith",
+    "description": "les quais animés de Laelith, bateaux, cordages, marchandises, brume sur l'eau, ambiance portuaire",
+    "file": "laelith_la_secte_du_crane_00_les_quais_de_laelith.png",
+    "norm": "les quais de laelith|les quais animes de laelith, bateaux, cordages, marchandises, brume sur l'eau, ambiance portuaire"
+  },
+  "le_temple_du_crane": {
+    "titre": "Le temple du Crâne",
+    "description": "un temple sombre en forme de crâne, lueur violette aux fenêtres, adeptes encapuchonnés à l'entrée",
+    "file": "laelith_la_secte_du_crane_01_le_temple_du_crane.png",
+    "norm": "le temple du crane|un temple sombre en forme de crane, lueur violette aux fenetres, adeptes encapuchonnes a l'entree"
+  },
+  "l_antre_de_la_secte_du_crane": {
+    "titre": "L'antre de la secte du Crâne",
+    "description": "la salle de culte de la secte, crânes empilés, cierges, autel macabre, encapuchonnés en cercle",
+    "file": "laelith_la_secte_du_crane_02_l_antre_de_la_secte_du_crane.png",
+    "norm": "l'antre de la secte du crane|la salle de culte de la secte, cranes empiles, cierges, autel macabre, encapuchonnes en cercle"
+  },
+  "le_fouineur_lamb": {
+    "titre": "Le fouineur Lamb",
+    "description": "un fouineur maigre et nerveux en cape, tenant une lanterne, dans une ruelle sombre de Laelith",
+    "file": "laelith_la_secte_du_crane_03_le_fouineur_lamb.png",
+    "norm": "le fouineur lamb|un fouineur maigre et nerveux en cape, tenant une lanterne, dans une ruelle sombre de laelith"
+  },
+  "la_relique_du_crane": {
+    "titre": "La relique du crâne",
+    "description": "un artefact en forme de crâne d'argent posé sur un autel, émanant une lueur malveillante",
+    "file": "laelith_la_secte_du_crane_04_la_relique_du_crane.png",
+    "norm": "la relique du crane|un artefact en forme de crane d'argent pose sur un autel, emanant une lueur malveillante"
+  }
+}

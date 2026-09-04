@@ -1,0 +1,32 @@
+{
+  "l_auberge_du_sanglier_gris": {
+    "titre": "L'auberge du Sanglier Gris",
+    "description": "une auberge rustique au bord de la route, enseigne au sanglier, lumière chaude aux fenêtres, forêt autour",
+    "file": "laelith_lauberge_du_sanglier_gris_00_l_auberge_du_sanglier_gris.png",
+    "norm": "l'auberge du sanglier gris|une auberge rustique au bord de la route, enseigne au sanglier, lumiere chaude aux fenetres, foret autour"
+  },
+  "la_salle_commune_de_l_auberge": {
+    "titre": "La salle commune de l'auberge",
+    "description": "la salle commune cosy de l'auberge, feu de cheminée, tables de bois, clients attablés, servantes",
+    "file": "laelith_lauberge_du_sanglier_gris_01_la_salle_commune_de_l_auberge.png",
+    "norm": "la salle commune de l'auberge|la salle commune cosy de l'auberge, feu de cheminee, tables de bois, clients attables, servantes"
+  },
+  "la_cave_secrete": {
+    "titre": "La cave secrète",
+    "description": "le réseau souterrain sous l'auberge, celliers humides, barreaux, prisonniers capturés, cloaque",
+    "file": "laelith_lauberge_du_sanglier_gris_02_la_cave_secrete.png",
+    "norm": "la cave secrete|le reseau souterrain sous l'auberge, celliers humides, barreaux, prisonniers captures, cloaque"
+  },
+  "les_geoles_des_ravisseurs": {
+    "titre": "Les geôles des ravisseurs",
+    "description": "une geôle cachée où les héros sont capturés, barreaux, paille, obscurité, une lanterne lointaine",
+    "file": "laelith_lauberge_du_sanglier_gris_03_les_geoles_des_ravisseurs.png",
+    "norm": "les geoles des ravisseurs|une geole cachee ou les heros sont captures, barreaux, paille, obscurite, une lanterne lointaine"
+  },
+  "l_evasion_de_la_cave": {
+    "titre": "L'évasion de la cave",
+    "description": "les héros s'échappent par un passage secret de la cave, lueur de torche, coursive de pierre étroite",
+    "file": "laelith_lauberge_du_sanglier_gris_04_l_evasion_de_la_cave.png",
+    "norm": "l'evasion de la cave|les heros s'echappent par un passage secret de la cave, lueur de torche, coursive de pierre etroite"
+  }
+}

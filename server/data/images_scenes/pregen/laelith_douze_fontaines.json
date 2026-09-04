@@ -1,0 +1,32 @@
+{
+  "la_fontaine_empoisonnee": {
+    "titre": "La fontaine empoisonnée",
+    "description": "une des douze fontaines de Laelith, eau trouble et verdâtre, des villageois malades autour, ambiance inquiétante",
+    "file": "laelith_douze_fontaines_00_la_fontaine_empoisonnee.png",
+    "norm": "la fontaine empoisonnee|une des douze fontaines de laelith, eau trouble et verdatre, des villageois malades autour, ambiance inquietante"
+  },
+  "les_catacombes_de_l_empereur_demon": {
+    "titre": "Les catacombes de l'Empereur-Démon",
+    "description": "le repaire souterrain du vampire, un domaine funèbre de catacombes, cercueils, bougies noires",
+    "file": "laelith_douze_fontaines_01_les_catacombes_de_l_empereur_demon.png",
+    "norm": "les catacombes de l'empereur-demon|le repaire souterrain du vampire, un domaine funebre de catacombes, cercueils, bougies noires"
+  },
+  "le_laboratoire_des_empoisonneurs": {
+    "titre": "Le laboratoire des empoisonneurs",
+    "description": "un laboratoire secret d'alchimie sombre, fioles de poison, cornues, un sbire masqué au travail",
+    "file": "laelith_douze_fontaines_02_le_laboratoire_des_empoisonneurs.png",
+    "norm": "le laboratoire des empoisonneurs|un laboratoire secret d'alchimie sombre, fioles de poison, cornues, un sbire masque au travail"
+  },
+  "l_empereur_demon": {
+    "titre": "L'Empereur-Démon",
+    "description": "le vampire empereur-démon en cape écarlate, se dressant dans son antre, yeux rouges, crocs luisants",
+    "file": "laelith_douze_fontaines_03_l_empereur_demon.png",
+    "norm": "l'empereur-demon|le vampire empereur-demon en cape ecarlate, se dressant dans son antre, yeux rouges, crocs luisants"
+  },
+  "la_place_empoisonnee_de_laelith": {
+    "titre": "La place empoisonnée de Laelith",
+    "description": "la grande place de Laelith en émeute naissante, foule inquiète, fontaine au centre, gardes vigilants",
+    "file": "laelith_douze_fontaines_04_la_place_empoisonnee_de_laelith.png",
+    "norm": "la place empoisonnee de laelith|la grande place de laelith en emeute naissante, foule inquiete, fontaine au centre, gardes vigilants"
+  }
+}

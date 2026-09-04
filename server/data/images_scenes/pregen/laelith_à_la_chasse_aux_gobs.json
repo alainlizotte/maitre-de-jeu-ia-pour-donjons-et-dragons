@@ -1,0 +1,32 @@
+{
+  "la_route_ravagee_par_les_gobelins": {
+    "titre": "La route ravagée par les gobelins",
+    "description": "une route de campagne dévastée par un raid gobelin, charrette renversée, fumée, corps de marchands",
+    "file": "laelith_à_la_chasse_aux_gobs_00_la_route_ravagee_par_les_gobelins.png",
+    "norm": "la route ravagee par les gobelins|une route de campagne devastee par un raid gobelin, charrette renversee, fumee, corps de marchands"
+  },
+  "le_camp_gobelin": {
+    "titre": "Le camp gobelin",
+    "description": "un camp gobelin animé dans les collines, feux de camp, huttes de toile, gobelins armés",
+    "file": "laelith_à_la_chasse_aux_gobs_01_le_camp_gobelin.png",
+    "norm": "le camp gobelin|un camp gobelin anime dans les collines, feux de camp, huttes de toile, gobelins armes"
+  },
+  "la_taniere_du_chef_gobelin": {
+    "titre": "La tanière du chef gobelin",
+    "description": "la grotte du chef gobelin, trône de bois, butins entassés, trophées de voyageurs",
+    "file": "laelith_à_la_chasse_aux_gobs_02_la_taniere_du_chef_gobelin.png",
+    "norm": "la taniere du chef gobelin|la grotte du chef gobelin, trone de bois, butins entasses, trophees de voyageurs"
+  },
+  "le_chef_gobelin_et_sa_garde": {
+    "titre": "Le chef gobelin et sa garde",
+    "description": "les héros affrontent le chef gobelin et sa garde dans sa tanière, combat brutal à la lueur des torches",
+    "file": "laelith_à_la_chasse_aux_gobs_03_le_chef_gobelin_et_sa_garde.png",
+    "norm": "le chef gobelin et sa garde|les heros affrontent le chef gobelin et sa garde dans sa taniere, combat brutal a la lueur des torches"
+  },
+  "la_carte_secrete_des_gobelins": {
+    "titre": "La carte secrète des gobelins",
+    "description": "une carte griffonnée révélant un repaire bien plus vaste, posée sur une table de camp éclairée",
+    "file": "laelith_à_la_chasse_aux_gobs_04_la_carte_secrete_des_gobelins.png",
+    "norm": "la carte secrete des gobelins|une carte griffonnee revelant un repaire bien plus vaste, posee sur une table de camp eclairee"
+  }
+}

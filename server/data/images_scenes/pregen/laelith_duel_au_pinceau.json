@@ -1,0 +1,32 @@
+{
+  "la_place_des_sept_royaumes": {
+    "titre": "La place des Sept Royaumes",
+    "description": "la grande place des Sept Royaumes de Laelith, marché animé, couleurs vives, badauds et étals",
+    "file": "laelith_duel_au_pinceau_00_la_place_des_sept_royaumes.png",
+    "norm": "la place des sept royaumes|la grande place des sept royaumes de laelith, marche anime, couleurs vives, badauds et etals"
+  },
+  "le_duel_pictural": {
+    "titre": "Le duel pictural",
+    "description": "deux artistes peignent face à face sur la place, chevalets, toiles, foule en cercle qui observe",
+    "file": "laelith_duel_au_pinceau_01_le_duel_pictural.png",
+    "norm": "le duel pictural|deux artistes peignent face a face sur la place, chevalets, toiles, foule en cercle qui observe"
+  },
+  "le_portrait_ensorcele": {
+    "titre": "Le portrait ensorcelé",
+    "description": "un portrait d'apparence innocente qui fascine, une lueur magique dans les yeux du tableau, un spectateur ensorcelé",
+    "file": "laelith_duel_au_pinceau_02_le_portrait_ensorcele.png",
+    "norm": "le portrait ensorcele|un portrait d'apparence innocente qui fascine, une lueur magique dans les yeux du tableau, un spectateur ensorcele"
+  },
+  "la_guilde_des_peintres": {
+    "titre": "La guilde des peintres",
+    "description": "l'atelier de la guilde des peintres, toiles partout, palettes, lumière de lanterne, peintres au travail",
+    "file": "laelith_duel_au_pinceau_03_la_guilde_des_peintres.png",
+    "norm": "la guilde des peintres|l'atelier de la guilde des peintres, toiles partout, palettes, lumiere de lanterne, peintres au travail"
+  },
+  "le_maitre_peintre_comploteur": {
+    "titre": "Le maître peintre comploteur",
+    "description": "un peintre à l'air perfide enveloppé d'ombres, un pinceau magique à la main, des toiles vaporeuses derrière lui",
+    "file": "laelith_duel_au_pinceau_04_le_maitre_peintre_comploteur.png",
+    "norm": "le maitre peintre comploteur|un peintre a l'air perfide enveloppe d'ombres, un pinceau magique a la main, des toiles vaporeuses derriere lui"
+  }
+}

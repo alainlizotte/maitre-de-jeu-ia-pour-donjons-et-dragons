@@ -1,0 +1,32 @@
+{
+  "les_ruelles_de_laelith": {
+    "titre": "Les ruelles de Laelith",
+    "description": "les ruelles étroites et colorées de Laelith, maisons penchées, linges suspendus, marché animé",
+    "file": "laelith_le_collier_de_zark_00_les_ruelles_de_laelith.png",
+    "norm": "les ruelles de laelith|les ruelles etroites et colorees de laelith, maisons penchees, linges suspendus, marche anime"
+  },
+  "zark_le_fox_terrier": {
+    "titre": "Zark le fox-terrier",
+    "description": "un petit fox-terrier blanc et écossais au collier de laiton garni de boules de verre multicolores, courant dans une ruelle",
+    "file": "laelith_le_collier_de_zark_01_zark_le_fox_terrier.png",
+    "norm": "zark le fox-terrier|un petit fox-terrier blanc et ecossais au collier de laiton garni de boules de verre multicolores, courant dans une ruelle"
+  },
+  "le_marche_de_laelith": {
+    "titre": "Le marché de Laelith",
+    "description": "le marché animé de Laelith, étals colorés, marchands criant, foule, tissus et fruits exposés",
+    "file": "laelith_le_collier_de_zark_02_le_marche_de_laelith.png",
+    "norm": "le marche de laelith|le marche anime de laelith, etals colores, marchands criant, foule, tissus et fruits exposes"
+  },
+  "le_voleur_au_collier": {
+    "titre": "Le voleur au collier",
+    "description": "un voleur ravisseur fuyant avec le chien au collier étincelant, à travers ruelles et toits",
+    "file": "laelith_le_collier_de_zark_03_le_voleur_au_collier.png",
+    "norm": "le voleur au collier|un voleur ravisseur fuyant avec le chien au collier etincelant, a travers ruelles et toits"
+  },
+  "la_restitution_du_collier": {
+    "titre": "La restitution du collier",
+    "description": "le marchand Amlarag heureux, le fox-terrier Zark dans ses bras, le collier de laiton brillant, devant sa boutique",
+    "file": "laelith_le_collier_de_zark_04_la_restitution_du_collier.png",
+    "norm": "la restitution du collier|le marchand amlarag heureux, le fox-terrier zark dans ses bras, le collier de laiton brillant, devant sa boutique"
+  }
+}

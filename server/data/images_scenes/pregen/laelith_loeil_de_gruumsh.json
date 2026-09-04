@@ -1,0 +1,32 @@
+{
+  "le_temple_maudit_de_gruumsh": {
+    "titre": "Le temple maudit de Gruumsh",
+    "description": "un temple orc souterrain dédié à Gruumsh, autel de pierre noire gravé d'yeux, torches rouges, crânes et tribus orques en prière",
+    "file": "laelith_loeil_de_gruumsh_00_le_temple_maudit_de_gruumsh.png",
+    "norm": "le temple maudit de gruumsh|un temple orc souterrain dedie a gruumsh, autel de pierre noire grave d'yeux, torches rouges, cranes et tribus orques en priere"
+  },
+  "la_caverne_du_rituel": {
+    "titre": "La caverne du rituel",
+    "description": "une vaste caverne où un rituel de destruction orc est lancé, cercle runique rougeoyant, chamane orc en transe, énergie sombre",
+    "file": "laelith_loeil_de_gruumsh_01_la_caverne_du_rituel.png",
+    "norm": "la caverne du rituel|une vaste caverne ou un rituel de destruction orc est lance, cercle runique rougeoyant, chamane orc en transe, energie sombre"
+  },
+  "le_repaire_du_culte": {
+    "titre": "Le repaire du culte",
+    "description": "le quartier général du culte orc, une salle pillée pleine de trophées, armes rouillées et Goblins gardiens",
+    "file": "laelith_loeil_de_gruumsh_02_le_repaire_du_culte.png",
+    "norm": "le repaire du culte|le quartier general du culte orc, une salle pillee pleine de trophees, armes rouillees et goblins gardiens"
+  },
+  "le_combat_contre_le_champion_orc": {
+    "titre": "Le combat contre le champion orc",
+    "description": "les héros affrontent le champion orc de Gruumsh dans une arène de pierre, épée ensanglantée, hurlements de guerre",
+    "file": "laelith_loeil_de_gruumsh_03_le_combat_contre_le_champion_orc.png",
+    "norm": "le combat contre le champion orc|les heros affrontent le champion orc de gruumsh dans une arene de pierre, epee ensanglantee, hurlements de guerre"
+  },
+  "la_relique_de_gruumsh": {
+    "titre": "La relique de Gruumsh",
+    "description": "un lourd médaillon de bronze à l'effigie d'un œil, posé sur l'autel, irradiant une lueur mauve menaçante",
+    "file": "laelith_loeil_de_gruumsh_04_la_relique_de_gruumsh.png",
+    "norm": "la relique de gruumsh|un lourd medaillon de bronze a l'effigie d'un œil, pose sur l'autel, irradiant une lueur mauve menacante"
+  }
+}

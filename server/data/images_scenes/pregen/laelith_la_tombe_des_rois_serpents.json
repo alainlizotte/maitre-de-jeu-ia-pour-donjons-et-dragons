@@ -1,0 +1,32 @@
+{
+  "l_entree_de_la_tombe_des_rois_serpents": {
+    "titre": "L'entrée de la tombe des Rois Serpents",
+    "description": "l'entrée sombre d'un tombeau sous la cité-fantôme, portail de pierre à têtes de serpents, torches vacillantes",
+    "file": "laelith_la_tombe_des_rois_serpents_00_l_entree_de_la_tombe_des_rois_serpents.png",
+    "norm": "l'entree de la tombe des rois serpents|l'entree sombre d'un tombeau sous la cite-fantome, portail de pierre a tetes de serpents, torches vacillantes"
+  },
+  "la_salle_des_rois_serpents": {
+    "titre": "La salle des Rois Serpents",
+    "description": "la chambre funéraire des anciens Rois Serpents, sarcophages de pierre, fresques de serpents, poussière et toiles d'araignée",
+    "file": "laelith_la_tombe_des_rois_serpents_01_la_salle_des_rois_serpents.png",
+    "norm": "la salle des rois serpents|la chambre funeraire des anciens rois serpents, sarcophages de pierre, fresques de serpents, poussiere et toiles d'araignee"
+  },
+  "le_passage_piege": {
+    "titre": "Le passage piégé",
+    "description": "un couloir étroit criblé de pièges, flèches et fosses, un aventurier tendu, torche à la main",
+    "file": "laelith_la_tombe_des_rois_serpents_02_le_passage_piege.png",
+    "norm": "le passage piege|un couloir etroit crible de pieges, fleches et fosses, un aventurier tendu, torche a la main"
+  },
+  "le_gardien_serpent": {
+    "titre": "Le gardien serpent",
+    "description": "un gigantesque serpent gardien se dresse devant les héros dans la pénombre, écailles luisantes, œil reptilien",
+    "file": "laelith_la_tombe_des_rois_serpents_03_le_gardien_serpent.png",
+    "norm": "le gardien serpent|un gigantesque serpent gardien se dresse devant les heros dans la penombre, ecailles luisantes, œil reptilien"
+  },
+  "le_tresor_des_rois_serpents": {
+    "titre": "Le trésor des rois serpents",
+    "description": "un trésor de bijoux, couronnes et or entassé, un diadème de serpent étincelant sur un piédestal",
+    "file": "laelith_la_tombe_des_rois_serpents_04_le_tresor_des_rois_serpents.png",
+    "norm": "le tresor des rois serpents|un tresor de bijoux, couronnes et or entasse, un diademe de serpent etincelant sur un piedestal"
+  }
+}

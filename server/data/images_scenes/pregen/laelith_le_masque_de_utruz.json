@@ -1,0 +1,32 @@
+{
+  "les_geoles_du_roi_dieu": {
+    "titre": "Les geôles du Roi-Dieu",
+    "description": "les geôles sombres du Roi-Dieu, barreaux, chaînes, un demi-elfe prisonnier à la sortie",
+    "file": "laelith_le_masque_de_utruz_00_les_geoles_du_roi_dieu.png",
+    "norm": "les geoles du roi-dieu|les geoles sombres du roi-dieu, barreaux, chaines, un demi-elfe prisonnier a la sortie"
+  },
+  "le_voleur_demi_elfe": {
+    "titre": "Le voleur demi-elfe",
+    "description": "un voleur demi-elfe filant dans les ruelles de Laelith, un masque de bronze serré contre lui, regard furtif",
+    "file": "laelith_le_masque_de_utruz_01_le_voleur_demi_elfe.png",
+    "norm": "le voleur demi-elfe|un voleur demi-elfe filant dans les ruelles de laelith, un masque de bronze serre contre lui, regard furtif"
+  },
+  "le_masque_de_bronze_d_utruz": {
+    "titre": "Le masque de bronze d'Utruz",
+    "description": "un masque de bronze ancien gravé de runes, posé sur une table, à la lueur d'une bougie",
+    "file": "laelith_le_masque_de_utruz_02_le_masque_de_bronze_d_utruz.png",
+    "norm": "le masque de bronze d'utruz|un masque de bronze ancien grave de runes, pose sur une table, a la lueur d'une bougie"
+  },
+  "le_tresor_cache": {
+    "titre": "Le trésor caché",
+    "description": "une cachette secrète révélant un trésor d'or et de joyaux, derrière une pierre mouvante du mur",
+    "file": "laelith_le_masque_de_utruz_03_le_tresor_cache.png",
+    "norm": "le tresor cache|une cachette secrete revelant un tresor d'or et de joyaux, derriere une pierre mouvante du mur"
+  },
+  "l_ennemi_du_passe": {
+    "titre": "L'ennemi du passé",
+    "description": "un ancien ennemi surgit de l'ombre devant les héros, cape déchirée, regard menaçant, dans une ruelle nocturne",
+    "file": "laelith_le_masque_de_utruz_04_l_ennemi_du_passe.png",
+    "norm": "l'ennemi du passe|un ancien ennemi surgit de l'ombre devant les heros, cape dechiree, regard menacant, dans une ruelle nocturne"
+  }
+}

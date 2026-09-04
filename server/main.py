@@ -2572,6 +2572,55 @@ async def _handle_say(
                 print(f"[dnd35] Post-traitement combat (moteur/images) "
                       f"échoué (ignoré) : {e}")
 
+            # 5quater-bis. 🖼️ Scènes cousues d'avance par univers pilote
+            # (Laelith) : la galerie « Scènes » s'alimente automatiquement
+            # quand le groupe change de lieu/un moment marquant est narré.
+            # On ne sert QUE des prégénérées (cache, aucun appel ComfyUI) —
+            # zéro latence, zéro risque. `memoire.scene_hook_dernier` mémorise
+            # le dernier slug servi pour ne pas réafficher la même image à
+            # chaque tour.
+            try:
+                from .tools.cartes import serve_scene_si_pregen
+                etat_sc = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                if etat_sc.get("phase") != "combat":
+                    mem_sc = etat_sc.setdefault("memoire", {})
+                    pos_sc = mem_sc.get("position") or {}
+                    lieu_sc = str(pos_sc.get("lieu") or "").strip()
+                    # Champ de recherche : le lieu courant, sinon l'objectif, sinon le pitch.
+                    src_sc = str((etat_sc.get("quete") or {}).get("source") or "")
+                    sid_sc = src_sc.split("]", 1)[0].lstrip("[").strip() or ""
+                    cible_sc = lieu_sc or str(
+                        (etat_sc.get("quete") or {}).get("pitch") or ""
+                    ).strip()
+                    if lieu_sc and cible_sc:
+                        url_sc = serve_scene_si_pregen(
+                            ctx, lieu_sc, cible_sc, sid=sid_sc
+                        )
+                        if url_sc and mem_sc.get("scene_hook_dernier") != url_sc:
+                            mem_sc["scene_hook_dernier"] = url_sc
+                            PartyState(
+                                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                partie_id=partie_id,
+                            ).save(etat_sc)
+                            result.state_patches.append({"image_scene": url_sc})
+                            cb_sc = getattr(ctx, "on_event", None)
+                            if cb_sc is not None:
+                                try:
+                                    await cb_sc({
+                                        "type": "image",
+                                        "usage": "lieu",
+                                        "image": url_sc,
+                                        "msg": f"🖼️ Scène (cache) : {lieu_sc}",
+                                    })
+                                except Exception:                     # noqa: BLE001
+                                    pass
+                            print(f"[dnd35] Scène prégénérée servie : {lieu_sc} → {url_sc}")
+            except Exception as e:                                   # noqa: BLE001
+                print(f"[dnd35] Hook scène prégénérée échoué (ignoré) : {e}")
+
             # 5ter. ⚔️ Rattrapage combat narré EN PROSE mais non engagé.
             # Le petit modèle écrit parfois « Le combat commence ! Le zombie
             # bondit et t'attaque… » avec les jets/dégâts dans la narration,

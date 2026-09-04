@@ -80,11 +80,15 @@ export function PartyPage() {
 
     // Monstres : journal d'abord (anciens → récents), puis combattants
     // vivants dont l'image ne serait pas encore au journal.
+    // ⚔️ Le journal n'est réhydraté qu'en phase de combat : hors combat,
+    // aucun portrait de monstre ne doit s'afficher (même d'anciens).
     const urls = new Set<string>();
-    for (const r of etat.rencontres_images ?? []) {
-      if (r?.url && !urls.has(r.url)) {
-        urls.add(r.url);
-        addMonster({ nom: r.nom, url: r.url });
+    if (etat.phase === "combat") {
+      for (const r of etat.rencontres_images ?? []) {
+        if (r?.url && !urls.has(r.url)) {
+          urls.add(r.url);
+          addMonster({ nom: r.nom, url: r.url });
+        }
       }
     }
     for (const m of etat.monstres_combat ?? []) {

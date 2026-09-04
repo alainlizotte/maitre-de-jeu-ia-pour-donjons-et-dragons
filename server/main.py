@@ -35,6 +35,7 @@ from fastapi.staticfiles import StaticFiles
 from . import auth as auth_mod
 from . import catalogue as catalogue_mod
 from . import persos as persos_mod
+from . import sorts as sorts_mod
 from .config import AppConfig, get_config, set_config
 from .game.session import PartySession, registry as sessions
 from .game.state import PartyState, SCHEMA_PARTIE
@@ -64,6 +65,96 @@ _ACTION_COMBAT_RE = _re_mod.compile(
     r"|soins|guér\w*|charge\w*|degat\w*|dégâts?)\b",
     _re_mod.IGNORECASE,
 )
+
+# Détection d'un combat narré EN PROSE par le LLM (le petit modèle écrit
+# parfois « Le combat commence ! Le zombie charge… » et enchaîne jets/dégâts
+# dans la narration SANS appeler `engager_combat`). Le serveur rattrape alors
+# la phase officielle pour que l'ordre d'initiative, le suivi des PV et la
+# rotation restent conformes (cf. bloc 5ter sous le moteur de combat).
+_COMBAT_PROSE_MARKERS = (
+    "le combat commence", "le combat éclate", "le combat s'engage",
+    "le combat est lancé", "combat engagé", "les hostilités",
+    "charge vers vous", "se jette sur vous", "se précipite sur vous",
+    "bondit vers vous", "vous attaque", "attaque toi",
+    "t'attaque", "vous agresse", "se rue sur vous",
+    "prend son tour", "c'est au tour de",
+)
+# Marqueurs de combat déjà CLÔS dans la narration : on n'engage JAMAIS un
+# combat rétroactivement si l'issue a déjà été racontée (victoire, défaite,
+# fuite, mort…), pour ne pas écraser un combat terminé.
+_COMBAT_PROSE_END_MARKERS = (
+    "partie est perdue", "partie est gagnée", "combat est terminé",
+    "combat terminé", "combat est clos", "tous les héros sont tombés",
+    "vous êtes vaincu", "vous avez vaincu", "les monstres sont vaincus",
+    "est vaincu", "sont vaincus", "est détruit", "sont détruits",
+    "s'effondre à terre", "s'effondrent à terre", "le monstre s'écroule",
+    "a été éliminé", "ont été éliminés", "prenez la fuite", "prend la fuite",
+    "vous fuyez", "se rendent", "game over", "vous êtes mort",
+)
+
+# Marqueurs d'un déplacement / exploration narré EN PROSE par le LLM (le petit
+# modèle décrit souvent une progression sans appeler `carte_donjon_*`).
+_EXPLO_PROSE_MARKERS = (
+    "avancez", "avancent", "avançons", "avance ", "vous traversez",
+    "vous pénétrez", "vous entrez", "vous explorez", "vous vous enfoncez",
+    "vous empruntez", "vous ouvrez la porte", "poussez la porte",
+    "pénètrent", "explorent", "descendez le couloir", "remontez le couloir",
+    "nouvelle salle", "la pièce suivante", "au détour du couloir",
+    "vous suivez le passage", "vous franchissez",
+)
+# Marqueurs d'une exploration CLÔSE (retour, sortie, arrêt) : pas de rattrapage.
+_EXPLO_PROSE_END_MARKERS = (
+    "vous revenez", "vous rebroussez", "vous sortez", "vous repartez",
+    "vous vous arrêtez", "la pièce s'arrête", "cul-de-sac",
+)
+
+# Outils de la phase d'exploration : dès qu'un de ces outils a été appelé,
+# l'exploration a été correctement enregistrée côté serveur.
+_EXPLORATION_TOOLS = {
+    "carte_donjon_entrer", "carte_donjon_explorer", "carte_donjon_etage",
+    "monstre_consulter", "carte_donjon_voir",
+}
+
+# Outils qui valident la phase d'ouverture (le chargement du scénario choisi).
+_SCENARIO_LOAD_TOOLS = {"scenarios_laelith_charger", "scenarios_laelith_lister"}
+
+# Détection d'une demande explicite de choisir/charger un scénario (tour de
+# phase "load"). Sert de garde : on n'auto-charge JAMAIS le scénario pendant
+# la création de personnages (aussi en phase "opening"), uniquement quand le
+# joueur demande à voir/choisir les missions disponibles.
+_SCENARIO_CHOICE_RE = _re_mod.compile(
+    r"\b(scénario\w*|scenario\w*|missions?\s+proposees?|missions?\s+disponi\w*"
+    r"|scenarios?_laelith|choisir\s+un\s+scénario|charger\s+le\s+scénario"
+    r"|dues\s+for\s+the\s+dead|crypts\s+kelemvor|tombe\s+des\s+rois)\b",
+    _re_mod.IGNORECASE,
+)
+
+# Outils qui persistent un objet dans l'inventaire d'un PJ. Utilisé par
+# 5quater-c : si le MJ annonce une acquisition sans appeler l'un d'eux, on le
+# ré-invoque pour forcer l'enregistrement.
+_INVENTAIRE_TOOLS = {
+    "inventaire_ajouter", "inventaire_retirer", "inventaire_consommer_munition",
+}
+
+# Détection d'une acquisition/looting d'objet annoncé par le joueur ou le MJ :
+# déclenche le rattrapage 5quater-c si l'objet n'a pas été enregistré.
+_ITEM_ACQUISITION_RE = _re_mod.compile(
+    r"\b(ramass\w*|récup\w*|récupèr\w*|trouv\w*|obtien?t|obtenir|acquis\w*"
+    r"|pill\w*|prise au|je prend|il prend|elle prend|gagne\w* un|obtient un"
+    r"|ajout\w* à mon inventaire|dans mon inventaire|au trésor|butin|loot\w*"
+    r"|donne\w* à|offre\w* à|cède\w* à)\b",
+    _re_mod.IGNORECASE,
+)
+
+# Détection d'une demande de SOIN / guérison (hors combat aussi) : le petit
+# modèle 9B narre « Je lance les dés et soigne X » SANS appeler
+# `fiche_perso_soigner`. On rejoue alors (5quater-d) pour que les PV changent.
+_SOIN_RE = _re_mod.compile(
+    r"\b(soign\w*|soins|guéri\w*|guéris\w*|guériss\w*|répar\w*|cicatris\w*"
+    r"|soins\s+légers|lancer\s+des\s+et\s+soigne|ressusci\w*)\b",
+    _re_mod.IGNORECASE,
+)
+
 
 # Tools qui CONSOMMENT l'action standard du personnage courant : dès que le
 # joueur actif en a appelé un, le moteur serveur avance la rotation (le LLM
@@ -690,6 +781,22 @@ async def persos_modele() -> dict[str, Any]:
         "competences_classe": catalogue_mod.COMPETENCES_CLASSE,
         "points_competence": catalogue_mod.POINTS_COMPETENCE,
         "or_depart": catalogue_mod.OR_DEPART,
+        # Magie 3.5 : catalogue des sorts (filtré par classe/niveau côté
+        # client), tables d'emplacements par jour + règles de lancement.
+        "sorts": [
+            {
+                "nom": s["nom"], "niveau": s["niveau"], "ecole": s["ecole"],
+                "classes": s["classes"], "incantation": s["incantation"],
+                "portee": s["portee"], "composantes": s["composantes"],
+                "duree": s["duree"], "sauvegarde": s.get("sauvegarde", ""),
+                "description": s.get("description", ""),
+            }
+            for s in sorts_mod.SORTS
+        ],
+        "sorts_emplacements": sorts_mod._E,
+        "sorts_connus_max": sorts_mod.CONNUS,
+        "sorts_carac": sorts_mod.CARAC_INCANTATION,
+        "sorts_prepare": sorted(sorts_mod.PREPARE),
     }
 
 
@@ -943,6 +1050,14 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
             detail=f"Trop de dons ({len(dons)}) : maximum {max_dons} au niveau "
                    f"{niveau} (bonus humain inclus le cas échéant).",
         )
+    # Bonus de PV des dons (ex. « Dur à cuire » = +3 PV) appliqué ici, comme
+    # dans fiche_perso_creer / fiche_perso_creer_rapide. Sans cela, pv/pv_max
+    # omettaient l'effet des dons lors de la création via le formulaire.
+    from .tools.fiches import _bonus_dons_pv
+    bonus_pv = _bonus_dons_pv(dons, niveau)
+    pv = int(calculs["pv"]) + bonus_pv
+    pv_max = int(calculs["pv_max"]) + bonus_pv
+
     competences = payload.get("competences") or {}
     # Budget de points de compétence (même formule que le client) :
     # par_niveau = max(1, base_classe + mod_INT) ; total = par_niveau × (niveau+3)
@@ -968,6 +1083,70 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
                        f"{budget_comp} au niveau {niveau}.",
             )
 
+    # --------------------------- Sorts (magie 3.5) ---------------------------
+    # Validation stricte : chaque sort doit exister, appartenir à la liste de
+    # CLASSE et être castable à ce niveau. Sorcier/Barde : budget de sorts
+    # connus (table PHB). Magicien : grimoire de départ (tous les tours de
+    # magicien + 3+mod INT sorts de niveau 1). Clerc/Druide/Paladin/Rodeur :
+    # liste complète de classe (préparation quotidienne en jeu).
+    classe_canon = persos_mod.resoudre_classe(classe) or classe
+    sorts_payload = payload.get("sorts") or {}
+    sorts_connus = sorts_payload.get("connus") or []
+    sorts_prepares = sorts_payload.get("prepares") or {}
+    if not isinstance(sorts_connus, list) or not isinstance(sorts_prepares, dict):
+        raise HTTPException(status_code=400, detail="Champ sorts invalide.")
+    if sorts_connus or sorts_prepares:
+        if not sorts_mod.est_lanceur(classe_canon):
+            raise HTTPException(
+                status_code=400,
+                detail=f"La classe {classe_canon} ne lance pas de sorts.",
+            )
+        nls = sorts_mod.niveau_sort_max(classe_canon, niveau)
+        for s in sorts_connus + list(sorts_prepares.keys()):
+            sp = sorts_mod.sort_par_nom(str(s))
+            if sp is None:
+                raise HTTPException(status_code=400, detail=f"Sort inconnu : « {s} ».")
+            if classe_canon not in sp["classes"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"« {sp['nom']} » n'appartient pas à la liste de "
+                           f"sorts de {classe_canon}.",
+                )
+            if sp["niveau"] > nls:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"« {sp['nom']} » (niv. {sp['niveau']}) est trop "
+                           f"puissant pour {classe_canon} niv.{niveau} (max : "
+                           f"niveau de sort {nls}).",
+                )
+        if classe_canon == "Magicien" and niveau == 1:
+            # Grimoire de départ PHB : 3 + mod INT sorts de niveau 1.
+            mod_int = (int(calculs["carac_final"]["INT"]) - 10) // 2
+            budget_liv1 = 3 + mod_int
+            niv1 = [
+                s for s in sorts_connus
+                if (sorts_mod.sort_par_nom(str(s)) or {}).get("niveau") == 1
+            ]
+            if len(niv1) > budget_liv1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Grimoire de départ : maximum {budget_liv1} sorts de "
+                           f"niveau 1 (3 + mod INT {mod_int:+d}) — {len(niv1)} saisis.",
+                )
+        if classe_canon in sorts_mod.SPONTANE:
+            exces = sorts_mod.depassement_connus(classe_canon, niveau, sorts_connus)
+            if exces:
+                det = ", ".join(f"niv.{l}: {n} de trop" for l, n in sorted(exces.items()))
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Trop de sorts connus ({classe_canon} niv.{niveau}) : {det}.",
+                )
+    sorts_fiche = {
+        "connus": [str(s) for s in sorts_connus],
+        "prepares": {str(k): max(1, int(v or 1)) for k, v in sorts_prepares.items()},
+        "depenses": {},
+    }
+
     fiche = {
         "nom": nom,
         "joueur": utilisateur,
@@ -977,14 +1156,15 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         "niveau": niveau,
         "xp": 0,
         "carac": calculs["carac_final"],
-        "pv": calculs["pv"],
-        "pv_max": calculs["pv_max"],
+        "pv": pv,
+        "pv_max": pv_max,
         "ca": calculs["ca"],
         "sauvegardes": calculs["sauvegardes"],
         "bab": calculs["bab"],
         "initiative": calculs["initiative"],
         "charge_max": calculs["charge_max"],
         "competences": competences,
+        "sorts": sorts_fiche,
         "dons": dons,
         "equipement": equipement,
         "or": int(payload.get("or") or 0),
@@ -1732,6 +1912,141 @@ async def _appliquer_degats_oublies(
     return "\n\n".join(lignes)
 
 
+def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any]) -> list[str]:
+    """Repère les monstres du bestiaire mentionnés dans une narration qui
+    relate un combat SANS avoir appelé `engager_combat`.
+
+    Le petit modèle narratif écrit parfois « Le combat commence ! Le zombie
+    bondit… », puis enchaîne jets et dégâts dans la prose, oubliant d'appeler
+    l'outil. Le serveur engage alors la phase officielle pour que l'ordre
+    d'initiative, le suivi des PV et la rotation restent conformes.
+
+    Renvoie la liste des noms de type de monstres détectés ([] si aucun).
+    Précondition : `etat_avant.phase != "combat"` (sinon rien à rattraper).
+    """
+    if not text:
+        return []
+    # Sans marqueur explicite de combat, on ne déclenche JAMAIS un rattrapage :
+    # trop de faux positifs (monstre amical dans une taverne, squelette
+    # décoratif dont on parle sans s'y battre…).
+    bas = text.lower()
+    if not any(m in bas for m in _COMBAT_PROSE_MARKERS):
+        return []
+    # Si la narration indique déjà que le combat est TERMINÉ (victoire,
+    # défaite, fuite, monstre vaincu/tombé…), ne rien rattraper : l'issue a
+    # déjà été racontée, un ré-engagement écraserait un combat clos.
+    if any(_f in bas for _f in _COMBAT_PROSE_END_MARKERS):
+        return []
+    try:
+        best = _load_bestiaire_plain(data_dir)
+    except Exception:
+        return []
+    trouves: list[str] = []
+    for cle, m in (best.get("monstres", {}) or {}).items():
+        if not isinstance(m, dict):
+            continue
+        nom = str(m.get("nom") or cle or "").strip()
+        # On ne retient que les monstres explicitement nommés dans la prose
+        # (insensible casse, minuscules normalisées). Un « zombie » mentionné
+        # en passant compte, mais il faut aussi un marqueur de combat (vérifié
+        # plus haut) pour déclencher le rattrapage.
+        if not nom or len(nom) < 3:
+            continue
+        if nom.lower() in bas:
+            trouves.append(nom)
+    # Déduplique par nom (plusieurs clés du bestiaire peuvent pointer vers le
+    # même affichage) pour un `engager_combat(nom, nom, …)` propre.
+    _dedup = {_t: 1 for _t in trouves}
+    return list(_dedup.keys())
+
+
+def _load_bestiaire_plain(data_dir: str) -> dict[str, Any]:
+    """Charge le bestiaire JSON directement (sans ToolContext)."""
+    import json as _json
+    from pathlib import Path as _Path
+    path = _Path(data_dir) / "bestiaire.json"
+    try:
+        with open(path, "r", encoding="utf-8") as _f:
+            return _json.load(_f)
+    except Exception:
+        return {"monstres": {}}
+
+
+def _derive_scenario_id(data_dir: str, narration: str) -> Optional[str]:
+    """Déduit l'identifiant du scénario à charger pour une écriture « opening ».
+
+    Le petit modèle 9B raconte souvent l'ouverture en prose au lieu d'appeler
+    `scenarios_laelith_charger`. On retrouve le scénario par correspondance du
+    titre/ID mentionné dans la narration (best effort) ; sinon on retombe sur
+    la mission active déjà mémorisée (le MJ a pu appeler `memoire_mission`).
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    # 1. Correspondance titre/id mentionné dans la narration.
+    try:
+        cata = _json.load(open(_Path(data_dir) / "scenarios_catalogue.json",
+                               "r", encoding="utf-8"))
+    except Exception:
+        cata = None
+    if cata:
+        base = (narration or "").strip().lower()
+        for u in (cata.get("universes", []) or []):
+            for s in (u.get("scenarios", []) or []):
+                sid = str(s.get("id") or "").strip()
+                stitre = str(s.get("titre") or "").strip()
+                for frag in (sid, stitre):
+                    if frag and len(frag) >= 4 and frag.lower() in base:
+                        return sid or None
+    # 2. Fallback : mission active déjà mémorisée (titre = titre du scénario).
+    return None
+
+
+def _estnarration_explo(narration: str) -> bool:
+    """True si la narration relate un déplacement/exploration en prose."""
+    if not narration:
+        return False
+    bas = narration.lower()
+    # Pas de marqueur d'exploration → rien à rattraper (anti-faux-positifs).
+    if not any(m in bas for m in _EXPLO_PROSE_MARKERS):
+        return False
+    # Exploration déjà clôse (retour/sortie) → ne relance rien.
+    if any(m in bas for m in _EXPLO_PROSE_END_MARKERS):
+        return False
+    # Si la narration décrit déjà des combats engagés, on laisse le moteur
+    # de combat (5ter) s'en occuper — pas d'exploration à forcer.
+    if any(m in bas for m in _COMBAT_PROSE_MARKERS):
+        return False
+    return True
+
+
+async def _rejoue_correctif(orch, messages, ctx, result, on_event,
+                            consigne: str, tag: str) -> None:
+    """Résout une action narrée EN PROSE par le MJ : ré-invoque une fois
+    l'orchestrateur avec une consigne ferme et fusionne le résultat dans
+    `result` s'il a produit des outils. Génère au plus UN rejeu (le supervise
+    est là pour empêcher les boucles, mais on ajoute aussi une garde).
+    """
+    from .llm.client import Message
+    try:
+        corrective_messages = list(messages) + [
+            Message(role="assistant", content=result.narration or ""),
+            Message(role="user", content=consigne),
+        ]
+        result2 = await orch.run(corrective_messages, ctx, on_event=on_event,
+                                 on_delta=None)
+        if result2.tool_calls_trace:
+            result.tool_calls_trace.extend(result2.tool_calls_trace)
+            result.tool_events.extend(result2.tool_events)
+            result.state_patches.extend(result2.state_patches)
+            result.narration = result2.narration
+            result.iterations += result2.iterations
+            print(f"[dnd35] Rejeu {tag} réussi ({len(result2.tool_calls_trace)} tools)")
+        else:
+            print(f"[dnd35] Rejeu {tag} sans tool — avancement forcé")
+    except Exception as e:                                               # noqa: BLE001
+        print(f"[dnd35] Rejeu {tag} failed: {e}")
+
+
 async def _handle_say(
     initiator: WebSocket,
     session: PartySession,
@@ -2202,15 +2517,16 @@ async def _handle_say(
             except Exception as e:                                   # noqa: BLE001
                 print(f"[dnd35] Moteur de combat post-tour échoué (ignoré) : {e}")
 
-                # 5quater. 🖼️ Illustrations des monstres en jeu : le modèle
-                # oublie souvent d'appeler monstre_consulter à l'annonce d'une
-                # rencontre ; on garantit ici le portrait de chaque monstre
-                # nouveau (cache instantané s'il existe déjà, budget temps
-                # sinon pour ne pas bloquer la table). L'URL est persistée
-                # dans monstres_combat[i].image_url ET le journal
-                # rencontres_images : le front peut ainsi réafficher les
-                # portraits après un rechargement de page, jusqu'à la mort
-                # du monstre.
+            # 5quater. 🖼️ Illustrations des monstres en jeu : le modèle
+            # oublie souvent d'appeler monstre_consulter à l'annonce d'une
+            # rencontre ; on garantit ici le portrait de chaque monstre
+            # nouveau (cache instantané s'il existe déjà, budget temps
+            # sinon pour ne pas bloquer la table). L'URL est persistée
+            # dans monstres_combat[i].image_url ET le journal
+            # rencontres_images : le front peut ainsi réafficher les
+            # portraits après un rechargement de page, jusqu'à la mort
+            # du monstre.
+            try:
                 _t0 = time.time()
                 _vus: set[str] = set()
                 _img_persist = False
@@ -2256,6 +2572,280 @@ async def _handle_say(
                 print(f"[dnd35] Post-traitement combat (moteur/images) "
                       f"échoué (ignoré) : {e}")
 
+            # 5ter. ⚔️ Rattrapage combat narré EN PROSE mais non engagé.
+            # Le petit modèle écrit parfois « Le combat commence ! Le zombie
+            # bondit et t'attaque… » avec les jets/dégâts dans la narration,
+            # SANS appeler `engager_combat` → l'ordre d'initiative et le suivi
+            # des PV restaient absents (phase exploration, side panel vide).
+            # On détecte la prose de combat ET on engage la mécanique
+            # officielle, pour que l'ordre de combat s'affiche et que la
+            # rotation suive les règles 3.5.
+            if not result.tool_calls_trace:
+                etat_detect = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                if etat_detect.get("phase") != "combat":
+                    try:
+                        _types = _detecter_combat_prose(
+                            str(cfg.abs(cfg.paths.data_dir)),
+                            result.narration or "",
+                            etat_detect,
+                        )
+                        if _types:
+                            from .tools.base import (
+                                _TOOL_REGISTRY, invoke_tool,
+                            )
+                            spec = _TOOL_REGISTRY.get("engager_combat")
+                            if spec is not None:
+                                tr = await invoke_tool(
+                                    spec, ctx, {"monstres": ", ".join(_types)},
+                                )
+                                if tr is not None and not (
+                                    tr.text.startswith("⛔")
+                                    or tr.text.startswith("❌")
+                                ):
+                                    if tr.state_patch:
+                                        result.state_patches.append(tr.state_patch)
+                                    # Ajoute l'initiative officielle à la
+                                    # narration pour que la table la voie.
+                                    result.narration += (
+                                        "\n\n⚙️ _Le serveur a régularisé ce "
+                                        "combat porté en prose — initiative "
+                                        "officielle engagée pour des "
+                                        "monstres du bestiaire._\n\n"
+                                        + "".join(
+                                            line + "\n" for line in tr.text.splitlines()
+                                        )
+                                    )
+                                    print(
+                                        f"[dnd35] Combat prose rattrapé : "
+                                        f"engager_combat({', '.join(_types)})"
+                                    )
+                                    # Recharge l'état pour que l'image soit
+                                    # générée pour les monstres désormais suivis.
+                                    apres = PartyState(
+                                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                        partie_id=partie_id,
+                                    ).load()
+                    except Exception as e:                             # noqa: BLE001
+                        print(f"[dnd35] Rattrapage combat prose échoué "
+                              f"(ignoré) : {e}")
+
+            # 5quater. 🛠️ Correction des non-conformités signalées au test —
+            # le petit modèle 9B narre en prose sans appeler les outils
+            # spécifiques de la phase (chargement de scénario à l'ouverture,
+            # exploration de donjon, inventaire). On ré-invoque une fois le MJ
+            # avec une consigne très ferme ; le bloc rejoue uniquement s'il
+            # est SÛR que l'action n'a PAS été résolue (outils de phase absents
+            # alors que l'état l'exigeait encore).
+            try:
+                _etat_rejouer = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _outils_appeles = {
+                    str(tc.get("name") or "") and str(tc.get("name"))
+                    for tc in result.tool_calls_trace
+                }
+                _outils_appeles.discard("")
+
+                # --- 5quater-a. Ouverture SANS scénario chargé.
+                # Phase "opening" + quête non choisie : le MJ doit avoir
+                # appelé `scenarios_laelith_charger`. S'il n'a fait que de la
+                # narration (memoire_mission / intrigue à la place), on le
+                # force à charger le scénario correspondant à l'id/titre
+                # mentionné.
+                phase_ouverture = (
+                    str(_etat_rejouer.get("phase") or "").strip().lower()
+                    in ("opening", "opening_complete")
+                )
+                quete_pas_chargee = not str(
+                    (_etat_rejouer.get("quete") or {}).get("titre") or ""
+                ).strip()
+                scena_pas_appele = not (
+                    _outils_appeles & _SCENARIO_LOAD_TOOLS
+                )
+                # ⚠️ On ne force le chargement QUE si le joueur DEMANDE
+                # explicitement de choisir/charger un scénario (le tour de
+                # phase "load"). Pendant la pure création de personnages (aussi
+                # en phase "opening"), on ne déclenche RIEN : il est normal que
+                # la quête ne soit pas encore posée.
+                _demande_scenario = bool(
+                    _SCENARIO_CHOICE_RE.search(text or "")
+                )
+                if (phase_ouverture and quete_pas_chargee and scena_pas_appele
+                        and _demande_scenario):
+                    _scena_match = (
+                        _derive_scenario_id(
+                            str(cfg.abs(cfg.paths.data_dir)),
+                            (text or "") + " " + (result.narration or ""),
+                        )
+                        or _derive_scenario_id(
+                            str(cfg.abs(cfg.paths.data_dir)),
+                            result.narration or "",
+                        )
+                    )
+                    # 1er essai : on ré-invoque le MJ pour qu'il charge le
+                    # scénario par lui-même (trace propre côté table).
+                    _obj_open = (
+                        "⚠️ ERREUR système : le MJ devait CHARGER le "
+                        "scénario choisi avant de narrer l'ouverture. "
+                        "Appelle MAINTENANT `scenarios_laelith_charger` "
+                        f"avec scenario_id='{_scena_match or '_INFER_'}'. "
+                        "Appelle impérativement l'outil (jamais à la place "
+                        "`memoire_mission`/`memoire_intrigue`), puis narre "
+                        "la scène d'ouverture en 2-4 paragraphes."
+                    )
+                    await _rejoue_correctif(orch, messages, ctx, result,
+                                            on_event, _obj_open,
+                                            "ouverture scénario")
+                    # 2e essai : DÉTERMINISTE. Le petit modèle 9B refuse
+                    # parfois catégoriquement d'appeler `scenarios_laelith_`
+                    # (il confond avec `memoire_mission`/`etat_partie_patch`).
+                    # On charge alors le scénario DIRECTEMENT côté serveur via
+                    # le registre d'outils, comme le bloc 5ter fait pour
+                    # `engager_combat` — la quête est ainsi TOUJOURS posée.
+                    _etat_apres_open = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load()
+                    _quere_apres = str(
+                        (_etat_apres_open.get("quete") or {}).get("titre")
+                        or ""
+                    ).strip()
+                    if (not _quere_apres and _scena_match):
+                        from .tools.base import (
+                            _TOOL_REGISTRY, invoke_tool,
+                        )
+                        _spec_c = _TOOL_REGISTRY.get("scenarios_laelith_charger")
+                        if _spec_c is not None:
+                            _tr_c = await invoke_tool(
+                                _spec_c, ctx, {"scenario_id": _scena_match},
+                            )
+                            if _tr_c is not None:
+                                if _tr_c.state_patch:
+                                    result.state_patches.append(_tr_c.state_patch)
+                                # Le tool renvoie `quete` dans son state_patch,
+                                # que le CLIENT applique normalement (persisté
+                                # ici par le frontend). Comme le serveur a
+                                # injecté le chargement, on persiste AUSSI la
+                                # quête directement dans le fichier partie pour
+                                # que le side panel et les phases suivantes la
+                                # voient.
+                                _patch_quete = (
+                                    (_tr_c.state_patch or {}).get("quete")
+                                    or {}
+                                )
+                                if _patch_quete.get("titre"):
+                                    try:
+                                        _st_q = PartyState(
+                                            data_dir=str(
+                                                cfg.abs(cfg.paths.data_dir)),
+                                            partie_id=partie_id,
+                                        )
+                                        _etat_q = _st_q.load()
+                                        _etat_q["quete"] = dict(_patch_quete)
+                                        _st_q.save(_etat_q)
+                                        print(
+                                            f"[dnd35] Quête persistée : "
+                                            f"{_patch_quete.get('titre')}"
+                                        )
+                                    except Exception as _e:            # noqa: BLE001
+                                        print(
+                                            f"[dnd35] Persistance quête "
+                                            f"échouée : {_e}"
+                                        )
+                                if _tr_c.text and not (
+                                    _tr_c.text.startswith("⛔")
+                                    or _tr_c.text.startswith("❌")
+                                ):
+                                    result.narration += (
+                                        "\n\n⚙️ _Le serveur a chargé le "
+                                        "scénario « "
+                                        + str(_scena_match)
+                                        + " » — quête posée officiellement._"
+                                    )
+                                    print(
+                                        f"[dnd35] Scénario chargé par le "
+                                        f"serveur : "
+                                        f"scenarios_laelith_charger("
+                                        f"{_scena_match})"
+                                    )
+                    # Recharge l'état pour les phases suivantes.
+                    _etat_rejouer = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load()
+
+                # --- 5quater-b. Exploration narrée EN PROSE sans outil.
+                # Phase d'exploration + déplacement annoncé mais aucun outil
+                # `carte_donjon_*` appelé → on rejoue une fois.
+                phase_explo = str(
+                    _etat_rejouer.get("phase") or ""
+                ).strip().lower() in ("exploration", "voyage", "roleplay")
+                explo_pas_appele = not (_outils_appeles & _EXPLORATION_TOOLS)
+                if phase_explo and explo_pas_appele and _estnarration_explo(
+                        (text or "") + " " + (result.narration or "")):
+                    _obj_explo = (
+                        "⚠️ ERREUR système : le groupe se déplace / "
+                        "explore mais aucun outil de déplacement n'a été "
+                        "appelé. Utilise MAINTENANT l'outil approprié : "
+                        "`carte_donjon_explorer(direction='est')` si un "
+                        "donjon est actif, sinon `carte_donjon_entrer` "
+                        "(s'il existe un donjon) ou mets à jour "
+                        "`etat_partie_patch` (lieu) si la scène se passe "
+                        "en ville. NE te contente PAS de narrer : appelle "
+                        "l'outil puis narre le résultat."
+                    )
+                    await _rejoue_correctif(orch, messages, ctx, result,
+                                            on_event, _obj_explo,
+                                            "exploration donjon")
+
+                # --- 5quater-c. Acquisition d'objet non enregistrée.
+                # Le MJ (ou le joueur) annonce la récupération/le don d'un
+                # objet mais n'appelle aucun outil d'inventaire → l'objet reste
+                # introuvable côté serveur/side panel. On ré-invoque une fois.
+                inv_pas_appele = not (_outils_appeles & _INVENTAIRE_TOOLS)
+                if inv_pas_appele and _ITEM_ACQUISITION_RE.search(
+                        (text or "") + " " + (result.narration or "")):
+                    _obj_inv = (
+                        "⚠️ ERREUR système : l'objet gagné/récupéré/donné "
+                        "n'a pas été enregistré. Appelle MAINTENANT "
+                        "`inventaire_ajouter` (nom d'un PJ, nom, quantité, "
+                        "description) pour persister l'objet, puis narre la "
+                        "suite. NE narrate PAS l'acquisition sans appeler "
+                        "l'outil d'inventaire."
+                    )
+                    await _rejoue_correctif(orch, messages, ctx, result,
+                                            on_event, _obj_inv,
+                                            "inventaire objet")
+
+                # --- 5quater-d. Soin narré mais non appliqué (hors combat).
+                # Le joueur (ou MJ) demande/annonce un soin mais aucun outil
+                # `fiche_perso_soigner` n'a été appelé → les PV ne bougent
+                # pas. On ré-invoque une fois, y compris hors combat.
+                _soin_global_appele = any(
+                    str(tc.get("name")) == "fiche_perso_soigner"
+                    for tc in result.tool_calls_trace
+                )
+                if (not _soin_global_appele
+                        and _SOIN_RE.search((text or "") + " "
+                                            + (result.narration or ""))):
+                    _obj_soin = (
+                        "⚠️ ERREUR système : un SOIN a été annoncé mais "
+                        "`fiche_perso_soigner` n'a pas été appelé — les PV "
+                        "ne sont pas modifiés. Relance les dés de soin "
+                        "(`lancer_des` avec par ex. 1d8) puis appelle "
+                        "`fiche_perso_soigner` (nom du PJ à soigner, "
+                        "montant_rendu+bonus) pour appliquer la guérison aux "
+                        "PV. NE narrate PAS la guérison sans appeler l'outil."
+                    )
+                    await _rejoue_correctif(orch, messages, ctx, result,
+                                            on_event, _obj_soin, "soins")
+            except Exception as e:                                     # noqa: BLE001
+                print(f"[dnd35] 5quater rattrapage échoué (ignoré) : {e}")
+
             # 5. On ajoute la narration finale à l'historique de la session.
             if result.narration:
                 session.remember_assistant(result.narration)
@@ -2281,10 +2871,14 @@ async def _handle_say(
                     "Réessayez dans un instant.",
         })
     finally:
+        # Toujours lever le verrou "thinking", y compris si le tour est
+        # annulé (WebSocket coupé au milieu du streaming) ou en erreur.
+        # Sinon `session.thinking` reste True et BLOQUE tous les messages
+        # suivants ("Le MJ est en train de travailler") définitivement.
+        session.thinking = False
         last_turn = await _turn_end()
 
     # 7. Patches d'état → re-synchronise l'UI avec l'état persistant final.
-    session.thinking = False
     await session.broadcast({"type": "status", "description": "", "done": True})
 
     # 8. Décharge le modèle LLM de la VRAM pour libérer la place à ComfyUI —

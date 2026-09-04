@@ -181,6 +181,113 @@ def _parse_json(valeur: Any, label: str) -> Any:
         raise ValueError(f"JSON invalide pour {label} : {e}")
 
 
+# Dons qui octroient un bonus de PV, avec leur effet (PHB 3.5 + catalogue).
+# - « Dur à cuire » / Toughness : +3 PV (une fois).
+# - « Vigueur surhumaine » / Improved Toughness : +1 PV par niveau.
+# D'autres dons n'affectent pas les PV et renvoient un bonus de 0.
+def _bonus_dons_pv(dons: Any, niveau: int = 1) -> int:
+    """Somme du bonus de PV apporté par la liste de dons d'un personnage.
+
+    Reconnaît les dons par leur nom normalisé (l'ordre ainsi que la casse et
+    les accents n'importent pas, ex. « Dur à cuire (+3 PV) », « Resilient »).
+    """
+    if not dons:
+        return 0
+    if isinstance(dons, str):
+        # Le MJ peut passer une liste JSON ou une chaîne séparée par virgules.
+        try:
+            item = json.loads(dons)
+        except json.JSONDecodeError:
+            item = [x.strip() for x in dons.split(",")]
+        dons = item
+    if not isinstance(dons, (list, tuple)):
+        return 0
+    bonus = 0
+    for d in dons:
+        nom = _norm_key(str(d or ""))
+        if not nom:
+            continue
+        # Dur à cuire / Toughness  → +3 PV (une seule fois par occurrence)
+        if any(k in nom for k in (
+            "dur a cuire", "dur a cuire (+3", "toughness", "resilient",
+            "endurci", "coriace",
+        )):
+            bonus += 3
+        # Vigueur surhumaine / Improved Toughness → +1 PV par niveau
+        elif any(k in nom for k in (
+            "vigueur surhumaine", "improved toughness", "grande robustesse",
+            "vigueur",
+        )):
+            bonus += max(1, int(niveau or 1))
+        # Robustesse générique (barbare) → +1 PV par niveau
+        elif any(k in nom for k in ("robustesse", "endurance suprême")):
+            bonus += max(1, int(niveau or 1))
+    return bonus
+
+
+# Dons passifs à effet mécanique hors PV (PHB 3.5) : effet → mots-clés du don
+# (noms normalisés : minuscules, sans accents, tirets/apostrophes → espaces).
+# Couvre les dons du catalogue (« Alerte », « Initiative améliorée »,
+# « Volonté de fer »…) et leurs variantes FR/EN des fiches libres.
+_DONS_PASSIFS: dict[str, tuple[tuple[str, int], ...]] = {
+    # Initiative améliorée / Improved Initiative → +4 initiative
+    "initiative": (
+        ("initiative amelioree", 4), ("initiative surhumaine", 4),
+        ("improved initiative", 4),
+    ),
+    # Volonté de fer / Iron Will → +2 Volonté
+    "sauvegarde_volonte": (
+        ("volonte de fer", 2), ("iron will", 2),
+    ),
+    # Grande Fortitude / Great Fortitude → +2 Vigueur
+    "sauvegarde_vigueur": (
+        ("grande fortitude", 2), ("great fortitude", 2),
+    ),
+    # Réflexes surprenants / Lightning Reflexes → +2 Réflexes
+    "sauvegarde_reflexes": (
+        ("reflexes surprenants", 2), ("lightning reflexes", 2),
+    ),
+    # Alerte (Alertness) / Vigilance → +2 Détection et Perception auditive
+    "comp_detection": (
+        ("alerte", 2), ("vigilance", 2), ("alertness", 2),
+    ),
+    "comp_perception_auditive": (
+        ("alerte", 2), ("vigilance", 2), ("alertness", 2),
+    ),
+}
+
+
+def bonus_dons_effet(dons: Any, effet: str) -> int:
+    """Bonus mécanique total des dons passifs pour un effet donné.
+
+    `effet` ∈ _DONS_PASSIFS (ex. « initiative », « sauvegarde_volonte »,
+    « comp_detection »). Renvoie 0 si aucun don reconnu — les autres dons
+    (Attaque en puissance, Arme de prédilection…) restent à l'appréciation
+    du MJ dans les bornes des recoupements de lancer_attaque/lancer_degats.
+    """
+    cles = _DONS_PASSIFS.get(effet)
+    if not cles or not dons:
+        return 0
+    if isinstance(dons, str):
+        try:
+            item = json.loads(dons)
+        except json.JSONDecodeError:
+            item = [x.strip() for x in dons.split(",")]
+        dons = item
+    if not isinstance(dons, (list, tuple)):
+        return 0
+    bonus = 0
+    for d in dons:
+        nom = _norm_key(str(d or ""))
+        if not nom:
+            continue
+        for cle, val in cles:
+            if cle in nom:
+                bonus += val
+                break
+    return bonus
+
+
 def _load_fiche(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
     """Charge une fiche ou renvoie None si absente/illisible."""
     path = _chemin(ctx, nom)
@@ -361,6 +468,12 @@ async def fiche_perso_creer(
         return ToolResult(text=f"❌ {e}")
 
     from ..game.xp import xp_min_niveau
+    # Bonus de PV des dons (ex. « Dur à cuire » = +3 PV) appliqué ici, à la
+    # création. Sinon pv_max omettait l'effet des dons (non-conformité).
+    _bonus = _bonus_dons_pv(dons, int(niveau))
+    if _bonus:
+        pv = int(pv) + _bonus if isinstance(pv, (int, float)) else pv
+        pv_max = int(pv_max) + _bonus if isinstance(pv_max, (int, float)) else pv_max
     fiche = {
         "nom": nom,
         "joueur": joueur,
@@ -417,6 +530,7 @@ async def fiche_perso_creer_rapide(
     age: str = "",
     taille_physique: str = "",
     traitsdistinctifs: str = "",
+    dons_texte: str = "",
 ) -> ToolResult:
     """
     Crée rapidement la fiche d'un personnage. **UN SEUL appel suffit** :
@@ -437,6 +551,9 @@ async def fiche_perso_creer_rapide(
     :param age (str): ex. "32 ans", "Jeune adulte".
     :param taille_physique (str): ex. "1,65 m, mince", "2,10 m, massif".
     :param traitsdistinctifs (str): ex. "Cicatrice sur l'œil gauche, yeux verts".
+    :param dons_texte (str): liste de dons du personnage, ex. "Dur à cuire, Vigilance".
+        Les dons qui augmentent les PV (ex. « Dur à cuire » = +3 PV) sont
+        appliqués automatiquement à pv/pv_max.
     """
     import random as _rnd
 
@@ -554,6 +671,16 @@ async def fiche_perso_creer_rapide(
     alignement = _pick("alignement", alignement, etat_pj.get("alignement", ""))
     equip = equipement_texte or etat_pj.get("equipement", "")
 
+    # Dons : liste éventuellement fournie en texte (ex. "Dur à cuire, Vigilance").
+    dons_rapide: list[Any] = []
+    if dons_texte:
+        dons_rapide = [x.strip() for x in dons_texte.split(",") if x.strip()]
+    # Bonus de PV des dons (ex. « Dur à cuire » = +3 PV) appliqué à la création.
+    _bonus = _bonus_dons_pv(dons_rapide, int(niveau))
+    if _bonus:
+        pv = int(pv) + _bonus
+        pv_max = int(pv_max) + _bonus
+
     fiche = {
         "nom": nom,
         "joueur": joueur,
@@ -567,7 +694,7 @@ async def fiche_perso_creer_rapide(
         "sauvegardes": {"Vigueur": vig, "Reflexes": ref, "Volonte": vol},
         "bab": int(bab),
         "competences": {},
-        "dons": [],
+        "dons": dons_rapide,
         "equipement": [],
         "or": 0,
         "xp": 0,
@@ -632,6 +759,9 @@ async def fiche_perso_creer_rapide(
     import asyncio
     async def _gen_portrait():
         try:
+            from ..config import get_config
+            if not get_config().image.portraits_enabled:
+                return
             slug = _slug(nom)
             # Inclure party_id pour unicité (même nom dans parties différentes).
             portrait_name = f"{ctx.partie_id}_{slug}" if ctx.partie_id else slug

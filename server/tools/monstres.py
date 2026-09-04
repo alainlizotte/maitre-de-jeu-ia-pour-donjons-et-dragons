@@ -792,6 +792,10 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
     recours), None seulement si même le placeholder est impossible.
     """
     m = _find_monstre(ctx, nom)
+    # Nom canonique du bestiaire : le cache d'images est indexé DESSUS, pas
+    # sur le nom demandé — sinon « Golem » et « Golem de chair » (même
+    # créature) généreraient deux PNG distincts pour un hash identique.
+    nom_canonique = str((m or {}).get("nom") or nom) if m is not None else nom
     if m is None:
         # Nom non résolu dans le bestiaire → PAS de génération ComfyUI : la
         # requête RAG renverrait le portrait d'un AUTRE monstre (bug
@@ -806,10 +810,10 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
         _log.warning("bestiaire : monstre inconnu « %s » — image placeholder", nom)
         img_path = _write_placeholder(ctx, nom)
         return _url_for(img_path, ctx.data_dir)
-    slug = _cache_key(nom)
+    slug = _cache_key(nom_canonique)
     dest = os.path.join(_cache_dir(ctx), f"{slug}.png")
     meta_path = _meta_path_for(ctx, slug)
-    img_path = _find_image(ctx, nom)
+    img_path = _find_image(ctx, nom_canonique)
     description = ""
     if img_path is not None:
         meta_hash = _read_desc_hash(meta_path)
@@ -828,7 +832,6 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
             pass
     else:
         description = await _description_monstre(m, nom)
-    nom_canonique = str((m or {}).get("nom") or _type_nom(nom))
     prompt_text = monstre_prompt(_type_nom(nom_canonique), description)
     try:
         r = await generer_averti(ctx, "monstre", prompt_text, dest)
@@ -845,6 +848,22 @@ def _norm_nom_simple(s: Any) -> str:
     """Comparaison de noms insensible casse/accents (journal ↔ combat)."""
     s = unicodedata.normalize("NFKD", str(s or "").strip().lower())
     return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def _phase_partie(ctx: ToolContext) -> str:
+    """Phase courante de la partie (« combat », « exploration »…).
+
+    Fail-safe : "" si l'état est illisible. Sert à réserver les
+    illustrations de monstres aux phases de combat.
+    """
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+        if "_erreur" in etat:
+            return ""
+        return str(etat.get("phase") or "")
+    except Exception:                                            # noqa: BLE001
+        return ""
 
 
 def _fusionner_rencontres(
@@ -928,6 +947,9 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
         "Goule"/"Ghoul", "Dragon rouge jeune").
     """
     m = _find_monstre(ctx, nom)
+    # Nom canonique du bestiaire : la clé de cache en dérive — sinon « Golem »
+    # et « Golem de chair » (même créature) généreraient des PNG distincts.
+    nom_canonique = str((m or {}).get("nom") or nom) if m is not None else nom
     if m is None:
         # Nom non résolu dans le bestiaire → PAS de génération rétro :
         # le RAG renverrait un portrait d'un AUTRE monstre (goule montrée
@@ -939,76 +961,88 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
                 os.remove(stale)
             except OSError:
                 pass
-    # Image : priorité PNG en cache à jour, sinon génération ComfyUI, sinon
-    # placeholder SVG. « À jour » = le hash de la description stocké dans
-    # <slug>.meta.json correspond à la description courante — un vieux PNG
-    # généré sans description (monstre inventé par l'IA) est régénéré dès
-    # qu'une vraie fiche est disponible. Le cache est indexé sur le nom de
-    # TYPE (`_cache_key`) pour que les homonymes partagent une image.
-    slug = _cache_key(nom)
-    cache_dir = _cache_dir(ctx)
-    dest = os.path.join(cache_dir, f"{slug}.png")
-    meta_path = _meta_path_for(ctx, slug)
+    # 🖼️ Images de monstres : réservées aux phases de COMBAT. Hors combat,
+    # une consultation de stats ne génère rien, n'affiche rien et ne
+    # journalise rien (consigne de table : pas d'illustration tant que le
+    # monstre n'est pas réellement rencontré/engagé).
+    en_combat = _phase_partie(ctx) == "combat"
+    url: Optional[str] = None
+    src = ""
+    if en_combat:
+        # Image : priorité PNG en cache à jour, sinon génération ComfyUI,
+        # sinon placeholder SVG. « À jour » = le hash de la description
+        # stocké dans <slug>.meta.json correspond à la description courante
+        # — un vieux PNG généré sans description (monstre inventé par l'IA)
+        # est régénéré dès qu'une vraie fiche est disponible. Le cache est
+        # indexé sur le nom de TYPE canonique (`_cache_key(nom_canonique)`)
+        # pour que les homonymes ET les alias (« Golem » → « Golem de
+        # chair ») partagent une image.
+        slug = _cache_key(nom_canonique)
+        cache_dir = _cache_dir(ctx)
+        dest = os.path.join(cache_dir, f"{slug}.png")
+        meta_path = _meta_path_for(ctx, slug)
 
-    img_path = _find_image(ctx, nom)
-    src = "locale"
-    description = ""
-    if img_path is not None:
-        meta_hash = _read_desc_hash(meta_path)
-        # 1er test rapide avec la seule description locale (évite un appel
-        # RAG systématique quand le bestiaire suffit).
-        hash_local = _hash_desc(_desc_locale(m))
-        if meta_hash is not None and meta_hash == hash_local and hash_local:
-            src = "cache"
-        else:
-            # Description complète (locale ou portrait RAG du Manuel des
-            # Monstres, requête avec le nom canonique FR).
-            description = await _description_monstre(m, nom)
-            if meta_hash is not None and _hash_desc(description) == meta_hash:
+        img_path = _find_image(ctx, nom_canonique)
+        src = "locale"
+        description = ""
+        if img_path is not None:
+            meta_hash = _read_desc_hash(meta_path)
+            # 1er test rapide avec la seule description locale (évite un appel
+            # RAG systématique quand le bestiaire suffit).
+            hash_local = _hash_desc(_desc_locale(m))
+            if meta_hash is not None and meta_hash == hash_local and hash_local:
                 src = "cache"
             else:
-                # Image périmée → suppression AVANT régénération, sinon
-                # generer_averti court-circuite sur le fichier existant.
+                # Description complète (locale ou portrait RAG du Manuel des
+                # Monstres, requête avec le nom canonique FR).
+                description = await _description_monstre(m, nom)
+                if meta_hash is not None and _hash_desc(description) == meta_hash:
+                    src = "cache"
+                else:
+                    # Image périmée → suppression AVANT régénération, sinon
+                    # generer_averti court-circuite sur le fichier existant.
+                    try:
+                        os.remove(img_path)
+                    except OSError:
+                        pass
+                    img_path = None  # image périmée → régénération
+        if img_path is None:
+            gen_ok = False
+            if m is None:
+                # Aucun match bestiaire : pas de génération (RAG = portrait
+                # d'un autre monstre) → placeholder SVG direct.
+                img_path = _write_placeholder(ctx, nom)
+                src = "placeholder"
+            else:
                 try:
-                    os.remove(img_path)
-                except OSError:
-                    pass
-                img_path = None  # image périmée → régénération
-    if img_path is None:
-        gen_ok = False
-        if m is None:
-            # Aucun match bestiaire : pas de génération (RAG = portrait d'un
-            # autre monstre) → placeholder SVG direct.
-            img_path = _write_placeholder(ctx, nom)
-            src = "placeholder"
-        else:
-            try:
-                nom_canonique = str((m or {}).get("nom") or nom)
-                if not description:
-                    description = await _description_monstre(m, nom)
-                prompt_text = monstre_prompt(nom_canonique, description)
-                r = await generer_averti(ctx, "monstre", prompt_text, dest)
-                if r is not None and os.path.isfile(r):
-                    img_path = r
-                    src = "comfyui"
-                    gen_ok = True
-                    _write_desc_hash(meta_path, _hash_desc(description), nom_canonique)
-            except Exception as e:
-                # On ne casse pas le tour si ComfyUI échoue — fallback SVG.
-                src = f"comfyui_echec({type(e).__name__})"
-            if not gen_ok:
-                if img_path is None:
-                    img_path = _find_image(ctx, nom)
-                if img_path is None:
-                    img_path = _write_placeholder(ctx, nom)
-                    if "comfyui" not in src:
-                        src = "placeholder"
-    url = _url_for(img_path, ctx.data_dir)
-    # Persiste la rencontre (journal + combat éventuel) pour que le portrait
-    # survive aux rechargements de page, jusqu'à la mort du monstre.
-    _memoriser_rencontre(
-        ctx, str((m or {}).get("nom") or nom), url
-    )
+                    if not description:
+                        description = await _description_monstre(m, nom)
+                    prompt_text = monstre_prompt(nom_canonique, description)
+                    r = await generer_averti(ctx, "monstre", prompt_text, dest)
+                    if r is not None and os.path.isfile(r):
+                        img_path = r
+                        src = "comfyui"
+                        gen_ok = True
+                        _write_desc_hash(
+                            meta_path, _hash_desc(description), nom_canonique
+                        )
+                except Exception as e:
+                    # On ne casse pas le tour si ComfyUI échoue — fallback SVG.
+                    src = f"comfyui_echec({type(e).__name__})"
+                if not gen_ok:
+                    if img_path is None:
+                        img_path = _find_image(ctx, nom)
+                    if img_path is None:
+                        img_path = _write_placeholder(ctx, nom)
+                        if "comfyui" not in src:
+                            src = "placeholder"
+        url = _url_for(img_path, ctx.data_dir)
+        # Persiste la rencontre (journal + combat éventuel) pour que le
+        # portrait survive aux rechargements de page, jusqu'à la mort du
+        # monstre.
+        _memoriser_rencontre(
+            ctx, str((m or {}).get("nom") or nom), url
+        )
     if m is None:
         # Suggestions de noms proches dans le bestiaire (fail-safe : jamais
         # bloquant si le bestiaire est illisible).
@@ -1023,8 +1057,9 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
             f"❓ Monstre **{nom}** absent du bestiaire local. "
             f"Pour les stats, interrogez la KB « D&D 3.5 — Manuels » "
             f"(RAG activé). "
-            f"Image ({src}) : {url}"
         )
+        if url:
+            texte += f"Image ({src}) : {url}"
         if sugg:
             texte += f"\n🔎 Noms proches dans le bestiaire : {', '.join(sugg)}."
         texte += (
@@ -1032,18 +1067,21 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
             "`calculer_initiative` puis `demarrer_combat` AVANT toute "
             "attaque ou action de combat."
         )
-        return ToolResult(text=texte, state_patch={"image_monstre": url})
+        # Pas d'image hors combat : aucun patch, la galerie ne bouge pas.
+        patch = {"image_monstre": url} if url else None
+        return ToolResult(text=texte, state_patch=patch)
     fiche = _format_fiche(m)
-    return ToolResult(
-        text=(
-            f"{fiche}\n\n🖼️ Image ({src}) : {url}\n"
-            f"\n[JSON complet]\n" + json.dumps(m, ensure_ascii=False, indent=2)
-            + "\n⚔️ Ce monstre engage le groupe ? Appelle "
-              "`calculer_initiative` puis `demarrer_combat` AVANT toute "
-              "attaque ou action de combat."
-        ),
-        state_patch={"image_monstre": url},
+    texte = fiche + (
+        f"\n\n🖼️ Image ({src}) : {url}\n" if url else "\n"
     )
+    texte += (
+        "\n[JSON complet]\n" + json.dumps(m, ensure_ascii=False, indent=2)
+        + "\n⚔️ Ce monstre engage le groupe ? Appelle "
+          "`calculer_initiative` puis `demarrer_combat` AVANT toute "
+          "attaque ou action de combat."
+    )
+    patch = {"image_monstre": url} if url else None
+    return ToolResult(text=texte, state_patch=patch)
 
 
 @tool

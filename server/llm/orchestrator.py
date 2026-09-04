@@ -69,12 +69,18 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "carte_joueurs_placer_ville",
         "carte_donjon_entrer",
         "carte_donjon_etage",
+        "carte_donjon_decrire_salle",
         "memoire_mission",
         "memoire_lieu",
         "memoire_personnage",
         "memoire_position",
         "memoire_intrigue",
         "memoire_evenement",
+        # Scénario (bible + suivi d'étapes) : relire la trame et garder le
+        # groupe sur les objectifs même si l'historique est tronqué.
+        "scenarios_laelith_lister",
+        "scenarios_laelith_charger",
+        "scenario_etape",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
     ),
@@ -87,6 +93,9 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "carte_donjon_get",
         "carte_donjon_etage",
         "carte_donjon_sortir",
+        # Constance des salles : figer la description/l'état de chaque salle
+        # pour qu'un retour sur ses pas retrouve la salle à l'identique.
+        "carte_donjon_decrire_salle",
         "carte_joueurs_get",
         "carte_joueurs_deplacer",
         "carte_joueurs_placer_ville",
@@ -97,6 +106,11 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_d20",
         "lancer_sauvegarde",
         "lancer_des",
+        # Magie 3.5 : incantation validée (classe/niveau/préparation/slots),
+        # mémorisation quotidienne des préparateurs, repos long.
+        "incanter_sort",
+        "preparer_sorts",
+        "repos_long",
         # Transition exploration → combat : engager_combat déclenche la
         # rencontre (initiative officielle) ; TOUTE la suite (rotation,
         # attaques des monstres, clôture, XP) est gérée par le serveur.
@@ -110,6 +124,10 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "memoire_intrigue",
         "memoire_evenement",
         "inventaire_consulter",
+        # Scénario : relire le livret et suivre les étapes de la trame.
+        "scenarios_laelith_lister",
+        "scenarios_laelith_charger",
+        "scenario_etape",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
     ),
@@ -122,6 +140,7 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_degats",
         "lancer_sauvegarde",
         "lancer_des",
+        "incanter_sort",
         "combat_ajouter_combattant",
         "fiche_perso_recuperer",
         "fiche_perso_infliger_degats",
@@ -248,6 +267,80 @@ def looks_like_simulation(text: str, include_damage: bool = True) -> Optional[st
         m = pat.search(text)
         if m:
             return m.group(0)
+    return None
+
+
+# --------------------------------------------------------------------------- #
+#  Détection de répétition narrative (écho d'une scène déjà narrée)
+# --------------------------------------------------------------------------- #
+# Symptôme observé en partie réelle : le joueur choisit une des options
+# proposées et le MJ RE-NARRE mot pour mot une scène précédente au lieu de
+# répondre (ex. la torche allumée deux fois, une salle re-décrite à
+# l'identique). L'action du joueur est perdue et le fil de l'histoire casse.
+# On détecte l'écho quasi verbatim contre les narrations récentes, et la boucle
+# run() relance alors le tour avec un correctif ciblé.
+_REPET_SEUIL_CHEVAUCHEMENT = 0.40  # bigrammes fenêtrés = reprise de la scène
+_REPET_PREFIXE = 200          # préfixe normalisé dont le containment suffit
+_REPET_MIN_CANDIDAT = 80      # narrations trop courtes : pas de verdict
+_REPET_FENETRE = 8            # nb de narrations assistant récentes comparées
+
+
+def _normalise_pour_compare(texte: str) -> str:
+    """Normalise un texte pour comparaison : minuscules, sans accents, sans
+    ponctuation/markdown, espaces et sauts de ligne collapés."""
+    import unicodedata
+    t = re.sub(r"[*_`>#\[\]()|…\"']", " ", texte or "")
+    nf = unicodedata.normalize("NFKD", t.lower())
+    t = "".join(c for c in nf if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _bigrammes_fenetres(mots: list[str], fenetre: int = 4) -> set[tuple[str, str]]:
+    """Paires de mots distantes d'au plus `fenetre` positions — tolère la
+    compression/réorganisation de phrases (une paire adjacente stricte casse
+    dès qu'un mot est inséré ou supprimé)."""
+    n = len(mots)
+    return {
+        (mots[i], mots[j])
+        for i in range(n)
+        for j in range(i + 1, min(i + fenetre, n))
+    }
+
+
+def trouve_repetition(
+    narration: str, historique: list["Message"]
+) -> Optional[str]:
+    """Renvoie un extrait de la narration précédente que `narration` répète,
+    ou None si la narration est nouvelle.
+
+    Deux critères (le premier atteint suffit) :
+    - le préfixe normalisé de la narration apparaît tel quel dans un message
+      assistant récent (copie quasi verbatim) ;
+    - chevauchement des bigrammes fenêtrés de mots ≥ seuil (paraphrase qui
+      reprend la scène, même en comprimant/réordonnant ; les narrations
+      inédites restent ≪ seuil).
+    Les messages système/tool/user et les narrations très courtes sont ignorés.
+    """
+    cand = _normalise_pour_compare(narration)
+    if len(cand) < _REPET_MIN_CANDIDAT:
+        return None
+    prefixe = cand[:_REPET_PREFIXE]
+    bigrams_cand = _bigrammes_fenetres(cand.split())
+    assistant_recents = [
+        m.content for m in historique
+        if m.role == "assistant" and (m.content or "").strip()
+    ][-_REPET_FENETRE:]
+    for ancien in reversed(assistant_recents):
+        ref = _normalise_pour_compare(ancien)
+        if len(ref) < _REPET_MIN_CANDIDAT:
+            continue
+        if prefixe and prefixe in ref:
+            return ref[:120]
+        bigrams_ref = _bigrammes_fenetres(ref.split())
+        if bigrams_cand and bigrams_ref:
+            overlap = len(bigrams_cand & bigrams_ref) / len(bigrams_cand)
+            if overlap >= _REPET_SEUIL_CHEVAUCHEMENT:
+                return ref[:120]
     return None
 
 
@@ -865,6 +958,35 @@ def _tidy_empty_lines(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
+# --------------------------------------------------------------------------- #
+#  Nettoyage streaming — filtrage des artefacts AVANT broadcast
+# --------------------------------------------------------------------------- #
+# Marqueurs partiels pouvant être le début d'une balise en fuite.  On retient
+# le fragment terminal du buffer tant qu'il pourrait former le début d'une
+# balise problématique ; on ne le broadcast qu'une fois le flush final fait.
+_STREAM_LEAK_MARKERS = (
+    "<tool_call", "<tool_call/", "<tool_call ",
+    "</tool_call", "</tool_call>",
+    "<tool", "</tool",
+    "<|",  # Gemma channel-quote / thinking
+    "*(",  # début de placeholder prose  *(Appel au tool …)*
+)
+
+
+def _safe_stream_split(buf: str) -> tuple[str, str]:
+    """Sépare un buffer streaming en (texte_sûr, fragment_retenu).
+
+    Le fragment retenu est un suffixe qui pourrait être le début d'une
+    balise d'artefact (`<tool`, `<tool_call>`, `</tool`, `<|`, `*(`…).
+    Seul le texte sûr est broadcast ; le fragment est réinjecté au tour
+    suivant quand on aura plus de contexte pour décider.
+    """
+    for m in _STREAM_LEAK_MARKERS:
+        if buf.endswith(m):
+            return buf[: -len(m)], buf[-len(m):]
+    return buf, ""
+
+
 def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None) -> str:
     """Nettoie la narration finale de toute trace de mécanique d'appel :
 
@@ -1197,11 +1319,42 @@ class Orchestrator:
             # et à mesure au client.
             if on_delta:
                 collected = ""
+                pending = ""   # fragment retenu (début de balise potentiel)
                 async for token in self.client.stream_chat(
                     work, tools=tools_arg,
                 ):
                     collected += token
-                    await on_delta(token)
+                    pending += token
+                    # On nettoie le contenu SÛR du buffer avant de le pousser au
+                    # client, pour éviter la fuite des balises d'appel/thinking à
+                    # l'écran. Le fragment suspect (`<tool`, `*(`…) est retenu
+                    # jusqu'au flush final où on aura le contexte complet.
+                    safe, pending = _safe_stream_split(pending)
+                    if safe:
+                        # Filtre léger idempotent : applique le strip thinking +
+                        # suppression des jetons gemma, SANS les regex multi-token
+                        # (qui seraient tronquées en streaming) — elles s'exécutent
+                        # en intégralité sur le buffer final ci-dessous.
+                        # strip_spaces=False : ne JAMAIS dénuder chaque delta,
+                        # sinon les espaces/retours à la ligne entre les mots
+                        # disparaissent (texte collé à l'écran pendant le
+                        # streaming, corrigé seulement au message final).
+                        safe = _strip_thinking(safe, strip_spaces=False)
+                        for _tok in _GEM_QUOTE_TOKENS:
+                            if _tok in safe:
+                                safe = safe.replace(_tok, "")
+                        safe = _TOOLCALL_ORPHAN_CLOSE_RE.sub("", safe)
+                        if safe:
+                            await on_delta(safe)
+                # Flush final : le fragment retenu + tout reste, nettoyé complet.
+                if pending.strip():
+                    final = _strip_thinking(
+                        pending
+                    )
+                    final = _TOOLCALL_ORPHAN_CLOSE_RE.sub("", final)
+                    final = _tidy_empty_lines(final).strip()
+                    if final:
+                        await on_delta(final)
                 narration = collected
             else:
                 narration = chat.content
@@ -1243,6 +1396,43 @@ class Orchestrator:
                             "lancer_d20...). Recommence ce tour : appelle l'outil, "
                             "attends son résultat, puis narre l'issue en reprenant "
                             "le chiffre donné par l'outil."
+                        ),
+                    ))
+                    continue
+
+            # --- D1ter. Répétition d'une scène déjà narrée ------------------
+            # Le modèle re-narre mot pour mot un tour précédent au lieu de
+            # répondre à l'action du joueur (écho quasi verbatim observé en
+            # partie réelle) : l'action est perdue et le fil de l'histoire
+            # casse. On relance avec un correctif qui re-cite l'action du
+            # joueur — les deltas déjà streamés sont remplacés par le dm final.
+            if narration.strip() and result.corrections < 3:
+                echo = trouve_repetition(narration, work)
+                if echo:
+                    result.corrections += 1
+                    derniere_action = next(
+                        (m.content for m in reversed(work)
+                         if m.role == "user" and (m.content or "").strip()),
+                        "(action illisible)",
+                    )
+                    _log.warning(
+                        "narration répétée d'un tour précédent (« %s… », "
+                        "correction %d) — relance orientée sur l'action joueur",
+                        echo[:80], result.corrections,
+                    )
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "⚠️ CORRECTION : tu viens de RÉPÉTER mot pour mot "
+                            "une narration déjà envoyée "
+                            f"(« {echo}… »). C'est interdit : chaque tour "
+                            "FAIT AVANCER l'histoire. L'action du joueur à "
+                            f"laquelle tu dois répondre est : "
+                            f"« {derniere_action} ». Raconte la CONSÉQUENCE "
+                            "de cette action (nouveaux événements, PNJ, "
+                            "découvertes ou dangers), en t'appuyant sur "
+                            "l'état actuel et les résultats d'outils — "
+                            "jamais en recopiant un texte précédent."
                         ),
                     ))
                     continue
@@ -1325,9 +1515,30 @@ class Orchestrator:
         try:
             if on_delta:
                 collected = ""
+                pending = ""
                 async for token in self.client.stream_chat(final_work, tools=None):
                     collected += token
-                    await on_delta(token)
+                    pending += token
+                    safe, pending = _safe_stream_split(pending)
+                    if safe:
+                        # strip_spaces=False : cf. commentaire du flux
+                        # streaming principal — préserve espaces/retours
+                        # à la ligne entre les deltas.
+                        safe = _strip_thinking(safe, strip_spaces=False)
+                        for _tok in _GEM_QUOTE_TOKENS:
+                            if _tok in safe:
+                                safe = safe.replace(_tok, "")
+                        safe = _TOOLCALL_ORPHAN_CLOSE_RE.sub("", safe)
+                        if safe:
+                            await on_delta(safe)
+                if pending.strip():
+                    await on_delta(
+                        _tidy_empty_lines(
+                            _TOOLCALL_ORPHAN_CLOSE_RE.sub(
+                                "", _strip_thinking(pending)
+                            )
+                        ).strip()
+                    )
                 narration = collected
             else:
                 fb = await self.client.chat(final_work, tools=None)

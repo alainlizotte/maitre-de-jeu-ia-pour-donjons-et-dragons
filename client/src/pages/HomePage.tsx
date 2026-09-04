@@ -2,7 +2,7 @@
 // Le joueur choisit ici le personnage (menu déroulant) qu'il incarnera en
 // rejoignant ou créant une partie ; il est transmis au WS via le store.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken, setToken } from "../api/rest";
@@ -148,10 +148,21 @@ export function HomePage() {
     return <Navigate to="/connexion" replace />;
   }
 
+  // Les portraits sont générés en arrière-plan côté serveur (ComfyUI) :
+  // tant qu'un personnage affiche « Portrait en génération… », on relance
+  // la requête toutes les 3 s pour rafraîchir la carte dès que l'image
+  // est prête. Abandon après 2 min (ComfyUI désactivé → monogramme).
+  const debutAttentePortrait = useRef(Date.now());
   const persos = useQuery({
     queryKey: ["persos"],
     queryFn: api.listPersos,
     enabled: !!getToken(),
+    refetchInterval: (query) => {
+      const liste = (query.state.data ?? []) as FichePerso[];
+      if (!liste.some((p) => !p.portrait)) return false;
+      if (Date.now() - debutAttentePortrait.current > 120_000) return false;
+      return 3000;
+    },
   });
   const parties = useQuery({
     queryKey: ["parties"],

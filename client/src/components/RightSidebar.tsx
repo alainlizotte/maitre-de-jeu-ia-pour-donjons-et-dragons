@@ -27,6 +27,81 @@ interface RightSidebarProps {
   socket?: React.RefObject<{ send: (payload: Record<string, unknown>) => void } | null>;
 }
 
+/** Image de la galerie Monstres avec retry anti-cache : si le PNG n'est pas
+ *  encore prêt (ComfyUI en cours de génération) au moment où le patch arrive,
+ *  on re-tente quelques fois avec cache-busting avant de basculer sur le
+ *  placeholder SVG. Même logique que les portraits de personnages. */
+function MonsterGalleryImg({
+  url,
+  nom,
+  onClick,
+}: {
+  url: string;
+  nom: string;
+  onClick?: () => void;
+}) {
+  const base = url.replace(/\?.*$/, "");
+  const [failed, setFailed] = useState(0); // -1 = placeholder définitif
+  const maxRetries = 5;
+
+  useEffect(() => {
+    if (failed <= 0 || failed > maxRetries) return;
+    const delay = Math.min(2000 * Math.pow(2, failed - 1), 30000);
+    const timer = setTimeout(() => setFailed(failed + 1), delay);
+    return () => clearTimeout(timer);
+  }, [failed, maxRetries]);
+
+  const isSvg = base.endsWith(".svg");
+  if (failed > maxRetries) {
+    // Échec prolongé → placeholder SVG (si pas déjà) ou image masquée.
+    if (isSvg) {
+      return (
+        <div className="text-xs text-stone-500 px-2 text-center">
+          {nom}
+        </div>
+      );
+    }
+    const svg = base.replace(/\.(png|jpg|jpeg|webp)$/i, ".svg");
+    return (
+      <img
+        src={`${svg}?t=${Date.now()}`}
+        alt={nom}
+        onClick={onClick}
+        className="max-w-full max-h-full object-contain"
+      />
+    );
+  }
+  if (failed > 0) {
+    // Re-monte le <img> avec cache-busting pour forcer le re-téléchargement.
+    return (
+      <img
+        key={`${base}-${failed}`}
+        src={`${base}?t=${Date.now()}`}
+        alt={nom}
+        title={nom}
+        onClick={onClick}
+        className="max-w-full max-h-full object-contain cursor-zoom-in"
+        onLoad={() => setFailed(0)}
+        onError={() => {
+          if (failed === 0) setFailed(1);
+        }}
+      />
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt={nom}
+      title={nom}
+      onClick={onClick}
+      className="max-w-full max-h-full object-contain cursor-zoom-in"
+      onError={() => {
+        setFailed(1);
+      }}
+    />
+  );
+}
+
 /** Moitié basse de la colonne : galerie à onglets — monstres rencontrés et
  *  scènes illustrées (salles de donjon + moments clés générés par le MJ).
  *  L'onglet Scènes s'active tout seul quand une nouvelle image arrive. */
@@ -172,19 +247,10 @@ function EncounterGallery() {
             {current.nom}
           </div>
           <div className="flex-1 min-h-0 rounded border border-stone-700 bg-stone-950/60 overflow-hidden flex items-center justify-center">
-            <img
-              src={current.url}
-              alt={current.nom}
-              title={isMonstres ? `Voir la fiche de ${current.nom}` : "Agrandir"}
+            <MonsterGalleryImg
+              url={current.url}
+              nom={current.nom}
               onClick={() => (isMonstres ? setSheet(current) : setZoom(current))}
-              className="max-w-full max-h-full object-contain cursor-zoom-in"
-              onError={(e) => {
-                // PNG manquant → placeholder SVG du même slug.
-                const el = e.target as HTMLImageElement;
-                if (!el.src.endsWith(".svg")) {
-                  el.src = current.url.replace(/\.(png|jpg|jpeg|webp)$/i, ".svg");
-                }
-              }}
             />
           </div>
           {items.length > 1 && (

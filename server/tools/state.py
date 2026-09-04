@@ -223,6 +223,19 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     monstres_combat: list[dict] = []
     lignes: list[str] = ["🎲 **Initiative du combat**"]
 
+    def _mod_initiative_pj(nom_pj: str, mod_dex: int) -> int:
+        """Mod. DEX + dons d'initiative lus sur la fiche (Initiative
+        améliorée = +4). L'entrée `pj` de l'état ne transporte pas les
+        dons ; fiche absente → mod. DEX seul. Fail-safe."""
+        try:
+            from .fiches import _load_fiche, bonus_dons_effet
+            fiche = _load_fiche(ctx, nom_pj)
+            if fiche:
+                return mod_dex + bonus_dons_effet(fiche.get("dons"), "initiative")
+        except Exception:                                    # noqa: BLE001
+            pass
+        return mod_dex
+
     # Monstres validés (init officielle du bestiaire). Les homonymes sont
     # d'abord désambiguïsés : le suivi de tour/PV est basé sur le nom, deux
     # créatures identiques doivent rester distinctes.
@@ -277,7 +290,7 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
                 import re as _re
                 m = _re.search(r"(?:DEX|Dex)\D{0,3}(\d{1,2})", caracs)
                 dex = int(m.group(1)) if m else 10
-                mod = (dex - 10) // 2
+                mod = _mod_initiative_pj(str(p.get("nom") or ""), (dex - 10) // 2)
                 jet = random.randint(1, 20)
                 participants.append({"nom": p["nom"], "init": jet + mod,
                                      "jet_brut": jet, "mod": mod})
@@ -287,7 +300,7 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
                 )
                 continue
         dex = ((caracs.get("DEX") if isinstance(caracs, dict) else None) or 10)
-        mod = (int(dex) - 10) // 2
+        mod = _mod_initiative_pj(str(p.get("nom") or ""), (int(dex) - 10) // 2)
         jet = random.randint(1, 20)
         participants.append({"nom": p["nom"], "init": jet + mod,
                              "jet_brut": jet, "mod": mod})

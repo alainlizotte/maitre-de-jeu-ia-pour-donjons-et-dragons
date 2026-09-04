@@ -50,6 +50,44 @@ _DEBUT_AVENTURE = (
 )
 
 
+def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
+    """Bloc « SCÉNARIO (bible) » injecté au MJ à chaque tour : la trame du
+    scénario (accroche, PNJ, objectifs, étapes en cours/accomplies) et
+    l'avertissement d'édition. Suffisant pour que le MJ reste sur la trame
+    même quand l'historique est tronqué."""
+    bible = (quete or {}).get("bible") or {}
+    if not bible:
+        return ""
+    lignes = ["\n=== SCÉNARIO (bible) — reste sur cette trame ==="]
+    # Avertissement d'édition / difficulté (cohérence 3.5).
+    if bible.get("avertissement"):
+        lignes.append(bible["avertissement"])
+    if bible.get("niveau_recommande"):
+        lignes.append(
+            f"Niveaux recommandés : {bible['niveau_recommande']}"
+            + (f" — joueurs : {bible['joueurs_recommandes']}"
+               if bible.get("joueurs_recommandes") else "")
+        )
+    if bible.get("resume"):
+        lignes.append(f"Résumé du scénario : {bible['resume'][:1400]}")
+    objectif = bible.get("objectif") or bible.get("etape_courante") or ""
+    if objectif:
+        lignes.append(f"Objectif courant (étape en cours) : {objectif}")
+    etapes_faites = bible.get("etapes_terminees") or []
+    if etapes_faites:
+        lignes.append(
+            "Étapes accomplies : "
+            + ", ".join(etapes_faites[-6:])
+        )
+    lignes.append(
+        "→ Chaque tour, lie une action des PJ à cet objectif. Ne dérive pas "
+        "hors-sujet : si l'action s'éloigne, ramène-la vers la trame (sans "
+        "forcer brutalement : respecte les choix des PJ). Mets à jour "
+        "`scenario_etape` quand une étape est franchie."
+    )
+    return "\n".join(lignes)
+
+
 def _sexe_libelle(sexe_brut: str) -> str:
     """Normalise un sexe stocké (« M », « F », « Autre », « f »…) en libellé."""
     s = (sexe_brut or "").strip().lower()
@@ -79,6 +117,20 @@ def _genre_pj(data_dir: str, p: dict[str, Any]) -> str:
             except Exception:                                   # noqa: BLE001
                 return ""
     return _sexe_libelle(sexe_brut)
+
+
+def _dons_competences_pj(data_dir: str, nom: str) -> str:
+    """Dons + rangs de compétences d'un PJ, lus dans sa fiche sur disque —
+    l'entrée `pj` de l'état ne transporte ni les dons ni les rangs. Sans
+    cette ligne, le MJ ignore les choix faits à la création. Renvoie ''
+    si fiche absente ou sans dons/rangs (fail-safe)."""
+    if not nom or not data_dir:
+        return ""
+    try:
+        from ..persos import charger_fiche, resume_dons_competences
+        return resume_dons_competences(charger_fiche(data_dir, nom) or {})
+    except Exception:                                        # noqa: BLE001
+        return ""
 
 
 # --------------------------------------------------------------------------- #
@@ -288,6 +340,9 @@ class PromptBuilder:
                 )
                 if not (etat.get("histoire") or []):
                     lignes.append(_DEBUT_AVENTURE)
+            bible_min = _scenario_bible_bloc(quete_min)
+            if bible_min:
+                lignes.append(bible_min)
             lignes += [
                 "",
                 "Pour progresser maintenant : appelle les outils adéquats "
@@ -368,6 +423,25 @@ class PromptBuilder:
                     f"CA {p.get('ca','?')} — joueur: {p.get('joueur','?')} — "
                     f"conditions: {p.get('conditions') or 'aucune'}"
                 )
+                # Dons + rangs de compétences = valeurs officielles de la
+                # fiche : le MJ doit les respecter dans tous les jets.
+                extra = _dons_competences_pj(data_dir, str(p.get("nom") or ""))
+                if extra:
+                    lignes.append(f"    · {extra}")
+                # Magie : emplacements restants + sorts préparés/connus.
+                try:
+                    from ..persos import charger_fiche as _cf
+                    from ..sorts import resume_sorts
+                    _sorts = resume_sorts(_cf(data_dir, str(p.get("nom") or "")) or {})
+                except Exception:                                # noqa: BLE001
+                    _sorts = ""
+                if _sorts:
+                    lignes.append(f"    · {_sorts}")
+            lignes.append(
+                "  (Dons et rangs listés = valeurs officielles des fiches : "
+                "applique-les systématiquement aux jets de compétence, "
+                "d'initiative, de sauvegarde et aux effets des dons.)"
+            )
 
         pnjs = etat.get("pnj", []) or []
         if pnjs:
@@ -417,6 +491,11 @@ class PromptBuilder:
                 etat.get("histoire") or []
             ):
                 lignes.append(_DEBUT_AVENTURE)
+            # Bible du scénario : la trame, les étapes et la difficulté,
+            # réinjectées pour tenir le cap malgré l'improvisation.
+            bible_bloc = _scenario_bible_bloc(quete)
+            if bible_bloc:
+                lignes.append(bible_bloc)
 
         derniere = etat.get("derniere_narration", "")
         if derniere:

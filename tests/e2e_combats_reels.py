@@ -66,7 +66,7 @@ THINK_MARKERS = ("<|channel", "<channel|>", "<|think", "thought\n")
 
 JOUEURS = ["Groth", "Mélodie", "Elara", "Zarkon"]
 
-TOUR_TIMEOUT = 280  # un tour MJ (LLM + images éventuelles)
+TOUR_TIMEOUT = 600  # un tour MJ (LLM + images éventuelles)
 
 
 # --------------------------------------------------------------------------- #

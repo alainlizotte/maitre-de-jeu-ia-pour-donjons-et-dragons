@@ -80,6 +80,14 @@ _COMBAT_PROSE_MARKERS = (
     "t'attaque", "vous agresse", "se rue sur vous",
     "prend son tour", "c'est au tour de",
 )
+# Prose de DÉGÂTS infligés (attaque portée en narration) : un montant de
+# dégâts narré hors combat signifie qu'une action hostile a été jouée —
+# le combat DOIT être régularisé (initiative + suivi des PV), sinon les
+# dégâts narrés restent de la fiction sans effet (observé en partie réelle :
+# « **5 points de dégâts** sont infligés à cette créature » sans engager_combat).
+_DEGATS_PROSE_RE = _re_mod.compile(
+    r"\b\d{1,3}\s*(?:points?\s+de\s+)?d[ée]g[âa]ts\b", _re_mod.IGNORECASE,
+)
 # Marqueurs de combat déjà CLÔS dans la narration : on n'engage JAMAIS un
 # combat rétroactivement si l'issue a déjà été racontée (victoire, défaite,
 # fuite, mort…), pour ne pas écraser un combat terminé.
@@ -2016,11 +2024,15 @@ def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any])
     """
     if not text:
         return []
-    # Sans marqueur explicite de combat, on ne déclenche JAMAIS un rattrapage :
-    # trop de faux positifs (monstre amical dans une taverne, squelette
-    # décoratif dont on parle sans s'y battre…).
+    # Déclencheurs : marqueur explicite de combat OU prose de dégâts (une
+    # attaque a été narrée). Sans l'un des deux, on ne déclenche JAMAIS un
+    # rattrapage : trop de faux positifs (monstre amical dans une taverne,
+    # squelette décoratif dont on parle sans s'y battre…).
     bas = text.lower()
-    if not any(m in bas for m in _COMBAT_PROSE_MARKERS):
+    if not (
+        any(m in bas for m in _COMBAT_PROSE_MARKERS)
+        or bool(_DEGATS_PROSE_RE.search(bas))
+    ):
         return []
     # Si la narration indique déjà que le combat est TERMINÉ (victoire,
     # défaite, fuite, monstre vaincu/tombé…), ne rien rattraper : l'issue a
@@ -2032,18 +2044,49 @@ def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any])
     except Exception:
         return []
     trouves: list[str] = []
+    # Vocabulaire de la prose (mots ≥ 4 lettres, normalisés sans accent,
+    # singulier OU pluriel) pour le rapprochement flou des noms — le petit
+    # modèle écrit parfois le nom ANGLAIS du monstre (« Ghoul ») là où le
+    # bestiaire porte le nom français (« Goule ») : sans rapprochement,
+    # l'attaque narrée restait sans combat et sans suivi de PV.
+    import difflib as _difflib
+    import unicodedata as _ud
+
+    def _sans_accents(w: str) -> str:
+        nf = _ud.normalize("NFKD", w)
+        return "".join(c for c in nf if not _ud.combining(c))
+
+    mots_prose: set[str] = set()
+    for w in _re_mod.split(r"[^a-z']+", bas):
+        w = w.strip("'")
+        if len(w) < 4:
+            continue
+        w2 = _sans_accents(w)
+        mots_prose.add(w2)
+        if w2.endswith("s"):
+            mots_prose.add(w2[:-1])
     for cle, m in (best.get("monstres", {}) or {}).items():
         if not isinstance(m, dict):
             continue
         nom = str(m.get("nom") or cle or "").strip()
         # On ne retient que les monstres explicitement nommés dans la prose
         # (insensible casse, minuscules normalisées). Un « zombie » mentionné
-        # en passant compte, mais il faut aussi un marqueur de combat (vérifié
-        # plus haut) pour déclencher le rattrapage.
+        # en passant compte, mais il faut aussi un marqueur de combat ou une
+        # prose de dégâts (vérifiés plus haut) pour déclencher le rattrapage.
         if not nom or len(nom) < 3:
             continue
-        if nom.lower() in bas:
+        nl = _sans_accents(nom.lower())
+        if nl in _sans_accents(bas):
             trouves.append(nom)
+            continue
+        # Rapprochement flou : nom du bestiaire vs mot de la prose (ratio ≥
+        # 0.8 → « Ghoul »/« Goule » = 0.8 exactement). Réservé aux noms
+        # d'au moins 4 lettres pour limiter les faux positifs.
+        if len(nl) >= 4:
+            for w in mots_prose:
+                if _difflib.SequenceMatcher(None, nl, w).ratio() >= 0.8:
+                    trouves.append(nom)
+                    break
     # Déduplique par nom (plusieurs clés du bestiaire peuvent pointer vers le
     # même affichage) pour un `engager_combat(nom, nom, …)` propre.
     _dedup = {_t: 1 for _t in trouves}
@@ -2642,11 +2685,19 @@ async def _handle_say(
                         == str(apres.get("courant_tour_pour") or "")
                         for p in (apres.get("pj") or [])
                     )
+                    # `actif_avant` est vide quand le combat a DÉBUTÉ pendant
+                    # ce tour (le joueur attaquait hors combat) : l'action
+                    # résolue doit alors aussi faire avancer la rotation,
+                    # sinon le joueur restait actif et rejouait au tour
+                    # suivant (double action, conformité 3.5 rompue).
                     force = bool(
                         action_consommee
                         and courant_est_pj
-                        and str(apres.get("courant_tour_pour") or "")
-                        == actif_avant
+                        and (
+                            not actif_avant
+                            or str(apres.get("courant_tour_pour") or "")
+                            == actif_avant
+                        )
                     )
                     res_post = await _boucle_combat(
                         ctx,
@@ -2807,7 +2858,15 @@ async def _handle_say(
             # On détecte la prose de combat ET on engage la mécanique
             # officielle, pour que l'ordre de combat s'affiche et que la
             # rotation suive les règles 3.5.
-            if not result.tool_calls_trace:
+            # Le rattrapage reste armé même si d'autres tools ont tourné dans
+            # le tour (ex. `lancer_degats` hors combat : les dégâts d'un
+            # monstre non suivi partaient dans le vide) — seuls
+            # `engager_combat`/`combat_ajouter_combattant` prouvent que le
+            # combat EST officiel.
+            if not any(
+                tc.get("name") in ("engager_combat", "combat_ajouter_combattant")
+                for tc in result.tool_calls_trace
+            ):
                 etat_detect = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
                     partie_id=partie_id,

@@ -251,6 +251,14 @@ _DAMAGE_PROSE_PATTERNS = [
         r"\b\d+\s+au\s+toucher[,;\s]+\d+\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
         re.IGNORECASE,
     ),
+    # « 12 (points de) dégâts sont infligés / ont été infligés » — voix
+    # passive (nombre AVANT le verbe) : échappait aux patterns actifs
+    # (« inflige 12 dégâts ») et laissait des dégâts 100 % narratifs.
+    re.compile(
+        r"\b\d{1,3}(?:\*\*)?\s*(?:points?\s+de\s+)?d[ée]g[âa]ts?\s*"
+        r"(?:\*\*)?\s*(?:sont|est|ont|a)\s+(?:\w+\s+)?inflig\w*",
+        re.IGNORECASE,
+    ),
     # « +2 dégâts » (« **+2 dégâts** sont infligés au Gnoll ») — forme très
     # fréquente chez Qwen/Gemma : montant écrit à la main sans lancer_degats.
     re.compile(

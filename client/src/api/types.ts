@@ -140,6 +140,12 @@ export type WsMessage =
   | { type: "status"; description: string; done?: boolean }
   | { type: "delta"; text: string }
   | { type: "tool_event"; event: ToolEvent }
+  /** Patch d'état poussé en direct dès l'exécution d'un tool serveur
+   *  (PV, phase, initiative…) — sans attendre le dm final du tour. */
+  | { type: "state_patches"; patches: unknown[] }
+  /** Le serveur a relancé le tour (simulation/répétition/rejeu) : l'aperçu
+   *  streamé est périmé, le client doit effacer le bloc en cours. */
+  | { type: "stream_reset" }
   | { type: "dm"; text: string; tool_events?: ToolEvent[]; state_patches?: unknown[] }
   | { type: "team_msg"; player: string; text: string }
   | { type: "audio_signal"; player: string; signal: Record<string, unknown> };

@@ -78,6 +78,8 @@ interface PartyStore {
   // -- Fil de discussion -------------------------------------------------- //
   messages: ChatMessage[];
   thinking: boolean;
+  /** Libellé du statut MJ (« Le MJ réfléchit… », « Le MJ finalise la scène… »). */
+  thinkingLabel: string;
   participants: string[];
 
   // -- Monstres rencontrés (galerie bas de colonne droite) --------------- //
@@ -92,9 +94,11 @@ interface PartyStore {
   addScene: (s: EncounterMonster) => void;
 
   addMessage: (m: ChatMessage) => void;
+  /** Retire un message du fil (reset de l'aperçu streamé périmé). */
+  removeMessage: (id: string) => void;
   appendDelta: (streamId: string, text: string) => void;
   finalizeStream: (streamId: string, content: string, toolEvents: ToolEvent[], image?: string) => void;
-  setThinking: (v: boolean) => void;
+  setThinking: (v: boolean, label?: string) => void;
   setParticipants: (p: string[]) => void;
   addParticipant: (p: string) => void;
 
@@ -220,6 +224,7 @@ export const useParty = create<PartyStore>((set) => ({
 
   messages: [],
   thinking: false,
+  thinkingLabel: "Le MJ réfléchit…",
   participants: [],
 
   monsters: [],
@@ -248,6 +253,9 @@ export const useParty = create<PartyStore>((set) => ({
 
   addMessage: (m) => set((st) => ({ messages: [...st.messages, m] })),
 
+  removeMessage: (id) =>
+    set((st) => ({ messages: st.messages.filter((m) => m.id !== id) })),
+
   appendDelta: (streamId, text) =>
     set((st) => ({
       messages: st.messages.map((m) =>
@@ -264,7 +272,11 @@ export const useParty = create<PartyStore>((set) => ({
       ),
     })),
 
-  setThinking: (v) => set({ thinking: v }),
+  setThinking: (v, label) =>
+    set((st) => ({
+      thinking: v,
+      thinkingLabel: v ? (label || st.thinkingLabel) : st.thinkingLabel,
+    })),
   setParticipants: (p) => set({ participants: p }),
   addParticipant: (p) =>
     set((st) =>

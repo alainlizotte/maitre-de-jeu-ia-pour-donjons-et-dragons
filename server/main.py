@@ -34,6 +34,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth as auth_mod
 from . import catalogue as catalogue_mod
+from . import gpu as _gpu
 from . import persos as persos_mod
 from . import sorts as sorts_mod
 from .config import AppConfig, get_config, set_config
@@ -146,12 +147,14 @@ _ITEM_ACQUISITION_RE = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
-# Détection d'une demande de SOIN / guérison (hors combat aussi) : le petit
-# modèle 9B narre « Je lance les dés et soigne X » SANS appeler
-# `fiche_perso_soigner`. On rejoue alors (5quater-d) pour que les PV changent.
+# Détection d'une demande de SOIN / guérison ou de REPOS (hors combat aussi) :
+# le petit modèle 9B narre « Je lance les dés et soigne X » ou « vous vous
+# reposez et récupérez vos PV » SANS appeler `fiche_perso_soigner` ni
+# `repos_long`. On rejoue alors (5quater-d) pour que les PV changent.
 _SOIN_RE = _re_mod.compile(
     r"\b(soign\w*|soins|guéri\w*|guéris\w*|guériss\w*|répar\w*|cicatris\w*"
-    r"|soins\s+légers|lancer\s+des\s+et\s+soigne|ressusci\w*)\b",
+    r"|soins\s+légers|lancer\s+des\s+et\s+soigne|ressusci\w*"
+    r"|repos\w*|récupèr\w*|régénér\w*)\b",
     _re_mod.IGNORECASE,
 )
 
@@ -1396,6 +1399,41 @@ async def set_quest(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     if "_erreur" in etat:
         raise HTTPException(status_code=404, detail="Partie introuvable.")
     etat["quete"] = {"titre": titre, "pitch": pitch, "source": source}
+    # Bible du scénario : construite ici (picker) comme le ferait
+    # `scenarios_laelith_charger` — trame + ennemis du module réinjectés au
+    # MJ à chaque tour (fidélité au scénario, même sans recharge du module).
+    # Best-effort : sans PDF lisible, la bible reste absente.
+    _sid = (
+        source.split("]", 1)[0].lstrip("[").strip()
+        if source.startswith("[") else ""
+    )
+    if _sid:
+        try:
+            from .tools.base import ToolContext as _TC
+            from .tools.scenarios import (
+                _charger_catalogue_plat as _ccp,
+                _construire_bible as _cb,
+                _ennemis_du_texte as _edt,
+                extraire_pdf as _epdf,
+            )
+            _ctx_q = _TC(
+                partie_id=partie_id, joueur="",
+                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+            )
+            _s = next(
+                (x for x in _ccp(_ctx_q) if str(x.get("id", "")) == _sid),
+                None,
+            )
+            if _s is not None:
+                _txt = _epdf(_ctx_q, _s["pdf"]) if _s.get("pdf") else ""
+                _bible = _cb(
+                    _s, _txt,
+                    str(etat.get("meta", {}).get("regles") or "D&D 3.5"),
+                )
+                _bible["ennemis"] = _edt(_ctx_q, _txt)
+                etat["quete"]["bible"] = _bible
+        except Exception as e:                                   # noqa: BLE001
+            print(f"[dnd35] Bible scénario non construite (picker) : {e}")
     etat["phase"] = "exploration"
     err = state.save(etat)
     if err:
@@ -1773,14 +1811,19 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
         session.authenticated.discard(ws)
 
 
-# Compteur global de tours MJ actifs (toutes parties confondues) : le déchargement
-# du modèle LLM ne doit survenir que lorsque PLUS AUCUN tour n'est en cours —
-# sinon un tour concurrent verrait le modèle disparaître sous ses pieds (HTTP 500).
-_active_turns: int = 0
-_turns_guard: asyncio.Lock = asyncio.Lock()
+# Compteur global de tours MJ actifs (toutes parties confondues) : géré par
+# server/gpu.py qui ARBITRE aussi le GPU — un tour LLM attend la fin des
+# générations ComfyUI en cours (et réciproquement), pour ne jamais charger
+# llama.cpp ET ComfyUI en même temps sur la même carte graphique.
+# Tâches d'arrière-plan (illustrations de monstres après le dm final) : la
+# référence est gardée pour éviter le garbage-collect prématuré.
+_bg_tasks: set[asyncio.Task] = set()
 # Unload différé (llm.unload_after_turn = false) : tâche en attente, annulée si
 # un nouveau tour démarre avant l'expiration du délai.
 _pending_unload: Optional[asyncio.Task] = None
+# Verrou autour du déchargement : un tour qui démarre pendant l'unload
+# (≈1 s) l'attend au lieu de perdre le modèle en cours de route.
+_unload_guard: asyncio.Lock = asyncio.Lock()
 
 
 def _cancel_pending_unload() -> None:
@@ -1792,25 +1835,20 @@ def _cancel_pending_unload() -> None:
 
 
 async def _turn_begin() -> None:
-    global _active_turns
-    async with _turns_guard:
-        # Un nouveau tour démarre : le modèle doit rester en VRAM.
-        _cancel_pending_unload()
-        _active_turns += 1
+    _cancel_pending_unload()
+    async with _unload_guard:
+        await _gpu.turn_begin()
 
 
 async def _turn_end() -> bool:
     """Décrémente le compteur de tours ; True s'il ne reste aucun tour actif."""
-    global _active_turns
-    async with _turns_guard:
-        _active_turns = max(0, _active_turns - 1)
-        return _active_turns == 0
+    return await _gpu.turn_end()
 
 
 async def _delayed_unload_task(app: FastAPI, delay_s: float) -> None:
     """Décharge le modèle après `delay_s` secondes d'inactivité.
 
-    Le garde `_turns_guard` est conservé pendant l'appel réseau d'unload :
+    Le garde `_unload_guard` est conservé pendant l'appel réseau d'unload :
     un tour qui démarre pendant l'unload attend sa fin (≈1 s) au lieu de
     perdre le modèle en cours de route. La tâche est annulée par
     `_cancel_pending_unload` si un tour reprend avant l'expiration du délai.
@@ -1818,8 +1856,8 @@ async def _delayed_unload_task(app: FastAPI, delay_s: float) -> None:
     global _pending_unload
     try:
         await asyncio.sleep(delay_s)
-        async with _turns_guard:
-            if _active_turns > 0:
+        async with _unload_guard:
+            if _gpu.turns_actifs() > 0:
                 return  # un tour a repris — il reprogrammera l'unload
             _pending_unload = None
             await app.state.client.unload_model()
@@ -1909,6 +1947,58 @@ async def _appliquer_degats_oublies(
             )
             if tr is not None and not tr.text.startswith("❌"):
                 lignes.append(tr.text)
+
+    # 2ᵉ filet (rattrapage « touché sans dégâts ») : une attaque RÉUSSIE
+    # (lancer_attaque → Touché / 20 naturel) dont la cible n'a reçu AUCUN
+    # lancer_degats NI aucune application (`fiche_perso_infliger_degats`).
+    # Le LLM narre alors le montant en prose — on récupère le chiffre annoncé
+    # près du nom de la cible (fenêtre courte) et on l'applique réellement.
+    # S'il est absent ou ambigu, on n'invente rien : les PV restent cohérents.
+    degats_jetes: set[str] = set()
+    deja_applique: set[str] = set()
+    for tc in trace:
+        nom_tc = tc.get("name")
+        if nom_tc == "lancer_degats" and tc.get("ok"):
+            c = str((tc.get("args") or {}).get("cible") or "").strip()
+            if c:
+                degats_jetes.add(_norm_nom(c))
+        elif nom_tc == "fiche_perso_infliger_degats" and tc.get("ok"):
+            c = str((tc.get("args") or {}).get("nom") or "").strip()
+            if c:
+                deja_applique.add(_norm_nom(c))
+    re_montant = _re_mod.compile(
+        r"\+?\s*(\d{1,3})\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
+        _re_mod.IGNORECASE,
+    )
+    narration = result.narration or ""
+    cibles_traitees: set[str] = set()
+    for tc in trace:
+        if tc.get("name") != "lancer_attaque" or not tc.get("ok"):
+            continue
+        texte_tc = tc.get("text") or ""
+        if ("✅ **Touché**" not in texte_tc) and ("⭐ **20 naturel**" not in texte_tc):
+            continue
+        cible = str((tc.get("args") or {}).get("nom_cible") or "").strip()
+        cle_cible = _norm_nom(cible)
+        if (not cible or cle_cible in degats_jetes
+                or cle_cible in deja_applique or cle_cible in cibles_traitees):
+            continue
+        montants: list[int] = []
+        for m_nom in _re_mod.finditer(_re_mod.escape(cible), narration,
+                                      _re_mod.IGNORECASE):
+            fenetre = narration[max(0, m_nom.start() - 100):m_nom.end() + 100]
+            montants.extend(int(x) for x in re_montant.findall(fenetre))
+        uniques = sorted(set(montants))
+        if len(uniques) != 1:
+            continue
+        cibles_traitees.add(cle_cible)
+        tr = await orch.execute_tool_direct(
+            "fiche_perso_infliger_degats",
+            {"nom": cible, "degats": uniques[0]},
+            ctx, on_event, result,
+        )
+        if tr is not None and not tr.text.startswith("❌"):
+            lignes.append(tr.text)
     return "\n\n".join(lignes)
 
 
@@ -1961,15 +2051,28 @@ def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any])
 
 
 def _load_bestiaire_plain(data_dir: str) -> dict[str, Any]:
-    """Charge le bestiaire JSON directement (sans ToolContext)."""
+    """Charge le bestiaire JSON directement (sans ToolContext).
+
+    Le bestiaire source stocke les monstres en clés top-level (hors `_meta`) :
+    on les enveloppe ici sous `{"monstres": {...}}`, même convention que
+    `tools.monstres._load_bestiaire` — sinon la détection de combat en prose
+    (5ter) itérait sur un dict vide et ne détectait JAMAIS rien.
+    """
     import json as _json
     from pathlib import Path as _Path
     path = _Path(data_dir) / "bestiaire.json"
     try:
         with open(path, "r", encoding="utf-8") as _f:
-            return _json.load(_f)
-    except Exception:
+            raw = _json.load(_f)
+    except Exception:                                            # noqa: BLE001
         return {"monstres": {}}
+    monstres: dict[str, Any] = {}
+    for _k, _v in raw.items():
+        if _k == "_meta":
+            continue
+        if isinstance(_v, dict) and "nom" in _v:
+            monstres[_v.get("cle", _k)] = _v
+    return {"monstres": monstres}
 
 
 def _derive_scenario_id(data_dir: str, narration: str) -> Optional[str]:
@@ -2040,6 +2143,13 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
             result.state_patches.extend(result2.state_patches)
             result.narration = result2.narration
             result.iterations += result2.iterations
+            # (c) La narration finale remplace celle déjà streamée : on
+            # demande aux clients d'effacer l'aperçu périmé avant le dm final.
+            if on_event is not None:
+                try:
+                    await on_event({"type": "stream_reset"})
+                except Exception:                                # noqa: BLE001
+                    pass
             print(f"[dnd35] Rejeu {tag} réussi ({len(result2.tool_calls_trace)} tools)")
         else:
             print(f"[dnd35] Rejeu {tag} sans tool — avancement forcé")
@@ -2093,6 +2203,36 @@ async def _handle_say(
     await _turn_begin()
     try:
         async with session.turn_lock:
+            # Callbacks définis AVANT le pre-run : le moteur de combat serveur
+            # (et les tools qu'il exécute) doit pouvoir pousser ses patches
+            # d'état en direct, pas seulement à la fin du tour.
+            async def on_event(ev: dict[str, Any]) -> None:
+                # (a)/(c) Les events de contrôle ont leur propre canal WS :
+                # patches d'état immédiats et reset de l'aperçu streamé.
+                etype = ev.get("type")
+                if etype == "state_patches":
+                    await session.broadcast({
+                        "type": "state_patches",
+                        "patches": ev.get("patches") or [],
+                    })
+                elif etype == "stream_reset":
+                    await session.broadcast({"type": "stream_reset"})
+                else:
+                    await session.broadcast({"type": "tool_event", "event": ev})
+
+            async def on_delta(token: str) -> None:
+                # Stream des tokens de narration vers tous les clients connectés.
+                if cfg.game.stream_to_clients:
+                    await session.broadcast({"type": "delta", "text": token})
+
+            async def reset_stream() -> None:
+                """(c) Efface l'aperçu streamé chez les clients : à réserver
+                aux cas où la narration finale va REMPLACER le texte déjà
+                affiché (rejeu correctif), sinon le joueur voit un bloc
+                disparaître puis un autre le remplacer sans transition."""
+                if cfg.game.stream_to_clients:
+                    await session.broadcast({"type": "stream_reset"})
+
             # 2.pre ⚙️ MOTEUR DE COMBAT SERVEUR (pre-run) : avant toute
             # décision de tour, le serveur fait avancer la mécanique —
             # saute les combattants incapables (mourants…), joue les tours
@@ -2100,6 +2240,7 @@ async def _handle_say(
             # victoire/défaite (clôture + XP officielle + mémoire). Aucun
             # LLM n'intervient ici : c'est déterministe.
             ctx_pre = _ctx(partie_id, player)
+            ctx_pre.on_event = on_event
             events_pre: list[str] = []
             patches_pre: list[dict[str, Any]] = []
             try:
@@ -2259,17 +2400,29 @@ async def _handle_say(
 
             # 4. Boucle d'orchestration : LLM ↔ tools → narration + events + patches.
             ctx = _ctx(partie_id, player)
+            ctx.on_event = on_event
 
-            async def on_event(ev: dict[str, Any]) -> None:
-                await session.broadcast({"type": "tool_event", "event": ev})
-
-            async def on_delta(token: str) -> None:
-                # Stream des tokens de narration vers tous les clients connectés.
-                if cfg.game.stream_to_clients:
-                    await session.broadcast({"type": "delta", "text": token})
+            # Des dégâts viennent d'être résolus par le moteur serveur (pre-run)
+            # ? Le LLM les reformule alors légitimement dans sa narration — on
+            # lui fait confiance sur la prose de dégâts pour ce tour.
+            trust_damage_prose = any(
+                "dégâts" in str(ev).lower() for ev in events_pre
+            )
 
             orch = _orchestrator(app)
-            result = await orch.run(messages, ctx, on_event=on_event, on_delta=on_delta)
+            result = await orch.run(
+                messages, ctx, on_event=on_event, on_delta=on_delta,
+                trust_damage_prose=trust_damage_prose,
+            )
+
+            # Statut : la narration est écrite à l'écran — ce qui suit est du
+            # post-traitement (vérifications anti-simulation, rejeus, images
+            # en arrière-plan). Le libellé change pour que la table sache que
+            # le MJ n'« écrit » plus.
+            await session.broadcast({
+                "type": "status",
+                "description": "Le MJ finalise la scène…",
+            })
 
             # 5bis. ⚔️ Post-traitement du tour LLM. Les tours de monstres ne
             # sont PLUS rejoués par le LLM : le moteur serveur (ci-dessous,
@@ -2364,6 +2517,7 @@ async def _handle_say(
                                     )
                                     result.narration = result2.narration
                                     result.iterations += result2.iterations
+                                    await reset_stream()
                                     print(
                                         f"[dnd35] Rejeu PJ {actif_avant} "
                                         f"réussi ({len(
@@ -2432,6 +2586,7 @@ async def _handle_say(
                         result.state_patches.extend(result2.state_patches)
                         result.narration = result2.narration
                         result.iterations += result2.iterations
+                        await reset_stream()
                         print("[dnd35] Rejeu invoquation réussi")
                     else:
                         print("[dnd35] Rejeu invoquation toujours sans "
@@ -2517,60 +2672,83 @@ async def _handle_say(
             except Exception as e:                                   # noqa: BLE001
                 print(f"[dnd35] Moteur de combat post-tour échoué (ignoré) : {e}")
 
-            # 5quater. 🖼️ Illustrations des monstres en jeu : le modèle
-            # oublie souvent d'appeler monstre_consulter à l'annonce d'une
-            # rencontre ; on garantit ici le portrait de chaque monstre
-            # nouveau (cache instantané s'il existe déjà, budget temps
-            # sinon pour ne pas bloquer la table). L'URL est persistée
-            # dans monstres_combat[i].image_url ET le journal
-            # rencontres_images : le front peut ainsi réafficher les
-            # portraits après un rechargement de page, jusqu'à la mort
-            # du monstre.
-            try:
-                _t0 = time.time()
-                _vus: set[str] = set()
-                _img_persist = False
-                _nouvelles_rencontres: list[tuple[str, str]] = []
-                from .tools.monstres import _type_nom
-                for mo in apres.get("monstres_combat") or []:
-                    nom_mo = str((mo or {}).get("nom") or "").strip()
-                    # Clé de dédup = NOM DE TYPE (« Gobelin (2) » == « Gobelin ») :
-                    # un groupe de monstres identiques partage UNE seule illustration.
-                    cle_mo = _type_nom(nom_mo).lower()
-                    if not nom_mo or cle_mo in _vus:
-                        continue
-                    _vus.add(cle_mo)
-                    if time.time() - _t0 > 100:
-                        print("[dnd35] Budget images monstres atteint — "
-                              "le reste sera généré au tour suivant.")
-                        break
-                    try:
-                        url_img = await image_pour(ctx, nom_mo)
-                    except Exception as e:                           # noqa: BLE001
-                        print(f"[dnd35] Image {nom_mo} échouée (ignoré) : {e}")
-                        continue
-                    if url_img:
-                        # On applique la MÊME image à tous les monstres du même type
-                        # (Gobelin, Gobelin (2), Gobelin (3)…), pas seulement au premier.
-                        for mo2 in apres.get("monstres_combat") or []:
-                            if _type_nom(str((mo2 or {}).get("nom") or "")).lower() == cle_mo:
-                                if (mo2 or {}).get("image_url") != url_img:
-                                    mo2["image_url"] = url_img
-                                    _img_persist = True
-                        result.state_patches.append({"image_monstre": url_img})
-                        _nouvelles_rencontres.append((_type_nom(nom_mo), url_img))
-                if _nouvelles_rencontres:
-                    from .tools.monstres import _fusionner_rencontres
-                    if _fusionner_rencontres(apres, _nouvelles_rencontres):
-                        _img_persist = True
-                if _img_persist:
-                    PartyState(
+            # 5quater. 🖼️ Illustrations des monstres en jeu — DÉPORTÉES EN
+            # ARRIÈRE-PLAN. La génération ComfyUI (jusqu'à ~100 s par lot)
+            # ne doit ni prolonger le statut du tour ni retarder le dm final :
+            # la tâche démarre ici, persiste les URLs (image_url + journal des
+            # rencontres) et pousse les patches au fil de l'eau ; la narration
+            # et les mises à jour de PV partent donc immédiatement.
+            async def _illustrer_monstres_arriere_plan() -> None:
+                try:
+                    _t0 = time.time()
+                    _vus: set[str] = set()
+                    _nouvelles_rencontres: list[tuple[str, str]] = []
+                    urls_par_type: dict[str, str] = {}
+                    from .tools.monstres import _type_nom
+                    etat_img = PartyState(
                         data_dir=str(cfg.abs(cfg.paths.data_dir)),
                         partie_id=partie_id,
-                    ).save(apres)
-            except Exception as e:                                   # noqa: BLE001
-                print(f"[dnd35] Post-traitement combat (moteur/images) "
-                      f"échoué (ignoré) : {e}")
+                    ).load()
+                    for mo in etat_img.get("monstres_combat") or []:
+                        nom_mo = str((mo or {}).get("nom") or "").strip()
+                        # Clé de dédup = NOM DE TYPE (« Gobelin (2) » == « Gobelin ») :
+                        # un groupe de monstres identiques partage UNE seule illustration.
+                        cle_mo = _type_nom(nom_mo).lower()
+                        if not nom_mo or cle_mo in _vus:
+                            continue
+                        _vus.add(cle_mo)
+                        if time.time() - _t0 > 180:
+                            # Budget élargi (180 s) : l'arbitrage GPU peut
+                            # faire ATTENDRE une image avant soumission (tour
+                            # LLM en cours) — ce temps d'attente consomme le
+                            # budget mais ne charge pas le PC.
+                            print("[dnd35] Budget images monstres atteint — "
+                                  "le reste sera généré au tour suivant.")
+                            break
+                        try:
+                            url_img = await image_pour(ctx, nom_mo)
+                        except Exception as e:                   # noqa: BLE001
+                            print(f"[dnd35] Image {nom_mo} échouée (ignoré) : {e}")
+                            continue
+                        if url_img:
+                            _nouvelles_rencontres.append((_type_nom(nom_mo), url_img))
+                            urls_par_type[cle_mo] = url_img
+                            # Galerie en direct, sans attendre la persistance.
+                            await on_event({
+                                "type": "state_patches",
+                                "patches": [{"image_monstre": url_img}],
+                            })
+                    if not urls_par_type:
+                        return
+                    # Persistance : re-load → patch ciblé → save (la fenêtre de
+                    # course avec un tour concurrent est réduite au save).
+                    st_img = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    )
+                    etat_img = st_img.load()
+                    touche = False
+                    for mo2 in etat_img.get("monstres_combat") or []:
+                        cle2 = _type_nom(str((mo2 or {}).get("nom") or "")).lower()
+                        url2 = urls_par_type.get(cle2)
+                        # On applique la MÊME image à tous les monstres du même
+                        # type (Gobelin, Gobelin (2), Gobelin (3)…).
+                        if url2 and (mo2 or {}).get("image_url") != url2:
+                            mo2["image_url"] = url2
+                            touche = True
+                    if _nouvelles_rencontres:
+                        from .tools.monstres import _fusionner_rencontres
+                        if _fusionner_rencontres(etat_img, _nouvelles_rencontres):
+                            touche = True
+                    if touche:
+                        st_img.save(etat_img)
+                except Exception as e:                           # noqa: BLE001
+                    print(f"[dnd35] Illustrations arrière-plan échouées "
+                          f"(ignoré) : {e}")
+
+            _t_img = asyncio.create_task(_illustrer_monstres_arriere_plan())
+            _bg_tasks.add(_t_img)
+            _t_img.add_done_callback(_bg_tasks.discard)
 
             # 5quater-bis. 🖼️ Scènes cousues d'avance par univers pilote
             # (Laelith) : la galerie « Scènes » s'alimente automatiquement
@@ -2870,25 +3048,31 @@ async def _handle_say(
                                             on_event, _obj_inv,
                                             "inventaire objet")
 
-                # --- 5quater-d. Soin narré mais non appliqué (hors combat).
-                # Le joueur (ou MJ) demande/annonce un soin mais aucun outil
-                # `fiche_perso_soigner` n'a été appelé → les PV ne bougent
-                # pas. On ré-invoque une fois, y compris hors combat.
+                # --- 5quater-d. Soin ou repos narré mais non appliqué (hors
+                # combat). Le joueur (ou MJ) demande un soin / un repos mais
+                # aucun outil `fiche_perso_soigner` ni `repos_long` n'a été
+                # appelé → les PV ne bougent pas. On ré-invoque une fois, y
+                # compris hors combat.
                 _soin_global_appele = any(
-                    str(tc.get("name")) == "fiche_perso_soigner"
+                    str(tc.get("name")) in (
+                        "fiche_perso_soigner", "repos_long",
+                        "fiche_perso_mettre_a_jour",
+                    )
                     for tc in result.tool_calls_trace
                 )
                 if (not _soin_global_appele
                         and _SOIN_RE.search((text or "") + " "
                                             + (result.narration or ""))):
                     _obj_soin = (
-                        "⚠️ ERREUR système : un SOIN a été annoncé mais "
-                        "`fiche_perso_soigner` n'a pas été appelé — les PV "
-                        "ne sont pas modifiés. Relance les dés de soin "
-                        "(`lancer_des` avec par ex. 1d8) puis appelle "
-                        "`fiche_perso_soigner` (nom du PJ à soigner, "
-                        "montant_rendu+bonus) pour appliquer la guérison aux "
-                        "PV. NE narrate PAS la guérison sans appeler l'outil."
+                        "⚠️ ERREUR système : un SOIN ou un REPOS a été annoncé "
+                        "mais aucun outil n'a été appelé — les PV ne sont pas "
+                        "modifiés. Pour un soin ponctuel : relance les dés de "
+                        "soin (`lancer_des` avec par ex. 1d8) puis appelle "
+                        "`fiche_perso_soigner` (nom du PJ à soigner, montant). "
+                        "Pour un repos (nuit / 8 h de récupération) : appelle "
+                        "`repos_long`, qui applique officiellement la "
+                        "récupération des PV et des sorts. NE narrate PAS la "
+                        "guérison sans appeler l'outil."
                     )
                     await _rejoue_correctif(orch, messages, ctx, result,
                                             on_event, _obj_soin, "soins")

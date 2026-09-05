@@ -29,6 +29,8 @@ import time
 from typing import Any, Optional
 import httpx
 
+from .. import gpu as _gpu
+
 # Usages attendus (mapped à un workflow .json dans server/image/workflows/):
 #   "monstre"  → portraits de monstres (bestiaire)
 #   "lieu"     → illustrations de salles de donjon / lieux de quête
@@ -252,9 +254,17 @@ class ComfyUIBackend:
             )
         graph = self._load_workflow(usage)
         graph, seed = self._patch_workflow(graph, prompt_text, usage, seed)
-        prompt_id = await self._submit_prompt(graph)
-        entry = await self._poll_history(prompt_id)
-        await self._download_png(entry, dest_path)
+        # Arbitrage GPU : attend la fin du tour LLM en cours (une soumission
+        # ComfyUI ne doit JAMAIS chevaucher une requête llama.cpp). Une
+        # génération demandée par le tour LLM lui-même (tool du MJ) passe
+        # sans attendre — elle est déjà séquentielle.
+        await _gpu.comfy_begin()
+        try:
+            prompt_id = await self._submit_prompt(graph)
+            entry = await self._poll_history(prompt_id)
+            await self._download_png(entry, dest_path)
+        finally:
+            await _gpu.comfy_end()
         return dest_path, seed
 
     # ------------------------------------------------------------------ #

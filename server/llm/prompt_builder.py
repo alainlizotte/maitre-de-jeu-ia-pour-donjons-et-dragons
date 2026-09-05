@@ -70,6 +70,12 @@ def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
         )
     if bible.get("resume"):
         lignes.append(f"Résumé du scénario : {bible['resume'][:1400]}")
+    ennemis = bible.get("ennemis") or []
+    if ennemis:
+        lignes.append(
+            "Ennemis/monstres DU SCÉNARIO (à utiliser EN PRIORITÉ pour toute "
+            "rencontre) : " + ", ".join(ennemis)
+        )
     objectif = bible.get("objectif") or bible.get("etape_courante") or ""
     if objectif:
         lignes.append(f"Objectif courant (étape en cours) : {objectif}")
@@ -79,6 +85,13 @@ def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
             "Étapes accomplies : "
             + ", ".join(etapes_faites[-6:])
         )
+    lignes.append(
+        "→ FIDÉLITÉ AU SCÉNARIO : les PNJ, lieux et organisations du résumé "
+        "font foi — reprends leurs noms EXACTS. N'invente NI village, NI PNJ, "
+        "NI faction, NI créature hors scénario : les rencontres doivent "
+        "correspondre aux ennemis listés ci-dessus (une créature hors liste "
+        "n'est acceptable que comme rencontre de voyage aléatoire explicite)."
+    )
     lignes.append(
         "→ Chaque tour, lie une action des PJ à cet objectif. Ne dérive pas "
         "hors-sujet : si l'action s'éloigne, ramène-la vers la trame (sans "

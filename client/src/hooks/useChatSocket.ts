@@ -13,6 +13,7 @@ export function useChatSocket(partie_id: string | null) {
 
   // Callbacks du store capturés une fois (évite re-render storm).
   const addMessage = useParty((s) => s.addMessage);
+  const removeMessage = useParty((s) => s.removeMessage);
   const appendDelta = useParty((s) => s.appendDelta);
   const finalizeStream = useParty((s) => s.finalizeStream);
   const setThinking = useParty((s) => s.setThinking);
@@ -80,6 +81,36 @@ export function useChatSocket(partie_id: string | null) {
 
     const sock = new ChatSocket(partie_id);
     sockRef.current = sock;
+
+    // Applique des patches d'état au store + effets de bord associés
+    // (re-fetch REST sur pj_updated, galeries d'images, retrait des monstres
+    // détruits). Utilisé par le push immédiat « state_patches » ET par le
+    // batch final du message « dm ».
+    const applyStatePatches = (patches: Record<string, unknown>[]) => {
+      applyPatches(patches);
+      for (const p of patches) {
+        if (!p) continue;
+        for (const cle of ["image_monstre", "image_scene"]) {
+          const img = p[cle];
+          if (typeof img === "string") classifyImage(img);
+        }
+      }
+      if (patches.some((p) => p && "pj_updated" in p)) {
+        bumpStateRev();
+      }
+      // Mort d'un monstre : son portrait quitte la galerie
+      // (« les images restent affichées jusqu'à sa mort »).
+      for (const p of patches) {
+        if (!p) continue;
+        const mc = p["monstres_combat"];
+        if (!Array.isArray(mc)) continue;
+        for (const m of mc as { nom?: string; conditions?: string[] }[]) {
+          if (m?.nom && (m.conditions ?? []).includes("Détruit")) {
+            removeMonsterByNom(m.nom);
+          }
+        }
+      }
+    };
 
     const handle = (msg: WsMessage) => {
       switch (msg.type) {
@@ -151,7 +182,12 @@ export function useChatSocket(partie_id: string | null) {
           // ici : le client ajoute déjà son propre message avant l'envoi.
           break;
         case "status":
-          setThinking(msg.done ? false : Boolean(msg.description));
+          // Libellé serveur (« Le MJ réfléchit... », « Le MJ finalise la
+          // scène… ») affiché tel quel pendant le tour ; done → indicateur off.
+          setThinking(
+            msg.done ? false : Boolean(msg.description),
+            msg.done ? undefined : (msg.description || undefined),
+          );
           break;
         case "delta": {
           // On n'accumule que dans un bloc « streaming » encore vivant. Si le
@@ -192,37 +228,29 @@ export function useChatSocket(partie_id: string | null) {
           }
           break;
         }
+        case "state_patches": {
+          // Push immédiat (tool exécuté côté serveur) : PV, phase,
+          // initiative… bougent à l'écran sans attendre le dm final.
+          applyStatePatches((msg.patches || []) as Record<string, unknown>[]);
+          break;
+        }
+        case "stream_reset": {
+          // Le serveur a relancé le tour (simulation, répétition, rejeu) :
+          // l'aperçu streamé est périmé → on l'efface pour ne garder que le
+          // texte final qui va suivre (deltas → nouveau bloc, puis dm final).
+          if (streamId.current) {
+            removeMessage(streamId.current);
+            streamId.current = null;
+          }
+          break;
+        }
         case "dm": {
           // state_patches du tour : images → galerie de la colonne droite,
           // le reste (lieu.position_x, phase, pj.0.pv…) → état du store
           // en direct (sans attendre le polling REST de 15 s).
-          const patches = (msg.state_patches || []) as Record<string, unknown>[];
-          applyPatches(patches);
-          for (const p of patches) {
-            if (!p) continue;
-            for (const cle of ["image_monstre", "image_scene"]) {
-              const img = p[cle];
-              if (typeof img === "string") classifyImage(img);
-            }
-          }
-          // Signal serveur « une fiche a changé » (pj_updated) : re-fetch
-          // immédiat de l'état REST pour rattraper ce que les path patches
-          // ne couvrent pas (entrée créée, renommée, supprimée…).
-          if (patches.some((p) => p && "pj_updated" in p)) {
-            bumpStateRev();
-          }
-          // Mort d'un monstre : son portrait quitte la galerie
-          // (« les images restent affichées jusqu'à sa mort »).
-          for (const p of patches) {
-            if (!p) continue;
-            const mc = p["monstres_combat"];
-            if (!Array.isArray(mc)) continue;
-            for (const m of mc as { nom?: string; conditions?: string[] }[]) {
-              if (m?.nom && (m.conditions ?? []).includes("Détruit")) {
-                removeMonsterByNom(m.nom);
-              }
-            }
-          }
+          applyStatePatches(
+            (msg.state_patches || []) as Record<string, unknown>[],
+          );
           const sid = streamId.current || uid();
           const streamingTarget = streamId.current
             ? useParty

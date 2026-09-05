@@ -67,6 +67,7 @@ function MessageView({ m }: { m: ChatMessage }) {
 export function ChatPanel({ sendSay }: ChatPanelProps) {
   const messages = useParty((s) => s.messages);
   const thinking = useParty((s) => s.thinking);
+  const thinkingLabel = useParty((s) => s.thinkingLabel);
   const participants = useParty((s) => s.participants);
   const player = useParty((s) => s.player);
   const state = useParty((s) => s.state);
@@ -84,7 +85,7 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
   // Auto-scroll en bas à chaque nouveau message.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, thinking]);
+  }, [messages, thinking, thinkingLabel]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,7 +109,7 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
         ))}
         {thinking && (
           <div className="text-xs text-stone-500 thinking mb-3">
-            Le MJ réfléchit…
+            {thinkingLabel}
           </div>
         )}
         <div ref={bottomRef} />

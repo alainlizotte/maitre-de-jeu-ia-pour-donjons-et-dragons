@@ -251,6 +251,18 @@ _DAMAGE_PROSE_PATTERNS = [
         r"\b\d+\s+au\s+toucher[,;\s]+\d+\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
         re.IGNORECASE,
     ),
+    # « +2 dégâts » (« **+2 dégâts** sont infligés au Gnoll ») — forme très
+    # fréquente chez Qwen/Gemma : montant écrit à la main sans lancer_degats.
+    re.compile(
+        r"\+\s*\d{1,3}\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
+        re.IGNORECASE,
+    ),
+    # « PV restant du Gnoll : 7 » / « PV restants : 7 » — état de PV affirmé
+    # en prose sans tool de suivi (le tool dit « PV X/Y », jamais « restant »).
+    re.compile(
+        r"\bPV\s+restants?\b[^.:!?\n]{0,60}?[:=]\s*\d{1,4}\b",
+        re.IGNORECASE,
+    ),
 ]
 
 
@@ -1092,6 +1104,7 @@ class Orchestrator:
         ctx: ToolContext,
         on_event: Optional[EventCallback] = None,
         on_delta: Optional[Callable[[str], Awaitable[None]]] = None,
+        trust_damage_prose: bool = False,
     ) -> OrchestratedResult:
         """Boucle principale : appelle le LLM, exécute les tools, narrate.
 
@@ -1101,6 +1114,10 @@ class Orchestrator:
         - `on_event`    : callback async pour events structurés (image, status).
         - `on_delta`    : callback async pour streaming tokens de narration au
                          client (peut être None si on ne stream pas).
+        - `trust_damage_prose` : True quand des dégâts viennent d'être résolus
+                         côté serveur (pre-run du moteur de combat) et que le
+                         LLM les reformule légitimement — désactive la
+                         détection « dégâts en prose » pour ce tour.
         """
         result = OrchestratedResult()
         work = list(messages)
@@ -1279,14 +1296,19 @@ class Orchestrator:
             # (après B/C/C2 : si un appel réel a été récupéré, ce n'est plus
             # une simulation à corriger — le tour continue avec les résultats.)
             if self.detect_simulation:
-                # Si un tool de dés a déjà tourné dans CE tour, la reformulation
-                # du résultat ("il subit 7 dégâts") est légitime : on désactive
-                # les patterns de dégâts en prose pour éviter un faux positif.
-                dice_used = any(
-                    tc.get("name") in _DICE_TOOL_NAMES
+                # Seul un JET DE DÉGÂTS réel (lancer_degats) légitime la
+                # reformulation en prose (« il subit 7 dégâts »). Une attaque
+                # résolue (lancer_attaque) ne prouve PAS que les dégâts aient
+                # été jetés : la détection reste active, sinon « touché +2
+                # dégâts » narré sans lancer_degats restait sans effet.
+                damage_rolled = any(
+                    tc.get("name") == "lancer_degats"
                     for tc in result.tool_calls_trace
                 )
-                sim = looks_like_simulation(chat.content, include_damage=not dice_used)
+                sim = looks_like_simulation(
+                    chat.content,
+                    include_damage=not (damage_rolled or trust_damage_prose),
+                )
                 if sim:
                     result.simulation_attempted = True
                     if result.corrections < 2:
@@ -1373,14 +1395,25 @@ class Orchestrator:
             # contenir des jets simulés. On re-vérifie ici : les deltas déjà
             # poussés au client seront remplacés par le dm final corrigé.
             if self.detect_simulation and narration.strip() and result.corrections < 3:
-                dice_used = any(
-                    tc.get("name") in _DICE_TOOL_NAMES
+                damage_rolled = any(
+                    tc.get("name") == "lancer_degats"
                     for tc in result.tool_calls_trace
                 )
-                sim_final = looks_like_simulation(narration, include_damage=not dice_used)
+                sim_final = looks_like_simulation(
+                    narration,
+                    include_damage=not (damage_rolled or trust_damage_prose),
+                )
                 if sim_final:
                     result.simulation_attempted = True
                     result.corrections += 1
+                    # (c) L'aperçu déjà streamé va être remplacé par la relance :
+                    # on demande au client d'effacer le bloc de streaming pour
+                    # un remplacement propre (pas de texte périmé affiché).
+                    if on_delta is not None and on_event is not None:
+                        try:
+                            await on_event({"type": "stream_reset"})
+                        except Exception:                     # noqa: BLE001
+                            pass
                     _log.warning(
                         "simulation dans narration streamée (« %s », correction %d) — relance",
                         sim_final, result.corrections,
@@ -1410,6 +1443,13 @@ class Orchestrator:
                 echo = trouve_repetition(narration, work)
                 if echo:
                     result.corrections += 1
+                    # (c) L'aperçu streamé est une répétition périmée : reset
+                    # client avant la relance (même logique que D1bis).
+                    if on_delta is not None and on_event is not None:
+                        try:
+                            await on_event({"type": "stream_reset"})
+                        except Exception:                     # noqa: BLE001
+                            pass
                     derniere_action = next(
                         (m.content for m in reversed(work)
                          if m.role == "user" and (m.content or "").strip()),
@@ -1445,6 +1485,13 @@ class Orchestrator:
             if not narration.strip():
                 if result.corrections < 3:
                     result.corrections += 1
+                    # (c) Rien de viable à l'écran : efface l'aperçu streamé
+                    # (le cas échéant) avant la relance.
+                    if on_delta is not None and on_event is not None:
+                        try:
+                            await on_event({"type": "stream_reset"})
+                        except Exception:                     # noqa: BLE001
+                            pass
                     _log.warning(
                         "narration vide après stripping thinking (correction %d/3) — relance",
                         result.corrections,
@@ -1685,6 +1732,18 @@ class Orchestrator:
                     pass
         if tr.state_patch:
             result.state_patches.append(tr.state_patch)
+            # (a) Push immédiat du patch (PV, phase, initiative…) : la barre de
+            # vie bouge à l'écran DÈS l'exécution du tool, sans attendre le dm
+            # final — le post-traitement (corrections, rejeus, images) peut
+            # retarder ce dernier de plusieurs dizaines de secondes.
+            if on_event:
+                try:
+                    await on_event({
+                        "type": "state_patches",
+                        "patches": [tr.state_patch],
+                    })
+                except Exception:                             # noqa: BLE001
+                    pass
         return tr
 
     # ------------------------------------------------------------------ #

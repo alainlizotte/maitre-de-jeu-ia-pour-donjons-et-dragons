@@ -250,6 +250,56 @@ def _construire_bible(
     return bible
 
 
+def _ennemis_du_texte(ctx: ToolContext, texte: str) -> list[str]:
+    """Repère les monstres du bestiaire mentionnés dans le TEXTE du scénario.
+
+    Garnit `bible.ennemis` (réinjectée au MJ à chaque tour) : la liste
+    officielle des créatures du module, pour éviter les ennemis improvisés
+    hors scénario (ex. un gnoll dans un module de morts-vivants).
+    Best-effort : [] si le bestiaire est illisible.
+    """
+    if not texte:
+        return []
+    import re as _re
+    try:
+        # Chargeur canonique (cache + enveloppement {"monstres": {...}}).
+        from .monstres import _load_bestiaire
+        best = _load_bestiaire(ctx)
+    except Exception:                                            # noqa: BLE001
+        return []
+    # Mots génériques à ne JAMAIS traiter comme des ennemis (des fiches
+    # erronées ont pu être créées depuis un titre de section de PDF — ex.
+    # une fiche nommée « Combat ») : tout nom dans cette liste est ignoré.
+    _STOP_NOMS = {
+        "combat", "monstre", "monstres", "créature", "creature", "ennemi",
+        "ennemis", "rencontre", "garde", "piège", "piege", "trésor", "tresor",
+        "porte", "salle", "couloir", "donjon", "niveau", "personnage",
+        "aventurier", "héros", "heros", "villageois",
+    }
+    trouves: dict[str, str] = {}
+    for cle, m in (best.get("monstres") or {}).items():
+        if not isinstance(m, dict):
+            continue
+        nom = str(m.get("nom") or cle or "").strip()
+        if len(nom) < 3 or nom.lower() in _STOP_NOMS:
+            continue
+        nom = str(m.get("nom") or cle or "").strip()
+        if len(nom) < 3:
+            continue
+        # Mot entier (tolère le pluriel « zombies/squelettes ») : « Orc » ne
+        # matche ni « orchestre » ni « orques » partiellement.
+        motif = (
+            r"(?<![A-Za-zÀ-ÿ'’-])" + _re.escape(nom)
+            + r"(?:s|x)?(?![A-Za-zÀ-ÿ])"
+        )
+        try:
+            if _re.search(motif, texte, _re.IGNORECASE):
+                trouves.setdefault(nom.lower(), nom)
+        except _re.error:                                        # noqa: PERF203
+            continue
+    return sorted(trouves.values())[:30]
+
+
 # --------------------------------------------------------------------------- #
 def _assurer_monstres_au_bestiaire(ctx: ToolContext, noms: list[str]) -> list[str]:
     """Garantit qu'UNE fiche bestiaire existe pour chaque monstre de scénario.
@@ -370,6 +420,15 @@ async def scenarios_laelith_charger(
     except Exception:                                            # noqa: BLE001
         pass
     bible = _construire_bible(s, texte, edition_partie)
+    # Ennemis du scénario : monstres du bestiaire détectés dans le texte du
+    # PDF — injectés à chaque tour (fidélité des rencontres au module).
+    if texte:
+        bible["ennemis"] = _ennemis_du_texte(ctx, texte)
+        if bible["ennemis"]:
+            champs.append(
+                "\n### Ennemis du scénario (détectés dans le texte)\n"
+                + ", ".join(bible["ennemis"])
+            )
     champs.append(
         "\n### 📖 Bible du scénario (réinjectée au MJ à chaque tour)\n"
         f"- Édition détectée : {bible['edition_detectee']} "

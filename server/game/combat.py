@@ -72,6 +72,14 @@ async def _tool(ctx, name: str, args: dict[str, Any], res: ResultatBoucle):
         return None
     if tr.state_patch:
         res.patches.append(tr.state_patch)
+        # (a) Push immédiat : les PV (attaque de monstre, stabilisation, XP…)
+        # s'affichent dès le jet serveur, pas seulement au dm final du tour.
+        cb = getattr(ctx, "on_event", None)
+        if cb is not None:
+            try:
+                await cb({"type": "state_patches", "patches": [tr.state_patch]})
+            except Exception:                                 # noqa: BLE001
+                pass
     return tr
 
 

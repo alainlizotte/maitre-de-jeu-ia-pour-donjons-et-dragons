@@ -49,6 +49,103 @@ _DEBUT_AVENTURE = (
     "rencontre."
 )
 
+_MAX_SALLES_BLOC = 40       # plafond de salles listées dans le bloc donjon
+_MAX_DESC_BLOC = 400        # plafond de la description reprise par salle
+
+
+def _portes_salle(salle: dict[str, Any]) -> list[str]:
+    """Portes OUVERTES d'une salle, dans l'ordre géographique."""
+    p = salle.get("portes") or {}
+    return [d for d in ("nord", "est", "sud", "ouest") if p.get(d)]
+
+
+def _donjon_bloc(etat: dict[str, Any]) -> str:
+    """Bloc « CARTE DU DONJON » injecté au MJ à chaque tour : salle courante
+    (type, description figée, état des lieux), portes réellement ouvertes,
+    plan des salles connues. C'est la SOURCE DE VÉRITÉ géographique.
+
+    Sans ce bloc, le petit modèle narratif INVENTAIT portes et salles
+    (« une porte au nord » alors que la grille n'en a pas) : la carte se
+    désynchronisait de la narration. Ici, la géographie narrée DOIT coller
+    au bloc — tout déplacement passe par `carte_donjon_explorer`, qui
+    refuse les directions sans porte.
+    """
+    donjon = etat.get("donjon") or {}
+    if not (donjon.get("id") and donjon.get("grille")):
+        return ""
+    salles: dict[tuple[int, int], dict[str, Any]] = {}
+    for s in donjon.get("grille", []):
+        if isinstance(s, dict) and "x" in s and "y" in s:
+            try:
+                salles[(int(s["x"]), int(s["y"]))] = s
+            except (TypeError, ValueError):
+                continue
+    if not salles:
+        return ""
+    try:
+        cr = list(donjon.get("courant") or [0, 0])
+        courant = (int(cr[0]), int(cr[1]))
+    except (TypeError, ValueError, IndexError):
+        courant = (0, 0)
+    cur = salles.get(courant) or {}
+    try:
+        from ..tools.cartes import _nom_etage
+        etage_lbl = _nom_etage(int(donjon.get("etage", 0) or 0))
+    except Exception:                                        # noqa: BLE001
+        etage_lbl = f"étage {donjon.get('etage', 0)}"
+    desc_cur = str(cur.get("description") or "").strip()
+    if not desc_cur:
+        try:
+            from ..tools.cartes import _description_secours
+            desc_cur = _description_secours(
+                str(donjon.get("id") or ""), courant[0], courant[1],
+                str(cur.get("type") or "salle"),
+            )
+        except Exception:                                    # noqa: BLE001
+            desc_cur = ""
+
+    lignes = ["\n=== CARTE DU DONJON (source de vérité géographique) ==="]
+    lignes.append(
+        f"Donjon « {donjon.get('id')} » — étage : {etage_lbl} — "
+        f"{len(salles)} salle(s) connue(s)."
+    )
+    portes_cur = _portes_salle(cur)
+    lignes.append(
+        f"Salle COURANTE : ({courant[0]},{courant[1]}) — "
+        f"type « {cur.get('type', '?')} »."
+    )
+    if desc_cur:
+        lignes.append(
+            f"  Description figée (reprends-la à l'identique) : « "
+            f"{desc_cur[:_MAX_DESC_BLOC]}"
+            + ("…" if len(desc_cur) > _MAX_DESC_BLOC else "") + " »"
+        )
+    edl = str(cur.get("etat_des_lieux") or "").strip()
+    if edl:
+        lignes.append(f"  État des lieux : {edl[:_MAX_DESC_BLOC]}")
+    lignes.append(
+        "  Portes EXISTANTES : "
+        + (", ".join(portes_cur) if portes_cur else "AUCUNE (cul-de-sac)")
+    )
+    lignes.append("Plan des salles connues (x,y — type — portes ouvertes) :")
+    for xy in sorted(salles)[:_MAX_SALLES_BLOC]:
+        s = salles[xy]
+        marque = "  ← VOUS ÊTES ICI" if xy == courant else ""
+        lignes.append(
+            f"  - ({xy[0]},{xy[1]}) {s.get('type', '?')} — portes : "
+            f"{', '.join(_portes_salle(s)) or 'aucune'}{marque}"
+        )
+    lignes.append(
+        "⚠️ RESPECT STRICT DE LA CARTE : seules les portes listées EXISTENT. "
+        "N'invente JAMAIS une porte, un passage ou une salle absents de ce "
+        "plan ; n'affirme une sortie au nord/sud/est/ouest que si la porte "
+        "est listée. Tout déplacement passe par `carte_donjon_explorer`, qui "
+        "refuse les directions sans porte. Une salle revisitée se narre "
+        "d'après sa description figée — jamais réinventée."
+    )
+    lignes.append("===============================================")
+    return "\n".join(lignes)
+
 
 def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
     """Bloc « SCÉNARIO (bible) » injecté au MJ à chaque tour : la trame du
@@ -356,6 +453,11 @@ class PromptBuilder:
             bible_min = _scenario_bible_bloc(quete_min)
             if bible_min:
                 lignes.append(bible_min)
+            # Carte du donjon (source de vérité géographique) : sans elle,
+            # le MJ inventait portes et salles — la carte se désynchronisait.
+            donjon_min = _donjon_bloc(etat)
+            if donjon_min:
+                lignes.append(donjon_min)
             lignes += [
                 "",
                 "Pour progresser maintenant : appelle les outils adéquats "
@@ -473,11 +575,15 @@ class PromptBuilder:
 
         donjon = etat.get("donjon", {}) or {}
         if donjon.get("id"):
-            salles = donjon.get("salles_visitees", []) or []
-            lignes.append(
-                f"\nDonjon '{donjon.get('id')}' — "
-                f"{len(salles)} salle(s) visitée(s) : {', '.join(salles)}"
-            )
+            donjon_riche = _donjon_bloc(etat)
+            if donjon_riche:
+                lignes.append(donjon_riche)
+            else:
+                salles = donjon.get("salles_visitees", []) or []
+                lignes.append(
+                    f"\nDonjon '{donjon.get('id')}' — "
+                    f"{len(salles)} salle(s) visitée(s) : {', '.join(salles)}"
+                )
 
         donjons_archives = etat.get("donjons_exploreres") or {}
         if donjons_archives:

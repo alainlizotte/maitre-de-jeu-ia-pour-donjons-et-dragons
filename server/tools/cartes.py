@@ -688,7 +688,37 @@ async def carte_donjon_decrire_salle(
     description = (description or "").strip()
     if not description:
         return ToolResult(text="❌ Donne une description de la salle.")
-    salle["description"] = description[:600]
+    description = description[:600]
+    # ── Protection ANTI-RÉINVENTION ──────────────────────────────────────
+    # Une description déjà figée est CANONIQUE : elle n'est JAMAIS écrasée
+    # par une narration différente (sinon une salle narrée par erreur
+    # — porte inventée, décor réinventé — corrompait la mémoire du donjon,
+    # observé en partie réelle). Seul l'état des lieux reste modifiable.
+    ancienne = str(salle.get("description") or "").strip()
+    if ancienne and ancienne != description:
+        edl_jour = bool((etat_des_lieux or "").strip())
+        if edl_jour:
+            salle["etat_des_lieux"] = etat_des_lieux.strip()[:400]
+        donjon["grille"] = _dict_vers_grille(salles)
+        _sync_etage(donjon)
+        etat["donjon"] = donjon
+        err = _sauver_etat(ctx, etat)
+        if err:
+            return ToolResult(text=f"❌ {err}")
+        msg = (
+            f"⚠️ Salle ({cx},{cy}) a DÉJÀ une description figée — elle est "
+            f"CONSERVÉE à l'identique : « {ancienne[:200]}"
+            + ("…" if len(ancienne) > 200 else "") + " ». "
+            "Ta proposition a été REFUSÉE (une salle ne se réinvente pas ; "
+            "la carte et la narration doivent rester synchronisées). "
+        )
+        msg += (
+            "Seul l'état des lieux a été mis à jour."
+            if edl_jour else
+            "Reprends la description canonique ci-dessus dans ta narration."
+        )
+        return ToolResult(text=msg, state_patch={"donjon": donjon})
+    salle["description"] = description
     if (etat_des_lieux or "").strip():
         salle["etat_des_lieux"] = etat_des_lieux.strip()[:400]
     donjon["grille"] = _dict_vers_grille(salles)
@@ -972,7 +1002,21 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     salles = _grille_vers_dict(donjon.get("grille", []))
     cour = salles.get((cx, cy))
     if cour and not cour.get("portes", {}).get(d):
-        return ToolResult(text=f"🚫 Pas de porte au {d} depuis la salle courante.")
+        # Refus INFAILLIBLE : on liste les portes réellement présentes pour
+        # que le MJ ne narre JAMAIS un passage inexistant (désynchronisation
+        # narration ↔ carte observée en partie réelle).
+        disp = [
+            k for k in ("nord", "est", "sud", "ouest")
+            if cour.get("portes", {}).get(k)
+        ]
+        return ToolResult(text=(
+            f"🚫 Pas de porte au {d} depuis la salle courante ({cx},{cy}). "
+            f"Portes réellement présentes ici : "
+            f"{', '.join(disp) if disp else 'AUCUNE (cul-de-sac)'}. "
+            "NE narre PAS un passage inexistant : soit tu reformules (mur, "
+            "porte verrouillée), soit tu proposes uniquement ces directions "
+            "au joueur via `carte_donjon_explorer`."
+        ))
     nx, ny = cx + dx, cy + dy
     deja_visitee = (nx, ny) in salles and salles[(nx, ny)].get("visitee")
     if (nx, ny) not in salles:

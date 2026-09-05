@@ -334,14 +334,46 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
         "actif déclare son action (attaque, sort…) ; terminer_mon_tour "
         "passe la main._",
     ]
+
+    # ⚔️ ORDRE D'INITIATIVE RESPECTÉ DÈS LE ROUND 1 (conformité D&D 3.5) :
+    # si le premier actif est un MONSTRE, le serveur joue IMMÉDIATEMENT son
+    # tour (attaque officielle du bestiaire, skips, stabilisation…) AVANT
+    # que le MJ ne résolve l'action déclarée par le joueur. Sans cela, le
+    # joueur agissait TOUJOURS en premier — même en ayant perdu
+    # l'initiative — et le round 1 était séquencé dans le désordre.
+    # Si un PJ gagne l'initiative, la boucle est inerte (état déjà stable).
+    # Idempotent avec l'endpoint REST /combat/engager (2e passe = no-op).
+    from ..game.combat import boucle_auto
+    res_boucle = await boucle_auto(ctx)
+    if res_boucle.events:
+        lignes += ["", "⚙️ _Mécanique résolue par le serveur (round 1) :_"]
+        lignes.extend(res_boucle.events)
+    # L'état final réel (la boucle a pu avancer le curseur, voire clôturer
+    # le combat) prime sur le snapshot d'avant boucle pour le patch UI.
+    etat_final = state.load()
+    patch = {
+        "phase": etat_final.get("phase", "combat"),
+        "tour": etat_final.get("tour", 1),
+        "initiative": etat_final.get("initiative", participants),
+        "courant_tour_pour": etat_final.get("courant_tour_pour"),
+        "monstres_combat": etat_final.get("monstres_combat", monstres_combat),
+    }
+    # Fusionne les patches de la boucle (PV, conditions, clôture éventuelle…)
+    # pour que l'UI suive l'état final réel du round 1.
+    for p_ in res_boucle.patches:
+        if isinstance(p_, dict):
+            patch.update(p_)
+    if res_boucle.combat_termine:
+        lignes += [
+            "",
+            (
+                f"💀 _Le combat s'est achevé dès le round 1 "
+                f"({res_boucle.combat_termine}) — clôturé par le serveur._"
+            ),
+        ]
     return ToolResult(
         text="\n".join(lignes),
-        state_patch={
-            "phase": "combat",
-            "tour": 1,
-            "initiative": participants,
-            "courant_tour_pour": etat["courant_tour_pour"],
-        },
+        state_patch=patch,
     )
 
 

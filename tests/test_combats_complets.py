@@ -191,7 +191,10 @@ async def test_combat1_gobelins_homonymes():
         assert inits == sorted(inits, reverse=True)
         assert {p["nom"] for p in parts} >= {"Groth", "Mélodie", "Elara",
                                              "Zarkon"}
-        assert etat["courant_tour_pour"] == parts[0]["nom"]
+        # ⚔️ Ordre d'initiative respecté DÈS le round 1 : si un monstre
+        # gagne l'initiative, le serveur joue son tour AVANT tout — le
+        # curseur est donc forcément sur un PJ capable d'agir ici.
+        assert etat["courant_tour_pour"] in {p["nom"] for p in etat["pj"]}
 
         # ── Groth (barbare) frappe « Gobelin (2) » jusqu'à sa mort ───────
         bonus_groth = 1 + 3  # BBA + mod FOR
@@ -447,13 +450,19 @@ async def test_avancement_des_tours():
         ordre = [p["nom"] for p in etat["initiative"]]
         assert len(ordre) == 5  # 4 PJ + 1 kobold
         assert etat["tour"] == 1
-        # Un tour_suivant par participant → retour au premier, round 2.
-        for attendu in ordre[1:] + [ordre[0]]:
+        # ⚔️ Le serveur a pu jouer le tour du kobold s'il a gagné
+        # l'initiative : le curseur démarre donc sur un PJ capable d'agir.
+        assert etat["courant_tour_pour"] in {
+            p["nom"] for p in etat["pj"]
+        }
+        # Un tour_suivant par participant → retour au départ, round 2.
+        depart = etat["courant_tour_pour"]
+        for _ in ordre:
             r = await tool(d, "tour_suivant_combat")
-            assert f"au tour de **{attendu}**" in r.text
+            assert "au tour de **" in r.text
         etat = _etat(d)
         assert etat["tour"] == 2
-        assert etat["courant_tour_pour"] == ordre[0]
+        assert etat["courant_tour_pour"] == depart
         # tour_suivant hors combat → refus propre.
         await tool(d, "finir_combat")
         r = await tool(d, "tour_suivant_combat")

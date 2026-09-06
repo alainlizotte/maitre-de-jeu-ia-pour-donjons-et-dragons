@@ -387,6 +387,13 @@ def _verifier_fin(etat: dict) -> Optional[str]:
         _pj_peut_agir(p)[1] == "mort" for p in pjs
     ):
         return "defaite"
+    if not ennemis and str(etat.get("phase") or "") == "combat":
+        # Plus AUCUN ennemi suivi alors que la partie est en combat :
+        # l'état des monstres a été perdu (tour interrompu, patch écrasé…).
+        # Un combat sans ennemi est terminé → victoire (les XP des monstres
+        # détruits sont incalculables, mais la partie ne doit pas rester
+        # bloquée en phase=combat à jamais — observé en e2e réel).
+        return "victoire"
     return None
 
 
@@ -546,8 +553,25 @@ async def boucle_auto(
     for _ in range(_MAX_ITER):
         etat = state.load()
         res.phase = str(etat.get("phase") or "")
-        if etat.get("phase") != "combat" or not etat.get("initiative"):
+        if etat.get("phase") != "combat":
             res.courant = str(etat.get("courant_tour_pour") or "")
+            return res
+        if not etat.get("initiative"):
+            # Combat en phase mais SANS ordre d'initiative (tour interrompu
+            # par une déconnexion, crash…). Sans ce filet, l'état restait
+            # zombie à jamais : phase=combat, tour=0, aucun traitment.
+            # On clôture proprement si la fin est détectée (ex. tous les
+            # ennemis déjà détruits/perdus) ; sinon on signale l'état.
+            fin = _verifier_fin(etat)
+            if fin:
+                await cloturer(ctx, res, fin)
+                res.courant = ""
+                res.phase = "exploration"
+            else:
+                res.events.append(
+                    "⚠️ Combat sans ordre d'initiative (état incohérent) — "
+                    "relancez `calculer_initiative` puis `demarrer_combat`."
+                )
             return res
 
         # 1) Fin de combat ?

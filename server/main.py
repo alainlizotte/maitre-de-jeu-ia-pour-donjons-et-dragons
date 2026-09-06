@@ -1672,6 +1672,17 @@ async def rag_ingest(payload: dict[str, Any] | None = None) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 #  WebSocket : canal chat multijoueur
 # --------------------------------------------------------------------------- #
+async def _ws_envoi(ws: WebSocket, payload: dict) -> None:
+    """Envoi WS tolérant : si le client se déconnecte pendant un tour MJ
+    long, tout `send_json` ultérieur lève (RuntimeError/WebSocketDisconnect)
+    et faisait planter le handler ASGI entier. On avale au lieu de crasher —
+    le `finally` de `ws_chat` fait déjà le ménage dans les registres."""
+    try:
+        await ws.send_json(payload)
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
 async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> None:
     """Envoie le payload « joined » (historique + participants) à un client.
 
@@ -1683,7 +1694,7 @@ async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> 
         for m in session.history
         if m.role in ("user", "assistant") and m.content
     ]
-    await ws.send_json({
+    await _ws_envoi(ws, {
         "type": "sys",
         "event": "joined",
         "partie_id": partie_id,
@@ -1706,7 +1717,7 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
     else:
         # Partie protégée : on exige le mot de passe via un message "join"
         # avant de révéler quoi que ce soit.
-        await ws.send_json({
+        await _ws_envoi(ws, {
             "type": "sys",
             "event": "auth_required",
             "partie_id": partie_id,
@@ -1719,8 +1730,8 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                await ws.send_json({"type": "sys", "event": "error",
-                                    "detail": "payload non JSON"})
+                await _ws_envoi(ws, {"type": "sys", "event": "error",
+                                     "detail": "payload non JSON"})
                 continue
 
             mtype = msg.get("type")
@@ -1731,7 +1742,7 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                 # pas de participant « fantôme » sans fiche rattachée.
                 personnage = (msg.get("personnage") or "").strip()
                 if not personnage:
-                    await ws.send_json({
+                    await _ws_envoi(ws, {
                         "type": "sys",
                         "event": "join_refused",
                         "detail": (
@@ -1743,7 +1754,7 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                 if pw_hash is not None:
                     mdp = msg.get("password") or ""
                     if _hash_mot_de_passe(mdp) != pw_hash:
-                        await ws.send_json({
+                        await _ws_envoi(ws, {
                             "type": "sys",
                             "event": "auth_failed",
                             "detail": "Mot de passe incorrect.",
@@ -1759,7 +1770,7 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                 if fiche_enregistree is None:
                     # Fiche inexistante ou n'appartenant pas au joueur : on
                     # refuse AVANT d'inscrire le participant.
-                    await ws.send_json({
+                    await _ws_envoi(ws, {
                         "type": "sys",
                         "event": "join_refused",
                         "detail": (
@@ -1785,7 +1796,7 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
 
             if mtype == "say":
                 if pw_hash is not None and ws not in session.authenticated:
-                    await ws.send_json({
+                    await _ws_envoi(ws, {
                         "type": "sys",
                         "event": "auth_required",
                         "detail": "Partie protégée : rejoignez avec le mot de passe.",
@@ -1796,7 +1807,7 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
 
             if mtype == "team_say":
                 if pw_hash is not None and ws not in session.authenticated:
-                    await ws.send_json({
+                    await _ws_envoi(ws, {
                         "type": "sys",
                         "event": "auth_required",
                         "detail": "Partie protégée.",
@@ -1829,9 +1840,15 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                             pass
                 continue
 
-            await ws.send_json({"type": "sys", "event": "error",
-                                "detail": f"type inconnu: {mtype}"})
+            await _ws_envoi(ws, {"type": "sys", "event": "error",
+                                 "detail": f"type inconnu: {mtype}"})
     except WebSocketDisconnect:
+        pass
+    except RuntimeError:
+        # Client déconnecté pendant un tour MJ long : `receive_text` lève
+        # « WebSocket is not connected » (état ≠ CONNECTED) au lieu d'un
+        # WebSocketDispatch propre — traité comme une déconnexion normale
+        # (crash ASGI observé en e2e réel sans ce filet).
         pass
     finally:
         session.connections.discard(ws)

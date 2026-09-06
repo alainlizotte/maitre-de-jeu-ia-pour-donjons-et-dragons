@@ -89,9 +89,13 @@ interface PartyStore {
    *  insensible à la casse/accents/tirets (nom bestiaire ↔ nom dérivé URL). */
   removeMonsterByNom: (nom: string) => void;
 
-  // -- Scènes illustrées (salles de donjon + moments clés) ---------------- //
+  // -- Scènes illustrées (moments clés générés par le MJ) ----------------- //
   scenes: EncounterMonster[];
   addScene: (s: EncounterMonster) => void;
+
+  // -- Pièces de donjon illustrées (une image par salle explorée) --------- //
+  salles: EncounterMonster[];
+  addSalle: (s: EncounterMonster) => void;
 
   addMessage: (m: ChatMessage) => void;
   /** Retire un message du fil (reset de l'aperçu streamé périmé). */
@@ -251,6 +255,14 @@ export const useParty = create<PartyStore>((set) => ({
         : { scenes: [sc, ...st.scenes].slice(0, 20) },
     ),
 
+  salles: [],
+  addSalle: (sl) =>
+    set((st) =>
+      st.salles.some((x) => x.url === sl.url)
+        ? { salles: [sl, ...st.salles.filter((x) => x.url !== sl.url)] }
+        : { salles: [sl, ...st.salles].slice(0, 20) },
+    ),
+
   addMessage: (m) => set((st) => ({ messages: [...st.messages, m] })),
 
   removeMessage: (id) =>
@@ -308,7 +320,7 @@ export const useParty = create<PartyStore>((set) => ({
   setAudioEnabled: (v) => set({ audioEnabled: v }),
 
   // Conserve player/password : ce sont des choix de session, pas de la partie.
-  reset: () => set({ messages: [], state: null, thinking: false, participants: [], teamMessages: [], teamUnread: 0, showPlayerChat: false, audioEnabled: false, monsters: [], scenes: [] }),
+  reset: () => set({ messages: [], state: null, thinking: false, participants: [], teamMessages: [], teamUnread: 0, showPlayerChat: false, audioEnabled: false, monsters: [], scenes: [], salles: [] }),
 }));
 
 export { uid };

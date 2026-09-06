@@ -38,6 +38,7 @@ export function PartyPage() {
   const queryClient = useQueryClient();
   const addMonster = useParty((s) => s.addMonster);
   const addScene = useParty((s) => s.addScene);
+  const addSalle = useParty((s) => s.addSalle);
   const removeMonsterByNom = useParty((s) => s.removeMonsterByNom);
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export function PartyPage() {
     // ⚔️ Le journal n'est réhydraté qu'en phase de combat : hors combat,
     // aucun portrait de monstre ne doit s'afficher (même d'anciens).
     const urls = new Set<string>();
+    const urls_salle = new Set<string>();
     if (etat.phase === "combat") {
       for (const r of etat.rencontres_images ?? []) {
         if (r?.url && !urls.has(r.url)) {
@@ -104,8 +106,9 @@ export function PartyPage() {
       }
     }
 
-    // Scène courante : l'illustration de la pièce où est le groupe
-    // (l'image est en cache disque — re-visiter la salle la réaffiche).
+    // Scène courante : l'illustration de la pièce où est le groupe va dans
+    // l'onglet « Pièces » (l'image est en cache disque — re-visiter la
+    // salle la réaffiche).
     const donjon = etat.donjon;
     const [cx, cy] = donjon?.courant ?? [];
     if (cx !== undefined && cy !== undefined) {
@@ -116,13 +119,25 @@ export function PartyPage() {
       ) as { image_url?: string; type?: string } | undefined;
       if (salle?.image_url) {
         const label = `${salle.type ?? "salle"} (${cx},${cy})`;
-        addScene({
+        addSalle({
           nom: label.charAt(0).toUpperCase() + label.slice(1),
           url: salle.image_url,
         });
       }
     }
-  }, [partyQuery.data, partie_id, addMonster, addScene, removeMonsterByNom]);
+    // Autres pièces explorées illustrées (onglet « Pièces », salles vues).
+    for (const s of donjon?.grille ?? []) {
+      const room = s as { x?: number; y?: number; image_url?: string; type?: string } | null;
+      if (!room?.image_url || urls_salle.has(room.image_url)) continue;
+      if (room.x === cx && room.y === cy) continue; // déjà ajoutée ci-dessus
+      urls_salle.add(room.image_url);
+      const label = `${room.type ?? "salle"} (${room.x},${room.y})`;
+      addSalle({
+        nom: label.charAt(0).toUpperCase() + label.slice(1),
+        url: room.image_url,
+      });
+    }
+  }, [partyQuery.data, partie_id, addMonster, addScene, addSalle, removeMonsterByNom]);
 
   const { sendSay, sendTeamSay, socket } = useChatSocket(partie_id ?? null);
 

@@ -1083,13 +1083,13 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         )
     # Illustration de salle : PNG ComfyUI en arrière-plan si dispo
     # (fallback silencieux — on garde le SVG carte principale).
-    # Respecte le toggle `image.scenes_enabled` (tableau de bord) comme
-    # `illustration_scene` : sans lui, les images de salle repartaient en
-    # cache/ComfyUI alors que l'utilisateur les avait désactivées.
+    # Respecte le toggle `image.salles_enabled` (config.yaml × maître GUI)
+    # comme `illustration_scene` : sans lui, les illustrations de salle
+    # repartaient en cache/ComfyUI alors que l'utilisateur les avait coupées.
     img_src = "—"
     try:
         from ..config import get_config
-        if get_config().image.scenes_enabled:
+        if get_config().image.effective("salles"):
             try:
                 img_src = await _illustrer_salle(ctx, donjon, salles, nx, ny)
             except Exception:
@@ -1407,12 +1407,12 @@ async def illustration_scene(ctx: ToolContext, description: str, titre: str = ""
     description = (description or "").strip()
     if not description:
         return ToolResult(text="❌ Décris la scène à illustrer.")
-    # Toggle runtime (config `image.scenes_enabled` ou bouton du GUI) :
+    # Toggle runtime (config `image.scenes_enabled` × maître GUI) :
     # les scènes seules sont coupées — monstres, portraits et illustrations
-    # de donjon restent générés.
+    # de donjon suivent leurs propres toggles.
     try:
         from ..config import get_config
-        if not get_config().image.scenes_enabled:
+        if not get_config().image.effective("scenes"):
             return ToolResult(
                 text="🚫 Illustration de scène désactivée (réglage du tableau "
                      "de bord) — poursuis la narration sans image."

@@ -168,6 +168,20 @@ def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
     if bible.get("resume"):
         lignes.append(f"Résumé du scénario : {bible['resume'][:1400]}")
     ennemis = bible.get("ennemis") or []
+    if not ennemis and bible.get("resume"):
+        # Repli : bibles persistées AVANT l'ajout de la détection (liste
+        # vide) — on recalcule les ennemis du scénario à chaque tour
+        # (bestiaire × résumé FR/EN). Sans cela, aucune liste d'ennemis
+        # officiels n'ancrait le MJ, qui improvisait des créatures hors
+        # scénario (observé en partie réelle : dragon rouge FP 7 substitué
+        # au nécromancien d'un module de niveau 1).
+        try:
+            from ..tools.scenarios import ennemis_du_resume
+            ennemis = ennemis_du_resume(str(bible["resume"]))
+            if ennemis:
+                bible["ennemis"] = ennemis
+        except Exception:                                        # noqa: BLE001
+            ennemis = bible.get("ennemis") or []
     if ennemis:
         lignes.append(
             "Ennemis/monstres DU SCÉNARIO (à utiliser EN PRIORITÉ pour toute "

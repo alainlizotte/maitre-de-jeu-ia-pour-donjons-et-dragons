@@ -8126,5 +8126,29 @@
     "cle": "entite_des_profondeurs",
     "prompt_image": "aboleth, ancient deep-sea horror, elongated fish-like body with a single broad tail fin, three glowing purple eyes in a row, four long tentacles around its circular maw, slimy grey-green hide, sunken ruins",
     "generique": true
+  },
+  "necromancien_rouge": {
+    "nom": "Nécromancien rouge",
+    "type": "Humanoïde (humain)",
+    "taille": "M",
+    "dv": "5d4+5",
+    "pv": 17,
+    "ca": 13,
+    "vitesse": "9 m (6 cases)",
+    "bab": "+2",
+    "init": "+1",
+    "attaques": "Dague +2 au corps à corps (1d4+1/19-20) ; rayon de givre +3 à distance (1d6)",
+    "degs": "Dague 1d4+1/19-20 ; rayon de givre 1d6",
+    "sauvegardes": "Réfl +2, Vig +2, Vol +5",
+    "carac": "For 10, Dex 13, Con 12, Int 17, Sag 14, Cha 15",
+    "comp": "Concentration +9, Art de la magie +11, Savoir (nécomancie) +11",
+    "dons": "Incantation matricielle, Spécialisation (Nécromancie)",
+    "capacites": "Sorts de nécromancien (préparateur) : projectile magique, mains brûlantes, rayon affaiblissant, commandement des morts-vivants ; entouré de serviteurs morts-vivants",
+    "faiblesses": "Fragile au corps à corps, dépend de ses servants",
+    "fp": "3",
+    "alignement": "Mauvais",
+    "source_page": "module Dues for the Dead (adaptation D&D 3.5)",
+    "prompt_image": "red wizard necromancer in violet and crimson robes, shaved tattooed head, gaunt sinister human male, skeletal hands, dark ritual chamber with black altar, undead silhouettes in shadows",
+    "cle": "necromancien_rouge"
   }
 }

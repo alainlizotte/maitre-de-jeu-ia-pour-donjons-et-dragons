@@ -791,6 +791,14 @@ async def image_pour(ctx: ToolContext, nom: str) -> Optional[str]:
     même son portrait. Renvoie toujours une URL (placeholder SVG en dernier
     recours), None seulement si même le placeholder est impossible.
     """
+    # Toggle images de MONSTRES (config.yaml × maître GUI) : coupé → aucune
+    # génération, aucune URL servie (la galerie « Monstres » est masquée).
+    try:
+        from ..config import get_config
+        if not get_config().image.effective("monstres"):
+            return None
+    except Exception:                                            # noqa: BLE001
+        pass
     m = _find_monstre(ctx, nom)
     # Nom canonique du bestiaire : le cache d'images est indexé DESSUS, pas
     # sur le nom demandé — sinon « Golem » et « Golem de chair » (même

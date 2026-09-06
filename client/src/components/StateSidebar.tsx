@@ -222,6 +222,84 @@ function Field({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+/** Entrée d'inventaire de la fiche : {nom, quantite|qte, poids_kg|poids,
+ *  description} — armes, armures, équipement et sac (inventaire). */
+interface ItemFiche {
+  nom?: string;
+  name?: string;
+  quantite?: number | string;
+  poids_kg?: number | string;
+  description?: string;
+}
+
+/** Lisible : « cle_fer » → « Cle fer » (les slugs ne sont pas des noms). */
+function nomLisible(s: string): string {
+  const t = String(s ?? "").replace(/[_-]+/g, " ").trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function ItemListe({ items }: { items: ItemFiche[] }) {
+  if (!items.length) return null;
+  return (
+    <ul className="space-y-1">
+      {items.map((it, i) => {
+        const qte = it.quantite != null ? Number(it.quantite) : 1;
+        const poids = it.poids_kg != null && Number(it.poids_kg) > 0
+          ? `${Number(it.poids_kg)} kg`
+          : null;
+        return (
+          <li key={`${it.nom ?? it.name}-${i}`} className="text-xs leading-snug">
+            <span className="text-stone-200">
+              {nomLisible(it.nom ?? it.name ?? "")}
+              {qte > 1 ? ` ×${qte}` : ""}
+            </span>
+            {poids && <span className="text-stone-500"> — {poids}</span>}
+            {it.description ? (
+              <span className="text-stone-500 italic"> — {it.description}</span>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Bloc inventaire de la fiche : équipement porté + sac. Les armes,
+ *  armures et objets du personnage y sont consultables en jeu. */
+function InventaireBloc({ fiche }: { fiche: Record<string, unknown> }) {
+  const liste = (v: unknown): ItemFiche[] =>
+    Array.isArray(v)
+      ? (v as ItemFiche[]).filter((it) => it && (it.nom || it.name))
+      : [];
+  const equipement = liste(fiche.equipement);
+  const inventaire = liste(fiche.inventaire);
+  const armes = liste(fiche.armes);
+  if (!equipement.length && !inventaire.length && !armes.length) return null;
+  return (
+    <div className="mt-2 rounded bg-stone-800/40 border border-stone-800 p-2">
+      <div className="text-xs text-stone-500 mb-1">Inventaire</div>
+      {armes.length > 0 && (
+        <div className="mb-1.5">
+          <div className="text-[11px] text-amber-300/80 mb-0.5">Armes</div>
+          <ItemListe items={armes} />
+        </div>
+      )}
+      {equipement.length > 0 && (
+        <div className="mb-1.5">
+          <div className="text-[11px] text-amber-300/80 mb-0.5">Porté / équipé</div>
+          <ItemListe items={equipement} />
+        </div>
+      )}
+      {inventaire.length > 0 && (
+        <div>
+          <div className="text-[11px] text-amber-300/80 mb-0.5">Sac</div>
+          <ItemListe items={inventaire} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Panneau magie d'une fiche : emplacements restants (X/Y) + sorts prêts.
  *  Badge vert = prêt, barré = épuisé. Miroir des règles de server/sorts.py. */
 function PanneauSorts({
@@ -359,8 +437,8 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
   const connus = new Set([
     "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
     "ca", "carac", "sauvegardes", "bab", "competences", "dons", "equipement",
-    "or", "histoire", "conditions", "sorts", "sorts_connus", "charge_max",
-    "apparence",
+    "inventaire", "armes", "or", "histoire", "conditions", "sorts",
+    "sorts_connus", "charge_max", "apparence",
   ]);
   const extras = Object.entries(f).filter(([k]) => !connus.has(k));
   const apparence = (f.apparence ?? pj?.apparence) as
@@ -479,7 +557,7 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
               | undefined,
           }}
         />
-        <Field label="Équipement" value={f.equipement} />
+        <InventaireBloc fiche={f} />
         {f.or != null && f.or !== 0 && <Field label="Or" value={`${f.or} pc`} />}
         <Field label="Conditions" value={f.conditions} />
         {f.histoire ? (

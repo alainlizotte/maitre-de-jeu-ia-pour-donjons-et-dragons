@@ -258,15 +258,77 @@ def _ennemis_du_texte(ctx: ToolContext, texte: str) -> list[str]:
     hors scénario (ex. un gnoll dans un module de morts-vivants).
     Best-effort : [] si le bestiaire est illisible.
     """
-    if not texte:
-        return []
-    import re as _re
     try:
         # Chargeur canonique (cache + enveloppement {"monstres": {...}}).
         from .monstres import _load_bestiaire
-        best = _load_bestiaire(ctx)
+        return ennemis_du_resume(texte, _load_bestiaire(ctx))
     except Exception:                                            # noqa: BLE001
         return []
+
+
+# Alias EN → nom de bestiaire FR : beaucoup de modules sources sont en
+# ANGLAIS (Adventurers League…) ; sans ce pont, la détection des ennemis
+# échouait sur « zombies/skeletons/ghouls/necromancer » et `bible.ennemis`
+# restait vide — le MJ improvisait alors n'importe quelle créature
+# (observé en partie réelle : dragon rouge substitué au nécromancien).
+_ALIASES_EN_FR: dict[str, str] = {
+    "zombie": "zombie",
+    "skeleton": "squelette",
+    "skeletal": "squelette",
+    "ghoul": "goule",
+    "gargoyle": "gargouille",
+    "shadow": "ombre",
+    "spectre": "spectre",
+    "wraith": "spectre",
+    "wight": "gourgule",
+    "goblin": "gobelin",
+    "hobgoblin": "hobgobelin",
+    "kobold": "kobold",
+    "orc": "orc",
+    "ogre": "ogre",
+    "troll": "troll",
+    "wolf": "loup",
+    "rat": "rat",
+    "spider": "araignee",
+    "bat": "chauve-souris",
+    "necromancer": "necromancien rouge",
+    "red wizard": "necromancien rouge",
+}
+
+
+def _norm_txt(s: str) -> str:
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", str(s or "").lower())
+    return "".join(c for c in nf if not _ud.combining(c))
+
+
+def ennemis_du_resume(texte: str, best: Optional[dict] = None) -> list[str]:
+    """Détection des ennemis d'un scénario (résumé FR **ou EN**).
+
+    `best` : bestiaire pré-chargé ({"monstres": {...}}) ; chargé depuis le
+    disque sinon. Renvoie les noms officiels des créatures détectées —
+    utilisée par `scenarios_laelith_charger` (persisté dans
+    `quete.bible.ennemis`) et par le repli du prompt_builder (bibles déjà
+    persistées avec une liste vide)."""
+    if not texte:
+        return []
+    import re as _re
+    if best is None:
+        try:
+            import json as _json
+            from ..config import get_config
+            cfg = get_config()
+            p = cfg.abs(cfg.paths.data_dir) / "bestiaire.json"
+            raw = _json.loads(p.read_text(encoding="utf-8"))
+            best = {
+                "monstres": {
+                    v.get("cle", k): v
+                    for k, v in raw.items()
+                    if k != "_meta" and isinstance(v, dict) and "nom" in v
+                }
+            }
+        except Exception:                                        # noqa: BLE001
+            return []
     # Mots génériques à ne JAMAIS traiter comme des ennemis (des fiches
     # erronées ont pu être créées depuis un titre de section de PDF — ex.
     # une fiche nommée « Combat ») : tout nom dans cette liste est ignoré.
@@ -277,24 +339,50 @@ def _ennemis_du_texte(ctx: ToolContext, texte: str) -> list[str]:
         "aventurier", "héros", "heros", "villageois",
     }
     trouves: dict[str, str] = {}
-    for cle, m in (best.get("monstres") or {}).items():
-        if not isinstance(m, dict):
-            continue
-        nom = str(m.get("nom") or cle or "").strip()
-        if len(nom) < 3 or nom.lower() in _STOP_NOMS:
-            continue
-        nom = str(m.get("nom") or cle or "").strip()
-        if len(nom) < 3:
-            continue
+    texte_norm = _norm_txt(texte)
+
+    def _ajoute(nom_candidat: str) -> None:
+        nom_aff = str(nom_candidat or "").strip()
+        if len(nom_aff) < 3 or nom_aff.lower() in _STOP_NOMS:
+            return
+        # Recherche sur texte normalisé (minuscule, sans accents) : le
+        # motif est donc aussi construit sur le nom normalisé.
+        nom_n = _norm_txt(nom_aff)
+        if len(nom_n) < 3:
+            return
         # Mot entier (tolère le pluriel « zombies/squelettes ») : « Orc » ne
         # matche ni « orchestre » ni « orques » partiellement.
         motif = (
-            r"(?<![A-Za-zÀ-ÿ'’-])" + _re.escape(nom)
-            + r"(?:s|x)?(?![A-Za-zÀ-ÿ])"
+            r"(?<![a-z])" + _re.escape(nom_n) + r"(?:s|x)?(?![a-z])"
         )
         try:
-            if _re.search(motif, texte, _re.IGNORECASE):
-                trouves.setdefault(nom.lower(), nom)
+            if _re.search(motif, texte_norm):
+                trouves.setdefault(nom_aff.lower(), nom_aff)
+        except _re.error:                                        # noqa: PERF203
+            pass
+
+    for cle, m in (best.get("monstres") or {}).items():
+        if isinstance(m, dict):
+            _ajoute(str(m.get("nom") or cle or ""))
+
+    # Alias EN → bestiaire FR : résolu via une entrée réelle du bestiaire.
+    # L'alias (mot anglais) est lui-même le déclencheur — on n'ajoute la
+    # créature que si l'ALIAS figure dans le texte, pas son équivalent FR.
+    par_norm = {}
+    for cle, m in (best.get("monstres") or {}).items():
+        if isinstance(m, dict):
+            par_norm[_norm_txt(m.get("nom") or cle)] = str(
+                m.get("nom") or cle)
+    for alias_en, fr in _ALIASES_EN_FR.items():
+        cible = par_norm.get(fr) or par_norm.get(_norm_txt(fr))
+        if not cible:
+            continue
+        motif = r"(?<![a-z])" + _re.escape(alias_en) + r"(?:s)?(?![a-z])"
+        try:
+            if _re.search(motif, texte_norm):
+                nom_aff = str(cible).strip()
+                if len(nom_aff) >= 3:
+                    trouves.setdefault(nom_aff.lower(), nom_aff)
         except _re.error:                                        # noqa: PERF203
             continue
     return sorted(trouves.values())[:30]

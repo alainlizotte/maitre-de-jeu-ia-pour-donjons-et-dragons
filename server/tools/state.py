@@ -162,6 +162,20 @@ def _noms_uniques(noms: list[str]) -> list[str]:
     return out
 
 
+def _cr_numerique(fp: Any) -> Optional[float]:
+    """FP du bestiaire → float (« 1/4 » → 0.25, « 7 » → 7.0, « ? » → None)."""
+    txt = str(fp or "").strip().lower().replace(",", ".")
+    if not txt:
+        return None
+    try:
+        if "/" in txt:
+            num, den = txt.split("/", 1)
+            return float(num) / float(den)
+        return float(txt)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 @tool
 async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     """
@@ -219,6 +233,64 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
 
     state = _party(ctx)
     etat = state.load()
+
+    # ── GARDE DE DIFFICULTÉ (conformité DMG 3.5) ────────────────────────
+    # Une créature dont le FP dépasse largement le niveau du groupe produit
+    # des rencontres SANS ESPOIR (TPK) et, hors scénario, trahit la trame
+    # (observé en partie réelle : dragon FP 7 engagé contre un Guerrier
+    # niv. 1). On refuse et on propose des créatures du bestiaire adaptées.
+    # Marge : niveau max +4 (1-2 PJ), +6 (3-4 PJ), +8 (5+ PJ).
+    niveaux: list[int] = []
+    for p in (etat.get("pj") or []):
+        try:
+            niveaux.append(int(p.get("niveau", 1) or 1))
+        except (TypeError, ValueError):
+            niveaux.append(1)
+    nb_pj = max(1, len(niveaux))
+    niveau_ref = max(niveaux) if niveaux else 1
+    marge = 4 if nb_pj <= 2 else (6 if nb_pj <= 4 else 8)
+    fp_plafond = niveau_ref + marge
+    trop_forts: list[tuple[str, str]] = []
+    for nom, m in zip(noms, monstres_ok):
+        cr = _cr_numerique((m or {}).get("fp"))
+        if cr is not None and cr > fp_plafond:
+            trop_forts.append((nom, str((m or {}).get("fp") or "?")))
+    if trop_forts:
+        from .monstres import _load_bestiaire
+        best = _load_bestiaire(ctx)
+        candidats: list[tuple[float, str, str]] = []
+        for cle2, m2 in (best.get("monstres") or {}).items():
+            if not isinstance(m2, dict):
+                continue
+            cr2 = _cr_numerique(m2.get("fp"))
+            if cr2 is None or cr2 <= 0 or cr2 > fp_plafond:
+                continue
+            cible_cr = min(max(1.0, niveau_ref - 1), fp_plafond)
+            candidats.append(
+                (abs(cr2 - cible_cr), str(m2.get("nom") or cle2),
+                 str(m2.get("fp") or "?"))
+            )
+        candidats.sort()
+        lignes_fp = [
+            "⛔ **Monstres trop puissants pour le groupe (conformité DMG 3.5) :**"
+        ]
+        for nom, fp_txt in trop_forts:
+            lignes_fp.append(
+                f"- **{nom}** (FP {fp_txt}) contre un groupe de niveau "
+                f"{niveau_ref} ({nb_pj} PJ) — rencontre sans espoir."
+            )
+        lignes_fp.append(
+            f"_\nPlafond du groupe : FP {fp_plafond}. Rejoue avec une "
+            "créature du bestiaire adaptée — et respecte la trame du "
+            "scénario en cours (ses ennemis listés en priorité)._"
+        )
+        if candidats:
+            lignes_fp.append(
+                "_Créatures plausibles (FP ≤ " + str(fp_plafond) + ") : "
+                + ", ".join(n for _, n, _ in candidats[:10]) + "._"
+            )
+        return ToolResult(text="\n".join(lignes_fp))
+
     participants: list[dict] = []
     monstres_combat: list[dict] = []
     lignes: list[str] = ["🎲 **Initiative du combat**"]
@@ -348,6 +420,52 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     if res_boucle.events:
         lignes += ["", "⚙️ _Mécanique résolue par le serveur (round 1) :_"]
         lignes.extend(res_boucle.events)
+
+    # 🖼️ Portraits des monstres engagés : servis IMMÉDIATEMENT depuis le
+    # cache bestiaire (aucune génération bloquante ici — le hook arrière-plan
+    # gère les manquantes) puis poussés à la galerie et au journal des
+    # rencontres. Sans ce push synchronisé, un combat clôturé DANS le même
+    # tour (victoire/défaite flash) ne poussait JAMAIS les images :
+    # `monstres_combat` était déjà vidé quand le hook relisait l'état
+    # (observé en partie réelle : dragon engagé sans portrait affiché).
+    try:
+        from ..config import get_config as _gc
+        images_monstres_on = _gc().image.effective("monstres")
+    except Exception:                                            # noqa: BLE001
+        images_monstres_on = True
+    if images_monstres_on and monstres_combat:
+        from .monstres import _find_image, _fusionner_rencontres, _url_for
+        rencontres: list[tuple[str, str]] = []
+        for mo in monstres_combat:
+            nom_mo = str(mo.get("nom") or "").strip()
+            if not nom_mo:
+                continue
+            try:
+                img = _find_image(ctx, nom_mo)   # cache uniquement (rapide)
+            except Exception:                                    # noqa: BLE001
+                img = None
+            if img:
+                url_m = _url_for(img, ctx.data_dir)
+                mo["image_url"] = url_m
+                rencontres.append((nom_mo, url_m))
+        if rencontres:
+            try:
+                etat_img = state.load()
+                if _fusionner_rencontres(etat_img, rencontres):
+                    state.save(etat_img)
+            except Exception:                                    # noqa: BLE001
+                pass
+            cb_img = getattr(ctx, "on_event", None)
+            if cb_img is not None:
+                for _nom, _url in rencontres:
+                    try:
+                        await cb_img({
+                            "type": "state_patches",
+                            "patches": [{"image_monstre": _url}],
+                        })
+                    except Exception:                                # noqa: BLE001
+                        pass
+
     # L'état final réel (la boucle a pu avancer le curseur, voire clôturer
     # le combat) prime sur le snapshot d'avant boucle pour le patch UI.
     etat_final = state.load()

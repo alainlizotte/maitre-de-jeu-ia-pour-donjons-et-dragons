@@ -22,6 +22,7 @@ Spécificité de l'app standalone :
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import random
 from typing import Any, Optional
@@ -213,7 +214,7 @@ def _rendre_svg_donjon(donjon: dict[str, Any], taille_cell: int = 64) -> str:
         f'<text x="{pad}" y="{h+2*pad-6}" font-family="Georgia, serif" '
         f'font-size="11" fill="#c4a96a" stroke="#0e0e14" stroke-width="3" '
         f'paint-order="stroke" stroke-linejoin="round">'
-        f"Étage : {_nom_etage(etage)}</text>"
+        f"Étage : {_nom_etage(etage, donjon)}</text>"
     )
 
     def _coords(x: int, y: int) -> tuple[int, int]:
@@ -563,26 +564,54 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             f"{len(donjon.get('salles_visitees', []))} salles déjà explorées."
         )
     else:
-        entree = {
-            "x": 0, "y": 0, "type": "entrée",
-            "description": "L'entrée du donjon. Une lourde porte de bois noir se dresse devant vous.",
-            "visitee": True,
-            "portes": {"nord": True, "sud": False, "est": True, "ouest": True},
-        }
-        donjon = {
-            "id": donjon_id,
-            "grille": _dict_vers_grille({(0, 0): entree}),
-            "salles_visitees": ["0,0"],
-            "portes_bloquees": [],
-            "courant": [0, 0],
-            "etage": 0,
-            "etages": {},
-        }
-        _sync_etage(donjon)
-        msg_restore = (
-            f"🚪 Vous entrez dans **{donjon_id}** (rez-de-chaussée). "
-            f"Salle d'entrée (0,0). Portes visibles : nord, est, ouest."
-        )
+        # 📜 Plan CANONIQUE du scénario ? (fichier `<nom>.donjon.json` à
+        # côté du PDF — voir scripts/generer_donjon_scenario.py) : il prime
+        # sur la génération procédurale — disposition, descriptions et
+        # contenu des salles collent au module.
+        manifeste = _manifest_pour(ctx, donjon_id)
+        donjon = _donjon_depuis_manifeste(manifeste) if manifeste else None
+        if donjon is not None:
+            nb_salles = len(donjon.get("grille") or [])
+            nb_etages = len(donjon.get("etages") or {})
+            entree0 = next(
+                (s for s in (donjon.get("grille") or []) if s.get("visitee")),
+                None,
+            )
+            msg_restore = (
+                f"📜 Vous entrez dans **{donjon.get('id')}** — plan du "
+                f"scénario chargé ({nb_salles} salles, {nb_etages} étage(s), "
+                f"source : « {os.path.basename(str(manifeste.get('_chemin') or ''))} »). "
+                "Suis FIDÈLEMENT les descriptions canoniques et le contenu "
+                "des salles (ennemis, trésors, pièges, PNJ) — n'improvise "
+                "ni salle ni rencontre hors module.\n\n"
+                + (
+                    f"Entrée : {entree0.get('type')} — « "
+                    f"{str(entree0.get('description') or '')[:300]} »"
+                    if entree0 else ""
+                )
+                + _bloc_contenu_salle(entree0 or {})
+            )
+        else:
+            entree = {
+                "x": 0, "y": 0, "type": "entrée",
+                "description": "L'entrée du donjon. Une lourde porte de bois noir se dresse devant vous.",
+                "visitee": True,
+                "portes": {"nord": True, "sud": False, "est": True, "ouest": True},
+            }
+            donjon = {
+                "id": donjon_id,
+                "grille": _dict_vers_grille({(0, 0): entree}),
+                "salles_visitees": ["0,0"],
+                "portes_bloquees": [],
+                "courant": [0, 0],
+                "etage": 0,
+                "etages": {},
+            }
+            _sync_etage(donjon)
+            msg_restore = (
+                f"🚪 Vous entrez dans **{donjon_id}** (rez-de-chaussée). "
+                f"Salle d'entrée (0,0). Portes visibles : nord, est, ouest."
+            )
     etat["donjon"] = donjon
     etat["phase"] = "exploration"
     err = _sauver_etat(ctx, etat)
@@ -754,22 +783,208 @@ _ETAGE_NOM = ["Rez-de-chaussée", "Sous-sol I", "Sous-sol II", "Sous-sol III",
 _TYPES_ESCALIER = {"escaliers", "escalier", "escalier du donjon", "escaliers du donjon"}
 
 
-def _nom_etage(etage: int) -> str:
+def _nom_etage(etage: int, donjon: Optional[dict[str, Any]] = None) -> str:
+    """Nom d'un étage : celui du manifeste de scénario s'il existe
+    (donjon.etages[str(etage)].nom), sinon la nomenclature standard."""
+    if donjon is not None:
+        fl = (donjon.get("etages") or {}).get(str(etage)) or {}
+        nom = str(fl.get("nom") or "").strip()
+        if nom:
+            return nom
     if 0 <= etage < len(_ETAGE_NOM):
         return _ETAGE_NOM[etage]
     return f"Étage {etage}"
 
 
+# --------------------------------------------------------------------------- #
+#  Manifestes de donjons par scénario (plans pré-générés)
+# --------------------------------------------------------------------------- #
+# Un fichier `<nom>.donjon.json` posé à côté du PDF du scénario (ou n'importe
+# où sous data/scenarios/) décrit le plan CANONIQUE du donjon : salles,
+# positions, portes, descriptions fidèles au module, ennemis, trésors,
+# pièges et PNJ. `carte_donjon_entrer` charge ce plan au lieu du procédural —
+# la carte se révèle toujours salle par salle, mais sa disposition (et son
+# contenu) collent au scénario. Génération de brouillons :
+# scripts/generer_donjon_scenario.py.
+_ETAGES_MANIFESTE_CHAMPS = ("etat_des_lieux", "ennemis", "pnj", "tresor",
+                            "piege", "note")
+
+
+def _norm_nom_donjon(s: str) -> str:
+    """Normalisation accent/casse pour rapprocher les noms de donjons."""
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", (s or "").lower())
+    ascii_ = "".join(c for c in nf if not _ud.combining(c))
+    return " ".join(ascii_.replace("'", " ").split())
+
+
+def _manifest_pour(ctx: ToolContext, donjon_id: str) -> Optional[dict[str, Any]]:
+    """Trouve le manifeste de donjon du scénario courant.
+
+    Priorité : (1) manifeste dont `scenario` == id du scénario de la quête
+    (champ `[id]` de `quete.source`) ; (2) manifeste dont `donjon_id`
+    normalisé == nom demandé. Renvoie None sans quête compatible — la
+    génération procédurale prend le relais.
+    """
+    base = os.path.join(ctx.data_dir, "scenarios")
+    if not os.path.isdir(base):
+        return None
+    sid = ""
+    try:
+        etat = _charger_etat(ctx)
+        src = str((etat.get("quete") or {}).get("source") or "")
+        sid = src.split("]", 1)[0].lstrip("[").strip()
+    except Exception:                                            # noqa: BLE001
+        sid = ""
+    cands: list[dict[str, Any]] = []
+    for racine, _dirs, fichiers in os.walk(base):
+        for f in fichiers:
+            if not f.endswith(".donjon.json"):
+                continue
+            chemin = os.path.join(racine, f)
+            try:
+                with open(chemin, encoding="utf-8") as fh:
+                    data = json.load(fh)
+            except Exception:                                    # noqa: BLE001
+                continue
+            if not isinstance(data, dict) or not (data.get("etages")):
+                continue
+            data["_chemin"] = chemin
+            cands.append(data)
+    # 1) Scénario courant.
+    if sid:
+        for m in cands:
+            if str(m.get("scenario") or "") == sid:
+                return m
+    # 2) Nom de donjon demandé.
+    cible = _norm_nom_donjon(donjon_id)
+    for m in cands:
+        if cible and _norm_nom_donjon(str(m.get("donjon_id") or "")) == cible:
+            return m
+    return None
+
+
+def _donjon_depuis_manifeste(man: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Construit l'état `donjon` (grille + étages) depuis un manifeste.
+
+    Toutes les salles démarrent `visitee: False` SAUF l'entrée de l'étage 0 :
+    la carte se révèle salle par salle pendant l'exploration. Les champs de
+    contenu (ennemis/trésor/piège/PNJ/note) sont portés par chaque salle et
+    restitués par `carte_donjon_explorer`.
+    """
+    floors = man.get("etages") or []
+    if not isinstance(floors, list) or not floors:
+        return None
+    etages: dict[str, dict[str, Any]] = {}
+    for idx, fl in enumerate(floors):
+        if not isinstance(fl, dict):
+            continue
+        salles: dict[tuple[int, int], dict[str, Any]] = {}
+        for s in (fl.get("salles") or []):
+            if not isinstance(s, dict):
+                continue
+            try:
+                x, y = int(s.get("x")), int(s.get("y"))
+            except (TypeError, ValueError):
+                continue
+            portes = {
+                d: bool((s.get("portes") or {}).get(d))
+                for d in ("nord", "sud", "est", "ouest")
+            }
+            salle: dict[str, Any] = {
+                "x": x, "y": y,
+                "type": str(s.get("type") or "salle"),
+                "description": str(s.get("description") or "").strip()[:600],
+                "visitee": False,
+                "portes": portes,
+            }
+            for champ in _ETAGES_MANIFESTE_CHAMPS:
+                if s.get(champ):
+                    salle[champ] = s[champ]
+            salles[(x, y)] = salle
+        if not salles:
+            continue
+        ent = (fl.get("entree") or [0, 0])
+        try:
+            ex, ey = int(ent[0]), int(ent[1])
+        except (TypeError, ValueError, IndexError):
+            ex, ey = 0, 0
+        if (ex, ey) in salles:
+            salles[(ex, ey)]["visitee"] = True
+        etages[str(idx)] = {
+            "nom": str(fl.get("nom") or "").strip(),
+            "grille": _dict_vers_grille(salles),
+            "salles_visitees": [f"{ex},{ey}"] if (ex, ey) in salles else [],
+            "portes_bloquees": [],
+            "courant": [ex, ey],
+        }
+    if not etages:
+        return None
+    fl0 = etages["0"]
+    return {
+        "id": str(man.get("donjon_id") or man.get("id") or "Donjon"),
+        "manifeste": str(man.get("scenario") or man.get("id") or ""),
+        "grille": fl0["grille"],
+        "salles_visitees": fl0["salles_visitees"],
+        "portes_bloquees": [],
+        "courant": fl0["courant"],
+        "etage": 0,
+        "etages": etages,
+    }
+
+
+def _bloc_contenu_salle(salle: dict[str, Any]) -> str:
+    """Bloc « contenu canonique » (manifeste de scénario) pour le résultat
+    de `carte_donjon_explorer` : le MJ DOIT le respecter (ennemis du module,
+    trésor, piège, PNJ) — jamais d'improvisation hors scénario."""
+    ennemis = salle.get("ennemis") or []
+    pnj = salle.get("pnj") or []
+    tresor = str(salle.get("tresor") or "").strip()
+    piege = str(salle.get("piege") or "").strip()
+    note = str(salle.get("note") or "").strip()
+    if not (ennemis or pnj or tresor or piege or note):
+        return ""
+    lignes: list[str] = []
+    if pnj:
+        if isinstance(pnj, list):
+            lignes.append("👥 PNJ : " + ", ".join(str(p) for p in pnj))
+        else:
+            lignes.append(f"👥 PNJ : {pnj}")
+    if ennemis:
+        if isinstance(ennemis, list):
+            liste_e = ", ".join(str(e) for e in ennemis)
+        else:
+            liste_e = str(ennemis)
+        lignes.append(
+            "⚔️ Ennemis DU SCÉNARIO : " + liste_e
+            + " — engage-les via `engager_combat` dès qu'ils sont aperçus ou "
+            "détectés ; JAMAIS d'autre créature à leur place."
+        )
+    if piege:
+        lignes.append(f"🪤 Piège : {piege}")
+    if tresor:
+        lignes.append(f"💰 Trésor : {tresor}")
+    if note:
+        lignes.append(f"📝 Note du module : {note}")
+    return "\n\n📜 **Contenu canonique de la salle (scénario)** :\n" + "\n".join(lignes)
+
+
 def _sync_etage(donjon: dict[str, Any]) -> None:
-    """Archive l'étage courant (grille/courant…) dans `donjon["etages"]`."""
+    """Archive l'étage courant (grille/courant…) dans `donjon["etages"]`.
+    Préserve le `nom` d'étage porté par un manifeste de scénario."""
     etages = donjon.setdefault("etages", {})
     etage = int(donjon.get("etage", 0) or 0)
-    etages[str(etage)] = {
+    precedent = etages.get(str(etage)) or {}
+    fl: dict[str, Any] = {
         "grille": donjon.get("grille", []),
         "salles_visitees": donjon.get("salles_visitees", []),
         "portes_bloquees": donjon.get("portes_bloquees", []),
         "courant": donjon.get("courant", [0, 0]),
     }
+    nom = str(precedent.get("nom") or "").strip()
+    if nom:
+        fl["nom"] = nom
+    etages[str(etage)] = fl
 
 
 def _charger_etage(donjon: dict[str, Any], etage: int) -> None:
@@ -1072,6 +1287,16 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
             "monstres vaincus, coffres vidés…), puis narre seulement ce que "
             "le groupe y trouve maintenant."
         )
+    elif str(salle.get("description") or "").strip():
+        # 📜 Salle du MANIFESTE de scénario : la description canonique du
+        # module est déjà figée — le MJ la narre fidèlement, sans l'inventer.
+        texte = (
+            f"🚶 Vous avancez au {d} → salle ({nx},{ny}) — type : "
+            f"**{salle.get('type','?')}**. {porte_ligne}\n\n"
+            f"📜 **Salle DU SCÉNARIO** — description canonique du module "
+            f"(narre-la à l'identique, sans rien inventer) : « "
+            f"{str(salle.get('description')).strip()[:600]} »"
+        )
     else:
         texte = (
             f"🚶 Vous avancez au {d} → salle ({nx},{ny}) — type : "
@@ -1081,6 +1306,10 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
             "ce fil garantit qu'en revenant ici, la salle sera retrouvée "
             "identique."
         )
+    # 📜 Contenu canonique du manifeste (ennemis, trésor, piège, PNJ) —
+    # restitué dans TOUS les cas (une salle revisitée contient encore son
+    # contenu tant qu'il n'a pas été traité dans la narration).
+    texte += _bloc_contenu_salle(salle)
     # Illustration de salle : PNG ComfyUI en arrière-plan si dispo
     # (fallback silencieux — on garde le SVG carte principale).
     # Respecte le toggle `image.salles_enabled` (config.yaml × maître GUI)
@@ -1167,13 +1396,20 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
         return ToolResult(text=f"❌ Erreur SVG : {e}")
     url = _url_for(path, ctx.data_dir)
     pos = list(donjon.get("courant", [0, 0]))
+    salle_arrivee = next(
+        (s for s in (donjon.get("grille") or [])
+         if s.get("x") == pos[0] and s.get("y") == pos[1]),
+        None,
+    ) if pos else None
     return ToolResult(
         text=(
             f"🪜 Vous empruntez l'escalier "
             f"({'descendez vers le sous-sol' if descendre else 'remontez'} → "
-            f"**{_nom_etage(nouvel_etage)}**). Salle actuelle ({pos[0]},{pos[1]}). "
+            f"**{_nom_etage(nouvel_etage, donjon)}**). Salle actuelle "
+            f"({pos[0]},{pos[1]}). "
             f"Le groupe poursuit son exploration du donjon.\n\n🖼️ Carte : {url}"
-        ),
+        )
+        + (_bloc_contenu_salle(salle_arrivee) if salle_arrivee else ""),
         state_patch={"donjon": donjon, "carte_donjon": url},
     )
 

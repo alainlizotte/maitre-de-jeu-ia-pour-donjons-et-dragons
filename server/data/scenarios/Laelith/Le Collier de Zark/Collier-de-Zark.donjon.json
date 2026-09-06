@@ -1,0 +1,150 @@
+{
+  "id": "laelith_le_collier_de_zark_donjon",
+  "scenario": "laelith_le_collier_de_zark",
+  "donjon_id": "laelith_le_collier_de_zark",
+  "titre": "Donjon du scénario laelith_le_collier_de_zark (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Chien ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "salle vide",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Rat ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": 3,
+          "type": "garde",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 2,
+          "y": 3,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": 3,
+          "y": 4,
+          "type": "trésor",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": 4,
+          "y": 4,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 5,
+          "y": 4,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "[À RÉDIGER — antre du « Cube gélatineux », final du scénario « laelith_le_collier_de_zark ». Reprendre la description du module.]",
+          "ennemis": [
+            "Cube gélatineux ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

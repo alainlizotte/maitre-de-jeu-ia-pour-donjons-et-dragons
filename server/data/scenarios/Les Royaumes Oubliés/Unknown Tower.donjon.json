@@ -1,0 +1,161 @@
+{
+  "id": "ro_unknown_tower_donjon",
+  "scenario": "ro_unknown_tower",
+  "donjon_id": "ro_unknown_tower",
+  "titre": "Donjon du scénario ro_unknown_tower (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": 1,
+          "y": -1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Spectre ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": -2,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Manticore ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": -2,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Griffon ×1"
+          ]
+        },
+        {
+          "x": 3,
+          "y": -2,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Goule ×1"
+          ]
+        },
+        {
+          "x": 3,
+          "y": -3,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Troglodyte ×1"
+          ]
+        },
+        {
+          "x": 4,
+          "y": -3,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Zombie ×1"
+          ]
+        },
+        {
+          "x": 4,
+          "y": -2,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 4,
+          "y": -1,
+          "type": "salle du trône",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Troll », final du scénario « ro_unknown_tower ». Reprendre la description du module.]",
+          "ennemis": [
+            "Troll ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

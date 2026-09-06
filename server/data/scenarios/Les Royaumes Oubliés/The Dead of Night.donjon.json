@@ -1,0 +1,161 @@
+{
+  "id": "ro_the_dead_of_night_donjon",
+  "scenario": "ro_the_dead_of_night",
+  "donjon_id": "ro_the_dead_of_night",
+  "titre": "Donjon du scénario ro_the_dead_of_night (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": 1,
+          "y": -1,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Ombre ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": -1,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Doppelganger ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": -2,
+          "type": "laboratoire",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Ogre ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": -3,
+          "type": "antichambre",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Goule ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": -4,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Squelette ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": -4,
+          "type": "antichambre",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Zombie ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": -5,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 2,
+          "y": -5,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "[À RÉDIGER — antre du « Spectre », final du scénario « ro_the_dead_of_night ». Reprendre la description du module.]",
+          "ennemis": [
+            "Spectre ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

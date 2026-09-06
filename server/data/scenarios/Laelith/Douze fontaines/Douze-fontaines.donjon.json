@@ -1,0 +1,150 @@
+{
+  "id": "laelith_douze_fontaines_donjon",
+  "scenario": "laelith_douze_fontaines",
+  "donjon_id": "laelith_douze_fontaines",
+  "titre": "Donjon du scénario laelith_douze_fontaines (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -1,
+          "y": 1,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Orque ×1"
+          ]
+        },
+        {
+          "x": -2,
+          "y": 1,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -3,
+          "y": 1,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -4,
+          "y": 1,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -5,
+          "y": 1,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": -6,
+          "y": 1,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": -7,
+          "y": 1,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": -7,
+          "y": 2,
+          "type": "salle du trône",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Loup », final du scénario « laelith_douze_fontaines ». Reprendre la description du module.]",
+          "ennemis": [
+            "Loup ×1"
+          ],
+          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Vampire (FP 8). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "id": "laelith_la_secte_du_crane_donjon",
+  "scenario": "laelith_la_secte_du_crane",
+  "donjon_id": "laelith_la_secte_du_crane",
+  "titre": "Donjon du scénario laelith_la_secte_du_crane (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": -1,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": -2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": 0,
+          "y": -2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": 1,
+          "y": -2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 2,
+          "y": -2,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 3,
+          "y": -2,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 3,
+          "y": -1,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 2,
+          "y": -1,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Momie », final du scénario « laelith_la_secte_du_crane ». Reprendre la description du module.]",
+          "ennemis": [
+            "Momie ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

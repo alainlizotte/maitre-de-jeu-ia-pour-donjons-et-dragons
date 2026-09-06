@@ -1,0 +1,160 @@
+{
+  "id": "ro_the_crown_of_mystra_donjon",
+  "scenario": "ro_the_crown_of_mystra",
+  "donjon_id": "ro_the_crown_of_mystra",
+  "titre": "Donjon du scénario ro_the_crown_of_mystra (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": 0,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -2,
+          "y": 0,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Nécromancien rouge ×1"
+          ]
+        },
+        {
+          "x": -3,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Goule ×1"
+          ]
+        },
+        {
+          "x": -4,
+          "y": 0,
+          "type": "antichambre",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Squelette ×1"
+          ]
+        },
+        {
+          "x": -4,
+          "y": -1,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Gobelin ×1"
+          ]
+        },
+        {
+          "x": -5,
+          "y": -1,
+          "type": "garde",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Rat ×1"
+          ]
+        },
+        {
+          "x": -5,
+          "y": -2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": -4,
+          "y": -2,
+          "type": "abattoir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -4,
+          "y": -3,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « ro_the_crown_of_mystra ». Reprendre la description du module.]",
+          "ennemis": [
+            "Ombre ×1"
+          ],
+          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Vampire (FP 8), Rakshasa (FP 10). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+        }
+      ]
+    }
+  ]
+}

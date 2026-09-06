@@ -140,7 +140,14 @@ def construire_manifeste(
     finale = boss). Les descriptions restent à remplir (chaîne vide).
     """
     rng = random.Random(graine or sid)
-    ennemis = _ennemis_avec_fp(best, texte)
+    tous_ennemis = _ennemis_avec_fp(best, texte)
+    # Créatures jouables par un groupe solo niveau 1 (plafond FP 5, même
+    # logique que la garde de `engager_combat`) : au-delà, la garde refuserait
+    # l'engagement — la créature passe alors en `note` pour ajustement manuel
+    # (ajouter le nombre, dégrader le monstre ou reprogrammer la rencontre).
+    _FP_PLAFOND_BROUILLON = 5.0
+    ennemis = [e for e in tous_ennemis if e["cr"] <= _FP_PLAFOND_BROUILLON]
+    trop_forts = [e for e in tous_ennemis if e["cr"] > _FP_PLAFOND_BROUILLON]
     nb = max(6, min(int(nb_salles), 20))
     etage: list[dict[str, Any]] = []
     x, y = 0, 0
@@ -198,20 +205,33 @@ def construire_manifeste(
             if voisin is not None:
                 etage[voisin]["portes"][_opp[d]] = True
 
-    # Contenu : boss (FP max) en salle finale, gardes avant, trésors/pièges.
-    if ennemis and etage:
-        boss = ennemis[-1]
-        etage[-1]["ennemis"] = [f"{boss['nom']} ×1"]
-        etage[-1]["description"] = (
-            etage[-1].get("description")
-            or f"[À RÉDIGER — antre du « {boss['nom']} », final du scénario « {sid} ». "
-            "Reprendre la description du module.]"
-        )
-        gardes = list(reversed(ennemis[:-1]))
-        milieu = list(range(2, len(etage) - 2)) or [1]
-        for j, e in enumerate(gardes):
-            i_salle = milieu[j % len(milieu)]
-            etage[i_salle].setdefault("ennemis", []).append(f"{e['nom']} ×1")
+    # Contenu : boss (FP max jouable) en salle finale, gardes avant,
+    # trésors/pièges. Les créatures trop fortes (FP > 5) sont signalées en
+    # note de la salle finale pour ajustement manuel.
+    if etage:
+        if ennemis:
+            boss = ennemis[-1]
+            etage[-1]["ennemis"] = [f"{boss['nom']} ×1"]
+            etage[-1]["description"] = (
+                etage[-1].get("description")
+                or f"[À RÉDIGER — antre du « {boss['nom']} », final du scénario « {sid} ». "
+                "Reprendre la description du module.]"
+            )
+            gardes = list(reversed(ennemis[:-1]))
+            milieu = list(range(2, len(etage) - 2)) or [1]
+            for j, e in enumerate(gardes):
+                i_salle = milieu[j % len(milieu)]
+                etage[i_salle].setdefault("ennemis", []).append(f"{e['nom']} ×1")
+        if trop_forts:
+            etage[-1]["note"] = (
+                "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes "
+                "pour un groupe niveau 1 (FP > 5, refusées par la garde de "
+                f"combat) : "
+                + ", ".join(f"{e['nom']} (FP {e['fp']})" for e in trop_forts)
+                + ". Replacer manuellement une version dégradée, un groupe "
+                "de créatures plus faibles, ou réserver à un groupe de "
+                "niveau supérieur."
+            )
     nb_tresors = 1 if nb < 10 else 2
     for i_t in rng.sample(range(1, max(2, nb - 2)), nb_tresors):
         s = etage[i_t]

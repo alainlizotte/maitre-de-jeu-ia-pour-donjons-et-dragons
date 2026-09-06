@@ -1,0 +1,148 @@
+{
+  "id": "ro_to_find_a_gate_donjon",
+  "scenario": "ro_to_find_a_gate",
+  "donjon_id": "ro_to_find_a_gate",
+  "titre": "Donjon du scénario ro_to_find_a_gate (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -1,
+          "y": 1,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Gobelin ×1"
+          ]
+        },
+        {
+          "x": -1,
+          "y": 2,
+          "type": "trésor",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": -2,
+          "y": 2,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -2,
+          "y": 1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -3,
+          "y": 1,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -4,
+          "y": 1,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": -4,
+          "y": 2,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -5,
+          "y": 2,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Worg », final du scénario « ro_to_find_a_gate ». Reprendre la description du module.]",
+          "ennemis": [
+            "Worg ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

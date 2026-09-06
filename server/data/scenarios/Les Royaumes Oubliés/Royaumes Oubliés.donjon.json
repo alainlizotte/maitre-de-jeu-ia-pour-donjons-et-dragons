@@ -1,0 +1,166 @@
+{
+  "id": "ro_royaumes_oublies_donjon",
+  "scenario": "ro_royaumes_oublies",
+  "donjon_id": "ro_royaumes_oublies",
+  "titre": "Donjon du scénario ro_royaumes_oublies (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": -1,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Manticore ×1",
+            "Krenshar ×1"
+          ]
+        },
+        {
+          "x": -2,
+          "y": -1,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Ours brun ×1",
+            "Hyène ×1"
+          ]
+        },
+        {
+          "x": -3,
+          "y": -1,
+          "type": "cellules",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Griffon ×1",
+            "Orque ×1"
+          ]
+        },
+        {
+          "x": -3,
+          "y": -2,
+          "type": "abattoir",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Magmatique ×1",
+            "Squelette ×1"
+          ]
+        },
+        {
+          "x": -3,
+          "y": -3,
+          "type": "antichambre",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Gobelours ×1",
+            "Gobelin ×1"
+          ]
+        },
+        {
+          "x": -3,
+          "y": -4,
+          "type": "puits",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Loup ×1",
+            "Chat ×1"
+          ]
+        },
+        {
+          "x": -4,
+          "y": -4,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -5,
+          "y": -4,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Troll », final du scénario « ro_royaumes_oublies ». Reprendre la description du module.]",
+          "ennemis": [
+            "Troll ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

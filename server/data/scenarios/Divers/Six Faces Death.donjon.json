@@ -1,0 +1,153 @@
+{
+  "id": "divers_six_faces_death_donjon",
+  "scenario": "divers_six_faces_death",
+  "donjon_id": "divers_six_faces_death",
+  "titre": "Donjon du scénario divers_six_faces_death (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "trésor",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": 1,
+          "y": -1,
+          "type": "crypte",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Derro ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": -2,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Squelette ×1"
+          ]
+        },
+        {
+          "x": 0,
+          "y": -2,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Zombie ×1"
+          ]
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": -1,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": -2,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -2,
+          "y": -2,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": -2,
+          "y": -1,
+          "type": "salle du trône",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « divers_six_faces_death ». Reprendre la description du module.]",
+          "ennemis": [
+            "Ombre ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

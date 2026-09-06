@@ -1,0 +1,156 @@
+{
+  "id": "ro_les_invasions_barbares_donjon",
+  "scenario": "ro_les_invasions_barbares",
+  "donjon_id": "ro_les_invasions_barbares",
+  "titre": "Donjon du scénario ro_les_invasions_barbares (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": 0,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -1,
+          "y": -1,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Licorne ×1"
+          ]
+        },
+        {
+          "x": -2,
+          "y": -1,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Loup ×1"
+          ]
+        },
+        {
+          "x": -3,
+          "y": -1,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Orque ×1"
+          ]
+        },
+        {
+          "x": -3,
+          "y": 0,
+          "type": "salle vide",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Chien ×1"
+          ]
+        },
+        {
+          "x": -4,
+          "y": 0,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -5,
+          "y": 0,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": -5,
+          "y": -1,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": -5,
+          "y": -2,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Ours brun », final du scénario « ro_les_invasions_barbares ». Reprendre la description du module.]",
+          "ennemis": [
+            "Ours brun ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "id": "ro_the_grandfather_tree_donjon",
+  "scenario": "ro_the_grandfather_tree",
+  "donjon_id": "ro_the_grandfather_tree",
+  "titre": "Donjon du scénario ro_the_grandfather_tree (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "trésor",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": 1,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Lion ×1"
+          ]
+        },
+        {
+          "x": -1,
+          "y": 2,
+          "type": "salle vide",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Worg ×1"
+          ]
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Gnoll ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Squelette ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": 2,
+          "type": "abattoir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Gobelin ×1"
+          ]
+        },
+        {
+          "x": 3,
+          "y": 2,
+          "type": "laboratoire",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 4,
+          "y": 2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 5,
+          "y": 2,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "[À RÉDIGER — antre du « Troll », final du scénario « ro_the_grandfather_tree ». Reprendre la description du module.]",
+          "ennemis": [
+            "Troll ×1"
+          ],
+          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Annis (FP 6). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+        }
+      ]
+    }
+  ]
+}

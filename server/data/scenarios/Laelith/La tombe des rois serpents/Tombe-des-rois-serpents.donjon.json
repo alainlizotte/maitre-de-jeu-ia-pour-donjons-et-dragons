@@ -1,0 +1,161 @@
+{
+  "id": "laelith_la_tombe_des_rois_serpents_donjon",
+  "scenario": "laelith_la_tombe_des_rois_serpents",
+  "donjon_id": "laelith_la_tombe_des_rois_serpents",
+  "titre": "Donjon du scénario laelith_la_tombe_des_rois_serpents (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": -1,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Basilic ×1"
+          ]
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Vase grise ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": -1,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Araignée géante ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": -1,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Squelette ×1"
+          ]
+        },
+        {
+          "x": 3,
+          "y": -1,
+          "type": "abattoir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Gobelin ×1"
+          ]
+        },
+        {
+          "x": 3,
+          "y": -2,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Lézard ×1"
+          ]
+        },
+        {
+          "x": 2,
+          "y": -2,
+          "type": "trésor",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 2,
+          "y": -3,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Gelée ocre », final du scénario « laelith_la_tombe_des_rois_serpents ». Reprendre la description du module.]",
+          "ennemis": [
+            "Gelée ocre ×1"
+          ],
+          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Succube (FP 7). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+        }
+      ]
+    }
+  ]
+}

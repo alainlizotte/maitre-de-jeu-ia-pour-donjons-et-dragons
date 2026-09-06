@@ -1,0 +1,148 @@
+{
+  "id": "ro_aurumglathrolos_adventure_donjon",
+  "scenario": "ro_aurumglathrolos_adventure",
+  "donjon_id": "ro_aurumglathrolos_adventure",
+  "titre": "Donjon du scénario ro_aurumglathrolos_adventure (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 1,
+          "y": -1,
+          "type": "abattoir",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Ogre ×1"
+          ]
+        },
+        {
+          "x": 1,
+          "y": -2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": 2,
+          "y": -2,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": 2,
+          "y": -3,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 1,
+          "y": -3,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 0,
+          "y": -3,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+        },
+        {
+          "x": 0,
+          "y": -4,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": -1,
+          "y": -4,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Harpie », final du scénario « ro_aurumglathrolos_adventure ». Reprendre la description du module.]",
+          "ennemis": [
+            "Harpie ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

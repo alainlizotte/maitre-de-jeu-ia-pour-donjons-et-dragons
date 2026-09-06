@@ -1,0 +1,155 @@
+{
+  "id": "divers_crypts_kelemvor_donjon",
+  "scenario": "divers_crypts_kelemvor",
+  "donjon_id": "divers_crypts_kelemvor",
+  "titre": "Donjon du scénario divers_crypts_kelemvor (BROUILLON)",
+  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
+  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Ogre ×1"
+          ]
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Loup ×1"
+          ]
+        },
+        {
+          "x": 3,
+          "y": 1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "ennemis": [
+            "Squelette ×1"
+          ]
+        },
+        {
+          "x": 4,
+          "y": 1,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "",
+          "ennemis": [
+            "Zombie ×1"
+          ]
+        },
+        {
+          "x": 4,
+          "y": 2,
+          "type": "crypte",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": ""
+        },
+        {
+          "x": 3,
+          "y": 2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "",
+          "tresor": "[À RÉDIGER — trésor du module]"
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": ""
+        },
+        {
+          "x": 3,
+          "y": 4,
+          "type": "salle du trône",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": false
+          },
+          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « divers_crypts_kelemvor ». Reprendre la description du module.]",
+          "ennemis": [
+            "Ombre ×1"
+          ]
+        }
+      ]
+    }
+  ]
+}

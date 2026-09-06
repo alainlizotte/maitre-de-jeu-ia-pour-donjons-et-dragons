@@ -22,6 +22,7 @@ export function useChatSocket(partie_id: string | null) {
   const addMonster = useParty((s) => s.addMonster);
   const removeMonsterByNom = useParty((s) => s.removeMonsterByNom);
   const addScene = useParty((s) => s.addScene);
+  const addSalle = useParty((s) => s.addSalle);
   const addTeamMessage = useParty((s) => s.addTeamMessage);
   const setTeamMessages = useParty((s) => s.setTeamMessages);
   const applyPatches = useParty((s) => s.applyPatches);
@@ -47,7 +48,8 @@ export function useChatSocket(partie_id: string | null) {
 
   /** Route une URL d'image générée vers la bonne galerie :
    *  - bestiaire_cache → monstres rencontrés ;
-   *  - images_salles / images_scenes → scènes illustrées.
+   *  - images_salles → pièces de donjon explorées ;
+   *  - images_scenes → scènes illustrées.
    *  Renvoie true si l'image a été classée (elle sera aussi affichée en chat). */
   const classifyImage = useCallback(
     (url: string): boolean => {
@@ -56,7 +58,17 @@ export function useChatSocket(partie_id: string | null) {
         addMonster(encounterFromUrl(url));
         return true;
       }
-      if (url.includes("/images_salles/") || url.includes("/images_scenes/")) {
+      if (url.includes("/images_salles/")) {
+        const fichier = decodeURIComponent(url.split("/").pop() ?? "");
+        const nom =
+          fichier
+            .replace(/\.(png|jpe?g|webp|svg)$/i, "")
+            .replace(/[_-]+/g, " ")
+            .trim() || "salle";
+        addSalle({ nom, url });
+        return true;
+      }
+      if (url.includes("/images_scenes/")) {
         const fichier = decodeURIComponent(url.split("/").pop() ?? "");
         const nom =
           fichier
@@ -68,7 +80,7 @@ export function useChatSocket(partie_id: string | null) {
       }
       return false;
     },
-    [addMonster, addScene],
+    [addMonster, addScene, addSalle],
   );
 
   useEffect(() => {

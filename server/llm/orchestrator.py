@@ -274,16 +274,44 @@ _DAMAGE_PROSE_PATTERNS = [
 ]
 
 
-def looks_like_simulation(text: str, include_damage: bool = True) -> Optional[str]:
+# Jets de caractéristique/compétence ANNONCÉS en prose sans être résolus :
+# « Je lance un jet de Force pour forcer la porte de pierre. » — le tour
+# s'arrêtait là, sans aucun dé (observé en partie réelle). Désactivés quand
+# un tool de dés a déjà tourné (la reformulation du résultat est légitime).
+_CHECK_PROSE_PATTERNS = [
+    re.compile(
+        r"\bje\s+(?:vais\s+)?(?:tenter\s+de\s+)?lancer\s+un\s+jet\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bjet\s+(?:de\s+)?(?:force|dext[ée]rit[ée]|constitution"
+        r"|intelligence|sagesse|charisme)\b\s*(?:pour|…|\?|$|\.)",
+        re.IGNORECASE,
+    ),
+]
+
+
+def looks_like_simulation(
+    text: str,
+    include_damage: bool = True,
+    include_checks: bool = True,
+) -> Optional[str]:
     """Renvoie le fragment de simulation trouvé, ou None.
 
     `include_damage=False` désactive les patterns de dégâts en prose — utilisé
     quand un tool de dés a déjà tourné dans le tour : la reformulation du
     résultat ("La créature subit 7 dégâts") est alors légitime.
+    `include_checks=False` désactive pareillement les patterns de jets de
+    caractéristique/compétence en prose (« jet de Force pour… »).
     """
     if not text:
         return None
-    for pat in _SIMULATION_PATTERNS + (_DAMAGE_PROSE_PATTERNS if include_damage else []):
+    pats: list[re.Pattern[str]] = list(_SIMULATION_PATTERNS)
+    if include_damage:
+        pats += _DAMAGE_PROSE_PATTERNS
+    if include_checks:
+        pats += _CHECK_PROSE_PATTERNS
+    for pat in pats:
         m = pat.search(text)
         if m:
             return m.group(0)
@@ -1313,23 +1341,38 @@ class Orchestrator:
                     tc.get("name") == "lancer_degats"
                     for tc in result.tool_calls_trace
                 )
+                dice_rolled = any(
+                    tc.get("name") in _DICE_TOOL_NAMES
+                    for tc in result.tool_calls_trace
+                )
                 sim = looks_like_simulation(
                     chat.content,
                     include_damage=not (damage_rolled or trust_damage_prose),
+                    include_checks=not dice_rolled,
                 )
                 if sim:
                     result.simulation_attempted = True
                     if result.corrections < 2:
                         result.corrections += 1
-                        # On injecte un correctif et on relance le même tour.
-                        work.append(Message(
-                            role="assistant",
-                            content=chat.content,
-                            tool_calls=chat.tool_calls or None,
-                        ))
-                        work.append(Message(
-                            role="system",
-                            content=(
+                        # Correctif ciblé : jet de compétence/caractéristique
+                        # ANNONCÉ mais non résolu (« Je lance un jet de
+                        # Force… » et le tour s'arrête sans résultat).
+                        if any(
+                            p.search(sim) for p in _CHECK_PROSE_PATTERNS
+                        ):
+                            consigne_sim = (
+                                "⚠️ CORRECTION : tu as ÉCRIT "
+                                f"« {sim} » sans le résoudre — le tour s'est "
+                                "arrêté avant tout résultat. Résous le jet "
+                                "MAINTENANT avec les outils : jet de "
+                                "caractéristique/compétence → `lancer_d20` "
+                                "(competence + difficulte/DD) ou `lancer_des` "
+                                "; sauvegarde → `lancer_sauvegarde`. Attends "
+                                "le résultat du tool, puis narre l'issue "
+                                "(réussite/échec et conséquences concrètes)."
+                            )
+                        else:
+                            consigne_sim = (
                                 "⚠️ CORRECTION : tu as écrit "
                                 f"« {sim} » au lieu d'appeler réellement l'outil. "
                                 "Les `*(Simulation de l'appel ...)*` sont interdites :"
@@ -1338,7 +1381,15 @@ class Orchestrator:
                                 "(mode prompt) ou via le tool_calls natif — sans "
                                 "reformuler la narrative jusqu'à obtenir le résultat. "
                                 "Recommence ce tour en appelant réellement l'outil."
-                            ),
+                            )
+                        work.append(Message(
+                            role="assistant",
+                            content=chat.content,
+                            tool_calls=chat.tool_calls or None,
+                        ))
+                        work.append(Message(
+                            role="system",
+                            content=consigne_sim,
                         ))
                         continue
                     # 2 corrections déjà : on continue avec le reste (best effort).
@@ -1407,9 +1458,14 @@ class Orchestrator:
                     tc.get("name") == "lancer_degats"
                     for tc in result.tool_calls_trace
                 )
+                dice_rolled_final = any(
+                    tc.get("name") in _DICE_TOOL_NAMES
+                    for tc in result.tool_calls_trace
+                )
                 sim_final = looks_like_simulation(
                     narration,
                     include_damage=not (damage_rolled or trust_damage_prose),
+                    include_checks=not dice_rolled_final,
                 )
                 if sim_final:
                     result.simulation_attempted = True

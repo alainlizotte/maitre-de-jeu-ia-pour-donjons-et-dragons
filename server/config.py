@@ -100,20 +100,42 @@ class RagConfig:
 class ImageConfig:
     enabled: bool = False
     base_url: str = ""  # vide → $COMFYUI_BASE_URL ou http://127.0.0.1:8188
-    # Illustration des scènes marquantes (outil `illustration_scene`) : peut
-    # être coupé seul via ce flag ou le bouton du GUI (persisté dans
-    # data/settings.json). Monstres, portraits et illustrations de donjon
-    # restent générés quoi qu'il arrive.
+    # Toggles PAR CATÉGORIE (monstres / pièces de donjon / scènes) : chacun
+    # coupe la génération ET l'affichage de sa galerie. Le bouton du GUI est
+    # un interrupteur MAÎTRE (persisté dans data/settings.json) qui coupe les
+    # trois d'un coup.
+    monstres_enabled: bool = True
+    salles_enabled: bool = True
+    # Illustration des scènes marquantes (outil `illustration_scene`).
     scenes_enabled: bool = True
     # Génération des portraits PJ via ComfyUI. Peut être coupé seul (par ex.
     # sur GPU à VRAM limitée où le LLM 9B et ComfyUI se disputent la mémoire) :
     # la fiche se crée quand même, seul le portrait PNG n'est pas généré.
     portraits_enabled: bool = True
-    # Verrou dur = valeur BRUTE de `image.scenes_enabled` dans config.yaml,
-    # capturée avant l'override du bouton GUI (settings.json). À false, les
-    # scènes sont coupées, l'onglet « Scènes » et son bouton disparaissent
-    # de l'interface, et le toggle runtime est refusé (403).
+    # Verrous durs = valeurs BRUTES de config.yaml, capturées avant l'override
+    # du bouton GUI (settings.json). À false, la catégorie est coupée et son
+    # toggle runtime est refusé (403) — l'onglet disparaît de l'interface.
+    monstres_config: bool = True
+    salles_config: bool = True
     scenes_config: bool = True
+
+    def effective(self, cle: str) -> bool:
+        """Valeur effective d'une catégorie (« monstres »/« salles »/« scènes »)
+        : toggle config (verrou dur) ET interrupteur maître du GUI."""
+        if cle not in ("monstres", "salles", "scenes"):
+            return False
+        if not getattr(self, f"{cle}_enabled"):
+            return False
+        return getattr(self, "all_enabled", True)
+
+    @property
+    def all_enabled(self) -> bool:
+        # Stocké hors dataclass (attribut runtime posé par main.py au
+        # démarrage depuis settings.json) — défaut True.
+        return getattr(self, "_all_enabled", True)
+
+    def set_all(self, v: bool) -> None:
+        self._all_enabled = bool(v)
 
 
 @dataclass
@@ -164,8 +186,10 @@ def load_config(path: str | os.PathLike[str] | None = None) -> AppConfig:
         project_root=project_root,
     )
 
-    # Verrou dur : capture la valeur YAML pure de `image.scenes_enabled`
+    # Verrous durs : capture les valeurs YAML pures de `image.*_enabled`
     # avant tout override runtime (settings.json appliqué au startup).
+    cfg.image.monstres_config = cfg.image.monstres_enabled
+    cfg.image.salles_config = cfg.image.salles_enabled
     cfg.image.scenes_config = cfg.image.scenes_enabled
 
     # S'assure que les dossiers critiques existent

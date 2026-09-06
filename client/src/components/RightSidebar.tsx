@@ -102,51 +102,82 @@ function MonsterGalleryImg({
   );
 }
 
-/** Moitié basse de la colonne : galerie à onglets — monstres rencontrés et
- *  scènes illustrées (salles de donjon + moments clés générés par le MJ).
- *  L'onglet Scènes s'active tout seul quand une nouvelle image arrive. */
+/** Moitié basse de la colonne : galerie à onglets — monstres rencontrés,
+ *  pièces de donjon illustrées et scènes marquantes. Trois onglets
+ *  séparés ; chaque catégorie peut être coupée individuellement via
+ *  config.yaml (verrou dur) et le bouton maître coupe les trois d'un coup. */
 function EncounterGallery() {
   const monsters = useParty((s) => s.monsters);
+  const salles = useParty((s) => s.salles);
   const scenes = useParty((s) => s.scenes);
-  const [onglet, setOnglet] = useState<"monstres" | "scenes">("monstres");
+  const [onglet, setOnglet] = useState<"monstres" | "salles" | "scenes">(
+    "monstres",
+  );
   const [selectedM, setSelectedM] = useState(0);
+  const [selectedSl, setSelectedSl] = useState(0);
   const [selectedS, setSelectedS] = useState(0);
   // Repli de la galerie → toute la hauteur pour les onglets du haut.
   const [replie, setReplie] = useState(false);
   // Fiche détaillée ouverte (popup) — monstre cliqué dans la galerie.
   const [sheet, setSheet] = useState<EncounterMonster | null>(null);
-  // Agrandissement plein écran d'une scène.
+  // Agrandissement plein écran d'une image (pièce ou scène).
   const [zoom, setZoom] = useState<EncounterMonster | null>(null);
 
-  // Toggle « génération des scènes » (persisté côté serveur). Monstres,
-  // portraits et illustrations de donjon ne sont pas affectés.
+  // Interrupteur MAÎTRE des images (persisté côté serveur) : coupe les
+  // trois onglets d'un coup. Les toggles individuels vivent dans
+  // config.yaml (image.monstres/salles/scenes_enabled).
   const queryClient = useQueryClient();
   const { data: imageSettings } = useQuery({
     queryKey: ["imageSettings"],
     queryFn: () => api.imageSettings(),
     staleTime: 60_000,
   });
-  const toggleScenes = useMutation({
-    mutationFn: (v: boolean) => api.setImageScenes(v),
+  const toggleMaster = useMutation({
+    mutationFn: (v: boolean) => api.setImageMaster(v),
     onSuccess: (s) => queryClient.setQueryData(["imageSettings"], s),
   });
+  const masterOn = imageSettings?.all_enabled ?? true;
+  const monstresOn = imageSettings?.monstres_enabled ?? true;
+  const sallesOn = imageSettings?.salles_enabled ?? true;
   const scenesOn = imageSettings?.scenes_enabled ?? true;
-  // Verrou dur config.yaml : à false, ni l'onglet « Scènes » ni le bouton
-  // de toggle ne sont rendus — seule la galerie Monstres reste.
-  const scenesAvailable = imageSettings?.scenes_config_enabled ?? true;
-  const isMonstres = !scenesAvailable || onglet === "monstres";
+  const unlocked =
+    (imageSettings?.monstres_config_enabled ?? true) ||
+    (imageSettings?.salles_config_enabled ?? true) ||
+    (imageSettings?.scenes_config_enabled ?? true);
+  // Onglets effectivement affichés (catégorie activée).
+  const ongletsDispo = (
+    [
+      ["monstres", monstresOn],
+      ["salles", sallesOn],
+      ["scenes", scenesOn],
+    ] as ["monstres" | "salles" | "scenes", boolean][]
+  ).filter(([, on]) => on);
+  const actif: "monstres" | "salles" | "scenes" =
+    ongletsDispo.some(([t]) => t === onglet) && masterOn
+      ? onglet
+      : (ongletsDispo[0]?.[0] ?? "monstres");
+  const isMonstres = masterOn && actif === "monstres";
+  const isSalles = masterOn && actif === "salles";
 
-  // Une nouvelle scène arrive → on bascule dessus automatiquement
-  // (seulement si l'onglet Scènes existe, i.e. config l'autorise).
-  const prevScenes = useRef(scenes.length);
+  // Une nouvelle image arrive → on bascule sur son onglet automatiquement
+  // (seulement si l'onglet existe, i.e. config + maître l'autorisent).
+  const prevCounts = useRef({ m: monsters.length, sl: salles.length, s: scenes.length });
   useEffect(() => {
-    if (scenesAvailable && scenes.length > prevScenes.current) {
+    if (!masterOn) {
+      prevCounts.current = { m: monsters.length, sl: salles.length, s: scenes.length };
+      return;
+    }
+    if (sallesOn && salles.length > prevCounts.current.sl) {
+      setOnglet("salles");
+      setSelectedSl(0);
+      setReplie(false);
+    } else if (scenesOn && scenes.length > prevCounts.current.s) {
       setOnglet("scenes");
       setSelectedS(0);
       setReplie(false);
     }
-    prevScenes.current = scenes.length;
-  }, [scenes.length, scenesAvailable]);
+    prevCounts.current = { m: monsters.length, sl: salles.length, s: scenes.length };
+  }, [monsters.length, salles.length, scenes.length, masterOn, sallesOn, scenesOn]);
 
   // Fermeture de l'agrandissement au clavier.
   useEffect(() => {
@@ -158,12 +189,37 @@ function EncounterGallery() {
     return () => window.removeEventListener("keydown", h);
   }, [zoom]);
 
-  const items = isMonstres ? monsters : scenes;
-  const brutIdx = isMonstres ? selectedM : selectedS;
+  const items = isMonstres ? monsters : isSalles ? salles : scenes;
+  const brutIdx = isMonstres ? selectedM : isSalles ? selectedSl : selectedS;
   const idx = Math.min(brutIdx, Math.max(0, items.length - 1));
   const current = items[idx];
   const selectItem = (i: number) =>
-    isMonstres ? setSelectedM(i) : setSelectedS(i);
+    isMonstres ? setSelectedM(i) : isSalles ? setSelectedSl(i) : setSelectedS(i);
+  const titreOnglet = isMonstres
+    ? `Monstres rencontrés${monsters.length > 0 ? ` (${monsters.length})` : ""}`
+    : isSalles
+      ? `Pièces explorées${salles.length > 0 ? ` (${salles.length})` : ""}`
+      : `Scènes${scenes.length > 0 ? ` (${scenes.length})` : ""}`;
+  const videTexte = isMonstres
+    ? "Les images des monstres croisés en jeu s'afficheront ici."
+    : isSalles
+      ? "Les illustrations des pièces de donjon explorées s'afficheront ici."
+      : "Les illustrations des scènes marquantes s'afficheront ici.";
+
+  const ongletBtn = (t: "monstres" | "salles" | "scenes", label: string) => (
+    <button
+      key={t}
+      onClick={() => setOnglet(t)}
+      className={
+        "px-2 py-1 " +
+        (actif === t
+          ? "bg-stone-700 text-amber-300 font-medium"
+          : "bg-stone-900 text-stone-400 hover:text-stone-200")
+      }
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -181,67 +237,55 @@ function EncounterGallery() {
           {replie ? "▸" : "▾"}
         </button>
         <h3 className="text-xs uppercase text-stone-500 truncate">
-          {isMonstres ? (
-            <>Monstres rencontrés {monsters.length > 0 && <span className="text-amber-400">({monsters.length})</span>}</>
-          ) : (
-            <>Scènes {scenes.length > 0 && <span className="text-amber-400">({scenes.length})</span>}</>
-          )}
+          {titreOnglet}
         </h3>
-        {scenesAvailable && (
+        {unlocked && (
           <>
-            <div className="ml-auto flex rounded overflow-hidden border border-stone-700 text-[10px] shrink-0">
-              <button
-                onClick={() => setOnglet("monstres")}
-                className={
-                  "px-2 py-1 " +
-                  (onglet === "monstres"
-                    ? "bg-stone-700 text-amber-300 font-medium"
-                    : "bg-stone-900 text-stone-400 hover:text-stone-200")
-                }
-              >
-                Monstres
-              </button>
-              <button
-                onClick={() => setOnglet("scenes")}
-                className={
-                  "px-2 py-1 relative " +
-                  (onglet === "scenes"
-                    ? "bg-stone-700 text-amber-300 font-medium"
-                    : "bg-stone-900 text-stone-400 hover:text-stone-200")
-                }
-              >
-                Scènes
-              </button>
-            </div>
+            {masterOn && ongletsDispo.length > 0 && (
+              <div className="ml-auto flex rounded overflow-hidden border border-stone-700 text-[10px] shrink-0">
+                {ongletsDispo.map(([t]) =>
+                  t === "monstres"
+                    ? ongletBtn("monstres", "Monstres")
+                    : t === "salles"
+                      ? ongletBtn("salles", "Pièces")
+                      : ongletBtn("scenes", "Scènes"),
+                )}
+              </div>
+            )}
             <button
-              onClick={() => toggleScenes.mutate(!scenesOn)}
-              disabled={toggleScenes.isPending}
+              onClick={() => toggleMaster.mutate(!masterOn)}
+              disabled={toggleMaster.isPending}
               className={
                 "shrink-0 w-6 h-6 rounded border text-[11px] leading-none flex items-center justify-center " +
-                (scenesOn
+                (masterOn
                   ? "border-amber-600/60 bg-stone-800 text-amber-300 hover:bg-stone-700"
                   : "border-stone-700 bg-stone-900 text-stone-600 hover:text-stone-400") +
-                (toggleScenes.isPending ? " opacity-50 animate-pulse" : "")
+                (toggleMaster.isPending ? " opacity-50 animate-pulse" : "")
               }
               title={
-                scenesOn
-                  ? "Illustration des scènes : ACTIVÉE — cliquer pour désactiver (les monstres, portraits et donjons restent illustrés)"
-                  : "Illustration des scènes : DÉSACTIVÉE — cliquer pour réactiver"
+                masterOn
+                  ? "Images (monstres, pièces, scènes) : ACTIVÉES — cliquer pour tout désactiver (toggles individuels dans config.yaml)"
+                  : "Images : DÉSACTIVÉES — cliquer pour tout réactiver"
               }
             >
-              {scenesOn ? "🖼" : "🚫"}
+              {masterOn ? "🖼" : "🚫"}
             </button>
           </>
         )}
       </div>
-      {!replie && !current && (
+      {masterOn && !replie && !current && (
         <div className="flex-1 flex items-center justify-center text-center text-stone-600 text-xs italic px-4">
-          {isMonstres
-            ? "Les images des monstres croisés en jeu s'afficheront ici."
-            : "Les illustrations des salles explorées et des scènes marquantes s'afficheront ici."}
+          {ongletsDispo.length > 0
+            ? videTexte
+            : "Toutes les catégories d'images sont désactivées dans config.yaml."}
         </div>
       )}
-      {!replie && current && (
+      {!masterOn && !replie && (
+        <div className="flex-1 flex items-center justify-center text-center text-stone-600 text-xs italic px-4">
+          Affichage des images désactivé (bouton 🚫 pour réactiver).
+        </div>
+      )}
+      {masterOn && !replie && current && (
         <>
           <div className="text-center text-stone-200 text-sm font-medium mb-1 shrink-0 truncate" title={current.nom}>
             {current.nom}

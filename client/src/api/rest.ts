@@ -173,8 +173,11 @@ export const api = {
       body: JSON.stringify({ model }),
     }).then(jq<{ ok: boolean; model: string }>),
 
-  // -- Réglages d'images (toggle « scènes » de la galerie) ---------------- //
+  // -- Réglages d'images (bouton maître de la galerie : monstres/pièces/
+  //    scènes ; toggles individuels dans config.yaml) --------------------- //
   imageSettings: () => fetch(`${API}/settings/images`).then(jq<ImageSettings>),
+  setImageMaster: (enabled: boolean) =>
+    post<ImageSettings>(`${API}/settings/images/master`, { enabled }),
   setImageScenes: (enabled: boolean) =>
     post<ImageSettings>(`${API}/settings/images/scenes`, { enabled }),
 

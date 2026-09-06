@@ -177,12 +177,20 @@ export interface ModelsList {
   error?: string;
 }
 
-/** /api/settings/images — génération d'images (globale + scènes seules). */
+/** /api/settings/images — génération/affichage des images par catégorie. */
 export interface ImageSettings {
   enabled: boolean;
+  /** Interrupteur maître du GUI (bouton de la galerie) : coupe les trois
+   *  catégories d'un coup ; persisté côté serveur (data/settings.json). */
+  all_enabled: boolean;
+  /** Valeurs EFFECTIVES = config.yaml (toggle par catégorie) ET maître. */
+  monstres_enabled: boolean;
+  salles_enabled: boolean;
   scenes_enabled: boolean;
-  /** Verrou dur config.yaml (image.scenes_enabled) — à false, l'onglet
-   *  « Scènes » et son bouton sont retirés de la galerie. */
+  /** Verrous durs config.yaml (image.*_enabled) — à false, l'onglet de la
+   *  catégorie est retiré de la galerie et ne peut pas être réactivé. */
+  monstres_config_enabled: boolean;
+  salles_config_enabled: boolean;
   scenes_config_enabled: boolean;
 }
 

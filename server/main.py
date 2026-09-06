@@ -218,20 +218,21 @@ async def lifespan(app: FastAPI):
                 cfg.llm.model = m
         except (json.JSONDecodeError, OSError):
             pass
-    # Réglages persistés via le GUI (bouton « scènes » de la galerie) —
+    # Réglages persistés via le GUI (bouton maître de la galerie d'images) —
     # même mécanique que model_choice : prime sur config.yaml au démarrage.
-    # Exception : si config.yaml coupe `image.scenes_enabled` (verrou dur),
-    # settings.json ne peut pas le réactiver — le fichier de config est
-    # autoritaire et l'onglet « Scènes » disparaît de l'interface.
+    # Verrous durs : la valeur BRUTE de config.yaml est autoritaire — si une
+    # catégorie (monstres/salles/scènes) y est coupée, settings.json ne peut
+    # pas la réactiver et l'onglet correspondant disparaît de l'interface.
     settings_path = cfg.abs(cfg.paths.data_dir) / "settings.json"
-    if not cfg.image.scenes_config:
-        cfg.image.scenes_enabled = False
-    elif settings_path.is_file():
+    for _cle in ("monstres", "salles", "scenes"):
+        if not getattr(cfg.image, f"{_cle}_config"):
+            setattr(cfg.image, f"{_cle}_enabled", False)
+    if settings_path.is_file():
         try:
             saved = json.loads(settings_path.read_text(encoding="utf-8"))
-            scenes = (saved.get("images") or {}).get("scenes_enabled")
-            if isinstance(scenes, bool):
-                cfg.image.scenes_enabled = scenes
+            all_on = (saved.get("images") or {}).get("all_enabled")
+            if isinstance(all_on, bool):
+                cfg.image.set_all(all_on)
         except (json.JSONDecodeError, OSError):
             pass
     client = OllamaClient(cfg.llm)
@@ -650,36 +651,39 @@ def _settings_path() -> Path:
 
 @app.get("/api/settings/images")
 async def image_settings() -> dict[str, Any]:
-    """État de la génération d'images : globale + scènes seules.
+    """État de la génération/affichage des images par catégorie.
 
-    `scenes_config_enabled` = verrou dur lu de config.yaml : à false, le front
-    retire l'onglet « Scènes » et son bouton (seul l'onglet Monstres reste).
+    - `*_enabled` (monstres/salles/scènes) : valeur EFFECTIVE = config.yaml
+      (toggle individuel par catégorie) ET interrupteur maître du GUI
+      (`all_enabled`, persisté dans data/settings.json).
+    - `*_config_enabled` : verrou dur lu de config.yaml — à false, la
+      catégorie est coupée, son onglet disparaît et le maître ne peut pas
+      la réactiver.
     """
     return {
         "enabled": cfg.image.enabled,
-        "scenes_enabled": cfg.image.scenes_enabled,
+        "all_enabled": cfg.image.all_enabled,
+        "monstres_enabled": cfg.image.effective("monstres"),
+        "salles_enabled": cfg.image.effective("salles"),
+        "scenes_enabled": cfg.image.effective("scenes"),
+        "monstres_config_enabled": cfg.image.monstres_config,
+        "salles_config_enabled": cfg.image.salles_config,
         "scenes_config_enabled": cfg.image.scenes_config,
     }
 
 
-@app.post("/api/settings/images/scenes")
-async def set_image_scenes(payload: dict[str, Any]) -> dict[str, Any]:
-    """Active/désactive à chaud l'illustration des scènes marquantes
-    (outil `illustration_scene`). Monstres, portraits et illustrations de
-    donjon restent actifs dans tous les cas. Le choix est persisté dans
-    data/settings.json et prime sur config.yaml au redémarrage (config/
-    est monté read-only en Docker, data_dir est writable).
+@app.post("/api/settings/images/master")
+async def set_image_master(payload: dict[str, Any]) -> dict[str, Any]:
+    """Interrupteur MAÎTRE du GUI : active/désactive l'affichage et la
+    génération des trois catégories d'images (monstres, pièces, scènes)
+    d'un coup. Les toggles individuels restent configurés dans config.yaml ;
+    le choix du maître est persisté dans data/settings.json et prime au
+    redémarrage (config/ est monté read-only en Docker, data_dir writable).
     """
-    if not cfg.image.scenes_config:
-        raise HTTPException(
-            status_code=403,
-            detail="Illustration des scènes verrouillée à off par config.yaml "
-                   "(image.scenes_enabled: false) — le toggle GUI est désactivé.",
-        )
     enabled = payload.get("enabled")
     if not isinstance(enabled, bool):
         raise HTTPException(status_code=400, detail="Champ 'enabled' (bool) requis.")
-    cfg.image.scenes_enabled = enabled
+    cfg.image.set_all(enabled)
     try:
         data: dict[str, Any] = {}
         if _settings_path().is_file():
@@ -688,14 +692,29 @@ async def set_image_scenes(payload: dict[str, Any]) -> dict[str, Any]:
             except json.JSONDecodeError:
                 data = {}
         images = data.get("images") if isinstance(data.get("images"), dict) else {}
-        images["scenes_enabled"] = enabled
+        images["all_enabled"] = enabled
         data["images"] = images
         _settings_path().write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
     except OSError:
         pass  # persistance best-effort ; le changement runtime reste actif
-    return {"ok": True, "enabled": cfg.image.enabled, "scenes_enabled": enabled}
+    return {
+        "ok": True,
+        "enabled": cfg.image.enabled,
+        "all_enabled": enabled,
+        "monstres_enabled": cfg.image.effective("monstres"),
+        "salles_enabled": cfg.image.effective("salles"),
+        "scenes_enabled": cfg.image.effective("scenes"),
+    }
+
+
+@app.post("/api/settings/images/scenes")
+async def set_image_scenes(payload: dict[str, Any]) -> dict[str, Any]:
+    """Compat : l'ancien bouton « scènes » agit désormais comme l'interrupteur
+    maître (il coupe/active les trois onglets d'un coup). Voir
+    `/api/settings/images/master`."""
+    return await set_image_master(payload)
 
 
 # --------------------------------------------------------------------------- #
@@ -1887,6 +1906,58 @@ def _extrait_arme_bonus(attaques: str) -> Optional[tuple[str, int]]:
     return (arme, int(m.group(2))) if arme else None
 
 
+def _exces_degats_monstres(
+    trace: list[dict[str, Any]],
+    monstres: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Détecte les dégâts APPLIQUÉS EN EXCÈS sur des monstres suivis.
+
+    Le LLM appelle parfois `fiche_perso_infliger_degats` une seconde fois
+    avec ses PROPRES chiffres narrés, en doublon du jet serveur déjà
+    consommé (observé en partie réelle : un zombie de 5 PV sous 4 puis
+    5 dégâts). On compare, par monstre suivi, le total appliqué
+    (`fiche_perso_infliger_degats` de la trace du tour) au total
+    RÉELLEMENT JETÉ (`lancer_degats`) : tout excédent est restitué par
+    l'appelant (PV plafonnés à pv_max, « Détruit » levé si les PV
+    repassent au-dessus de 0). Les seuls appels du tour LLM sont lus —
+    les attaques automatiques du moteur serveur passent par ailleurs.
+    """
+    import unicodedata as _u2
+
+    def _nn(s: str) -> str:
+        n = _u2.normalize("NFKD", str(s or "").strip().lower())
+        return "".join(c for c in n if not _u2.combining(c))
+
+    jetes: dict[str, int] = {}
+    appliques: dict[str, int] = {}
+    for tc in trace or []:
+        if not isinstance(tc, dict) or not tc.get("ok"):
+            continue
+        nom_tc = tc.get("name")
+        if nom_tc == "lancer_degats":
+            c = _nn(str((tc.get("args") or {}).get("cible") or ""))
+            m_total = _re_mod.search(
+                r"[Dd]égâts infligés\s*:\s*(\d+)", tc.get("text") or "")
+            if c and m_total:
+                jetes[c] = jetes.get(c, 0) + int(m_total.group(1))
+        elif nom_tc == "fiche_perso_infliger_degats":
+            c = _nn(str((tc.get("args") or {}).get("nom") or ""))
+            try:
+                d = int((tc.get("args") or {}).get("degats") or 0)
+            except (TypeError, ValueError):
+                continue
+            if c and d > 0:
+                appliques[c] = appliques.get(c, 0) + d
+    exces: dict[str, int] = {}
+    for mo in monstres or []:
+        nom = str(mo.get("nom") or "").strip()
+        cle = _nn(nom)
+        surplus = appliques.get(cle, 0) - jetes.get(cle, 0)
+        if nom and surplus > 0:
+            exces[nom] = surplus
+    return exces
+
+
 async def _appliquer_degats_oublies(
     orch: Orchestrator,
     result: Any,
@@ -2652,6 +2723,60 @@ async def _handle_say(
             except Exception as e:
                 print(f"[dnd35] Rattrapage dégâts échoué (ignoré) : {e}")
 
+            # 5bis-c2. 💥 Dé-duplication des dégâts de monstres : tout excès
+            # appliqué par le LLM au-delà de ce qu'il a réellement jeté est
+            # restitué aux PV du monstre (sinon un zombie de 5 PV mourait
+            # sous 4 + 5 dégâts narrés à la main).
+            try:
+                _st_dd = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                )
+                _etat_dd = _st_dd.load()
+                _mc_dd = _etat_dd.get("monstres_combat") or []
+                if _mc_dd and etat_avant.get("phase") == "combat":
+                    _exces = _exces_degats_monstres(
+                        result.tool_calls_trace, _mc_dd)
+                    if _exces:
+                        _corrections: list[str] = []
+                        for _mo in _mc_dd:
+                            _e = _exces.get(str(_mo.get("nom") or ""))
+                            if not _e:
+                                continue
+                            try:
+                                _pv_max = int(_mo.get("pv_max") or 0)
+                            except (TypeError, ValueError):
+                                _pv_max = 0
+                            try:
+                                _pv = int(_mo.get("pv", 0) or 0)
+                            except (TypeError, ValueError):
+                                _pv = 0
+                            _pv = min(_pv + _e, _pv_max or (_pv + _e))
+                            _mo["pv"] = _pv
+                            if _pv > 0:
+                                _mo["conditions"] = [
+                                    c for c in (_mo.get("conditions") or [])
+                                    if c not in ("Détruit", "Detruit")
+                                ]
+                            _corrections.append(
+                                f"⚙️ {str(_mo.get('nom'))} : {_e} dégâts "
+                                f"appliqués en double — PV restitués "
+                                f"({_pv}/{str(_mo.get('pv_max') or '?')})."
+                            )
+                        if _corrections:
+                            _st_dd.save(_etat_dd)
+                            result.narration += (
+                                "\n\n⚙️ _Correction serveur (dégâts doublés "
+                                "annulés) :_\n\n" + "\n".join(_corrections)
+                            )
+                            result.state_patches.append(
+                                {"monstres_combat": _mc_dd}
+                            )
+                            print("[dnd35] Dégâts doublés corrigés : "
+                                  + "; ".join(_corrections))
+            except Exception as e:                               # noqa: BLE001
+                print(f"[dnd35] Dé-duplication dégâts échouée (ignoré) : {e}")
+
             # ⚙️ MOTEUR DE COMBAT SERVEUR (post-tour).
             # 1) Les événements mécaniques résolus AVANT le tour LLM
             #    (pre-run : tours de monstres, skips…) sont ajoutés à la
@@ -2731,6 +2856,10 @@ async def _handle_say(
             # et les mises à jour de PV partent donc immédiatement.
             async def _illustrer_monstres_arriere_plan() -> None:
                 try:
+                    # Toggle images de MONSTRES (config.yaml × maître GUI) :
+                    # coupé → aucune génération ni push de portrait.
+                    if not cfg.image.effective("monstres"):
+                        return
                     _t0 = time.time()
                     _vus: set[str] = set()
                     _nouvelles_rencontres: list[tuple[str, str]] = []
@@ -2814,7 +2943,9 @@ async def _handle_say(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
                     partie_id=partie_id,
                 ).load()
-                if etat_sc.get("phase") != "combat":
+                if etat_sc.get("phase") != "combat" and cfg.image.effective(
+                    "scenes"
+                ):
                     mem_sc = etat_sc.setdefault("memoire", {})
                     pos_sc = mem_sc.get("position") or {}
                     lieu_sc = str(pos_sc.get("lieu") or "").strip()

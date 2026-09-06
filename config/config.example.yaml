@@ -75,10 +75,15 @@ image:
   # Désactivé par défaut — activez si ComfyUI est installé et accessible.
   enabled: false
   # base_url: "http://comfyui:8188"   # Docker ; local : http://127.0.0.1:8188
-  # Illustration des scènes marquantes uniquement (outil illustration_scene).
-  # Basculable aussi à chaud via le bouton de la galerie « Scènes » (persisté
-  # dans data/settings.json). Monstres, portraits et donjons restent générés.
-  scenes_enabled: true
+  # Toggles PAR CATÉGORIE : chacun coupe la génération ET l'affichage de sa
+  # galerie (onglet correspondant). Le bouton de la galerie en jeu est un
+  # interrupteur MAÎTRE qui coupe les trois d'un coup (persisté dans
+  # data/settings.json) ; ces clés config.yaml restent autoritaires.
+  monstres_enabled: true     # portraits des monstres rencontrés
+  salles_enabled: true       # illustrations des pièces de donjon
+  scenes_enabled: true       # scènes marquantes (événements, PNJ…)
+  # Génération des portraits PJ via ComfyUI (indépendante des catégories).
+  portraits_enabled: true
 
 rag:
   # Base de connaissances RAG (Phase 2). Désactivé par défaut ; passez à

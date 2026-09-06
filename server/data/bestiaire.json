@@ -8150,5 +8150,29 @@
     "source_page": "module Dues for the Dead (adaptation D&D 3.5)",
     "prompt_image": "red wizard necromancer in violet and crimson robes, shaved tattooed head, gaunt sinister human male, skeletal hands, dark ritual chamber with black altar, undead silhouettes in shadows",
     "cle": "necromancien_rouge"
+  },
+  "hobgobelin": {
+    "nom": "Hobgobelin",
+    "type": "Humanoïde (gobelin)",
+    "taille": "M",
+    "dv": "1d8+2",
+    "pv": 6,
+    "ca": 15,
+    "vitesse": "9 m (6 cases)",
+    "bab": "+1",
+    "init": "+1",
+    "attaques": "Épée longue +2 au corps à corps (1d8+1/19-20) ; javeline +2 au jet (1d6+1)",
+    "degs": "Épée longue 1d8+1/19-20 ; javeline 1d6+1",
+    "sauvegardes": "Réfl +2, Vig +2, Vol +0",
+    "carac": "For 13, Dex 13, Con 14, Int 10, Sag 9, Cha 10",
+    "comp": "Écouter +1, Spot +1",
+    "dons": "Arme de prédilection (épée longue)",
+    "capacites": "Vision dans le noir 18 m ; discipline militaire (bonus contre les effets de terreur)",
+    "faiblesses": "Aucune notable",
+    "fp": "1/2",
+    "alignement": "Loyal mauvais",
+    "source_page": "Manuel des Monstres 3.5, p. 155",
+    "prompt_image": "hobgoblin warrior, burly orange-skinned goblinoid with dark blue-grey hair, disciplined military stance, chain shirt and shield, longsword drawn, dark cavern garrison",
+    "cle": "hobgobelin"
   }
 }

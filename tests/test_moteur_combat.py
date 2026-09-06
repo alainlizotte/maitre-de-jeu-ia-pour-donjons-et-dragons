@@ -227,3 +227,63 @@ def test_force_avance_passe_le_tour_du_pj():
         assert res.combat_termine is None
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+def test_combat_zombie_sans_initiative_est_clore():
+    """Régression e2e réel : tour MJ interrompu (déconnexion WS) alors que
+    les monstres étaient détruits → état zombie `phase=combat, tour=0,
+    initiative=[], monstres_combat=[]` jamais refermé (le moteur sortait
+    en silence sur l'initiative vide AVANT de tester la fin du combat)."""
+    d = _fresh_dir()
+    try:
+        _setup(d, courant="Brunhild")
+        etat = _etat(d)
+        etat["phase"] = "combat"
+        etat["tour"] = 0
+        etat["initiative"] = []
+        etat["courant_tour_pour"] = None
+        etat["monstres_combat"] = []
+        PartyState(data_dir=d, partie_id=PID).save(etat)
+
+        res = asyncio.run(boucle_auto(_ctx(d)))
+        assert res.combat_termine == "victoire"
+        assert res.phase == "exploration"
+        etat_final = _etat(d)
+        assert etat_final["phase"] == "exploration"
+        assert etat_final["tour"] == 0
+        assert etat_final["initiative"] == []
+        # Le PJ est intact et la mémoire journalise la victoire.
+        mem = etat_final["memoire"]["monstres_combattus"]
+        assert mem and mem[-1]["issue"] == "victoire"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_creer_rapide_clamp_pv_superieur_pv_max():
+    """Régression e2e réel : Elara créée avec 4 PV pour 2 PV max — le LLM
+    fournissait pv/pv_max incohérents et `creer_rapide` les enregistrait
+    tels quels. PV actuel ≤ PV max doit être garanti à la création."""
+    import shutil as _sh
+    from server.game.state import PartyState as _PS
+    from server.tools.base import ToolContext as _TC, invoke_tool as _inv
+    from server.tools.registry import discover_tools as _disc
+
+    d = _fresh_dir()
+    try:
+        tools = _disc("server.tools")
+        ctx = _TC(partie_id=PID, joueur="alain", data_dir=d)
+        r = asyncio.run(_inv(tools["fiche_perso_creer_rapide"], ctx, {
+            "nom": "Elara", "race": "Elfe", "classe": "Magicien",
+            "niveau": 1, "joueur": "alain",
+            "carac_texte": "For 8, Dex 16, Con 7, Int 18, Sag 12, Cha 14",
+            "pv": 4, "pv_max": 2,          # incohérents (invention LLM)
+        }))
+        assert "❌" not in r.text[:20], r.text
+        fiche = json.load(open(
+            os.path.join(d, "fiches", "fiche_elara.json"),
+            encoding="utf-8"))
+        assert fiche["pv_max"] >= 1
+        assert fiche["pv"] <= fiche["pv_max"], (
+            f"pv={fiche['pv']} > pv_max={fiche['pv_max']}")
+    finally:
+        _sh.rmtree(d, ignore_errors=True)

@@ -634,11 +634,25 @@ def nettoyer(pid: str):
 async def phase_setup():
     os.makedirs(TMP, exist_ok=True)
     bilan = Bilan.neuf()
-    pid = _post("/api/parties", {"titre": "E2E Combats réels (4 PJ)"})[
-        "partie_id"]
-    with open(PID_FILE, "w", encoding="utf-8") as f:
-        f.write(pid)
-    print(f"=== Partie créée : {pid} ===")
+    # Reprise : réutilise la partie du run précédent si elle répond encore
+    # (setup idempotent comme les autres phases — un LLM qui omet le tool
+    # de création ne force plus à tout recommencer à zéro).
+    pid = ""
+    if os.path.isfile(PID_FILE):
+        candidat = open(PID_FILE, encoding="utf-8").read().strip()
+        try:
+            snapshot(candidat)
+            pid = candidat
+        except Exception:                                    # noqa: BLE001
+            pid = ""
+    if not pid:
+        pid = _post("/api/parties", {"titre": "E2E Combats réels (4 PJ)"})[
+            "partie_id"]
+        with open(PID_FILE, "w", encoding="utf-8") as f:
+            f.write(pid)
+        print(f"=== Partie créée : {pid} ===")
+    else:
+        print(f"=== Partie reprise : {pid} ===")
     sockets = await ouvrir_sockets(pid)
     demandes = {
         "Groth": ("Bonjour MJ ! Crée ma fiche : Groth, humain, barbare "

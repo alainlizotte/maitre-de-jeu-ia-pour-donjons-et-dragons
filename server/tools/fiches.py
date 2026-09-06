@@ -680,6 +680,16 @@ async def fiche_perso_creer_rapide(
     if _bonus:
         pv = int(pv) + _bonus
         pv_max = int(pv_max) + _bonus
+    # Garde-fou : un LLM invente parfois pv/pv_max incohérents (observé :
+    # Elara 4/2 PV). PV actuel ≤ PV max, les deux ≥ 1 — la valeur canonique
+    # PHB (max du dé de vie + mod CON) prime comme plafond si pv_max absent.
+    try:
+        pv = max(1, int(pv))
+        pv_max = max(1, int(pv_max))
+        if pv > pv_max:
+            pv = pv_max
+    except (TypeError, ValueError):
+        pv, pv_max = max(1, int(pv_val or 1)), max(1, int(pv_val or 1))
 
     fiche = {
         "nom": nom,

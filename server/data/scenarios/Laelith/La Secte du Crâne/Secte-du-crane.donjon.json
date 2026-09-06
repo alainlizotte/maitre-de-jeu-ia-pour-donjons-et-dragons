@@ -1,142 +1,123 @@
 {
   "id": "laelith_la_secte_du_crane_donjon",
   "scenario": "laelith_la_secte_du_crane",
-  "donjon_id": "laelith_la_secte_du_crane",
-  "titre": "Donjon du scénario laelith_la_secte_du_crane (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "Le Temple du Crâne",
+  "titre": "Le Temple du Crâne — La Secte du Crâne",
+  "source": "Aidedd.org — La Secte du Crâne (adaptation blueace, relecture Tom76) : zones B à F du temple du Crâne, Vrai Crâne, parc et repaire souterrain de la secte",
+  "note_convention": "Structure fidèle au module : étage 1 = temple du Crâne en surface (entrée gardée, patio B, salle des Espoirs Perdus C, Arcades du Jugement D, salle des Fouilles E, salle du Crâne F, dédale du Vrai Crâne, salle de cours de Sogar, parc). Étage 2 = repaire souterrain secret de la secte sous le parc (passage secret, grande salle de l'autel, chambre de Rotz, cellules, couloir du cloaque). Monstres réinterprétés avec les fiches D&D 3.5 du bestiaire (module d'origine 5e) : sectaires = chenailles, bande et Rotz = bandits/gardes, soldats du temple = gardes, momie (FP 5) conservée en combat. La rencontre optionnelle de l'auberge « La Cruche pleine » (7 bandits + chef) se joue hors grille.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Temple du Crâne",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Devant la haute porte du temple du Crâne, une atmosphère de mal-être pèse sur la place : le sanctuaire de Valdenath semble en ruine, à la différence des autres temples de Laelith. Des soldats à la tête tondue et maquillée en crâne montent la garde, tandis que chacun s'enduit les tempes et le front de la poussière d'os puisée dans le récipient en forme de crâne creusé dans le pilier d'entrée.",
+          "ennemis": ["Garde ×2"],
+          "note": "Entrée du temple — le rituel de la poussière d'os est indispensable : ne pas le faire serait très mal vu des gardes."
         },
         {
-          "x": 0,
-          "y": -1,
-          "type": "crypte",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -1, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Grande salle d'entrée du temple, le patio est encombré des autels portatifs des clercs des cultes modérés, peu désireux d'être assimilés aux mœurs bizarres du Crâne. Quatre énormes colonnes gravées de runes ésotériques en constituent la seule particularité.",
+          "note": "Zone B — Le patio."
         },
         {
-          "x": -1,
-          "y": -1,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 1, "y": -1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Vaste pièce à l'architecture chaotique, elle résonne en permanence des lamentations de fidèles repentants hurlant pour la bénédiction de leur divinité, tandis que des clercs des cultes affiliés au Crâne y disputent d'interminables discussions philosophiques.",
+          "note": "Zone C — la salle des Espoirs Perdus : Rotz y prend souvent la parole depuis que ses positions lui ont interdit l'accès au Vrai Crâne."
         },
         {
-          "x": -1,
-          "y": -2,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 2, "y": -1, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Des arcades dont les montants sont sculptés de crânes et d'ossements mènent vers la salle des Fouilles et au Vrai Crâne. Elles sont gardées en permanence par des soldats à l'allure peu commode, tête tondue et visage maquillé en crâne.",
+          "ennemis": ["Garde ×2"],
+          "note": "Zone D — les Arcades du Jugement."
         },
         {
-          "x": 0,
-          "y": -2,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 3, "y": -1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "C'est ici que les contemplateurs du Vrai Crâne sont soigneusement fouillés par les gardes avant d'emprunter les escaliers conduisant au saint des saints : depuis plusieurs attentats religieux, les visiteurs sont systématiquement fouillés.",
+          "note": "Zone E — la salle des Fouilles : sans clerc affilié au temple, seul un clerc, ou à défaut un paladin, accompagne le groupe dans la descente."
         },
         {
-          "x": 1,
-          "y": -2,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 4, "y": -1, "type": "autel",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Cette salle résonne du roulement permanent d'un énorme tambour, martelé par des clercs qui se relaient à intervalles réguliers. Des pénitents viennent chaque jour se recueillir devant le fameux crâne cornu découvert lors du creusement des fondations du temple, et qui lui a donné son nom.",
+          "note": "Zone F — la salle du Crâne : le tambour permanent couvre le bruit des pas dans les salles voisines."
         },
         {
-          "x": 2,
-          "y": -2,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 4, "y": -2, "type": "escaliers",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Un escalier s'enfonce dans les entrailles du temple : le Vrai Crâne, la partie souterraine, est un véritable dédale de couloirs menant à une multitude de petites pièces fermées par des tentures ou protégées par d'innombrables passages secrets.",
+          "note": "Le Vrai Crâne — pour rencontrer Sogar, il faut demander son chemin une dizaine de fois et se perdre autant de fois, rythmé par les tambours de la salle du Crâne."
         },
         {
-          "x": 3,
-          "y": -2,
-          "type": "salle vide",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 3, "y": -2, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Couloirs enchevêtrés, petites pièces closes de tentures, portes dérobées : on s'y égare inévitablement avant d'aboutir, guidé par le battement des tambours, à la salle de cours de Sogar.",
+          "note": "Dédale du Vrai Crâne — demander son chemin auprès des occupants ou s'égarer avant de trouver la salle de cours."
         },
         {
-          "x": 3,
-          "y": -1,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 2, "y": -2, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Dans cette salle de cours s'entassent bancs et lutrins où de jeunes enfants de Laelith apprennent la lecture. Sogar, petit homme sec à l'allure austère, y reçoit les héros sans ménagement : il confirme qu'un autre garçon de 9 ans, orphelin, a aussi disparu, et que les gardes du corps d'Agassi sont venus chercher l'enfant à la nuit tombée, comme d'habitude.",
+          "pnj": ["Sogar (prêtre du Crâne, petit homme sec et austère)"],
+          "note": "Salle de Sogar — il invite à sortir moins promptement qu'il n'a répondu ; en partant, on croise la bande aperçue chez Fogos."
         },
         {
-          "x": 2,
-          "y": -1,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Momie », final du scénario « laelith_la_secte_du_crane ». Reprendre la description du module.]",
-          "ennemis": [
-            "Momie ×1"
-          ]
+          "x": 1, "y": -2, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Le parc du Crâne mêle parties boisées et jardins potagers cultivés par les prêtres ; une dizaine d'enfants y jouent à la récréation. À la tombée de la nuit, une brume épaisse et anormale s'y forme — elle se rétracte vers une paroi de l'arrière du temple, derrière laquelle se dissimule un passage secret.",
+          "pnj": ["Lamb (fouineur de la milice, petite stature, regard bleu acier)"],
+          "note": "Le parc — Arcanes DD 10 : la brume se rétracte, elle ne se dissipe pas ; Investigation DD 10 pour trouver le mur pivotant (hauteur 1 m) et l'escalier. Scène optionnelle : deux cultistes y attaquent un halfelin pris pour un enfant. L'auberge « La Cruche pleine » (7 bandits + chef malfrat) se joue hors grille si la bande est poursuivie."
+        }
+      ]
+    },
+    {
+      "nom": "Repaire souterrain de la secte",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Le pan de mur pivoté découvre un étroit conduit qui s'enfonce à presque 30 mètres sous terre par un escalier en colimaçon. Au bas des marches, la lumière d'une salle éclairée perce l'obscurité, et un couloir horizontal disparaît dans le noir total.",
+          "note": "Passage secret du parc — conduit de la hauteur d'un mètre environ, obligeant à progresser courbé."
+        },
+        {
+          "x": 0, "y": -1, "type": "autel",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": true },
+          "description": "Énorme salle creusée à même la roche, éclairée par une vingtaine de torches et décorée de crânes : au centre se dresse un autel à sacrifice, et derrière lui un homme au regard fou — Rotz, le chef de la secte — domine la dizaine d'adeptes nus, fanatisés, prêts à donner leur vie pour lui.",
+          "ennemis": ["Chenaille ×9", "Bandit ×1"],
+          "tresor": "Sur l'autel, une chope en laiton incrustée de motifs de jade (125 po) servant aux sacrifices ; les fidèles n'ont rien sur eux.",
+          "note": "Grande salle de la secte — Rotz surveille le combat de loin et fuit par le couloir de gauche (ouest) dès la première attaque contre lui, accompagné de son bras droit, une humaine acolyte. Deux petits couloirs sortent de la salle à l'opposé de l'escalier."
+        },
+        {
+          "x": 1, "y": -1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Ce couloir donne dans le cloaque, un labyrinthe sans fin qui s'étend sous la cité, noyé dans l'obscurité totale. C'est par ici que, au moment de la sortie du repaire, une momie venue des égouts viendra chercher un trophée humanoïde — elle a tout son temps.",
+          "ennemis": ["Momie ×1"],
+          "note": "La surprise au retour — la momie (FP 5, réduction de dégâts 5/–, vulnérable au feu) surgit depuis le couloir du cloaque au moment où le groupe quitte les souterrains avec les prisonniers."
+        },
+        {
+          "x": -1, "y": -1, "type": "antichambre",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "La porte de cette pièce est fermée de l'intérieur : Rotz et son bras droit ont poussé une armoire contre elle. La chambre du chef de la secte ne comprend qu'un petit lit, un tabouret et l'armoire contenant des livres de prière, un grimoire et un calendrier des sacrifices.",
+          "ennemis": ["Bandit ×1", "Chenaille ×1"],
+          "tresor": "Trois parchemins de clerc (thaumaturgie, lumière, apaisement des émotions) et deux gros sacs (2400 pc et 100 pa) ; dans une poche de Rotz, la clef qui ouvre les cellules.",
+          "note": "Chambre de Rotz — les deux occupent les lieux, sans intention de laisser le groupe ressortir avec les prisonniers ; ils défendront chèrement leur vie. Le grimoire relate l'histoire de la secte et le Rituel des 9 (au 9e sacrifice d'un enfant de 9 ans, le Crâne donnerait à Rotz l'invincibilité et l'immortalité pour 9 jours) ; Agassi serait le 8e."
+        },
+        {
+          "x": -1, "y": -2, "type": "cellules",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Au bout de quelques mètres s'ouvrent trois cellules fermées à clef. Dans la première se trouve Agassi, le fils de Fogos ; dans la seconde, ses deux gardes du corps ; la dernière est vide.",
+          "pnj": [
+            "Agassi (fils de Fogos, prisonnier)",
+            "Les deux gardes du corps d'Agassi (prisonniers)"
+          ],
+          "note": "Les cellules — fermées à clef ; la clef est dans une poche de Rotz. Libérer Agassi sans qu'il soit blessé : +100 PX par personnage."
         }
       ]
     }

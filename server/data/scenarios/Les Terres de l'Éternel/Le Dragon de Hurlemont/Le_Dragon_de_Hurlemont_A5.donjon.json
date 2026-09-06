@@ -1,13 +1,13 @@
 {
   "id": "terres_dragon_hurlemont_donjon",
   "scenario": "terres_dragon_hurlemont",
-  "donjon_id": "terres_dragon_hurlemont",
-  "titre": "Donjon du scénario terres_dragon_hurlemont (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "Le Dragon de Hurlemont — la vallée",
+  "titre": "Le Dragon de Hurlemont — la vallée, le Monastère et les sommets",
+  "source": "Le Dragon de Hurlemont (Les Terres de l'Éternelle, livret d'initiation — Gnomous & Bradbur, 2026, terresdeleternelle.fr) : module sandbox sans plan fixe, cartographié en zones de jeu (porte du bourg, enquête, Monastère et crypte, tanière de Vrakendur).",
+  "note_convention": "Module d'enquête sans donjon cartographié : le manifeste décrit les ZONES clés de la vallée de Hurlemont. Monstres issus du bestiaire local (gobelin FP 1/3, ombre FP 3) ; Vrakendur (FP très supérieur à 5, hors bestiaire) est signalé en note — scène de négociation, jamais de combat.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "La vallée de Hurlemont",
       "entree": [
         0,
         0
@@ -20,128 +20,201 @@
           "portes": {
             "nord": false,
             "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -1,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": -2,
-          "y": 0,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": false,
-            "sud": true,
             "est": true,
             "ouest": false
           },
-          "description": "",
+          "description": "Au bout du dernier lacet, sous le hurlement du vent, des soldats en cuir bouilli rabattent une poignée de gobelins jusque sous les portes de Hurlemont. Une flèche part, un petit corps roule dans la boue ; un gobelin acculé contre un rocher lève ses mains vides vers les envoyés.",
           "ennemis": [
-            "Gobelin ×1"
-          ]
+            "Gobelin ×2"
+          ],
+          "pnj": [
+            "Gritch, gobelin acculé (ne se bat pas)"
+          ],
+          "note": "Premier dilemme : protéger Gritch garde ouvertes les portes des gobelins ; l'abandonner vaut les bonnes grâces du seigneur mais les referme pour toujours."
         },
         {
-          "x": -2,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": -3,
-          "y": 1,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": -4,
-          "y": 1,
-          "type": "salle vide",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": -4,
+          "x": 1,
           "y": 0,
-          "type": "garde",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -5,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": -5,
-          "y": 1,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -6,
-          "y": 1,
           "type": "salle du trône",
           "portes": {
             "nord": false,
             "sud": false,
             "est": true,
+            "ouest": true
+          },
+          "description": "Le donjon trapu et sombre de Varcan Durô s'élève au centre du bourg, bâti selon des proportions étrangères au Royaume. Dans une salle froide, le seigneur reçoit les envoyés avec une courtoisie glaciale tandis qu'Albine recopie leur lettre à une table latérale ; deux soldats gardent la porte et Bérulf se tient en retrait.",
+          "pnj": [
+            "Varcan Durô dit le Dragon, seigneur de Hurlemont",
+            "Albine Durô, l'héritière (recopie la lettre)",
+            "Bérulf, le sergent (en retrait)"
+          ],
+          "note": "Le collier de fer de Varcan (dragon qui se mord la queue) est le même signe que le cadenas du septième livre — un indice à relever. Il offre le gîte au Vent Clos afin de faire surveiller les envoyés."
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le Vent Clos, l'unique auberge du bourg : une maison basse près de la place qui sent la soupe aux pois, la laine mouillée et la fumée. Les conversations cessent à l'entrée des étrangers et ne retrouvent jamais leur volume ; un soldat boit seul près de la porte et écoute ouvertement.",
+          "pnj": [
+            "L'aubergiste",
+            "Un vieux muletier qui se tait en présence des soldats"
+          ],
+          "note": "La peur du bourg est imposée par les hommes de Varcan. Kesh reconnaît ce silence réglé sans jet : on surveille la porte, les uniformes et le donjon."
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "type": "cuisine",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Une maison basse adossée au mur du bourg : Bréa, dont la main porte la marque des Mille Sacrifices Miséricordieux, nettoie la plaie profonde d'un bûcheron pendant que sa famille attend en silence. Ici, auprès du feu, se souvient la mémoire du bourg.",
+          "pnj": [
+            "Bréa (mémoire du bourg, femme d'un ancien péager)"
+          ],
+          "note": "Auprès d'elle, les envoyés apprennent que les derniers novices ont été refoulés et leurs lettres interceptées ; elle les conduit, par ses souvenirs, vers l'ancien péage où la preuve dort dans les registres."
+        },
+        {
+          "x": 3,
+          "y": 1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "L'ancien poste de péage, une pièce étroite bâtie dans l'épaisseur de la porte du bourg, où dorment les comptes du domaine. Dans une armoire entière s'empilent les volumes : chaque voyageur retenu, chaque courrier intercepté, chaque ordre des Durô y est consigné de la main de plusieurs générations d'intendants.",
+          "tresor": "Le registre de l'ancien péage : entrées de 41, 26, 9 et 3 ans plus tôt, de quatre mains différentes — la preuve du blocus des Durô contre le Monastère.",
+          "pnj": [
+            "Bérulf (possède la clef et peut ouvrir sans témoin)"
+          ],
+          "note": "La poussière est plus fine devant les registres des dix dernières années : Varcan les a consultés. Emporter le volume, en copier les pages ou les arracher change la force de la preuve pendant l'assaut final."
+        },
+        {
+          "x": 2,
+          "y": 1,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le chemin de pierre taillé dans l'à-pic, seule voie vers le Monastère : deux heures de montée dans le souffle constant du vent, entre la paroi et le vide. Personne, au bourg, ne l'emprunte plus.",
+          "note": "Rude en été, impraticable en hiver. Les patrouilles de Varcan dégagent les hauteurs ; Gritch, s'il survit, connaît les sentes qui mènent au Monastère."
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le préau et le grand potager soigneusement entretenu du Monastère, derrière une petite enceinte : quelques chèvres, un poulailler et trois ou quatre moines très vieux qui ont désappris à accueillir. Le Vénérable, appuyé sur son bâton, ne demande qu'une chose : de l'aide pour rentrer le bois avant l'hiver.",
+          "pnj": [
+            "Le Vénérable, dernier lecteur du livre scellé (la clef de fer pend sous sa robe)",
+            "Les derniers frères Monastriers, dont un alité depuis l'hiver"
+          ],
+          "note": "Aider aux bois sans rien réclamer gagne sa pleine confiance et ouvre la crypte. Il sait qu'il mourra cette saison et s'efforce de ne pas le montrer."
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
             "ouest": false
           },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « terres_dragon_hurlemont ». Reprendre la description du module.]",
+          "description": "La chapelle du Monastère. Une tenture archaïque couvre le mur du fond : le Bon Roi et ses compagnons cernés par un grand dragon vert et une nuée de gobelins, la peur lisible sur les visages humains. Derrière la toile se devine une porte basse, sans poignée ni serrure apparente.",
+          "note": "Une pression sur la troisième pierre du montant ouvre la porte cachée. Plin repère la pierre mobile sans jet ; s'il ouvre contre la parole du Vénérable, sa confiance en pâtira."
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Un escalier taillé dans la roche s'enfonce sous la chapelle vers un air froid, sec et immobile. Ces lieux semblent plus vieux que le Monastère lui-même.",
+          "note": "Descente vers la crypte. Le Vénérable refuse d'y descendre depuis des années."
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La crypte : des niches creusées dans la paroi abritent des objets de culte oubliés — calices de pierre, cierges fossilisés, encensoir de bronze noirci. Sur une étagère qui a résisté aux siècles, sept incunables gainés de cuir sont alignés, et l'ombre d'un ancien moine semble encore monter la garde.",
           "ennemis": [
             "Ombre ×1"
-          ]
+          ],
+          "tresor": "Le septième livre, fermé d'un cadenas de fer au dragon qui se mord la queue (le vrai nom de Vrakendur et l'invocation), et le huitième ouvrage, Le Livre du Dragon de Hurlemont — une traduction annotée à remettre en fragments aux joueurs.",
+          "note": "La traduction révèle le nom, le pacte et le bluff des Durô. Dès que les envoyés descendent ici, Varcan monte prendre le livre et la clef par la force."
+        },
+        {
+          "x": 2,
+          "y": 2,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La bibliothèque du Monastère, où les frères copiaient, priaient et enseignaient avant que le monde cesse de leur répondre. Les étagères gardent des lettres demeurées sans réponse et des écritures que plus personne ne lira cet hiver.",
+          "note": "Le sort des livres et des moines se joue ici pendant l'assaut. Le Vénérable transmet assez de l'invocation pour une seule récitation guidée, mais refuse d'en être lui-même la voix : une parole portée mourrait avec lui."
+        },
+        {
+          "x": 3,
+          "y": 2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "La tanière de Vrakendur dans les neiges qui dominent Hurlemont : une grotte ouverte aux vents où sommeille, sur tout ce qu'il a pris, le descendant du Grand Dragon vaincu par le Bon Roi. Ici, on ne vient pas voler : on vient parler — et payer.",
+          "tresor": "Tout l'or de la vallée, fondu en une masse unique et brillante lorsque le pacte est conclu, puis emporté vers les sommets.",
+          "note": "[AJUSTEMENT REQUIS] Vrakendur (dragon, FP très supérieur à 5, hors bestiaire) : à ne jamais placer en ennemis — il ne se combat pas. Scène de négociation : le nom prononcé, l'or entier avant le prochain lever du soleil, et le serment en échange."
+        },
+        {
+          "x": 4,
+          "y": 1,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Les hauteurs boisées au-dessus de la vallée, aux gobelins bien avant l'arrivée des murs humains. Des campements brûlés fument encore parmi les arbres, et les patrouilles du seigneur nettoient les approches du Monastère.",
+          "pnj": [
+            "Gritch, guide du peuple des bois (s'il a survécu à la porte)"
+          ],
+          "note": "Le durcissement des chasses coïncide avec la maladie du Vénérable : Varcan dégage les abords du Monastère. Traités avec respect, les gobelins deviennent des alliés décisifs — leur volée de flèches peut renverser le siège."
         }
       ]
     }

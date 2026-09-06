@@ -2,158 +2,233 @@
   "id": "ro_unknown_tower_donjon",
   "scenario": "ro_unknown_tower",
   "donjon_id": "ro_unknown_tower",
-  "titre": "Donjon du scénario ro_unknown_tower (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "La Tour Inconnue — la Tour et les Salles Souterraines",
+  "source": "The Unknown Tower and Halls, module AD&D par Steven K. Allen pour les Royaumes Oubliés (environs de Bartlesville, le Nord), rattaché au panthéon celtique de Goibhnie. Cartographie fidèle des niveaux numérotés de la tour en ruine (premier niveau, écurie, second et troisième niveaux, sous-sol) puis des Salles Souterraines et des Salles Oubliées (niveaux 3 et 4).",
+  "note_convention": "Cartographie serpentine des niveaux numérotés de la Tour Inconnue et des salles souterraines, de la salle d'entrée du rez-de-chaussée jusqu'à l'antre du drider mage. Portes symétriques, carte connexe, coordonnées uniques. Combats limités au FP ≤ 5 du bestiaire ; les adversaires hors plafond (gauth, golem d'argile, golem de foudre, drider clerc et drider mage, seigneurs-zombies, wraiths d'épée, crochets-horrors, scrags) sont signalés en notes [AJUSTEMENT REQUIS].",
   "etages": [
     {
       "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "La tour carrée de pierre, à demi ruinée, dresse sa masse dans un bosquet de sapins. À l'intérieur, le sol de bois est percé d'un trou vertical de 3 m de diamètre qui traverse tous les étages jusqu'au sous-sol, pendant qu'un escalier branlant grimpe le long du mur est et qu'un foyer froid emplit le mur ouest de cendres.",
+          "note": "Passer par le trou vertical fait chuter jusqu'au sous-sol (salle T5) ; le reste de la tour baigne dans la pénombre filtrée par les meurtrières.",
+          "source": "T1 — premier niveau de la tour (The Unknown Tower and Halls)."
         },
         {
-          "x": 0,
-          "y": -1,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 1, "y": 0, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "L'écurie sombre et sèche, longue de 15 m, abrite dix stalles où gisent quatre statues de granit finement sculptées : un ours-hibou dressé sur ses pattes, un cerf en plein saut, un guerrier terrifié, une femme enlacée dans un cri muet. Un haut tas de paille, au mur est, recouvre l'accès au souterrain.",
+          "tresor": "Les statues de granit sont l'œuvre d'un maître sculpteur au goût morbide (5 à 10 po chacune pour un collectionneur, mais trop lourdes à transporter).",
+          "note": "[AJUSTEMENT REQUIS] Le gauth (parent du beholder, 9+9 DV, se nourrit de magie) monte la garde et tend son embuscade ici ; non répertorié au bestiaire, à ajuster ou à déjouer par la ruse.",
+          "source": "T2 — l'écurie."
+        }
+      ]
+    },
+    {
+      "nom": "Second niveau",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Quasi identique à l'étage du dessous, cette pièce garde un tapis moisi ramassé en tas sous l'escalier, une cheminée au mur ouest devant un canapé effondré, une table de nuit décapitée et une petite table bancale aux pieds écorchés. Le plafond de bois, gondolé et rongé, laisse de temps à autre tomber une goutte d'eau.",
+          "source": "T3 — second niveau de la tour."
         },
         {
-          "x": 1,
-          "y": -1,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Spectre ×1"
-          ]
+          "x": 1, "y": 0, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Sous la table de nuit, une petite trappe secrète verrouillée mais non piégée découvre un renfoncement du plancher. On y trouve un sac de portage unique, des potions et de faux rubis.",
+          "tresor": "Petit sac de portage (175 livres) contenant 40 po (frappe ancienne d'Eauprofonde), 30 rubis grossiers — imitations d'une valeur apparente de 40 po chacun — et deux fioles de cristal rose de Potions de Guérison Renforcée, chacune empoisonnée d'une sangsue de gorge invisible.",
+          "piege": "Les deux fioles de potion sont empoisonnées d'une sangsue de gorge invisible (étouffement).",
+          "source": "T3 — cachette secrète du second niveau."
+        }
+      ]
+    },
+    {
+      "nom": "Troisième niveau",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "bibliothèque",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Le troisième niveau est en partie effondré : une volée de marches s'arrête dans le vide contre le mur ouest, le foyer s'est éboulé et des oiseaux nichent dans les pierres. Dans le coin nord-est, un gros miroir de corps entier au cadre de fer doré, lisse et comme neuf, renvoie une image nette : c'est un miroir de téléportation magique vers les Salles Souterraines.",
+          "piege": "Un parchemin scellé de cire rouge renferme l'énigme de Janus ; prononcer « Janus » matérialise le miroir par un vortex magique.",
+          "note": "Répéter le nom de Janus invoque le miroir de téléportation (sans retour immédiat) qui mène à la salle n°1 des Salles Souterraines, le temps d'un tour avant qu'il ne se dissipe.",
+          "source": "T4 — troisième niveau (le miroir de Janus)."
         },
         {
-          "x": 1,
-          "y": -2,
-          "type": "autel",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Manticore ×1"
-          ]
+          "x": 1, "y": 0, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Contre le mur, un grand coffre de fer ferré, rayé et cabossé mais solide, gît sur le flanc. Il porte un cadenas rouillé comme soudé, par-dessus un verrou magique de 10e niveau ; ouvrir le double-fond déclenche une aiguille empoisonnée.",
+          "tresor": "Dans le coffre : 15 po, 15 pa (frappe de Lunargent), trois lingots d'or de 150 po chacun et un étui de cuir fêlé contenant trois parchemins (Briser, Œil de mage, Boule de feu), deux dagues de jet appariées et neuf fioles-bombes. Dans le double-fond : un sac de velours argenté avec quatre grandes bougies magiques (trois Bougies de Défense et une Bougie de Flamme).",
+          "piege": "Double-fond piégé d'une aiguille empoisonnée très complexe (-25 % au dépiégeage, poison de classe D) ; le coffre exige 75 points de dégâts ou un acide pour être forcé.",
+          "source": "T4 — coffre de fer ferré du troisième niveau."
+        }
+      ]
+    },
+    {
+      "nom": "Sous-sol de la Tour",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Le puits vertical de 3 m débouche sur un palier de pierre lisse, au cœur d'un sous-sol creusé de main d'homme. Un épais tapis de champignons — certains hauts de près de 1,5 m — recouvre le sol jusqu'à une arche de pierre, et le gauth y déverse ses carcasses pour nourrir son jardin fongique.",
+          "ennemis": ["Criard ×1", "Thallophyte_violet ×1"],
+          "piege": "Les cris perçants des criards alertent le gauth à travers toute la tour ; les champignons violets pourrissent la chair au contact.",
+          "source": "T5 — foyer fongique du sous-sol."
         },
         {
-          "x": 2,
-          "y": -2,
-          "type": "antichambre",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Griffon ×1"
-          ]
+          "x": 1, "y": 0, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Vaste caverne brute au toit de 4,5 m, l'antre du gauth est un bric-à-brac de tonneaux et de caisses pillés, de ballots de foin, de sacs de grain moisi, de selles et d'armes abîmées. Au fond, un grand tas de débris sert de nid, sous lequel sont enfouis pièces et trésors d'art.",
+          "ennemis": ["Ours_noir ×1", "Ours_hibou ×1"],
+          "tresor": "Dans le tas : deux pièces d'art (1 198 et 776 po) et un coffre ouvert de 81 pp, 2 099 pc, 41 po, trois Potions de Guérison Renforcée, une Potion de Superhéroïsme et une flasque de Potion aux Teintes d'Arc-en-ciel (sept gorgées) ; aussi 15 torches et plusieurs lanternes de laiton avec de l'huile.",
+          "note": "Le gauth s'y réfugie s'il recule ; son garde-manger (mulets, ours noir, ours-hibou ailé) erre dans la salle s'il est déjà vaincu. Gauth non répertorié : [AJUSTEMENT REQUIS].",
+          "source": "T6 — quartiers du gauth."
+        }
+      ]
+    },
+    {
+      "nom": "Salles Souterraines",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Un couloir sec et torride (70 °C) de 4,5 m sur 15 perce la roche lissée ; derrière, un mur nu, devant, une double porte de pierre sans poignée. La chaleur rend la vision infrarouge inutile.",
+          "piege": "La double porte est scellée par un verrou magique de 16e niveau ; seul un brisement de sort ou une téléportation permet de passer.",
+          "source": "Salles Souterraines, salle n°1 (Une arrivée brûlante)."
         },
         {
-          "x": 3,
-          "y": -2,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Goule ×1"
-          ]
+          "x": 1, "y": 0, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le corridor se poursuit sur 6 m jusqu'à une seconde double porte de pierre, devant laquelle se dresse un humanoïde de 2,4 m couleur terre cuite. Au milieu du passage, un grand symbole rougeoyant baigne le sol d'une lueur rouge et sert de phare à la téléportation.",
+          "note": "[AJUSTEMENT REQUIS] Le gardien est un golem d'argile (11 DV, 2 000 lb d'or), commandé de ne laisser passer que les drows ; mot de commande « abbil ». Golem non répertorié au FP admissible.",
+          "piege": "La double porte est protégée par un verrou magique et une alarme (Wyvern Watch) de 16e niveau.",
+          "source": "Salles Souterraines, salle n°2 (Un étrange gardien)."
         },
         {
-          "x": 3,
-          "y": -3,
-          "type": "autel",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Troglodyte ×1"
-          ]
+          "x": 2, "y": 0, "type": "piège",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Un couloir sombre de 7,5 m, qui se rétrécit de 4,5 m à 1,5 m et dont le plafond s'abaisse, finit sur une porte de pierre nue. Une plaque de pression dissimulée sous le seuil déclenche un mécanisme à deux temps.",
+          "piege": "Plaque de pression : verrouille les deux portes puis libère une fumée de sommeil (sauvegarde vs poison à -2, sinon sommeil 1d4 jours). Les drows avertis, guettant derrière une alarme de 16e niveau, s'emparent des endormis.",
+          "source": "Salles Souterraines, salle n°3 (Un piège mortel)."
         },
         {
-          "x": 4,
-          "y": -3,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Zombie ×1"
-          ]
+          "x": 2, "y": 1, "type": "couloir",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Un boyau de 1,5 m de large et 9 m de long, au plafond bas, mène vers le sud à une porte de pierre garnie d'une serrure de fer ouvragée. Une porte secrète se décèle sur le mur est, à 1,5 m de l'entrée.",
+          "piege": "« Jeune fille embrassée » (herse d'aiguilles enduites de poison de type E) cachée dans le plafond au-dessus de la porte et de la porte secrète ; serrure ouvragée au dépiégeage à -30 %.",
+          "source": "Salles Souterraines, salle n°4 (Une jeune fille en attente)."
         },
         {
-          "x": 4,
-          "y": -2,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 1, "y": 1, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La pièce de 4,5 m sur 10, éclairée de globes de verre flottants, empeste la chair en décomposition. Au centre se tiennent dix-sept morts-vivants : deux jumeaux en robes fines sur cotte de mailles saluent poliment — « Bienvenue au vestibule de Madame » — pendant que le reste des zombies attend une proie.",
+          "ennemis": ["Zombie ×2"],
+          "note": "Les deux frères sont des zombies ju-ju (insensibles aux sorts mentaux, que l'on ne touche qu'au fer +1 ou mieux) ; sous le plancher, un compartiment secret garde deux seigneurs-zombies et deux autres zombies ju-ju qui commandent la horde. [AJUSTEMENT REQUIS] pour ces variantes hors bestiaire.",
+          "source": "Salles Souterraines, salle n°5 (Accueil sinistre)."
         },
         {
-          "x": 4,
-          "y": -1,
-          "type": "salle du trône",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Troll », final du scénario « ro_unknown_tower ». Reprendre la description du module.]",
-          "ennemis": [
-            "Troll ×1"
-          ]
+          "x": 0, "y": 1, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Grande salle opulemment meublée, tentures riches aux murs, lustres de globes lumineux, canapés de cuir sombre où se prélasse une cour de drows. Sur trois trônes de velours trônent trois femmes drows ; au centre, Madame Nova, drow de noble lignée, lève une coupe d'argent.",
+          "pnj": ["Madame Nova, drow mage/combattante/prêtresse de Vhaeraun, et ses alliées Darien (weretiger) et Theana ; pacifiques si traitées avec respect, elles renseignent et concluent un accord de troc"],
+          "note": "Si capturés ici, les aventuriers sont dépouillés de leur équipement ; seuls les amis reçoivent repos, vivres, eau et repos, relâchés à l'écart d'une manticore.",
+          "source": "Salles Souterraines, salle n°6 (Le salon de Madame Nova)."
+        }
+      ]
+    },
+    {
+      "nom": "Salles Oubliées — niveau 3",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "bibliothèque",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Chambre carrée au toit en arche, où un portique de belle pierre scintillant occupe le mur est. Les autres murs sont tapissés d'étagères couvertes de crânes de toutes tailles, du plus petit en haut au plus grand en bas, chacun frappé d'une petite plaque de laiton.",
+          "piege": "Un levier ouvre le sol ; une statue de femme à coiffe de scorpion de fer se dresse, tenant un diamant. Tirer la queue du scorpion déchaîne la lumière qui révèle l'énigme : « Qui marche à quatre pattes le matin, deux à midi, trois le soir ? » (réponse : l'homme).",
+          "tresor": "Diamant au sommet de la statue (valeur à déterminer) ; les crânes peuvent être retirés.",
+          "note": "Répondre « homme » dans la langue de l'énigme active le portique vers la salle n°15 ; briser plus de trois crânes ou dérober le diamant rend le portique inopérant.",
+          "source": "Salles Oubliées, salle n°14 (le premier portique)."
+        },
+        {
+          "x": 1, "y": 0, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Petite pièce identique à la précédente, mais sans portique ni décoration macabre : elle est d'une chaleur insupportable (74 °C) qui n'épargne pas la vision infrarouge. Un escalier en pente douce descend du mur est.",
+          "source": "Salles Oubliées, salle n°15 (Accueil chaleureux)."
+        },
+        {
+          "x": 1, "y": 1, "type": "salle vide",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Un palier de pierre simple, conçu comme aire de repos : des rangées de bancs destinés au sommeil longent le mur nord, chacun flanqué d'un foyer usé, et une fontaine de pierre au mur sud déborde d'une eau jaunâtre sulfureuse.",
+          "source": "Salles Oubliées, salle n°16 (la première chambre de repos)."
+        },
+        {
+          "x": 0, "y": 1, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Jadis jumelle de la salle de repos, elle a souffert : le plafond s'est partiellement effondré en un tas de gravats au centre, une eau jaune croupit autour, et une puanteur de viande pourrie se mêle au soufre. Un ruisseau s'écoule de la caverne naturelle au-dessus.",
+          "note": "[AJUSTEMENT REQUIS] La caverne au-dessus abrite une prêtresse drider (6 DV) qui attaque par surprise depuis sa position surélevée, à l'abri ; drider non répertorié au FP admissible (6 > 5).",
+          "piege": "Embuscade : la drider lance un globe de ténèbres sur le plus gros groupe depuis sa caverne, où elle est dissimulée à plus de 50 %.",
+          "source": "Salles Oubliées, salle n°17 (la deuxième chambre de repos)."
+        }
+      ]
+    },
+    {
+      "nom": "Salles Oubliées — niveau 4",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Une caverne immense s'étend au-delà de la portée de la vue, où une forêt de champignons de plus de 2,4 m pousse autour d'une eau jaunâtre fétide. L'air sent fort l'œuf pourri (soufre).",
+          "note": "Quatre scrags (trolls d'eau) jaillissent des champignons ; ils ne régénèrent pas hors de l'eau douce. Scrags non répertoriés : à jouer comme troll (FP 5).",
+          "tresor": "Diverses pierres semi-précieuses (29 po) ; un cadre de bât en cuir et bois recèle trois flasques de vin bâtard, une Potion de Guérison Renforcée, un sifflet d'argent (4 po), trois pitons rouillés, une lanterne et du petit matériel.",
+          "source": "Salles Oubliées, salle n°18 (la caverne naturelle)."
+        },
+        {
+          "x": 1, "y": 0, "type": "bibliothèque",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une caverne équarrie, aux murs de pierre naturelle, au sol et au plafond travaillés, où une arche de pierre bombée scintille d'un voile de lumière sur le mur nord. Devant, gravée dans le sol, une ancienne énigme du commun : « Qui a un visage mais pas d'yeux, des mains mais pas de doigts ? »",
+          "note": "Répondre « horloge » dans la langue de l'énigme active le portique vers la salle n°21.",
+          "source": "Salles Oubliées, salle n°20 (le second portique)."
+        },
+        {
+          "x": 1, "y": 1, "type": "abattoir",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La puanteur de la mort saisit d'abord, puis l'on distingue les restes d'une grande bataille : des dizaines de corps jonchent un couloir frais de 9 m sur 7,5 m et, parmi eux, des silhouettes commencent à bouger.",
+          "ennemis": ["Zombie ×2", "Squelette ×2"],
+          "note": "Au cœur des morts : 6 wraiths d'épée, des squelettes dont un squelette de guerrier intelligent, et des morts affamés ; ces variantes sont hors bestiaire. [AJUSTEMENT REQUIS] pour les wraiths d'épée (7+3 DV) dont le FP dépasse 5, à déjouer par le renvoi ou la ruse.",
+          "tresor": "13 pp, 244 po, 17 pa, 46 pc et 245 po de gemmes ; un compartiment secret au mur ouest (verrouillé, non piégé) recèle une paire de Dagues de Jet +3.",
+          "source": "Salles Oubliées, salle n°21 (la charnellerie)."
+        },
+        {
+          "x": 0, "y": 1, "type": "couloir",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Une cascade d'eau bouillante (82 °C) jaillit d'une fente du toit et s'engouffre dans une brèche du sol, noyant la salle de vapeur et de chaleur. La brume limite la vue à 3 m ; au-delà, une grande caverne se devine, dont certaines parois sont naturelles, d'autres travaillées.",
+          "note": "Au-delà de la cascade, une bande de drows non amis, leurs hobgobelins-alliés et neuf crochets-horrors portant de lourdes charges se préparent au combat. Crochets-horrors non répertoriés : à jouer comme humanoïdes monstrueux (FP ≤ 5). [AJUSTEMENT REQUIS] si nécessaire.",
+          "piege": "Franchir la cascade ébouillante inflige 2d4 dégâts (1d4 avec un bouclier) ; la vapeur ôte la vision infrarouge.",
+          "source": "Salles Oubliées, salle n°22 (la cascade bouillante)."
+        },
+        {
+          "x": 0, "y": 2, "type": "puits",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Une caverne naturelle immense s'étend à perte de vue, tapissée de lichen, de mousse et de champignons. Près du monticule central, une mare jaune fume, et des troupeaux de rothes noirs et bruns broutent, veillant leurs petits.",
+          "note": "[AJUSTEMENT REQUIS] Dans le monticule niche un drider mage (6+6 DV) et sa chauve-souris sinistre, possesseur du miroir de téléportation vers la surface ; il se laisse corrompre par un pot-de-vin ou une ruse. Drider non répertorié au FP admissible (6 > 5).",
+          "source": "Salles Oubliées, salle n°24 (la caverne des rothes)."
+        },
+        {
+          "x": 1, "y": 2, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Sous le monticule, une petite chambre imprégnée de l'odeur âcre du drider, avec des coffres et des sacs empilés sur deux gradins. Au centre du mur est, un grand miroir à cadre doré, recouvert d'un rideau de feutre noir : le miroir de téléportation vers la surface.",
+          "tresor": "12 pp, 148 po, 137 pa, 267 pe, 3 402 po de gemmes ; les grimoires et parchemins du drider (dont le sort rare Protection contre la Pierre et la Terre) ; des Bracers de Défense AC 2, un Anneau de Chute de Plume et un Anneau d'Armure.",
+          "piege": "Le tunnel d'accès est tendu de deux pièges à globes de verre (spores d'ascomycoïde + globes éclair), au dépiégeage à -25 %.",
+          "pnj": ["Le drider mage, gardien du miroir vers la surface, corrompu par un pot-de-vin ou une ruse"],
+          "source": "Salles Oubliées, salle n°25 (l'antre du drider)."
         }
       ]
     }

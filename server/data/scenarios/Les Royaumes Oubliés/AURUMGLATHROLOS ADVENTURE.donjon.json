@@ -1,13 +1,13 @@
 {
   "id": "ro_aurumglathrolos_adventure_donjon",
   "scenario": "ro_aurumglathrolos_adventure",
-  "donjon_id": "ro_aurumglathrolos_adventure",
-  "titre": "Donjon du scénario ro_aurumglathrolos_adventure (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "L'antre d'Aurumglathrolos",
+  "titre": "L'antre d'Aurumglathrolos et l'Arc des Géants",
+  "source": "Aurumglathrolos Adventure (AD&D) — pics du Nether, repaire du dernier dragon de bronze",
+  "note_convention": "Le module se déroule sur les pentes glacées des pics du Nether : temple d'Horgrathix (à NE PAS ouvrir), aeries de harpies massacrées, repaire d'Aurumglathrolos et l'Arc des Géants. La Compagnie de la Griffe Écarlate (20 membres niveaux 5-9) et Rothex le Rouge sont hors plafond FP : en note [AJUSTEMENT REQUIS]. Les seuls combats licites sont l'avant-garde de morts-vivants levés.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "Les pics du Nether & l'antre d'Aurum",
       "entree": [
         0,
         0
@@ -18,12 +18,27 @@
           "y": 0,
           "type": "entrée",
           "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le plateau glacé du Nether, battu par des vents qui charrient de la grêle : la montagne y est âpre et sans pitié. Sur le pic le plus haut se dressent des ruines antiques, et plus bas, entre les aiguilles de glace, devine-t-on l'ombre d'une faille ouverte — l'entrée du repaire du grand bronze.",
+          "note": "Corps de harpies massacrées visibles sur la pente ; les ruines du temple d'Horgrathix se détachent plein ouest."
+        },
+        {
+          "x": -1,
+          "y": 0,
+          "type": "autel",
+          "portes": {
             "nord": false,
             "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "Les ruines d'un temple plus ancien que tout ce que la montagne connaît, dédié au balor Horgrathix. Aux murs, des fresques de supplices montrent des armées d'esclaves vivants torturés pour l'éternité ; la porte scellée au fond garde l'issue d'un enfer sans nom.",
+          "piege": "La porte du temple est la prison magique d'Horgrathix : l'ouvrir libère le balor, qu'aucune arme du monde ne peut blesser.",
+          "note": "Ne JAMAIS ouvrir la porte. Un sort de re-scellage sacré pourrait sanctifier le seuil à jamais."
         },
         {
           "x": 1,
@@ -35,112 +50,135 @@
             "est": false,
             "ouest": true
           },
-          "description": ""
+          "description": "La pente déchiquetée menant au repaire, jonchée des restes ensanglantés de harpies tuées les unes après les autres, par les armes comme par la magie. Une quarantaine de cadavres ailés grainent le sentier.",
+          "note": "Pistage difficile possible : remonter la piste jusqu'à l'aerie, mais aucune trace du tueur (la Griffe Écarlate)."
         },
         {
           "x": 1,
           "y": -1,
           "type": "abattoir",
           "portes": {
-            "nord": true,
+            "nord": false,
             "sud": true,
             "est": false,
+            "ouest": true
+          },
+          "description": "L'aerie des harpies, perchée sur un surplomb battu par les vents : plumes, os et épaves forment un nid grandiose — désormais une fosse silencieuse où s'accumulent les corps de toute une famille de harpies, égorgées sans une seule blessure défensive.",
+          "tresor": "Fouille d'une heure entière : quelques affaires et poignées de pièces oubliées sous les plumes.",
+          "note": "Quarante-cinq harpies au total, tuées par sorts et lames sans combat."
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "couloir",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": true,
             "ouest": false
           },
-          "description": "",
-          "ennemis": [
-            "Ogre ×1"
-          ]
+          "description": "Les galeries d'entrée du repaire d'Aurum, taillées dans le roc par les géants d'autrefois puis polies au fil des âges par les griffes de dragons de bronze : statues de bronze aux yeux d'émeraude et runes d'avertissement incrustées dans la paroi.",
+          "note": "Les protections magiques d'Aurum restent dormantes tant qu'on n'approche pas son trésor sans invitation."
+        },
+        {
+          "x": 0,
+          "y": -2,
+          "type": "salle du trône",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La salle de l'audience d'Aurumglathrolos, dernier de sa lignée : amas d'or vierge et de reliques de bronze (étendards, lustres, coques d'épaves anciennes) autour d'une couche immense. Le grand wyrm de bronze, las mais majestueux, accueille les voyageurs — il ne demandera pas d'aide, mais il l'espère.",
+          "pnj": [
+            "Aurumglathrolos, le grand wyrm de bronze (gardien de l'Arc des Géants)"
+          ],
+          "note": "La cérémonie du lien se déroule ici : l'acolyte du groupe (Galin) endosse le manteau de disciple du dragon."
         },
         {
           "x": 1,
           "y": -2,
           "type": "trésor",
           "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": 2,
-          "y": -2,
-          "type": "piège",
-          "portes": {
             "nord": true,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": 2,
-          "y": -3,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "description": "La tanière au trésor, cœur de la fortune de la lignée des bronzes : monnaie des trois continents, joyaux sous-marins, armes d'honneur des capitales englouties. Aurum y pioche une portion tirée au hasard pour l'offrir — dans un trou portable — à ceux qui ont gagné son estime.",
+          "tresor": "Un trou portable rempli d'un trésor tiré au hasard du tas (bijoux, monnaie, objets magiques mineurs).",
+          "note": "C'est en quittant la tanière que les protections d'Aurum sonnent : la Compagnie de la Griffe Écarlate a trouvé le repaire."
         },
         {
           "x": 1,
           "y": -3,
-          "type": "cellules",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": 0,
-          "y": -3,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": 0,
-          "y": -4,
-          "type": "autel",
+          "type": "bibliothèque",
           "portes": {
             "nord": false,
             "sud": true,
             "est": false,
             "ouest": true
           },
-          "description": ""
+          "description": "La bibliothèque des Âges, seule pièce où la roche lisse cède la place aux étagères de basalte : fresques de l'empire des géants, cartes des failles dimensionnelles et, gravé dans la pierre, le fonctionnement de l'Arc — un passage capable d'expédier une créature de la taille d'un dragon à travers les vastes domaines de l'antique empire.",
+          "note": "On y apprend les deux mots de commande de l'Arc : « Hortul » pour ouvrir le portail, « Lutroh » pour le fermer."
         },
         {
-          "x": -1,
-          "y": -4,
-          "type": "salle du trône",
+          "x": 0,
+          "y": -3,
+          "type": "salle vide",
           "portes": {
-            "nord": false,
-            "sud": false,
+            "nord": true,
+            "sud": true,
             "est": true,
             "ouest": false
           },
-          "description": "[À RÉDIGER — antre du « Harpie », final du scénario « ro_aurumglathrolos_adventure ». Reprendre la description du module.]",
+          "description": "Les tombeaux de la lignée : niches creusées dans le roc où reposent les squelettes calcinés ou verdâtres des dragons de bronze qui gardèrent ce domaine avant Aurum, leur dernier descendant — chacun portant le nom d'une mer perdue.",
+          "note": "Aurum ne montre jamais cette salle ; la découvrir attriste le dragon mais renforce le lien."
+        },
+        {
+          "x": 0,
+          "y": -4,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La salle de l'Arc des Géants : deux colonnes de basalte hautes de dix mètres encadrent un cadre de bronze aux dimensions presque inconcevables. L'Arc sommeille, muet — mais un mot de commande suffit à l'éveiller vers des mondes lointains.",
+          "tresor": "L'Arc des Géants (portail dimensionnel de l'empire).",
+          "note": "« Hortul » ouvre, « Lutroh » ferme. Fermer l'Arc sur Rothex le déchire en deux — la résolution du module."
+        },
+        {
+          "x": 1,
+          "y": -4,
+          "type": "couloir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Les galeries du vent : cheminées naturelles où sifflent les bourrasques du Nether, reliant la salle de l'Arc aux reliefs extérieurs. C'est par là qu'on perçoit, au loin, les tambours de guerre de la Compagnie approchant.",
+          "note": "Sallie défensive : les vents permettent des embuscades à couvert."
+        },
+        {
+          "x": 1,
+          "y": -5,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "Le plateau de la bataille, face au repaire : drapeaux blêmes et tambours de guerre — puis le déferlement. La Compagnie de la Griffe Écarlate lance dès l'entrée morts-vivants levés et créatures invoquées comme avant-garde pour affaiblir le dragon en retraite.",
           "ennemis": [
-            "Harpie ×1"
-          ]
+            "Squelette ×2",
+            "Zombie ×2"
+          ],
+          "note": "[AJUSTEMENT REQUIS] La Griffe Écarlate : prêtre de Talos 9e, prêtresse de Loviatar 8e, sorcier du culte 7e, mage 8e (demi-drow), invocateur 7e, roublards 9e/5e, chaman géant du feu 6e, flinds (5), ogre magi 6e, 2 ogres gardes, demi-dragon rouge/ogre 7e, duergar 7e, prêtresse-sorcière drow 8/5e — et Rothex le Rouge entre au 5e round. Résolution : fuir par l'Arc, prononcer « Lutroh » quand la tête de Rothex passe la porte — il est lacéré en deux. Cliffhanger de campagne : un château de géants surgit au-delà du portail."
         }
       ]
     }

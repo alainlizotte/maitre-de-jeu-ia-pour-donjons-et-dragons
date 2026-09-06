@@ -1,13 +1,13 @@
 {
   "id": "ro_the_crown_of_mystra_donjon",
   "scenario": "ro_the_crown_of_mystra",
-  "donjon_id": "ro_the_crown_of_mystra",
-  "titre": "Donjon du scénario ro_the_crown_of_mystra (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "La Couronne de Mystra",
+  "titre": "La Couronne de Mystra — la quête des huit gemmes",
+  "source": "The Crown of Mystra (AD&D, Michael P. Brock) — appendices A à K : Tour de l'Équilibre (silvermoon), Groove/Caverne de Nulentok (App. B), Phare de Sarr (App. C), Boutique de Sergental à Aluarim (App. D), Oasis d'Olomaa et QG Zhentarim (App. E/F), Manoir de Rineen à Calimport (App. G), Temple ruiné de Farouk à Chult (App. H), Fosse de Shakkak sur le Grand Glacier (App. I), Tour de Mortagne à Luskan (App. J), Château de Meredoth à Surthay (App. K).",
+  "note_convention": "Manifeste des zones clés de la quête de la Couronne de Mystra, mises en grille serpentin (une salle par lieu marquant du module). Monstres traduits en fiches D&D 3.5 du bestiaire local ; les adversaires trop puissants (FP > 5) ou absents du bestiaire sont signalés en « note » [AJUSTEMENT REQUIS] avec une alternative jouable.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "Parcours de la Couronne de Mystra",
       "entree": [
         0,
         0
@@ -20,139 +20,320 @@
           "portes": {
             "nord": false,
             "sud": false,
-            "est": false,
-            "ouest": true
+            "est": true,
+            "ouest": false
           },
-          "description": ""
+          "description": "Haut lieu de Silverymoon, la salle d'audience de la Tour de l'Équilibre s'ouvre sur la cité par de hautes baies de verre dépoli : marbre laiteux, tapis célestes et parfum d'encens. La magesteresse Thukmuul Teleshann y reçoit le groupe, le regard grave, et lui confie la quête de la Couronne de Mystra dérobée par les adorateurs de Cyric.",
+          "pnj": [
+            "Thukmuul Teleshann (magesteresse NG de la Tour de l'Équilibre — donne la quête)"
+          ],
+          "note": "Point de départ : récupérer la Couronne chez Zendar Nulentok, puis réunir ses huit gemmes dispersées sur Faerûn ; la baguette de téléportation qu'elle remettra ensuite ne s'active qu'au contact de la couronne."
         },
         {
-          "x": -1,
+          "x": 1,
+          "y": 0,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Une vaste caverne où quatorze myconides aveuglés par Nulentok attendent, immobiles, la mort — leurs teintes fanées dans la pénombre. Au moindre bruit, ils gémissent une prière rauque : on peut leur rendre la vue.",
+          "pnj": [
+            "Quatorze myconides aveuglés (alliés si on guérit leur cécité)"
+          ],
+          "note": "Guérir les champignons-gens et leur redonner espoir engage des alliés précieux contre l'anti-druide."
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Un couloir de caverne baigné d'une lueur violette : des champignons luminescents tapissent les parois, tandis que des pierceurs aux pointes de pierre guettent suspendus au plafond. Un lac d'eau de fonte clapote plus loin, alimenté par les crevasses de la voûte.",
+          "note": "Les pierceurs (3d6 suspendus) frappent quiconque passe dessous ; l'eau du lac est une eau de fonte de neige pure, mais le MJ peut la rendre hallucinogène."
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "type": "puits",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Une fosse ronde où Nulentok jette champignons morts et créatures égarées dans son « jardin » : les débris végétaux s'y entassent dans une puanteur amère. Des charognards rampants y rôdent et s'élancent aussitôt sur les intrus.",
+          "note": "[AJUSTEMENT REQUIS] Les charognards rampants du module (App. B-5) ne sont pas au bestiaire : les remplacer par un groupe de goules ou de rats faméliques selon le niveau."
+        },
+        {
+          "x": 4,
           "y": 0,
           "type": "piège",
           "portes": {
             "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": -2,
-          "y": 0,
-          "type": "garde",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Nécromancien rouge ×1"
-          ]
-        },
-        {
-          "x": -3,
-          "y": 0,
-          "type": "couloir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Goule ×1"
-          ]
-        },
-        {
-          "x": -4,
-          "y": 0,
-          "type": "antichambre",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
-        },
-        {
-          "x": -4,
-          "y": -1,
-          "type": "couloir",
-          "portes": {
-            "nord": false,
             "sud": true,
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Gobelin ×1"
-          ]
+          "description": "Le cœur du « groove » : d'immenses champignons de cinq à sept pieds peuplent la caverne, et l'entrée en est gardée par des stalagmites dressées à trois pieds l'une de l'autre. Caché dans les ombres du mycélium, Zendar Nulentok étudie le groupe avant de déchaîner ses plantes tueuses — il ne cédera pas la Couronne sans combat.",
+          "pnj": [
+            "Zendar Nulentok (anti-druide NE, agent présumé de la Zhentarim — garde la Couronne)"
+          ],
+          "tresor": "La Couronne de Mystra (dépouillée de ses huit gemmes) et le parchemin des énigmes (Appendice A).",
+          "piege": "Stalagmites enchantées de pierres à pointes (spikes stones) : franchir l'entrée force à longer au moins cinq cônes hérissés.",
+          "note": "Nulentok est intelligent : il fuit s'il est dominé et traquera le groupe tant qu'il n'aura pas récupéré la couronne."
         },
         {
-          "x": -5,
-          "y": -1,
-          "type": "garde",
+          "x": 4,
+          "y": 1,
+          "type": "trésor",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Dans la base évidée du phare ruiné de l'île de Sarr, un escalier décomposé surplombe un plancher de sable où reposent des ossements humains — dix squelettes s'animent quand le premier intrus touche le sol. Après le combat, une trappe à demi ensablée et un coffre solitaire intriguent les observateurs.",
+          "ennemis": [
+            "Squelette ×4"
+          ],
+          "tresor": "Le Beljuril (gemme d'Abjuration), conservé dans un sac sans fond dissimulé sous le coffre.",
+          "note": "[AJUSTEMENT REQUIS] Le coffre est en réalité un mimique (8 DV) qui attaque quiconque veut l'ouvrir : le MJ peut le remplacer par un piège ou une goule gardienne."
+        },
+        {
+          "x": 3,
+          "y": 1,
+          "type": "tableau",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Au cœur d'Aluarim, l'échoppe d'écriture de Cynthia Seregental sent l'encre et le papier : rayons garnis de plumes, flacons et rouleaux de parchemin de premier choix. À l'étage, dans l'alcôve feutrée de sa chambre, un tableau de la ville dissimule un compartiment secret.",
+          "pnj": [
+            "Cynthia Seregental (agent Zhentarim nerveux CE — croit tenir un simple joyau)"
+          ],
+          "tresor": "Le Diamant (gemme de Convocation et d'invocation), caché derrière le tableau de la ville ; lettres et registres adressés à ses supérieurs.",
+          "note": "Cynthia fuit si on la presse ; en dernier recours, elle propose la gemme en échange de sa liberté."
+        },
+        {
+          "x": 2,
+          "y": 1,
+          "type": "cuisine",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Les cuisines du QG zhentarim de l'oasis d'Olomaa mêlent marmites, épices rares de Kara-Tur et butin d'une caravane pillée. Des réserves de vivres pour des mois s'entassent dans la soute voisine, où des watchspiders montent la garde dans les ténèbres.",
+          "note": "[AJUSTEMENT REQUIS] Les watchspiders du module (App. F-9, attaquent dès que tous les PJ sont entrés) ne sont pas au bestiaire : les remplacer par des araignées géantes ou des rats."
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La chambre du prêtre de Cyric, tapie de rouge d'un mur à l'autre, abrite derrière un rideau noir un sanctuaire funèbre : autel sacrificiel, instruments impies et grand symbole d'électrum du dieu usurpateur, suspendu au mur nord. L'air y est chargé d'encens âcre et de menaces.",
+          "pnj": [
+            "Le prêtre de Cyric (gardien de l'oasis — 15% de chances qu'il dorme à l'arrivée des PJ)"
+          ],
+          "note": "S'il est alerté, il combat prêt ; son symbole d'électrum vaut 2 500 po."
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Au pied de l'escalier du QG, la salle basse résonne de mouvements lents : le tyran oculaire Xualahuu, convalescent, y surveille la Jacinthe soudée à une chaîne magique greffée à son corps et tient une licorne prisonnière dans la pièce voisine. Il ne se rue pas d'abord au combat, fasciné par ceux qui ont percé ses défenses.",
+          "pnj": [
+            "Xualahuu (tyran oculaire CE — temporise avant de frapper)",
+            "La licorne captive (la libérer vaut des présents de Mielikki)"
+          ],
+          "tresor": "La Jacinthe (gemme d'Alteration), sertie à l'extrémité de la chaîne magique greffée au tyran oculaire.",
+          "note": "[AJUSTEMENT REQUIS] Le tyran oculaire (FP très supérieur à 5) : le remplacer par un nécromancien rouge et ses serviteurs, la Jacinthe devenant accessible après leur défaite."
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "bibliothèque",
           "portes": {
             "nord": true,
             "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": "",
-          "ennemis": [
-            "Rat ×1"
-          ]
+          "description": "Bibliothèque et cabinet de Max Rinnen à Calimport : cinq cents ouvrages, boiseries sombres et un long banc d'acajou. La serrure et la porte sont empoisonnées, à l'image de leur propriétaire, un zhent infiltré chez les voleurs et les assassins de la cité.",
+          "pnj": [
+            "Max Rinnen (werejackal NE, voleur 12 — détient la Rogue Stone)"
+          ],
+          "tresor": "La Rogue Stone (gemme d'Illusion et de phantasm), qu'il ne laisse qu'avec la vie ; amulette de protection +4 et bottes de striding et springing sur lui.",
+          "note": "Sous le coup d'une attaque, il passe aussitôt sous sa forme hybride ; sa morsure transmet la lycanthropie."
         },
         {
-          "x": -5,
-          "y": -2,
+          "x": 1,
+          "y": 2,
           "type": "trésor",
           "portes": {
             "nord": false,
-            "sud": true,
+            "sud": false,
             "est": true,
-            "ouest": false
+            "ouest": true
           },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "description": "La chambre au trésor secrète de Rineen regorge de coffres et de butins, mais le voleur aime jouer : des lames de cheville jaillissent des murs à l'ouverture de la porte, et d'autres surgissent du sol si l'interrupteur du linteau n'est pas manœuvré.",
+          "tresor": "Trésors des types F, S, T et Z (monnaies, joyaux, objets magiques) et documents compromettants.",
+          "piege": "Lames de cheville (ThAC0 6, 1d8) — 30% de trancher le tendon d'Achille ; lames du sol si l'interrupteur au-dessus de la porte n'est pas basculé.",
+          "note": "Toutes les serrures et les pièges du manoir se détectent et se retirent avec un malus de 25%."
         },
         {
-          "x": -4,
-          "y": -2,
-          "type": "abattoir",
+          "x": 2,
+          "y": 2,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La piste moite de la jungle de Chult, entre lianes et moustiques, mène au temple ruiné — suivie sans relâche par les Kuro Goblins, qui étudient les voyageurs avant de frapper. Des dards de sarbacanes enduits d'un poison de sommeil sifflent alors des fourrés.",
+          "ennemis": [
+            "Gobelin ×4"
+          ],
+          "note": "La troisième nuit, une partie de chasse de quinze Kuro Goblins attaque aux dards soporifiques ; si tous les PJ sont endormis, ils emportent tous les objets de métal — y compris la couronne."
+        },
+        {
+          "x": 3,
+          "y": 2,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Les catacombes chaotiques et démesurées du temple de Farouk jonchent le sol de tombes ouvertes et d'os de victimes. Des goules y rôdent en gardiennes, prêtes à paralyser les profanateurs de la demeure du rakshasa.",
+          "ennemis": [
+            "Goule ×2"
+          ],
+          "note": "[AJUSTEMENT REQUIS] Le module place aussi deux ghats et un gantelet (wight) dans cette salle : les ajouter selon le niveau du groupe."
+        },
+        {
+          "x": 4,
+          "y": 2,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Dans la grande salle du temple d'Ibrandul, devant un autel massif, Masad Farouk trône sur une chaise de pierre — un bâton sculpté à l'image d'une vipère posé sur ses genoux, l'Émeraude de Shou Lung dans la gueule du serpent. Huit gardes-gorilles figés l'entourent : il laisse partir ceux qui l'impressionnent, puis frappe traîtreusement.",
+          "pnj": [
+            "Masad Farouk (rakshasa CE déguisé — garde l'Émeraude)"
+          ],
+          "tresor": "L'Émeraude de Shou Lung (gemme de Divination), sertie dans la gueule du bâton-sceptre, et le trésor de type F.",
+          "note": "[AJUSTEMENT REQUIS] Le rakshasa (FP bien supérieur à 5) et ses gorilles ne sont pas au bestiaire : les remplacer par une troupe de goules ou d'ombres servantes."
+        },
+        {
+          "x": 4,
+          "y": 3,
+          "type": "crypte",
           "portes": {
             "nord": true,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": ""
+          "description": "La crevasse de Shakkak, sur le Grand Glacier : une neige scintillante qui n'est pas de la neige — la glace de fée, granuleuse, s'enfonce comme des sables mouvants sous les pas. Au pied du totem dressé sur la glace repose le cimetière des dragons blancs, gardé par le souffle éternel d'un dracoliche.",
+          "tresor": "Le Saphir étoilé (gemme d'Enchantement et de charme), dans le trésor du dracoliche.",
+          "piege": "Glace de fée : on s'y enfonce d'un pied par round comme dans des sables mouvants ; une vérification de Force ou de Dex permet de s'extraire, sinon on risque la suffocation.",
+          "note": "[AJUSTEMENT REQUIS] Le dracoliche (FP bien supérieur à 5) : le remplacer par des ombres et des squelettes gelés gardant le totem et le saphir."
         },
         {
-          "x": -4,
-          "y": -3,
+          "x": 3,
+          "y": 3,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Les oubliettes de la tour de Luskan résonnent de gémissements : Mortagne y engraisse des « volontaires », futures pièces de sa première vague contre la tour de la Fraternité arcanique. Des rats affamés rongent les débris de leurs repas dans les cellules de pierre.",
+          "ennemis": [
+            "Rat ×2"
+          ],
+          "pnj": [
+            "Prisonniers de Mortagne (à sauver avant qu'ils ne deviennent des minions)"
+          ],
+          "note": "[AJUSTEMENT REQUIS] Mortagne le vampire (FP 8) domine la tour : le remplacer, pour la rencontre d'étage, par des goules ou des vampires-mineurs du bestiaire."
+        },
+        {
+          "x": 2,
+          "y": 3,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le corps de garde du château de Surthay, en Thay, sent la cire et le soufre : un nécromancien rouge monte la garde, entouré de morts-vivants qui cliquettent dans l'ombre des créneaux. Le capitaine Werpafel, mage mineur, laisse entrer l'escorte sur ordre du seigneur lich — et referme le piège derrière elle.",
+          "ennemis": [
+            "Nécromancien_rouge ×1"
+          ],
+          "pnj": [
+            "Werpafel (capitaine et mage mineur de Meredoth — accueille puis referme le piège)"
+          ],
+          "note": "[AJUSTEMENT REQUIS] Les gardes du corps grimlocks du module sont jouables (FP 2) ; le nécromancien rouge évoque les arcanes thayans de Meredoth."
+        },
+        {
+          "x": 1,
+          "y": 3,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La bibliothèque privée de Meredoth aligne cinq grimoires à parchemins retroussés, scellés de nécromancie : clone, doigt de la mort, sphère prismatique... Chaque volume semble palpiter d'un souffle surnaturel dans une pièce aux murs tapissés de fioles et de reliques impies.",
+          "tresor": "Les cinq grimoires de Meredoth (sorts de nécromancien) ainsi que ses bracers AC 4, sa cape de protection +3 et son anneau d'étoiles filantes.",
+          "note": "S'emparer des grimoires prive le lich de ses arcanes les plus funestes."
+        },
+        {
+          "x": 0,
+          "y": 3,
           "type": "salle du trône",
           "portes": {
             "nord": false,
-            "sud": true,
-            "est": false,
+            "sud": false,
+            "est": true,
             "ouest": false
           },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « ro_the_crown_of_mystra ». Reprendre la description du module.]",
+          "description": "Au plus profond du château, le caveau-trône de Meredoth baigne dans un froid d'ossuaire : des ombres frissonnent entre les colonnes et portent la dernière gemme. Le lich des terres rouges n'offre le salut qu'une seule fois — au-delà, c'est la mort, et la Couronne lui revient.",
           "ennemis": [
-            "Ombre ×1"
+            "Ombre ×2"
           ],
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Vampire (FP 8), Rakshasa (FP 10). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "tresor": "L'Étoile de rubis (gemme de Nécromancie), portée au cou du lich — et, une fois la couronne rechargée, la restauration des pouvoirs de la déesse Mystra.",
+          "note": "[AJUSTEMENT REQUIS] Meredoth (lige FP très supérieur à 5) est remplacé par ses ombres-conjurées et ses serviteurs : la confrontation finale se joue contre les gardiens de la dernière gemme."
         }
       ]
     }

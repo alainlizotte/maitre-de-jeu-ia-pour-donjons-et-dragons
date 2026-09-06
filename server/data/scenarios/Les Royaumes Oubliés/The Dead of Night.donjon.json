@@ -1,13 +1,13 @@
 {
   "id": "ro_the_dead_of_night_donjon",
   "scenario": "ro_the_dead_of_night",
-  "donjon_id": "ro_the_dead_of_night",
-  "titre": "Donjon du scénario ro_the_dead_of_night (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "Les ruines oubliées de Kalthrax",
+  "titre": "The Dead of Night — les ruines oubliées de Kalthrax",
+  "source": "THE DEAD OF NIGHT (module AD&D de Derek Chapman, généré avec l'utilitaire DunGen de Steve Alvarez) — village massacré par les assassins doppelgangers de Braxius, catacombes et ruines oubliées de Kalthrax sous la bourgade.",
+  "note_convention": "Manifeste réécrit d'après le kit : étage 1 = village à la nuit tombée (taverne → débarras → place → écuries, entrée cachée) ; étage 2 = ruines oubliées de Kalthrax (salles 1-19 du module + 3 pièges de l'appendice 2). Ennemis issus du bestiaire, FP ≤ 5 : Squelette, Zombie, Ombre, Goule, Ogre, Doppelganger, Spectre. Créatures hors bestiaire (banedead, momies, wights, wraiths, squelettes géants, cubes gélatineux) signalées en notes ; la rencontre finale de Braxius, très au-dessus du plafond, est balisée [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "Le village à la nuit tombée",
       "entree": [
         0,
         0
@@ -18,25 +18,49 @@
           "y": 0,
           "type": "entrée",
           "portes": {
-            "nord": false,
+            "nord": true,
             "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "La taverne du village au cœur de la nuit : l'ale coule à flots, un barde aux soieries étranges conte des légendes, tandis que le tavernier chauve et replet verse discrètement un sédatif dans vos chopes. Un murmure vous glace le sang : « Si vous voulez vivre, suivez-moi. » Mais quand la mascarade prend fin, les trois serveurs se fondent en humanoïdes gris aux yeux blancs.",
+          "ennemis": [
+            "Doppelganger ×2"
+          ],
+          "pnj": [
+            "Karragen, barde mystérieux (neutre)"
+          ],
+          "note": "Le tavernier et ses deux servantes sont des doppelgangers : ils retiennent le groupe jusqu'à l'arrivée de Braxius. Karragen vend l'antidote (flacon de liquide bleu) pour 30 po et s'évanouit à la première menace. Sédatifs dans les chopes : jet de sauvegarde vs poison (-5 si l'on ignore l'avertissement)."
         },
         {
           "x": 1,
           "y": 0,
-          "type": "piège",
+          "type": "abattoir",
           "portes": {
             "nord": true,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "description": "Une arrière-salle encombrée d'herbes et d'épices, où l'air empeste le sang figé. Dans l'alcôve, un amas de chair lacérée : le tavernier et ses deux servantes, taillés et déchiquetés en un horrible charnier.",
+          "note": "Les corps sont retrouvés taillés en pièces dans le débarras, que le groupe ait parlé fort ou non au barde."
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Le village est plongé dans un silence de mort : nulle âme dans les rues, le sol détrempé ruisselle de sang et, étrangement, hormis quelques membres arrachés, aucun cadavre n'ensanglante la couche. Une voix tremblante s'élève des ombres — un homme pâle en robe pourpre de magicien de guerre de Cormyr.",
+          "pnj": [
+            "Slagel, magicien de guerre de Cormyr (mourant)"
+          ],
+          "tresor": "Carte marquée « Entrée des ruines oubliées de Kalthrax », remise dans un dernier souffle par Slagel, avec la mission de détruire le Cristal des Morts.",
+          "note": "Braxius a fait massacrer la bourgade par des assassins doppelgangers avant de relever les habitants en morts-vivants."
         },
         {
           "x": 1,
@@ -45,104 +69,340 @@
           "portes": {
             "nord": false,
             "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "La troisième stalle des écuries, l'endroit exact porté sur la carte. Prononcer « Vlac Smun Gan Furm » fait apparaître une porte de fer aux ciselures travaillées, si lourde qu'une force combinée de 25 est requise pour la soulever. Derrière, l'obscurité totale attend ceux qui ne portent pas de lumière.",
+          "note": "Entrée cachée par une illusion magique ; il fait noir au-delà, une source de lumière est indispensable pour poursuivre."
+        }
+      ]
+    },
+    {
+      "nom": "Les ruines oubliées de Kalthrax — niveau 1",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": "",
+          "description": "La salle est entièrement peinte en noir, jusqu'au sol couvert d'un sable noir singulier ; l'endroit sent le tombeau. Quatre silhouettes squelettiques, armées d'épées longues et de boucliers au symbole de la main noire sur fond rouge, accueillent les intrus.",
+          "ennemis": [
+            "Squelette ×2"
+          ],
+          "note": "Baneguards : squelettes gardiens de Bane (AC 7, 4 DV+4, clignotement et missiles magiques) — représentés par Squelette (FP 1/3), doubler le nombre pour la rencontre complète."
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "De vastes peintures de spectateurs couvrent les murs de cette salle octogonale, et leurs yeux bougent dans les toiles. L'air est immobile et tiède ; au centre, un large escalier s'enfonce dans les profondeurs.",
+          "note": "Peintures immuables, en réalité des dispositifs de scrutation : quelqu'un veille depuis les ruines."
+        },
+        {
+          "x": 1,
+          "y": -1,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Des tapisseries en décomposition racontent la mort du dieu Bane le long des murs. Dans un angle, un autel noir veillé par des chandelles à demi-consumées exhibe des éclaboussures de sang séché.",
+          "tresor": "Deux chandeliers d'or (10 po chacun).",
+          "note": "Reliques de Bane : flacon d'eau non sainte et symbole sacré du dieu mort."
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "garde",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Des tentures noires et rouges tapissent la salle. Quatre zombies aux traits inhumains se tiennent tels des sentinelles muettes devant le vestibule du dieu mort Bane.",
+          "ennemis": [
+            "Zombie ×2"
+          ],
+          "note": "Quatre zombies-monstres (6 DV, 4d4) montent la garde — représentés par Zombie (FP 1/4), doubler pour la rencontre complète."
+        },
+        {
+          "x": 0,
+          "y": -2,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Un couloir étroit dont le puits de la fosse à pointes monte à quarante pieds sous un plafond d'obscurité. Des chaînes pendent des ténèbres jusqu'au sol, prêtes à trahir le poids de qui ose s'y suspendre.",
+          "piege": "Piège « Corridor des Chaînes » (appendice 2) : tirer ou supporter une chaîne fait remonter les pointes de la fosse aussi vite que le poids retombe — imprudence = empalement (Réflexes DD 15 pour se dégager, dégâts du MJ)."
+        },
+        {
+          "x": 1,
+          "y": -2,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Une salle carrée d'une vingtaine de pieds aux deux portes opposées, dont le plafond se perd dans les ténèbres. Trois cordes descendent de la nuit jusqu'au sol, appâtées comme autant de pièges invités.",
+          "piege": "Piège « Tirez-moi » (appendice 2) : quand le dernier PJ entre, les portes claquent et se verrouillent magiquement. Chaque corde, au-delà de 50 livres, libère une boule de feu à retardement, un nuage puant — ou la clé qui révèle la serrure."
+        },
+        {
+          "x": 1,
+          "y": -3,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Dans une niche du mur brille une arme magnifique, appât rêvé pour les cupides. Rien ne révèle la masse gélatineuse et collante tapie au creux du renfoncement.",
+          "piege": "Piège « Ooze séductrice » (appendice 2) : saisir l'arme colle la main dans une ooze adhésive ; la libérer exige un test de bris de barres / lever de herse, dont l'échec peut arracher la main."
+        },
+        {
+          "x": 0,
+          "y": -3,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Une salle circulaire immense, entièrement bordée d'un rayonnage de livres : tomes poussiéreux, parchemins jaunis, et au centre un bureau massif chargé de chandelles, d'un encrier et d'un seul livre relié de cuir noir. Des ombres dansent le long des murs sans que rien ne bouge.",
           "ennemis": [
             "Ombre ×1"
-          ]
+          ],
+          "tresor": "Grimoire noir renfermant tous les sorts de nécromancie connus et 6 chandeliers d'or (30 po chacun).",
+          "note": "Cœur d'une zone de magie morte : les sorts ne fonctionnent pas au centre de la salle. Deux baneguards et un banedead la gardent — représentés par Ombre/Squelette."
         },
         {
-          "x": 2,
-          "y": -1,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Doppelganger ×1"
-          ]
-        },
-        {
-          "x": 2,
-          "y": -2,
-          "type": "laboratoire",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Ogre ×1"
-          ]
-        },
-        {
-          "x": 2,
-          "y": -3,
-          "type": "antichambre",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Goule ×1"
-          ]
-        },
-        {
-          "x": 2,
+          "x": 0,
           "y": -4,
-          "type": "escaliers",
+          "type": "garde",
           "portes": {
             "nord": false,
             "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
-        },
-        {
-          "x": 1,
-          "y": -4,
-          "type": "antichambre",
-          "portes": {
-            "nord": true,
-            "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": "",
+          "description": "Les flammes des torches vacillent comme sous une brise alors que l'air demeure immobile. Des râteliers courent le long des murs, chargés d'armes rouillées et d'armures brisées ; cinq zombies d'origine non humaine errent entre les étagères et bondissent à l'attaque.",
           "ennemis": [
             "Zombie ×1"
-          ]
+          ],
+          "tresor": "Cotte de mailles et hache de bataille (usées mais récupérables).",
+          "note": "Zombies-monstres en plus grand nombre — multiplier la rencontre (FP 1/4)."
+        },
+        {
+          "x": 1,
+          "y": -4,
+          "type": "salle vide",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "La salle a été débarrassée de tout débris et frottée jusqu'à la propreté. La belle taille de pierre évoque les cités naines, et des bancs de bois moulent les murs."
         },
         {
           "x": 1,
           "y": -5,
-          "type": "escaliers",
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Une ancienne forge, propre et encore fonctionnelle : les feux de fusion sont tièdes d'un usage récent et les outils de métallurgie s'y alignent sous un toit haut de vingt pieds. Quatre squelettes géants de treize pieds s'y tiennent, une flamme étrange brûlant dans leurs cages thoraciques.",
+          "ennemis": [
+            "Squelette ×2"
+          ],
+          "note": "Squelettes géants (4 DV+4, 1d12 ; la mine de feu de la poitrine peut lancer une boule de feu 8d6, 1/heure) — représentés par Squelette (FP 1/3)."
+        },
+        {
+          "x": 0,
+          "y": -5,
+          "type": "crypte",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Des peintures balaient la montée puis la chute du dieu Bane. Deux tombeaux ouverts contiennent des morts enveloppés de lin ancien — et alors que l'on distingue une troisième forme rongée, les deux momies se dressent et avancent, bras tendus.",
+          "ennemis": [
+            "Goule ×1"
+          ],
+          "note": "Deux momies et une goule supérieure (wight) surgissent des tombeaux — créatures hors bestiaire, prévoir des fiches ; la goule sert de remplaçante d'ambiance (FP 2)."
+        },
+        {
+          "x": 0,
+          "y": -6,
+          "type": "garde",
           "portes": {
             "nord": false,
             "sud": true,
             "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "Le cri de mille soldats morts résonne dans la salle. Deux êtres décharnés aux yeux cruels et à la chair momifiée, ainsi que deux nuées noires à face de crâne aux yeux rougeoyants, glissent dans l'air chargé d'odeur de chair brûlée.",
+          "ennemis": [
+            "Spectre ×2"
+          ],
+          "tresor": "Urne funéraire : bague en or (20 po) et diamant (500 po).",
+          "note": "Deux wraiths et deux wights, drain de niveaux à la touche — représentés par Spectre (FP 5), à jouer prudemment."
         },
         {
-          "x": 2,
-          "y": -5,
+          "x": 1,
+          "y": -6,
+          "type": "abattoir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Tous les instruments du supplice sont réunis : chevalet, fouets, chaînes, cheminée, acides variés et autres engins de douleur. Les formes pourrissantes de deux ogres, aux os colossaux encore drapés de chairs, encadrent deux zombies semblables à ceux de la taverne.",
+          "ennemis": [
+            "Ogre ×1",
+            "Zombie ×1"
+          ],
+          "tresor": "Grand sac : 4 émeraudes (184 à 1479 po) et un anneau serti d'une gemme.",
+          "note": "Porte secrète vers la chambre du Cristal des Morts : indétectable sans le Cristal de Vie, elle apparaît d'elle-même dès que le groupe le possède."
+        },
+        {
+          "x": 1,
+          "y": -7,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "L'air y porte l'odeur de la mort. À la descente, cinq créatures mortes-vivantes aux griffes acérées et aux traits tordus accueillent d'un regard fixe les voyageurs.",
+          "note": "Cinq wights attendent au pied des marches, drain de niveaux — hors bestiaire, prévoir des fiches ; le niveau inférieur commence ici."
+        },
+        {
+          "x": 0,
+          "y": -7,
+          "type": "trésor",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La salle ronde baigne dans une clarté plus vive qu'un plein ciel sans nuage. Au centre, un orbe de cristal grouille littéralement d'essence de vie : c'est le Cristal de Vie, objet de la quête.",
+          "piege": "Le cristal repose sur une dalle de pression : plus de 100 livres ouvrent une trappe-puits qui se referme aussitôt (piège « Pit locking », appendice 2 ; 25 de force pour rouvrir).",
+          "note": "Saisi, le cristal trace en lettres d'or : « trouvez la salle de torture ». C'est l'unique contre, face au Cristal des Morts."
+        },
+        {
+          "x": 0,
+          "y": -8,
+          "type": "tableau",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Un lit à baldaquin immense, paré de noir, se dresse sous le portrait de Braxius lui-même, peint au-dessus de la cheminée. Un coffre de chêne massif attend au pied du lit, veillé aux quatre piliers par des zombies.",
+          "ennemis": [
+            "Zombie ×1"
+          ],
+          "tresor": "Coffre d'ébène au pied du lit : sac sans fond, dague du venin, 500 po, 234 pp, 128 pa.",
+          "note": "Quatre zombies ju-ju (repr. par Zombie, FP 1/4) montent la garde aux piliers du lit de Braxius."
+        },
+        {
+          "x": 1,
+          "y": -8,
+          "type": "cellules",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Une geôle aux murs humides : trois petits humanoïdes gris à la peau de cuir, enchaînés aux parois par d'épaisses chaînes, gisent presque inconscients. Deux squelettes énormes, le feu aux côtes, montent la garde.",
+          "ennemis": [
+            "Doppelganger ×1",
+            "Squelette ×1"
+          ],
+          "note": "Les doppelgangers emprisonnés ont refusé de servir Braxius ; contre leur liberté, ils révèlent que seul le Cristal de Vie peut contrecarrer sa relique. Squelettes géants en garde (repr. par Squelette)."
+        },
+        {
+          "x": 1,
+          "y": -9,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Sous un plafond en dôme, un vent violent balaie la salle. Au centre, un coffre d'acier aux reflets polis — non verrouillé — attend, plein à craquer.",
+          "tresor": "Coffre d'acier : 539 po et onze émeraudes (de 515 à 1857 po).",
+          "note": "Le coffre n'est pas verrouillé ; le MJ peut y glisser un dernier piège ou un appât."
+        },
+        {
+          "x": 0,
+          "y": -9,
+          "type": "cuisine",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Le cellier déborde de rations sèches inaltérables et d'entrepôts de vivres : c'est ici que Braxius garde ses réserves. Dans un coin se recroqueville un petit humanoïde gris, sur le point d'être exécuté par deux squelettes géants.",
+          "ennemis": [
+            "Doppelganger ×1",
+            "Squelette ×1"
+          ],
+          "note": "Doppelganger réfugié ayant refusé de servir Braxius — il va payer le prix ultime ; les squelettes géants sont représentés par Squelette."
+        },
+        {
+          "x": 0,
+          "y": -10,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "À en juger par les lieux, ce fut jadis une infirmerie — mais les morts-vivants n'ont que faire des soins, et la salle se dégrade depuis des siècles. Deux cubes étranges, apparemment gélatineux, flottent dans l'air, engloutissant épées, casques et quelques pièces.",
+          "note": "Deux cubes gélatineux (bestiaire : cube_gelatineux, FP 3) dévorent les métaux — hors liste « ennemis », prévoir une fiche."
+        },
+        {
+          "x": 1,
+          "y": -10,
           "type": "salle du trône",
           "portes": {
             "nord": false,
@@ -150,10 +410,15 @@
             "est": false,
             "ouest": true
           },
-          "description": "[À RÉDIGER — antre du « Spectre », final du scénario « ro_the_dead_of_night ». Reprendre la description du module.]",
+          "description": "L'essence de la mort vous enveloppe d'emblée. Sur un piédestal repose l'objet de la quête : un orbe plus noir que le cœur de Cyric, flanqué d'un formidable amoncellement de trésors — et de l'homme qui vous pourchasse : Braxius. D'un geste, il anime deux tas d'ossements, et des boules de feu naissent dans leurs côtes.",
           "ennemis": [
-            "Spectre ×1"
-          ]
+            "Squelette ×2"
+          ],
+          "pnj": [
+            "Braxius, seigneur des morts-vivants (guerrier 13)"
+          ],
+          "tresor": "Le Cristal des Morts (orbe noir) ; 3 rubis, 2 émeraudes, 3058 po et 8 objets magiques tirés au sort dans le trésor amoncelé.",
+          "note": "[AJUSTEMENT REQUIS] Braxius (guerrier 13, AC -5, 124 pv, épée à deux mains des Ténèbres +3, armure de résistance à la magie 50 %) dépasse largement le plafond FP 5 — boss à rééquilibrer, fuite ou ruse conseillées. Au contact du Cristal de Vie, le Cristal des Morts grisonne et devient inerte ; tous les morts-vivants des ruines s'effondrent."
         }
       ]
     }

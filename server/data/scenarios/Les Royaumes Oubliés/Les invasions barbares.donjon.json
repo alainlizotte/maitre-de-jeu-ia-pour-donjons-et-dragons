@@ -2,153 +2,92 @@
   "id": "ro_les_invasions_barbares_donjon",
   "scenario": "ro_les_invasions_barbares",
   "donjon_id": "ro_les_invasions_barbares",
-  "titre": "Donjon du scénario ro_les_invasions_barbares (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Les invasions barbares — Kurth et le val de Rochetaille",
+  "source": "Les invasions barbares (AD&D 2e, module publié, scénario pour PJs débutants, région des Royaumes Oubliés autour de Kurth et de Mulmastre) — bastion, palissade et cols du val de Rochetaille soumis aux invasions orques d'Eléas.",
+  "note_convention": "Manifeste fidèle au module : la prison de Kurth (cellules a/b), le tribunal du prévôt, le val de Rochetaille, la maison des bûcherons massacrés, la tour des mercenaires de Rodrick, la grotte de l'ourse, l'étude d'Eléas et l'ancienne mine servant de camp aux orcs. Les chefs puissants (Rodrick, prévôt Eléas, chaman, ourse berserk) sont signalés en note [AJUSTEMENT REQUIS] ou décrits sans carte d'ennemi.",
   "etages": [
     {
       "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "La porte fortifiée de Kurth se dresse sur la route commerciale reliant Mulmastre au sud, bastion isolé en cette fin d'hiver. Derrière la palissade et les tours, on sent un village nerveux : plusieurs centaines d'orques se massent secrètement dans les montagnes pour couper toutes les voies terrestres menant à la ville."
         },
         {
-          "x": -1,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 1, "y": 0, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Les remparts de Kurth sont dévolus à la garnison : deux soldats dans chaque tour, un factionnaire à la porte et un vive-lame de service au mur. Les torchères, rechargées à chaque relève, éclairent une enceinte désespérément mince pour ce qui se prépare.",
+          "ennemis": ["Garde ×2"]
         },
         {
-          "x": -1,
-          "y": -1,
-          "type": "salle vide",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Licorne ×1"
-          ]
+          "x": 2, "y": 0, "type": "cellules",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La prison du village, cellules a et b aux barreaux rouillés : c'est ici qu'échouent les PJs, accusés du double meurtre d'Aldrick et de Mélissande. Un soupirail grêlé laisse passer la lumière, les crachats et les insultes des badauds, tandis que les gardes, abreuvés d'eau-de-vie par Gros Pierre, somnolent.",
+          "ennemis": ["Garde ×2"],
+          "note": "Gros Pierre passe par le soupirail : il offre une dague et une fiole d'acide pour forcer la porte (deux essais de crochetage). Les effets des PJs sont récupérables au dortoir."
         },
         {
-          "x": -2,
-          "y": -1,
-          "type": "garde",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Loup ×1"
-          ]
+          "x": 2, "y": -1, "type": "salle du trône",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "La salle des fêtes du village, reconvertie en tribunal : des guirlandes oubliées pendent du plafond au-dessus de la populace grondante. Sur son estrade, le prévôt Eléas Rochebrune, un bandage sanglant autour du crâne, préside la mascarade d'un procès truqué où Abélard et Gros Pierre chargent les innocents.",
+          "ennemis": ["Garde ×4"],
+          "pnj": ["Prévôt Eléas Rochebrune", "Abélard du Gué Fleuri"],
+          "note": "Procès truqué : aucun plaidoyer ne persuade Eléas. Les PJs sont condamnés à être pendus à l'aube, ce qui force l'évasion — et ouvre l'enquête sur les véritables assassins."
         },
         {
-          "x": -3,
-          "y": -1,
-          "type": "antichambre",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Orque ×1"
-          ]
+          "x": 1, "y": -1, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le val de Rochetaille, défilé étroit entre des parois de calcaire friable qui tombent à pic sur une vingtaine de mètres : le passage obligé vers les anciennes mines, jadis creusées pour la roche. C'est le lieu rêvé pour une embuscade — les orques y surgissent des hauteurs dès que l'on s'y engage.",
+          "ennemis": ["Orque ×4"]
         },
         {
-          "x": -3,
-          "y": 0,
-          "type": "salle vide",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Chien ×1"
-          ]
+          "x": 0, "y": -1, "type": "abattoir",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Une maison de bûcherons abandonnée où la table reste mise et les jouets traînent sous la poussière. Sous le tapis déplacé, une large tache de sang séché ; à l'orée du bois, une douzaine de tombes camouflées recèlent les corps de deux familles égorgées — l'œuvre de Rodrick pour étouffer des témoins gênants.",
+          "pnj": ["Aléna, fillette rescapée (7 ans)"],
+          "note": "Aléna s'est cachée dans les fourrés pendant le massacre. Elle ne parle que si l'on est doux avec elle ; la recueillir et la confier à un couple sans enfant rapporte 1000 xp de groupe."
         },
         {
-          "x": -4,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -2, "type": "piège",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Aux abords de la tour des mercenaires, la clairière dégagée est hérissée des pièges grossiers que Valoréa a disséminés dans l'ombre. Un piège à loup aux mâchoires de fer, agrémenté de clochettes, attend l'imprudent au détour des fourrés.",
+          "piege": "Piège à loup (1D4+1 dégâts ; détection +10% de nuit) — les clochettes accrochées ont 60% de chances de donner l'alerte à la tour."
         },
         {
-          "x": -5,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 1, "y": -2, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La tour de bois des mercenaires se dresse au-dessus de la clairière, visible de loin : c'est là que Rodrick et sa bande détiennent Ernest, le fils de Gros Pierre. De jour comme de nuit, quelqu'un monte la garde au sommet, tandis que dans les étages la bande confie ses plans à voix basse.",
+          "ennemis": ["Bandit ×3"],
+          "pnj": ["Rodrick, colosse roux", "Kurt", "Amir, prêtresse de Cyric", "Valoréa", "Anthéus, mage"],
+          "note": "[AJUSTEMENT REQUIS] Rodrick (guerrier puissant, FOR 18) et Anthéus (mage 3) sont des adversaires redoutables pour des novices : à jouer avec prudence. Si les PJs traînent en route, la bande se débarrasse d'Ernest et leur tend une embuscade."
         },
         {
-          "x": -5,
-          "y": -1,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 2, "y": -2, "type": "trésor",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Dans un recoin de la tour, un petit coffre fermé à clé et hérissé d'une aiguille empoisonnée renferme le butin des mercenaires. Son poison, dont l'effet s'est émoussé, blesse encore qui l'ouvre sans précaution.",
+          "ennemis": ["Chien ×2"],
+          "tresor": "Coffre piégé (aiguille empoisonnée : 2D4 dégâts ou 0 si jet de sauvegarde réussi) renfermant le trésor des mercenaires : 500 po."
         },
         {
-          "x": -5,
-          "y": -2,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Ours brun », final du scénario « ro_les_invasions_barbares ». Reprendre la description du module.]",
-          "ennemis": [
-            "Ours brun ×1"
-          ]
+          "x": 2, "y": -3, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une mine abandonnée et à moitié effondrée, que les orcs évitent avec soin car elle abrite une ourse exaspérée protégeant ses deux petits. Les ossements d'orques malheureux jonchent le sol — un poste d'observation idéal sur les allées et venues du camp.",
+          "note": "[AJUSTEMENT REQUIS] Ourse massive (descriptif : ours faisandé) qui devient berserk si l'un de ses petits meurt (étreinte 2D8). Jouer la fuite ou la ruse plutôt que le combat frontal."
+        },
+        {
+          "x": 1, "y": -3, "type": "laboratoire",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le bureau et la chambre d'Eléas, mis en désordre par un départ précipité : le sorcier-prévôt a bouclé ses effets avant de fuir. Sa boule de cristal lui servait à tracer les PJs ; sous l'armoire glisse la lettre de son commanditaire, signée « S », qui évente le plan de conquête de Mulmastre.",
+          "note": "La lettre « S » accuse Eléas du meurtre d'Aldrick et Mélissande et révèle la machination : c'est la preuve qui disculpe les PJs."
+        },
+        {
+          "x": 0, "y": -3, "type": "escaliers",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Une ancienne mine dont les escaliers plongent dans la roche, transformée en camp retranché des orques : des centaines d'assaillants disciplinés s'y massent, prêts à fondre sur le village. Les sentinelles y sont si nombreuses que toute approche discrète relève de la gageure.",
+          "ennemis": ["Orque ×3"],
+          "note": "Les orques, trop nombreux pour être affrontés, sont des soldats d'élite soutenus par un chaman et un lieutenant. Leur but : fondre sur Kurth et envoyer les PJs donner l'alerte."
         }
       ]
     }

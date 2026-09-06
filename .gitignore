@@ -31,6 +31,10 @@ server/data/fiches/
 server/data/images_salles/
 server/data/model_choice.json
 
+# État/rapports runtime à la racine
+/data/
+/rapport_images.json
+
 # Outils / OS
 .zcode/
 .DS_Store

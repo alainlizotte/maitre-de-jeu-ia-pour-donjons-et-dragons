@@ -1,13 +1,13 @@
 {
   "id": "ro_the_sea_curse_donjon",
   "scenario": "ro_the_sea_curse",
-  "donjon_id": "ro_the_sea_curse",
-  "titre": "Donjon du scénario ro_the_sea_curse (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "La Malédiction de la Mer — Mintarn",
+  "titre": "La Malédiction de la Mer — zones de Mintarn",
+  "source": "The Sea Curse (AD&D, îles de Mintarn) — module sans plan fixe : zones de jeu",
+  "note_convention": "Module-sandbox sans donjon cartographié : le manifeste décrit les ZONES clés de l'enquête. Monstres réinterprétés en fiches 3.5 du bestiaire local.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "Côte ouest de Mintarn",
       "entree": [
         0,
         0
@@ -18,130 +18,170 @@
           "y": 0,
           "type": "entrée",
           "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": 1,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
+            "nord": true,
             "sud": false,
             "est": true,
             "ouest": true
           },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "description": "Caelbrin, petit village de pêcheurs et de fermiers de la côte ouest de Mintarn. Depuis plusieurs semaines, les animaux naissent déformés puis meurent, et des citoyens disparaissent après avoir contracté une hideuse malodie. L'ancien du village a lancé un appel à l'aide.",
+          "pnj": [
+            "L'ancien de Caelbrin"
+          ],
+          "note": "Point de départ : enquêter sur la malédiction. Marées de créatures mi-poissons aperçues la nuit."
         },
         {
-          "x": 2,
+          "x": -1,
           "y": 0,
           "type": "puits",
           "portes": {
             "nord": false,
             "sud": false,
             "est": true,
+            "ouest": false
+          },
+          "description": "Le puits et les réserves de nourriture du village, cœur de l'enquête : l'eau y laisse un arrière-goût étrange de marée, et les bestiaux qui s'y abreuvent dépérissent.",
+          "piege": "Eau et vivres empoisonnés par la « recette » de Guulsh'uugh : métamorphose lente en créatures-poissons serviles.",
+          "note": "Preuve clé : remonter le poison jusqu'au repaire sahuagin."
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
             "ouest": true
           },
-          "description": "",
+          "description": "Le sanctuaire improvisé de la « Reine du Récif » : cierges, coquillages et offrandes de poisson y emplissent l'air d'une odeur âcre. La prêtresse y prêche que la malédiction ne peut être levée que par la dévotion à sa déesse — et ceux qu'elle « guérit » ne redeviennent jamais tout à fait eux-mêmes.",
+          "pnj": [
+            "Keerlynth Zelbaar, prêtresse de Loviatar (complote avec les sahuagins)"
+          ],
+          "note": "L'exposer brise l'emprise du culte sur le village. Elle garde le secret de la recette."
+        },
+        {
+          "x": 0,
+          "y": -1,
+          "type": "couloir",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Le sentier côtier qui serpente le long des falaises battues par les embruns, unique liaison entre Caelbrin et les récifs du nord — patrouillé la nuit par des silhouettes à nageoires.",
           "ennemis": [
-            "Locathah ×1"
-          ]
+            "Sahuagin ×2"
+          ],
+          "note": "Rencontres nocturnes probables : patrouilles sahuagins entre la mer et le village."
         },
         {
-          "x": 3,
-          "y": 0,
-          "type": "abattoir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": 4,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": 4,
-          "y": 1,
-          "type": "trésor",
+          "x": 1,
+          "y": -1,
+          "type": "antichambre",
           "portes": {
             "nord": true,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "description": "Une caverne de marée creusée dans le récif de corail, dont les bassins scintillants abritent la tribu locathah alliée. Ces hommes-poissons y ont vécu en paix depuis que le magicien Kyle Stormbringer les a aidés à repousser un raid sahuagin.",
+          "pnj": [
+            "La tribu locathah (alliée — guette les mouvements sahuagins)"
+          ],
+          "note": "Alliés précieux : renseignent sur le gouffre sahuagin et préviennent les embuscades."
         },
         {
-          "x": 3,
-          "y": 1,
-          "type": "trésor",
+          "x": 1,
+          "y": -2,
+          "type": "bibliothèque",
           "portes": {
-            "nord": false,
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "La demeure submergée de Kyle Stormbringer, magicien spécialiste des sorts de météo, légèrement déséquilibré : grimoires gonflés d'humidité, instruments d'astronomie corrodés et, sur un socle de corail, sa précieuse Coupe de commandement des élémentaires d'eau, cadeau des locathahs.",
+          "pnj": [
+            "Kyle Stormbringer (magicien, allié potentiel)"
+          ],
+          "tresor": "La Coupe de commandement des élémentaires d'eau (prêtée si on gagne sa confiance).",
+          "note": "Kyle peut renverser la tendance d'un combat naval avec sa coupe."
+        },
+        {
+          "x": 0,
+          "y": -2,
+          "type": "garde",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "L'avant-poste sahuagin gardant le gouffre : une plate-forme de corail noir surmontant un puits d'eau sombre, où des sentinelles écailleuses montent la garde, harpons en main.",
+          "ennemis": [
+            "Sahuagin ×2"
+          ],
+          "note": "L'alarme ici alerte tout le repaire (zones profondes)."
+        },
+        {
+          "x": 0,
+          "y": -3,
+          "type": "cellules",
+          "portes": {
+            "nord": true,
             "sud": true,
             "est": true,
             "ouest": false
           },
-          "description": ""
-        },
-        {
-          "x": 3,
-          "y": 2,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": 2,
-          "y": 2,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": 2,
-          "y": 3,
-          "type": "salle du trône",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Sahuagin », final du scénario « ro_the_sea_curse ». Reprendre la description du module.]",
+          "description": "Une fosse inondée où gémissent les villageois disparus, métamorphosés à demi en choses-poissons serviles : des visages familiers sous des écailles, les yeux vides, obéissant aux sifflements de leurs maîtres.",
           "ennemis": [
             "Sahuagin ×1"
-          ]
+          ],
+          "pnj": [
+            "Villageois métamorphosés (sauvetage possible si la recette est détruite)"
+          ],
+          "note": "Les malades ne guérissent que si la recette de Guulsh'uugh est récupérée/détruite."
+        },
+        {
+          "x": 1,
+          "y": -3,
+          "type": "laboratoire",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "L'antre de Guulsh'uugh, la sorcière-druide sahuagin : alambics de coquillage, marmites d'écume putride et herbes des profondeurs composent la laboratoire où brasse sa terrible « recette » — le poison qui change les hommes en bêtes marines.",
+          "ennemis": [
+            "Sahuagin ×1"
+          ],
+          "pnj": [
+            "Guulsh'uugh, sorcière-druide sahuagin (fiche Sahuagin, lance des sorts naturels)"
+          ],
+          "tresor": "La « recette » du poison de métamorphose (l'enjeu de l'aventure) et quelques gemmes des profondeurs.",
+          "note": "Très secret sur sa recette : elle ne l'a confiée qu'à la prêtresse de Loviatar."
+        },
+        {
+          "x": 0,
+          "y": -4,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "La grande caverne trônée de corail blanc du « prince » en exil Ssuulg'aash, noble sahuagin renégat venu de Kressilac. Cruel même pour les siens, il voue une haine sans bornes aux respirants de la surface qu'il tient responsables du déclin de son peuple — et prépare depuis ici le razzia final contre Caelbrin.",
+          "ennemis": [
+            "Sahuagin ×4"
+          ],
+          "pnj": [
+            "Ssuulg'aash, prince sahuagin renégat (fiche Sahuagin noble)"
+          ],
+          "tresor": "Le butin des raids : monnaie des épaves, armes de bronze et perles noires.",
+          "note": "Confrontation finale : l'issue détermine le sort de Caelbrin et des métamorphosés."
         }
       ]
     }

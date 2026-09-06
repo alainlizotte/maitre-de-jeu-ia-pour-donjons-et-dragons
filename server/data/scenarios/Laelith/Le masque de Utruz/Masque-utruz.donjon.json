@@ -2,146 +2,155 @@
   "id": "laelith_le_masque_de_utruz_donjon",
   "scenario": "laelith_le_masque_de_utruz",
   "donjon_id": "laelith_le_masque_de_utruz",
-  "titre": "Donjon du scénario laelith_le_masque_de_utruz (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Le temple utruz — Le Masque d'Utruz",
+  "source": "Aidedd.org — Le masque utruz (Denis Beck, adapt. blueace, v. 25/05/2020), PDF du module ; salle de la tour du Boulier Bleu, chapelle clandestine du temple du Crâne et temple utruz.",
+  "note_convention": "Structure fidèle au module, en grille en serpentin, couvrant les trois volets explorables : la tour du Boulier Bleu (salle principale, cuisine, balcons, salon, cellier, grenier), la chapelle semi-clandestine du temple du Crâne, puis le temple utruz sur l'île d'Altalith (dédale piégé, grande porte de métal, salle du trésor). Module 5e pour un groupe de niveau 3, réinterprété en D&D 3.5 avec les fiches du bestiaire (FP ≤ 5) : les acolytes de la secte sont représentés par des chenailles (FP 1/3) et les malfrats par des bandits. Les six pièges du dédale (tirage 1d6 du module) occupent les salles 13 à 18 : si le masque n'est pas correctement décrypté, le MJ les tire au hasard sur les mauvais embranchements ; Mez'Arate et la pieuvre géante, hors bestiaire, sont signalés en note [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Itinéraire complet (tour, chapelle, temple utruz)",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "La porte étroite du Boulier Bleu, vitrée sur sa partie supérieure, est restée entrouverte comme une invitation. La salle principale est d'un dépouillement monacal : sol dallé nu, table recouverte d'un drap gris supportant une balance, une loupe et un sablier, et deux immenses coffres à multiples serrures derrière le comptoir. Une douzaine de mendiants de la secte du Crâne s'y sont répandus pour s'emparer de l'usurier.",
+          "ennemis": ["Bandit ×6", "Chenaille ×6"],
+          "tresor": "Bourses des attaquants : 18 po par bandit, 11 po par acolyte.",
+          "note": "Étape 1 — la tour (Castagne du jour). Les 6 acolytes (crânes rasés, visage fardé, tatouage de vigne enroulée autour d'un bâton) sont représentés par des chenailles (FP 1/3)."
         },
         {
-          "x": 1,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 1, "y": 0, "type": "cuisine",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "De l'autre côté d'une petite porte, la cuisine sert à la fois de lieu de travail et de logement à Mistouk, servante d'à peine dix-sept ans, maigrelette, qui rembourse une dette sans plaisir. Affligée d'un vertige tyrannique, emprunter les escaliers branlants est pour elle un cauchemar.",
+          "pnj": ["Mistouk (servante de Grassepath, 17 ans, vertige, rembourse une dette)"],
+          "note": "Étape 1 — la maison de l'usurier."
         },
         {
-          "x": 1,
-          "y": -1,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Orque ×1"
-          ]
+          "x": 2, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Sur l'arrière de la maison, un échafaudage de balcons et d'escaliers branlants surplombe le gouffre vertigineux de la faille, la demeure étant dénuée d'escalier intérieur. Une échelle glisse du balcon inférieur vers le cellier creusé dans la falaise ; la seule idée de gagner l'étage donne le frisson.",
+          "note": "Étape 1 — les balcons du Boulier Bleu, au-dessus du vide."
         },
         {
-          "x": 0,
-          "y": -1,
-          "type": "crypte",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 3, "y": 0, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "À l'étage, au-dessus de la cuisine, le salon offre un entassement démentiel de bibelots, coffres et coffrets, statuettes, candélabres, lustres et tapisseries. Maître Grassepath s'y est réfugié avec sa servante pendant les assauts. La nuit, trois voleurs tentent de s'infiltrer par la falaise ou les toits pour le neutraliser.",
+          "ennemis": ["Bandit ×3"],
+          "pnj": ["Maître Grassepath (usurier du Boulier Bleu, réfugié à l'étage)"],
+          "note": "Étape 1 — la re-castagne nocturne. En cas d'échec des trois voleurs, renforts : 4 malfrats (représentés par des bandits) et 2 acolytes (chenailles), tatoués de la vigne."
         },
         {
-          "x": 0,
-          "y": -2,
-          "type": "crypte",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 3, "y": 1, "type": "cellier",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Rejoint par une échelle accrochée au balcon inférieur, ce cellier est creusé à même le flanc de la falaise et renferme surtout des provisions grignotées par l'humidité. L'eau suinte des parois rocheuses au-dessus du vide.",
+          "note": "Étape 1 — le cellier creusé dans la falaise."
         },
         {
-          "x": 0,
-          "y": -3,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 2, "y": 1, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une échelle de corde flasque pend vers le grenier, où l'on accède théoriquement par ladite corde ; selon Mistouk, s'y pendre serait encore le meilleur moyen de rester en vie. La pièce se perd dans la poussière et les débris.",
+          "piege": "Échelle de corde avachie : risque de rupture ; chaque grimpeur supplémentaire au-delà d'un à la fois exige Réflexes DD 12 sous peine de chute de 3 m (1d6 dégâts contondants).",
+          "note": "Étape 1 — le grenier (cuve inutile, échelle dangereuse)."
         },
         {
-          "x": -1,
-          "y": -3,
-          "type": "salle vide",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 1, "y": 1, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "À la nuit tombée, la traversée s'effectue par les toits et les ruelles obscures de la terrasse du Nuage, en direction du prolongement du quai de l'Antiquaille. La milice, elle, ne monte guère la garde par ici.",
+          "note": "Étape 2 — cheminement nocturne vers la chapelle clandestine."
         },
         {
-          "x": -1,
-          "y": -4,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 0, "y": 1, "type": "crypte",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Au fond d'une ruelle sans lumière, coincée entre le quai de l'Antiquaille et le temple du Crâne, ce réduit poussiéreux est tapissé de gravures obscènes et d'offrandes hétéroclites. Mulluk, le gardien au physique étrange, y reçoit sans barguigner les fidèles du Crâne en pèlerinage en sous-sol. La clé à la décoration de pieuvre est entreposée là, parmi les fadaises.",
+          "pnj": ["Mulluk (gardien bizarre de la chapelle clandestine du Crâne)"],
+          "tresor": "Parmi les offrandes : la clé ornée d'une pieuvre ouvrant la grande porte du temple utruz (vol discret : Perception/Savoir-faire DD 15).",
+          "note": "Étape 2 — la chapelle semi-clandestine. Profitez des quiproquos si les personnages sont déguisés en prêtres de haut rang (demi-lune peinte sur l'arrière-crâne)."
         },
         {
-          "x": -1,
-          "y": -5,
-          "type": "cellules",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 2, "type": "couloir",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Au petit matin, le groupe rejoint Mez'Arate sur les quais, où il a loué un bateau. La traversée vers l'île dure à peine une journée avant que le vaisseau ne s'enfonce dans l'ouverture d'une grotte percée à flanc de falaise.",
+          "note": "Étape 3 — embarquement vers le temple utruz."
         },
         {
-          "x": 0,
-          "y": -5,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "[À RÉDIGER — antre du « Pieuvre », final du scénario « laelith_le_masque_de_utruz ». Reprendre la description du module.]",
-          "ennemis": [
-            "Pieuvre ×1"
-          ],
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Pieuvre géante (FP 8). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "x": 1, "y": 2, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le voyage devient lugubre le long d'un cours d'eau souterrain obstrué de concrétions, dans une pénombre absolue. Mez'Arate, prudent, a appris sa carte par cœur plutôt que de l'emporter.",
+          "note": "Étape 3 — la grotte et le cours d'eau souterrain d'Altalith."
+        },
+        {
+          "x": 2, "y": 2, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le petit vaisseau échoue sur une plage de sable noir, au fond de la grotte. Au-delà s'ouvre l'antre des utruz : un véritable dédale où une mauvaise route mène tout droit à la mort.",
+          "note": "Étape 3 — la plage de sable noir."
+        },
+        {
+          "x": 3, "y": 2, "type": "couloir",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Les couloirs taillés dans le basalte se croisent, indistinguables, dans le noir. Seul le décryptage du masque — la hiérarchie des couleurs utruz (noir, bleu, jaune, vert, rouge) et des nœuds valant environ six mètres — indique la route sûre.",
+          "note": "Étape 3 — l'entrée du dédale. Si le masque n'est pas décrypté, le MJ tire les pièges au hasard (1d6) dans les salles suivantes."
+        },
+        {
+          "x": 3, "y": 3, "type": "piège",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Une plaque de pierre dissimule une fosse profonde : le sol semble solide jusqu'à ce qu'il s'effondre sous les pas.",
+          "piege": "Fosse bien camouflée (Perception DD 15) : fosse profonde de 6 m, 2d6 dégâts contondants.",
+          "note": "Piège 1 du dédale (tirage 1d6 du module)."
+        },
+        {
+          "x": 2, "y": 3, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le fond de cette cavité est hérissé de pieux effilés, invisibles derrière un voile de terre et de débris.",
+          "piege": "Fosse hérissée de pieux (Perception DD 15) : fosse de 3 m, 11 (2d10) dégâts perforants + 1d6 contondants de la chute.",
+          "note": "Piège 2 du dédale (tirage 1d6 du module)."
+        },
+        {
+          "x": 1, "y": 3, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Des orifices dans les parois crachent des projectiles garnis d'un venin noirâtre.",
+          "piege": "Fléchettes empoisonnées (Perception DD 15) : 4 fléchettes, Att +8, 2 (1d4) dégâts perforants + 11 (2d10) poison (Vigueur DD 15 : moitié).",
+          "note": "Piège 3 du dédale (tirage 1d6 du module)."
+        },
+        {
+          "x": 0, "y": 3, "type": "piège",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Les pas résonnent sous une voûte fissurée, prête à se rompre au premier faux mouvement.",
+          "piege": "Effondrement de plafond (Perception DD 10) : 22 (4d10) dégâts contondants (Réflexes DD 15 : moitié).",
+          "note": "Piège 4 du dédale (tirage 1d6 du module)."
+        },
+        {
+          "x": 0, "y": 4, "type": "piège",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Une gueule de fer se devine dans la paroi : au passage, un jet de flammes magiques balaie le couloir sur trois mètres.",
+          "piege": "Jet de flammes (Perception DD 15) : cône de 3 m de long, 22 (4d10) dégâts de feu (Réflexes DD 13 : moitié).",
+          "note": "Piège 5 du dédale (tirage 1d6 du module)."
+        },
+        {
+          "x": 1, "y": 4, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une trappe camouflée dans le plafond libère un rocher sphérique de deux mètres cinquante de diamètre qui dévale le couloir.",
+          "piege": "Sphère roulante (Perception DD 15) : rocher de 2,5 m de diamètre, 33 (6d10) dégâts contondants (Réflexes DD 15 pour l'éviter ; la sphère s'arrête contre un mur).",
+          "note": "Piège 6 du dédale (tirage 1d6 du module)."
+        },
+        {
+          "x": 2, "y": 4, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une longue ligne droite taillée au cordeau mène enfin vers une immense porte de métal, de derrière laquelle retentit une étrange mélopée monotone qui semble sourdre du cœur de la roche.",
+          "note": "Étape 3 — la ligne droite du dédale, si le bon chemin est suivi."
+        },
+        {
+          "x": 3, "y": 4, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Devant la grande porte de métal à la serrure évoquant une pieuvre, Mez'Arate — toujours déguisé en « Leroy » — joue sa dernière carte : il demande d'éteindre les lumières, avance une fiole de rapetissement au guerrier le plus costaud puis frappe dans le noir. Il n'a jamais eu l'intention de partager le trésor.",
+          "pnj": ["Mez'Arate (espion-magicien, alias Leroy, trahit le groupe dans l'obscurité)"],
+          "tresor": "Sac à dos du magicien : 7 gemmes de 50 po chacune, 80 po, un grimoire (sorts préparés + 2 sorts de niveau 1 et 1 sort de niveau 2 au hasard), une potion de respiration aquatique ; à son cou, la main gauche d'elfe (sort de main de mage), à sa main droite un anneau de nage.",
+          "note": "[AJUSTEMENT REQUIS] Mez'Arate, magicien-espion (~niveau 5-6, vision dans le noir, armure de mage, sommeil, sphère de feu, flèche acide, éclair de sorcière, projectile magique) : hors bestiaire, offensif estimé > FP 5. Combat dans l'obscurité totale si le groupe suit sa demande."
+        },
+        {
+          "x": 3, "y": 5, "type": "autel",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "En contrebas, au centre d'une immense salle, une stèle dressée supporte la carcasse avachie d'une pieuvre de proportions exceptionnelles, environ cinq mètres de diamètre rien que pour le corps, entourée d'une centaine d'utruz prosternés à l'origine de la mélopée. Aucune autre issue ne s'offre, sinon une grande flaque qui communique avec le lac : le « trésor » n'est autre que le Dieu-Poisson des utruz, réincarnation de leur peuple. Un escalier taillé dans la pierre descend vers la stèle.",
+          "note": "[AJUSTEMENT REQUIS] Pieuvre géante (FP 8), non hostile en réalité. Les utruz ne cherchent pas le combat : une retraite discrète est la meilleure option. Si les personnages descendent l'escalier, un utruz donne l'alerte et une centaine d'utruz hurlants les pourchasse ; seule issue, la fuite, en retraversant les pièges du dédale (salles 13 à 18)."
         }
       ]
     }

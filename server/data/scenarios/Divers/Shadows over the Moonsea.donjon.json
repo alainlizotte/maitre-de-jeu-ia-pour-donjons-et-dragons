@@ -2,12 +2,12 @@
   "id": "divers_shadows_over_the_moonsea_donjon",
   "scenario": "divers_shadows_over_the_moonsea",
   "donjon_id": "divers_shadows_over_the_moonsea",
-  "titre": "Donjon du scénario divers_shadows_over_the_moonsea (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Shadows over the Moonsea — l'île sans nom et le navire du culte",
+  "source": "Shadows over the Moonsea (D&D Encounters — Tyranny of Dragons, Adventurers League, 2014), conception Greg Marks. Manifeste fidèle aux parties 3 à 5 : village de la Baie de la Tempête, Bois Sombre, autel infernal, assaut du culte de la Dragon et bataille navale contre l'Audacity.",
+  "note_convention": "Le module n'a pas de plan de donjon figé : l'île est un bac à sable délimité. Le manifeste tisse ses zones clés en une grille serpentin connexe, explorée salle par salle. Monstres réinterprétés en fiches 3.5 du bestiaire local (kobolds, bandits/pirates, gardes, loup terrifiant) ; les figures humaines restent des PNJ et les créatures sans fiche (lémure) sont rendues en note avec l'Appendice du module pour référence.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "De la Route de Fer à la Baie de la Tempête",
       "entree": [
         0,
         0
@@ -20,42 +20,21 @@
           "portes": {
             "nord": false,
             "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -1,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": -1,
-          "y": -1,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
+          "description": "La Route de Fer, grand-route côtière qui s'étire de Phlan vers le sud-ouest, détrempée par les averses de la Baie de la Tempête. Un marchand et son fils s'y reposent près d'un feu sous leur carriole, tandis qu'au crépuscule une louve énorme, les yeux luisants, surveille le chemin non loin d'eux.",
+          "pnj": [
+            "Gilfron Milon, marchand de bois de Quivering Forest, et son fils Gilmont"
+          ],
           "ennemis": [
-            "Loup ×1"
-          ]
+            "Loup terrible ×1"
+          ],
+          "note": "Partie 2 : la mère louve protège ses petits — la fuir ou la calmer (DD 10) évite le combat ; Gilfron renseigne sur l'île et ses raiders."
         },
         {
-          "x": 0,
-          "y": -1,
+          "x": 1,
+          "y": 0,
           "type": "antichambre",
           "portes": {
             "nord": false,
@@ -63,44 +42,108 @@
             "est": true,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
-        },
-        {
-          "x": 1,
-          "y": -1,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Gobelin ×1"
-          ]
+          "description": "Le débarcadère du côté nord-ouest de l'île : chaloupe du ferry et barques de pêche tirées au sec et amarrées, hangar rempli de filets raccommodés, de cordages et d'engins de pêche. Un vieil homme à l'œil torve surveille le tout, sa pipe éteinte serrée entre les dents.",
+          "pnj": [
+            "Warsh le batelier (magicien bougon, dernier survivant du pacte avec sa barque)"
+          ],
+          "note": "Warsh exige 1 po par tête pour traverser (3× pour tout « pirate ») — sinon naufrage, 600 pieds à la nage en mer démontée. Les barils d'huile de poisson et les filets peuvent servir à tendre des pièges."
         },
         {
           "x": 2,
-          "y": -1,
-          "type": "bibliothèque",
+          "y": 0,
+          "type": "salle vide",
           "portes": {
             "nord": false,
             "sud": false,
             "est": true,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Kobold ×1"
-          ]
+          "description": "Quatorze huttes de rondins et de pierre, dressées en cercle autour de la place du feu, toutes portes tournées vers le foyer et aucune fenêtre côté mer. La moitié gît en ruine, toits effondrés, et les habitants dégénérés vous dévisagent à travers l'averse, le couteau à portée de main.",
+          "tresor": "Dans une masure désaffectée, un fétiche de cheveux tressés portant cinq dents humaines (marqué du sceau des infernaux ; mal, magie de conjuration en déperdition, autrefois protecteur).",
+          "note": "Les insulaires appellent les étrangers « Outsides » et se taisent devant eux ; chercher de force déclenche leur colère (chaque hutte abrite 1d4 adultes et des enfants)."
         },
         {
           "x": 3,
-          "y": -1,
+          "y": 0,
+          "type": "cuisine",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La place du feu, cœur battant du village : un grand seau d'eau douce bout sur la braise et un pavillon de rondins offre un abri précaire à des souches servant de tabourets. Trois vieilles femmes aux cheveux filasse y éventrent du poisson en jacassant d'une voix perçante, sans jamais laisser la flamme mourir.",
+          "pnj": [
+            "Exirsa, Lolmetta et Rentida, les trois sorcières du village (garantes du pacte)"
+          ],
+          "piege": "Eau de boisson et cuit empoisonnés à la poudre de greensleep (DD 10 Constitution sinon épuisement niveau 1 après 2 heures) tant que l'espion Verik n'est pas démasqué.",
+          "note": "Les sorcières ne laissent jamais le feu s'éteindre (« tant que la flamme brûle, le village prospère ») ; convaincues par la flatterie ou un bon tour, elles rallient les villageois."
+        },
+        {
+          "x": 4,
+          "y": 0,
+          "type": "abattoir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le fumoir attenant à la maison d'Ulburto : des crocs de fer couvrent murs et plafond, des braises rougeoient dans des auges de brique et des viandes non identifiées se balancent dans la fumée. Dans la réserve contiguë, sel, charbon et planches s'entassent sur une dalle de pierre qui semble fraîchement remuée.",
+          "pnj": [
+            "Ulburto, boucher taciturno du village (bras inégaux, ancien survivant du pacte)"
+          ],
+          "piege": "Fumée suffocante : DD 10 Constitution après la première minute d'exposition, puis refaire un jet chaque minute (épuisement).",
+          "tresor": "Sous une dalle cachée (DD 15 Investigation sous le bois), des armes anciennes volées aux pirates d'il y a 60 ans et les journaux de bord de l'Audacity et de l'Abundant Serendipity, qui racontent la prise du navire et l'esclavage des villageois.",
+          "note": "Ulburto interdit le fumoir ; surpris à creuser le sol, il attaque sans prévenir. Son aide se gagne par un projet lié à la violence."
+        },
+        {
+          "x": 5,
+          "y": 0,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Une grange de fortune bâtie de flotsam ramassé sur les grèves, où quatre chèvres dégénérées — une borgne, une boiteuse, une chèvre au pis manquant — ruminent dans la paille. Sur une poutre, une inscription en lettres d'or fané, presque illisible.",
+          "tresor": "Matériel de défense : sacs de grain, barrique d'outils, bottes de foin (renseignement : la poutre porte le nom « Audacity » en doré délavé).",
+          "note": "La poutre de la grange provient de la chaloupe de l'Audacity — indice discret reliant l'île aux pirates d'autrefois."
+        },
+        {
+          "x": 5,
+          "y": 1,
+          "type": "cellules",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Une masure effondrée dont un pan de mur abrite seul de la pluie : des bols vides et des arêtes de poisson jonchent le sol de terre battue. Accroupi dans l'ombre, un loqueteux aux mains bandées gémit, « les yeux du dracoliche… il me voit ».",
+          "pnj": [
+            "Verik, le faux « fou » — espion du culte de la Dragon envoyé par Ixas"
+          ],
+          "tresor": "Sous une pierre mobile (DD 15 Investigation), un carnet draconique (plans du village, effectifs, repaire de l'autel) et une fiole de poudre de greensleep.",
+          "note": "DD 20 Psychologie pour percer l'acte du fou ; il jure que ses blessures et son délire viennent d'un vaisseau fantôme qu'il a vu — fable destinée à semer la terreur."
+        },
+        {
+          "x": 4,
+          "y": 1,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le Bois Sombre : pins, noyers et aubépines se pressent sous un ciel gris, entremêlés de ronces et d'orties qui rendent la marche pénible. Une odeur de terre et de pourriture monte des taillis, et quelque chose semble vous observer entre les troncs.",
+          "note": "Un lémure des Neuf Enfers, masse de chair liquide liée à Warsh et aux sorcières, rôde ici : il évite les aventuriers et n'attaque que si l'autel est profané ou le village assailli (utiliser le bloc de l'Appendice du module). Le fétiche trouvé dans les masures devient brûlant à son approche."
+        },
+        {
+          "x": 3,
+          "y": 1,
           "type": "piège",
           "portes": {
             "nord": false,
@@ -108,48 +151,105 @@
             "est": true,
             "ouest": true
           },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "description": "Au fond de la partie la plus ténébreuse du bois, un ravin noyé d'eau : la paroi ruisselante et glissante dégringole vers l'embouchure d'une caverne étroite, à peine large d'un homme. Le silence qui règne en bas a quelque chose de froid et de patient.",
+          "piege": "Descente périlleuse : DD 10 Force (Athlétisme) sinon 3 (1d6) dégâts de contusion sur les rochers. Le tunnel remonte sur une vingtaine de mètres avant la salle sèche de l'autel.",
+          "note": "Le fétiche de la masure s'échauffe dès qu'on approche du ravin — signe sûr que les lieux sont liés aux infernaux."
         },
         {
-          "x": 4,
-          "y": -1,
-          "type": "escaliers",
+          "x": 2,
+          "y": 1,
+          "type": "autel",
           "portes": {
             "nord": false,
             "sud": false,
             "est": true,
             "ouest": true
           },
-          "description": ""
+          "description": "Une caverne sèche et spacieuse, quatre cents pieds carrés, qu'éclairent des chandelles fondues sur un bloc de pierre aux fines traînées de rouille. Des peintures rupestres naïves couvrent les murs : un serpent de mer à cinq têtes dévore des silhouettes sur une grève tandis qu'un homme debout sur l'eau verse un sac de pièces dans les vagues. L'air pèse, chargé d'une noirceur qui hérisse la nuque.",
+          "piege": "Illusion résiduelle : DD 10 Volonté pour entrer sans être gagné par une horreur indicible et l'envie de fuir la caverne au plus vite.",
+          "tresor": "Sur l'autel, des lingots d'or estampillés il y a 60 ans, un couteau rituel plaqué argent (dague de fortune à la lame piquée) et un parchemin scellé de cire rouge : le pacte entre les « Servants de la Queene » et le « Folk » — l'échange des âmes et d'une fortune contre le pouvoir des feux de l'enfer.",
+          "note": "Ouvrir le parchemin enflamme d'un coup toutes les chandelles et rompt le pacte — le signal qui ramène l'Audacity et son équipage maudit des Neuf Enfers."
         },
         {
-          "x": 5,
-          "y": -1,
-          "type": "escaliers",
+          "x": 1,
+          "y": 1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Dans un recoin de la caverne, un amas d'ouvrages rongés par l'humidité et le temps, inutilisables — à l'exception d'un volume recouvert de cuir, remarquablement conservé, malgré une écriture draconique délavée à force de siècles.",
+          "tresor": "Le grimoire de cuir en draconique (DD 15 Investigation parmi la pile) : il décrit les étapes du pacte et mentionne l'emplacement final d'un Masque du Dragon — l'objectif secret qu'Ixas poursuit.",
+          "note": "Entre les mains du culte et des factions, le contenu du tome devient la clé de l'épilogue de la campagne."
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Le long-courrier de huit rameurs jeté sur la grève au nord de l'île, puis la passe qui mène vers la haute mer : sur les flots, à quelques encablures, se devine la coque noire du navire d'Ixas, voiles serrées, luisant d'une pâle lueur sous la pluie battante.",
+          "note": "Partie 5 : en approchant du navire, la brume s'entrouvre — l'Audacity surgit des flots, épave fantôme toute de brouillard et d'os, et s'encastre dans la caravelle du culte avec un bruit de déchirure."
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "garde",
           "portes": {
             "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Le pont du navire d'Ixas, luisant d'une lueur spectrale, où la brume magique cache tout au-delà d'une vingtaine de pas. Le château arrière embrasé par l'abordage, kobolds et pirates maudits se déchirent entre eux sur les planches inclinées, tandis qu'un capitaine aux chairs martyrisées hurle des ordres d'une voix d'outre-tombe.",
+          "pnj": [
+            "Le capitaine Reeve Sar Testain, âme damnée de l'Audacity (vétéran, marqué par soixante ans d'esclavage en enfer)"
+          ],
+          "ennemis": [
+            "Kobold ×6",
+            "Bandit ×5"
+          ],
+          "note": "L'équipage du culte (kobolds, gardes) et les pirates infernaux (bandits) s'entretuent ; chaque camp veut aussi la peau des aventuriers. Feu aux coques accolées (DD 10 Con, 1d8 dégâts, propage 1 case/round), pont incliné (DD 10 Acrobaties), mât en abri partiel, gréement escaladable (DD 10 Force)."
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La poupe du navire, quartiers du mage : cartes éparpillées, journaux à la reliure viciée par les embruns, et au centre une statue de dracoliche de taille humaine dont les yeux de pierre de lune semblent fouiller votre mémoire. Un homme en robe pourpre se tient là, calme, comme s'il était seul maître du chaos alentour.",
+          "pnj": [
+            "Ixas le Porteur de Pourpre, mage du culte de la Dragon en quête d'un Masque du Dragon"
+          ],
+          "ennemis": [
+            "Garde ×2"
+          ],
+          "tresor": "Le butin des raids : 500 pa, 500 pé, 75 po, deux idoles religieuses turmish serties de pierres semi-précieuses (100 po chacune), la statue du dracoliche (150 po à un acheteur sans scrupules) et l'anneau d'évasion porté par Ixas.",
+          "note": "Vaincu, Ixas avoue la scission du culte et sa mission ; ses journaux draconiques détaillent les raids et l'emplacement présumé d'un Masque du Dragon — de quoi satisfaire toute faction."
+        },
+        {
+          "x": 2,
+          "y": 2,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": ""
-        },
-        {
-          "x": 5,
-          "y": -2,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « divers_shadows_over_the_moonsea ». Reprendre la description du module.]",
-          "ennemis": [
-            "Ombre ×1"
-          ],
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Vampire (FP 8). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "description": "La soute du navire d'Ixas, entre les barriques de la cargaison : tissus précieux, thé, épices et vivres amassés au fil des raids côtiers s'empilent dans la pénombre rougeoyante que répand l'incendie sur le pont.",
+          "tresor": "Stocks de marchandises en vrac (tissus, thé, épices) — en grande partie perdus dans la bataille ou engloutis avec le navire qui sombre dans les hauts-fonds.",
+          "note": "Les deux navires, trop endommagés, coulent près de l'île : seule la prise des quartiers d'Ixas (voir salle du trône) est récupérable."
         }
       ]
     }

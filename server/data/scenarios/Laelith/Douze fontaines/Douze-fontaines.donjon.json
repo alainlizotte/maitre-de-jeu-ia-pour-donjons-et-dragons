@@ -2,147 +2,145 @@
   "id": "laelith_douze_fontaines_donjon",
   "scenario": "laelith_douze_fontaines",
   "donjon_id": "laelith_douze_fontaines",
-  "titre": "Donjon du scénario laelith_douze_fontaines (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Douze fontaines — L'enquête de la Lune ivre",
+  "source": "Aidedd.org — Douze fontaines (Stefan Schultz & Dorothea Sautter, adaptation blueace, v. 14/07/2021) ; lieux du module : Introduction, Engrenage, Chez Thrad Redaff, Chez Smitt & Weston, Au pont des Pêcheurs, L'entrepôt, Conclusion.",
+  "note_convention": "Enquête urbaine chaînée en 16 salles sur une grille en serpentin (rangées y=0, -1, -2…) ; chaque salle figure un lieu clé du module, l'entrée étant l'auberge de la Lune ivre et le final l'entrepôt où Mork Zaro retient Esméralda. Monstres du module 5e réinterprétés aux fiches D&D 3.5 du bestiaire : marins et malfrats = bandits, bretteur/espion = bandits armuriers, demi-orque vétéran = orque homme d'armes (à jouer nettement supérieur). Portes symétriques, carte connexe depuis l'entrée, coordonnées uniques ; l'eau empoisonnée des fontaines est figurée en piège.",
   "etages": [
     {
       "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "entree": [0, 0],
       "salles": [
         {
           "x": 0,
           "y": 0,
           "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Une petite masure sordide, enfumée et bruyante, au 27 de l'échelle du Départ sur la Chaussée du lac. Un colosse barbu au poil roux s'effondre convulsivement sur votre table, une dague plantée dans le dos, un document dans ses doigts crispés : « Sauvez Laelith ! ». Trois femmes vêtues de cuir noir s'esquivent vers l'arrière-cour tandis que la salle crie « Assassins ! ».",
+          "pnj": ["Diedra, Enira et Faromé (courtisanes, s'esquivent discrètement)"],
+          "tresor": "Le document de Rufus : carte de Laelith aux douze croix (les fontaines) et initiales « E.D. ».",
+          "note": "La victime est Rufus Cairn, chroniqueur à la Gazette de Laelith, poignardé par Mork Zaro par la porte de derrière ; un « fouineur » arrogant consigne bientôt les personnages en ville comme « témoins »."
         },
         {
           "x": 0,
-          "y": 1,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "y": -1,
+          "type": "couloir",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Les ruelles glacées de l'hiver laelithien serpentent entre les façades lépreuses du bas quartier ; la nuit est tombée et seuls quelques fanaux fumeux éclairent les pavés. Un marchand de journaux ambulant hèle les passants : « Un chroniqueur de la Gazette de Laelith assassiné à l'auberge de la Lune ivre ! »."
         },
         {
           "x": -1,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Orque ×1"
-          ]
+          "y": -1,
+          "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "La rédaction de la Gazette trône au bout de la rue du Nuage, près du temple ; rouleaux, encriers et presses s'y entassent dans un joyeux désordre. Le rédacteur en chef Ansar Allamra, affable, révèle que le Poignard sanglant est la guilde des assassins de Laelith et conseille d'écumer les tavernes de la Chaussée du lac.",
+          "pnj": ["Ansar Allamra (rédacteur en chef de la Gazette de Laelith)"],
+          "note": "À la conclusion, Ansar verse 20 po à chaque personnage pour avoir tiré l'affaire au clair, et autant pour l'exclusivité de leur récit."
         },
         {
-          "x": -2,
-          "y": 1,
-          "type": "crypte",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0,
+          "y": -2,
+          "type": "couloir",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Un boyau sombre entre deux murs de torchis ; le vent d'hiver charrie une odeur de soupe et de fumée de bois. Ivrognes et gens de mauvaise vie se pressent vers les estaminets de la Chaussée du lac, où l'on finit toujours par glaner ce que l'on cherche."
         },
         {
-          "x": -3,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0,
+          "y": -3,
+          "type": "couloir",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "D'étroits escaliers de pierre descendent vers les quais ; on y croise matelots, portefaix et crieurs de journaux. Un passant anonyme, contre dix pièces d'or, affirme savoir où loger Thrad Redaff."
         },
         {
-          "x": -4,
-          "y": 1,
+          "x": 1,
+          "y": -3,
+          "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Un taudis d'une seule pièce, jonché de cadavres de bouteilles, en bordure de la Chaussée du lac. Sept matelots (marins) en sortent, d'emblée agressifs, peu disposés pourtant à y laisser leur vie. À l'intérieur, Thrad Redaff, malfrat patibulaire, repose sur son lit : interrogé, il lâche tout sur le poison et le rendez-vous du pont des Pêcheurs.",
+          "ennemis": ["Bandit ×7"],
+          "pnj": ["Thrad Redaff (malfrat, lâche sous la pression)"],
+          "tresor": "Carte de Laelith aux six croix (fontaines au sud de la faille) et bourse de 18 po ; les marins portent en tout 13 po, 7 pe, 22 pc, 15 pc, 15 pc et 7 pa.",
+          "note": "Thrad donne l'adresse de Bartabas et affirme que le commanditaire est un demi-orque baraqué ; les armuriers Smitt & Weston (cités sur la Gazette) jouent le même rôle de piste."
+        },
+        {
+          "x": 0,
+          "y": -4,
+          "type": "couloir",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Une ruelle pavée longe la terrasse de la Prospérité vers le lac. À chaque croisée, une fontaine de pierre : les douze croix de la carte de Rufus commencent à faire sens."
+        },
+        {
+          "x": 1,
+          "y": -4,
           "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Une fontaine publique de Laelith, adossée à un mur de pierre : l'eau paraît claire au premier regard, mais de la poudre blanchâtre s'est dissoute dans la vasque. La garde commence à barricader les fontaines en attendant que des clercs détectent et neutralisent le poison.",
+          "piege": "Arsenic ingéré (DD 13) : 1d4 points de Constitution, puis 1d4 points de Constitution une minute plus tard.",
+          "note": "Si la visite suit la nuit du pont des Pêcheurs, les armuriers ont déjà empoisonné 1d3 fontaines."
         },
         {
-          "x": -5,
-          "y": 1,
+          "x": 0,
+          "y": -5,
+          "type": "bibliothèque",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Logement propre au 44 rue des Vents vacillants, terrasse du Nuage, dans un immeuble de trois étages au-dessus d'un commerce. Toutes les pièces ont été fouillées, mais sur la table de travail de Rufus traîne encore la lettre de menaces ; la chambre recèle archives, notes de voyage et vieux numéros de la Gazette.",
+          "tresor": "La lettre de menaces grossière (« Nous avon ta seur si tu veu l'a retrouvé vivante oubli Thrad ! ») ; dans la cache du mur (Perception DD 16), une serviette de cuir contenant la fiche de Thrad Redaff et des soupçons sur les armuriers Smitt & Weston, liés à « E.D. ».",
+          "pnj": ["Les voisins de Rufus (n'ont rien vu, rien entendu)"],
+          "note": "Les indices de la fiche de Thrad orientent vers le Poignard sanglant et vers l'Empereur-Démon (« E.D. »)."
+        },
+        {
+          "x": 0,
+          "y": -6,
+          "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Au 86 échelle de la Tempête, un bâtiment de plain-pied coupé en deux par une grande cheminée. La boutique regorge d'armes importées des provinces des Deux lacs ; Smitt, un homme, et Weston, sa femme, nient toute implication, mais leur nervosité les trahit à un jet de Sagesse (Perspicacité) DD 15.",
+          "ennemis": ["Bandit ×2"],
+          "pnj": ["Smitt (bretteur) et Weston (espion), armuriers"],
+          "note": "La veille du pont des Pêcheurs, ils nient aisément (Perspicacité DD 20) ; si on leur révèle qu'ils ont été vus à la rencontre, ils saisissent leurs armes et attaquent."
+        },
+        {
+          "x": 1,
+          "y": -6,
           "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Derrière la grande cheminée, le bureau et les pièces d'habitation du couple d'armuriers. Les économies de Smitt et Weston sommeillent dans un recoin du comptoir, à côté des sachets de poison restants (Perception DD 15 pour les apercevoir dissimulés).",
+          "tresor": "332 pa et 153 po, six sachets d'arsenic en poudre (dont certains vides) et un plan de Laelith aux six croix des fontaines, toutes au nord de la faille."
         },
         {
-          "x": -6,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 0,
+          "y": -7,
+          "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Sous la lune d'hiver, le pont de bois des Pêcheurs enjambe un lac d'un brun glacé. Thrad et son compère maigre à tête frisée, Bartabas Diavolo, y retrouvent Smitt et Weston vêtus de cuir, puis un demi-orque balafré portant une large hache — Mork Zaro — qui sort des sachets d'un sac pour les distribuer.",
+          "ennemis": ["Bandit ×4", "Orque ×1"],
+          "tresor": "Les sachets de poison remis aux deux équipes : chaque groupe emporte sa carte et six sachets dans un sac vide.",
+          "note": "Mork, très prudent, surveille sans cesse les deux côtés du pont (Perception contre Discrétion) ; détecté, il fait combattre ses sous-fifres et fuit vers l'entrepôt des quais. Ne pas le tuer ici : il est le seul à savoir où est Esméralda."
         },
         {
-          "x": -7,
-          "y": 1,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0,
+          "y": -8,
+          "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Vaste construction de bois à toit de tuiles, l'une de quatre entrepôts sur les quais. Caisses, coffres et ballots — marchandises souvent inflammables — s'entassent jusqu'au plafond le long des murs ; quatre petites fenêtres à barreaux donnent sur les quais. Des planches clouées tapissent le mur du fond, derrière lequel vit le demi-orque.",
+          "tresor": "Un gros sac de 500 po, caché dans l'entrepôt par Mork.",
+          "note": "Les cris d'Esméralda, qui se défend dans son réduit, parviennent jusqu'ici. Les marchandises exigent de porter sa torche avec précaution."
         },
         {
-          "x": -7,
-          "y": 2,
-          "type": "salle du trône",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Loup », final du scénario « laelith_douze_fontaines ». Reprendre la description du module.]",
-          "ennemis": [
-            "Loup ×1"
-          ],
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Vampire (FP 8). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "x": 1,
+          "y": -8,
+          "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Derrière les planches du mur du fond s'ouvre une pièce assez grande mais crasseuse : le repaire de Mork Zaro. Le demi-orque avance à grand peine en tenant Esméralda, qui se débat vigoureusement derrière la porte du petit réduit attenant ; il est prêt à la rendre contre sa propre fuite.",
+          "ennemis": ["Orque ×1"],
+          "note": "Mork, vétéran du Poignard sanglant, doit être joué nettement au-dessus de la fiche d'orque. S'il refuse ou traîne, les trois courtisanes, qui ont appris sa cachette, sont sur le point d'arriver et l'acculent."
+        },
+        {
+          "x": 1,
+          "y": -9,
+          "type": "cellules",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Un réduit exigu et crasseux, à peine éclairé, attenant au repaire du demi-orque : une femme magnifique à la chevelure cuivrée, dans la quarantaine, s'y débat contre son geôlier. Esméralda Cairn, la sœur de Rufus, est saine et sauve, gardée prisonnière pour faire taire l'enquête du chroniqueur.",
+          "pnj": ["Esméralda Cairn (sœur de Rufus, otage, saine et sauve)"],
+          "note": "Libérée, elle entre comme prévu au cercle des courtisanes ; avec elles, elle remercie le groupe et avertit la garde pour lever les poursuites contre les « témoins »."
         }
       ]
     }

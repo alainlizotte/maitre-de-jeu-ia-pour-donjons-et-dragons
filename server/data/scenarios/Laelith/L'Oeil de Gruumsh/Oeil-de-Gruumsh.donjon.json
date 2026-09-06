@@ -1,147 +1,149 @@
 {
   "id": "laelith_loeil_de_gruumsh_donjon",
   "scenario": "laelith_loeil_de_gruumsh",
-  "donjon_id": "laelith_loeil_de_gruumsh",
-  "titre": "Donjon du scénario laelith_loeil_de_gruumsh (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "Le repaire de Mez'Arate",
+  "titre": "Le repaire de Mez'Arate — L'Œil de Gruumsh",
+  "source": "Aidedd.org — L'Œil de Gruumsh (Kimtchi / blueace), module D&D 5e ; zones « Entrée » et 1-13 du repaire du magicien (Creux du Géant)",
+  "note_convention": "Manifeste fidèle au module « L'Œil de Gruumsh » (Aidedd.org, module D&D 5e d'origine, adaptation D&D 3.5 avec les fiches du bestiaire de l'app). Le donjon couvre le repaire de l'espion-magicien Mez'Arate : enceinte extérieure (grille, cabane des gardiens, écurie), les quatre niveaux de la demeure (rez-de-chaussée, premier et deuxième étages, sous-sol) et l'antre souterrain. Les séquences hors donjon (campement des orques de Kerog, Egonzasthan-la-basse) ne sont pas cartographiées. Grille en serpentin (rangées y=0, -1, -2…) ; portes normées (nord=(x,y-1), sud=(x,y+1), est=(x+1,y), ouest=(x-1,y)) et symétriques, carte connexe depuis l'entrée de chaque niveau. Monstres 5e réinterprétés avec les statblocks D&D 3.5 du bestiaire (garde solo = FP ≤ 5).",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Enceinte extérieure",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Une grille en fer noir ferme l'enceinte de la propriété, doublée d'un mur de trois mètres de haut. Juste à côté, une petite cabane de garde abrite deux gardiens en tenue de combat, flanqués de deux molosses qui aboient au moindre bruit.",
+          "ennemis": ["Bandit ×2", "Chien ×2"],
+          "tresor": "17 pa sur un gardien et 22 pa sur l'autre.",
+          "note": "Zone « Entrée » du module — une corde actionne une cloche sur le toit de la cabane ; les gardiens ne la tirent qu'en cas de danger mortel. Mez'Arate étant absent, la surveillance est relâchée."
         },
         {
-          "x": 1,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 1, "y": 0, "type": "couloir",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Un sentier d'une centaine de mètres relie la grille à la grande demeure de pierre au toit de chaume. Au bord du chemin se dresse l'écurie de bois, son auvent affaissé."
         },
         {
-          "x": 1,
-          "y": 1,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Chien ×1"
-          ]
+          "x": 1, "y": -1, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "L'écurie aligne quatre boxes vides : aucun cheval, seulement du foin sec et une fourche abandonnée. La poussière qui recouvre le sol atteste qu'elle est depuis longtemps inutilisée."
+        }
+      ]
+    },
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "La porte d'entrée est un battant de chêne massif de cinq centimètres, renforcé de clous de fer et condamné de l'intérieur par une solide barre transversale : impossible à crocheter. Au-delà, le hall s'ouvre sur un couloir à l'imposante cheminée, où un escalier en colimaçon monte vers le premier étage et plonge vers le sous-sol.",
+          "note": "Zone 1 — enfoncer la porte exige Force DD 25 et attire aussitôt les gardes de la salle 4."
         },
         {
-          "x": 0,
-          "y": 1,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": 0, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Ce garde-manger regorge de vivres : viande salée, fromages et pains, de quoi nourrir dix personnes pendant au moins une semaine."
         },
         {
-          "x": -1,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 0, "y": -1, "type": "cuisine",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une petite cuisine équipée de tout le nécessaire pour mitonner de bons plats, dominée par un fourneau de taille moyenne qui trône au milieu de la pièce."
         },
         {
-          "x": -1,
-          "y": 2,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": -1, "y": -1, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Cinq paillasses, des quarts de bière et de vin : la salle de garde où vivent la plupart des hommes que Mez'Arate a laissés derrière lui. De jour, ils s'y attardent à boire et à parler ; de nuit, ils y dorment.",
+          "ennemis": ["Bandit ×5"],
+          "tresor": "10 po, 11 pa, 10 pe, 8 pe et 12 pa répartis sur les cinq hommes.",
+          "note": "Zone 4 — l'un des gardes porte la clef de la cave ; les hommes savent que l'Œil est entré dans la maison avec leur employeur, mais que celui-ci est reparti sans lui. Ils ignorent où il se trouve."
+        }
+      ]
+    },
+    {
+      "nom": "Premier étage",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "escaliers",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "L'escalier en colimaçon débouche sur le premier étage, dont toutes les fenêtres sont closes par de lourds volets de bois."
         },
         {
-          "x": -2,
-          "y": 2,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 1, "y": 0, "type": "bibliothèque",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Une vaste bibliothèque chargée d'ouvrages d'histoire, qui relatent notamment la reconstruction de Laelith après le Châtiment et la création des provinces. Aucun grimoire de magie ne s'y trouve."
         },
         {
-          "x": -3,
-          "y": 2,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": -1, "type": "garde",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Cinq paillasses pour les meilleurs mercenaires du magicien, mais seuls deux hommes de main occupent les lieux : les trois autres ont suivi Mez'Arate jusqu'à Egonzasthan-la-basse.",
+          "ennemis": ["Bandit ×2"],
+          "tresor": "24 pc sur l'un des hommes, 3 pp sur l'autre."
         },
         {
-          "x": -4,
-          "y": 2,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": -1, "type": "bureau",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Un seul meuble orne cette pièce sobre : un très beau secrétaire en acajou. Ses tiroirs renferment une vingtaine de parchemins vierges, des plumes et diverses encres."
+        }
+      ]
+    },
+    {
+      "nom": "Deuxième étage",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "escaliers",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "L'escalier s'achève sur le palier du deuxième étage, celui des appartements privés de l'espion-magicien : les trois portes de l'étage sont verrouillées.",
+          "note": "Les trois portes de l'étage se crochètent avec un jet de Dextérité DD 15 (outils de voleur)."
         },
         {
-          "x": -4,
-          "y": 3,
-          "type": "salle du trône",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Orque », final du scénario « laelith_loeil_de_gruumsh ». Reprendre la description du module.]",
-          "ennemis": [
-            "Orque ×1"
-          ]
+          "x": 1, "y": 0, "type": "chambre",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Une chambre à coucher au mobilier dépouillé mais de goût, qui semble toutefois ne pas être habitée."
+        },
+        {
+          "x": 1, "y": -1, "type": "chambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une autre chambre à coucher, propre et ordonnée, qui ne paraît pas occupée elle non plus."
+        },
+        {
+          "x": 0, "y": -1, "type": "chambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "La chambre du maître des lieux : peu de meubles, mais tous d'excellente qualité. Des vêtements de rechange de taille humaine et deux sacs renferment les richesses de Mez'Arate.",
+          "tresor": "600 pa, 100 po et 6 gemmes de 4 po chacune, dans les deux sacs."
+        }
+      ]
+    },
+    {
+      "nom": "Sous-sol",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "escaliers",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "L'air se fait frais et humide au pied de l'escalier : le sous-sol voûté de la demeure s'ouvre dans la pénombre."
+        },
+        {
+          "x": 0, "y": -1, "type": "cellier",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Trois tonneaux de bière et une étagère de bouteilles de vin rouge de qualité médiocre garnissent cette cave. Un passage secret, que seule l'autre face du mur permet d'ouvrir, file vers le reste du sous-sol."
+        },
+        {
+          "x": -1, "y": -1, "type": "cave",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Une grande cave verrouillée, pleine de bouteilles de vins fins et de trois grands tonneaux de bonne bière : Mez'Arate aime à ne manquer de rien. Derrière les réserves, un pan de mur de construction récente dissimule un passage secret.",
+          "piege": "Devant la porte secrète, une plaque de pression actionne un jeu de ressorts : 4 fléchettes se déclenchent (attaque +8, 1d4 dégâts perforants chacune) et une cloche sonne dans le couloir du rez-de-chaussée. Coincer un piton sous la plaque ou boucher les orifices désamorce le piège.",
+          "note": "Zone 12 — porte fermée à clef (crochetage DD 12 ; la clef est sur un garde de la salle 4). Perception DD 15 pour repérer la brique enfoncée, Investigation DD 15 pour déduire la plaque de pression."
+        },
+        {
+          "x": -1, "y": -2, "type": "laboratoire",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Cette grande salle est d'un aspect sinistre et d'étranges odeurs flottent dans l'air. Sur les tables et étagères reposent l'Œil de Gruumsh, deux potions, un grimoire, des composantes matérielles et, dans un bocal, une main droite d'elfe. Un gros coffre en fer verrouillé gît au sol.",
+          "ennemis": ["Araignée-géante ×7"],
+          "tresor": "Potion d'escalade et potion de soins ; un grimoire de sorts de magicien volé (école d'enchantement, niveaux 1-2) ; un coffre en fer à crocheter (Dextérité DD 15) contenant environ 2100 pa ; l'Œil de Gruumsh, dont la gemme est un rubis d'au moins 1000 po.",
+          "note": "Zone 13 — 7 grosses araignées s'en prennent aux personnages occupés à se remplir les poches. Arracher la gemme de l'Œil : sauvegarde de Constitution DD 30 (DD 10 pour les orques, 20 pour les demi-orques) ou 5d10 dégâts de foudre [AJUSTEMENT REQUIS]. Mez'Arate porte sur lui la main gauche, enchantée d'un sort de main de mage à volonté."
         }
       ]
     }

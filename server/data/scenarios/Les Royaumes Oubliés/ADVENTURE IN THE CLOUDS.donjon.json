@@ -1,147 +1,98 @@
 {
   "id": "ro_adventure_in_the_clouds_donjon",
   "scenario": "ro_adventure_in_the_clouds",
-  "donjon_id": "ro_adventure_in_the_clouds",
-  "titre": "Donjon du scénario ro_adventure_in_the_clouds (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "La forteresse d'Hagan",
+  "titre": "Adventure in the Clouds — la forteresse de pierre d'Hagan",
+  "source": "Adventure in the Clouds (AD&D) — forteresse d'Hagan au bord de l'Epine-du-Monde, suite d'Aurumglathrolos",
+  "note_convention": "Préquelle résolue : Rothex tué, le groupe est parti du château nuageux de Sky-Hammer (le roi Torgon Ombrace). Ici : la forteresse de pierre d'Hagan, sorcier humain 13e, et l'alliance des seigneurs géants. Géants FP ≥ 7 et Hagan hors plafond : en note [AJUSTEMENT REQUIS]. Combats licites : orques, orogs (≈ orque), ogre geôlier, otyughs.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "La forteresse de pierre",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La forteresse de pierre grise d'Hagan, plaquée contre le flanc de la plus grande montagne de l'Epine-du-Monde : murs antique en brèche, portail en ruines, et chaque trouée gardée par des orques bardés de fer. Les wards de sorcellerie interdisent tout assaut aérien.",
+          "note": "Des silhouettes géantes déambulent au loin sur les remparts. Un égout-citerne couvert de ronces s'ouvre à l'extrémité est du fort."
         },
         {
-          "x": 0,
-          "y": -1,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": -1, "y": 0, "type": "couloir",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Le canal d'égout débouchant à l'ouest : un long boyau de pierre noircie, à demi bouché par des broussailles et des tumbleweeds. C'est l'entrée la plus discrète — et celle que fréquentent les bêtes du cloaque.",
+          "note": "Faibles chances de rencontre en s'y glissant vite : le couple d'otyughs a élu domicile plus profond."
         },
         {
-          "x": -1,
-          "y": -1,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Griffon ×1"
-          ]
+          "x": 0, "y": -1, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "ouest": true, "est": false },
+          "description": "Le cloaque : une vasière fétide où flottent os et détritus, immense litière d'un couple d'otyughs. Un jeune géant de pierre, Shale, gît là, dévoré de blessures — Hagan l'a précipité ici après qu'il ait voulu prévenir son peuple de ne pas s'allier au sorcier.",
+          "ennemis": ["Otyugh ×1"],
+          "pnj": ["Shale, jeune géant de pierre (allié à sauver ; il connaît les plans secrets d'Hagan)"],
+          "tresor": "Une pierre de granite lisse gravée d'une rune géante : gage d'amitié de la tribu de Shale.",
+          "note": "Shale apprend que Skielara n'est pas aux ergastules mais ligotée dans la grande salle de festin."
         },
         {
-          "x": -2,
-          "y": -1,
-          "type": "laboratoire",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Ogre ×1"
-          ]
+          "x": -1, "y": -1, "type": "cellules",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Les ergastules basses : cachots humides flanqués des geôliers orogs, sous l'autorité d'un ogre garde-chiourme. Derrière les barreaux, une dizaine de prisonniers épuisés — soldats de Nesme, nains du clan Taille-hache, elfes d'or de la Forêt-de-Bois et un gnome.",
+          "ennemis": ["Ogre ×1"],
+          "pnj": ["Sgt. Brayton, soldats Cole & Derrick (Nesme) ; le clan Taille-hache (Mogor, Herod, Heisa, Lortol) ; Belira Morningdance, Hasperen Leafwalker ; Berol Glittergem"],
+          "note": "Les orogs geôliers (non répertoriés : jouer comme des orques endurcis) accompagnent l'ogre. Libérer et soigner les prisonniers crée des alliés durables."
         },
         {
-          "x": -2,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": -2, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "La cour des patrouilles : bandes d'orques et d'orogs défilent entre les bastions, sous le regard des silhouettes géantes qui arpentent les remparts. Tout mouvement trop bruyant attire trois patrouilles à la fois.",
+          "ennemis": ["Orque ×2"],
+          "note": "Parfois, en plus des orques, un géant de passage traverse la cour — ne pas s'attarder."
         },
         {
-          "x": -2,
-          "y": 1,
-          "type": "abattoir",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": -2, "type": "cuisine",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La cuisine des géants : fours aussi hauts qu'une maison, broches à sanglier entier et chaudrons où mijotent des ragoûts immenses. Quelques cuisiniers orques y braillent en remuant des marmites d'une pièce.",
+          "ennemis": ["Orque ×1"],
+          "note": "Bonne cachette ou voie de passage : les remugles couvrent les bruits."
         },
         {
-          "x": -3,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 1, "y": -3, "type": "bibliothèque",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "La tour de sorcellerie d'Hagan : étagères de marbre croulant sous les grimoires, reliques géantes assemblées sur des paillasses, et au centre, un cercle de warding gravé à même le sol — source des protections qui interdisent les vols sur la forteresse.",
+          "piege": "Wards de détection : entrer sans contremagie alerte Hagan dans la grande salle.",
+          "note": "Étudier ici la magie des wards permet de comprendre les défenses du fort et d'y travailler une parenthèse muette."
         },
         {
-          "x": -3,
-          "y": 0,
-          "type": "laboratoire",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -3, "type": "salle du trône",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "La grande salle de festin : tables de chêne à la taille des géants, broches et cornes à boire énormes. Le sorcier Hagan, en robe sombre, trône entre les cinq seigneurs géants — la hache du massacreur géant des collines, la fourrure du roi du givre, la barbe ardente du chaman du feu, la gravité du seigneur de pierre, la brume du géant des brumes — tandis qu'une « servante » à taille humaine nettoie les reliefs : Skielara, fille du roi Torgon, rapetissée par magie et enchaînée.",
+          "ennemis": ["Orque ×2"],
+          "pnj": ["Skielara (enchaînée, transformée à taille humaine) — Hagan, sorcier humain 13e niveau"],
+          "piege": "Plus de six rounds de combat et les seigneurs géants accourent (ils sont loin de la salle après le festin si on frappe vite).",
+          "note": "[AJUSTEMENT REQUIS] Hagan (sorcier 13e) et les seigneurs géants — Trasher Tuerie (géant des collines 134 PV), Jarl Vergold (du givre 155), Bergutin (du feu 165), Sar'tol (de pierre 147), Aster Horlogis (des brumes 149) — sont hors plafond : jouer l'action, la ruse et l'évasion plutôt que l'affrontement. Le tuer fait s'effondrer l'alliance."
         },
         {
-          "x": -4,
-          "y": 0,
-          "type": "crypte",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": -4, "type": "trésor",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Le trésor de l'Overking : butins amassés par les clans orques de l'Epine-du-Monde et tributs extorqués aux seigneurs géants — monnaie, ivoire de mammouth, pierres précieuses taillées à la taille géante.",
+          "tresor": "Butin des clans et des seigneurs : pièces, ivoires et gemmes géantes (chargement pour plusieurs montures à dos de griffon).",
+          "note": "La Perle de Voyage de Nuage-Marcheur : la briser fait venir Sky-Hammer — elle ne ramène pas Skielara, elle fait surgir le château au-dessus du fort."
         },
         {
-          "x": -4,
-          "y": -1,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Otyugh », final du scénario « ro_adventure_in_the_clouds ». Reprendre la description du module.]",
-          "ennemis": [
-            "Otyugh ×1"
-          ]
+          "x": 1, "y": -4, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Les loges des seigneurs géants : tentes et alcôves à la taille des géants, fourrures, étendards de batailles perdues et trophées. Vide au moment de choisir l'embuscade — les maîtres festoient encore dans la grande salle.",
+          "note": "Voie de repli vers la tour, la cuisine ou le trésor selon la tournure de l'embuscade."
+        },
+        {
+          "x": 1, "y": -5, "type": "garde",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "L'arsenal : râteliers d'armes humaines et armes de géant entassées pêle-mêle, cordes, grappins et tonneaux de poudre. Les renforts orques viennent s'y équiper dès que l'alarme sonne.",
+          "note": "Bon point de chute pour l'ultime fuite vers les griffons convoqués par Nuage-Marcheur."
+        },
+        {
+          "x": 0, "y": -5, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Les meurtrières du rempart surplombant la vallée : c'est d'ici que l'on voit Sky-Hammer, le château nuageux du roi Torgon, planer au-dessus de la forteresse et larguer des quartiers de roc sur les défenseurs, tandis que les géants nuageux donnent l'assaut — Hagan mort, les défenseurs s'enfuient dans la montagne.",
+          "note": "Si la Perle a été brisée, le château du roi Torgon surgit : les nuages cèdent et la victoire est celle des géants nuageux. Le roi offre son amitié et un cristal d'alliance à briser en cas de détresse."
         }
       ]
     }

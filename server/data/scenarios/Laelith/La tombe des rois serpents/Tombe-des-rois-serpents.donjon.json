@@ -1,159 +1,419 @@
 {
   "id": "laelith_la_tombe_des_rois_serpents_donjon",
   "scenario": "laelith_la_tombe_des_rois_serpents",
-  "donjon_id": "laelith_la_tombe_des_rois_serpents",
-  "titre": "Donjon du scénario laelith_la_tombe_des_rois_serpents (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "La tombe des rois serpents",
+  "titre": "La tombe des rois serpents — Laelith",
+  "source": "Aidedd.org — La tombe des rois serpents (d'après Skerples, trad. Whidou, Matthieu B, Bruno Bord ; adapt. blueace), zones 1-52, réinterprété avec les fiches D&D 3.5 du bestiaire.",
+  "note_convention": "Module D&D 5 pour 5 personnages de niveau 1 : 3 niveaux = salles 1-7, 8-22, 23-52. Au niveau 3, jet de rencontre 1d6 toutes les 30 min (vase grise, araignée géante, 3 chauves-souris géantes, gobelins) — non attribué à une salle fixe. Les monstres sont exprimés avec les fiches du bestiaire local (réinterprétation des stats 5e du module). L'atrium (11) et le hall du basilic (38) sont découpés en plusieurs cellules pour la grille ; les passages secrets sans case voisine (39/17, 51/38) sont signalés en note.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Niveau 1 — L'entrée",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Un long couloir de trois mètres de large, taillé grossièrement dans la roche, que la lumière du soleil n'atteint que jusqu'à son entrée. De fines racines percent le plafond, l'endroit sent la poussière et il y fait plus froid qu'à l'extérieur. Quatre ouvertures percent les parois.",
+          "pnj": ["Martin (roturier, employé du noble — reste à l'entrée avec les mules)"],
+          "note": "Zone 1 du module — Couloir d'entrée."
         },
         {
-          "x": -1,
-          "y": 0,
-          "type": "couloir",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 1, "y": 0, "type": "couloir",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": true },
+          "description": "Le couloir se poursuit vers l'est, flanqué de deux nouvelles ouvertures, avant de buter sur une porte barrée. La pierre y est tout aussi grossière et la poussière épaisse.",
+          "note": "Zone 1 du module — partie est du couloir d'entrée."
         },
         {
-          "x": -1,
-          "y": -1,
-          "type": "crypte",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Basilic ×1"
-          ]
+          "x": 0, "y": -1, "type": "crypte",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Une petite salle presque identique à sa voisine : un cercueil en bois orné de gravures de scènes de bataille trône au centre, tandis que des fresques de serpents entrelacés courent sur les murs. Le cercueil renferme la statue d'argile creuse d'un guerrier homme-serpent, pleine de plus que ce qu'elle laisse voir.",
+          "piege": "À l'ouverture du cercueil : nuage de gaz empoisonné (vieille fumée d'othur, Vigueur DD 13, 1d6 dégâts de poison puis jets répétés) qui envahit la pièce en 1 round.",
+          "tresor": "Amulette en or (20 po) et squelette de serpent desséché cachés dans la statue d'argile creuse.",
+          "note": "Zone 2a du module — Tombe de garde (les deux salles 2 sont identiques)."
         },
         {
-          "x": 0,
-          "y": -1,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Vase grise ×1"
-          ]
+          "x": 1, "y": -1, "type": "crypte",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "L'autre tombe de garde, identique en taille et en contenu à la première : le même cercueil aux gravures guerrières, les mêmes fresques de serpents entrelacés, la même statue d'argile creuse.",
+          "piege": "À l'ouverture du cercueil : nuage de gaz empoisonné (vieille fumée d'othur, Vigueur DD 13, 1d6 dégâts de poison puis jets répétés) qui envahit la pièce en 1 round.",
+          "tresor": "Amulette en or (20 po) et squelette de serpent desséché cachés dans la statue d'argile creuse.",
+          "note": "Zone 2b du module — Tombe de garde (les deux salles 2 sont identiques)."
         },
         {
-          "x": 1,
-          "y": -1,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Araignée géante ×1"
-          ]
+          "x": 0, "y": 1, "type": "crypte",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Le même agencement que les tombes de garde, mais le cercueil est orné de gravures abstraites et contient la statue d'un érudit homme-serpent, parmi des fresques de serpents bondissants. Ses parchemins sont depuis tombés en poussière.",
+          "piege": "À l'ouverture du cercueil : nuage de gaz empoisonné (vieille fumée d'othur, Vigueur DD 13, 1d6 dégâts de poison puis jets répétés).",
+          "tresor": "Amulette en or (20 po) cachée dans la statue d'argile creuse.",
+          "note": "Zone 3 du module — Tombe d'érudit."
         },
         {
-          "x": 2,
-          "y": -1,
-          "type": "couloir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
+          "x": 1, "y": 1, "type": "crypte",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Un cercueil aux gravures macabres, des fresques de serpents bondissants : la statue d'argile d'un sorcier homme-serpent porte à son auriculaire un anneau bien plus inquiétant qu'il n'en a l'air.",
+          "piege": "À l'ouverture du cercueil : nuage de gaz empoisonné (vieille fumée d'othur, Vigueur DD 13, 1d6 dégâts de poison puis jets répétés).",
+          "tresor": "Amulette en or (20 po) ; anneau maudit à l'auriculaire de la statue (l'ongle du porteur s'allonge en croc — dague 1d4 —, puis tombe en petit serpent inoffensif après 6 dégâts infligés).",
+          "note": "Zone 4 du module — Tombe de sorcier."
         },
         {
-          "x": 3,
-          "y": -1,
-          "type": "abattoir",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Gobelin ×1"
-          ]
+          "x": 2, "y": 0, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le couloir se termine sur une épaisse porte de pierre. Deux pieux de fer plantés de part et d'autre du chambranle soutiennent une lourde barre minérale — qu'il faudra soulever, en déclenchant au passage un marteau colossal prêt à basculer du plafond.",
+          "piege": "Barre de pierre (30 points de Force cumulés) : dès qu'elle est levée, un marteau colossal s'abat (Réflexes DD 12, 2d6 dégâts contondants ; détection Perception DD 14 ; il enfonce la porte puis se rétracte).",
+          "note": "Zone 5 du module — La porte."
         },
         {
-          "x": 3,
-          "y": -2,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Lézard ×1"
-          ]
+          "x": 3, "y": 0, "type": "crypte",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La fausse chambre funéraire du roi des hommes-serpents et de ses deux épouses : trois cercueils de bois le long du mur nord, celui du milieu plus volumineux et orné d'hommes-serpents endormis. Des fresques délitées de paysages, une odeur de poussière et de moisi — et trois squelettes qui n'attendent que la profanation de leur repos.",
+          "ennemis": ["Squelette ×3"],
+          "note": "Zone 6 du module — Fausse tombe royale : les squelettes attaquent dès que le repos de l'un d'eux est troublé."
         },
         {
-          "x": 2,
-          "y": -2,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 4, "y": 0, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Une salle dominée par la gigantesque statue d'un hideux dieu homme-serpent. Un filet d'eau coule le long du mur est, et l'on peut deviner (Perception DD 12) qu'il s'écoule sous la statue : la déplacer révèle un passage secret vers le niveau inférieur.",
+          "note": "Zone 7 du module — Faux temple : passage secret vers la zone 8."
+        }
+      ]
+    },
+    {
+      "nom": "Niveau 2 — Hall aux statues et atrium",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "couloir",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Un niveau plus bas, la roche est taillée finement, mais l'œuvre est gâchée par de multiples fissures causées par l'eau au fil du temps. De nombreuses flaques couvrent le sol ; le couloir s'élargit bientôt en un hall aux statues.",
+          "note": "Zone 8 du module — Passage secret sous le faux temple."
         },
         {
-          "x": 2,
-          "y": -3,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Gelée ocre », final du scénario « laelith_la_tombe_des_rois_serpents ». Reprendre la description du module.]",
-          "ennemis": [
-            "Gelée ocre ×1"
-          ],
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Succube (FP 7). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "x": 0, "y": -1, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "ouest": true, "est": false },
+          "description": "Un long et large couloir plongeant dans les ténèbres, bordé de six énormes statues d'hommes-serpents en armes et armures qui toisent le groupe d'un regard dédaigneux. La pièce est humide et sent le moisi ; un mince filet d'eau coule au centre. L'une des statues est légèrement désalignée (Perception DD 14) et pivote pour révéler un passage.",
+          "note": "Zone 9 du module — Hall aux statues : passage secret vers 10."
+        },
+        {
+          "x": -1, "y": -1, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Cette salle sombre semble vide : avec le temps, les meubles de bois ont pourri jusqu'à se désagréger presque intégralement. C'était autrefois la salle de garde secrète des assassins du temple.",
+          "tresor": "Deux dagues encore utilisables et une icône religieuse en argent (1 500 pa).",
+          "note": "Zone 10 du module — Salle de garde secrète."
+        },
+        {
+          "x": 0, "y": -2, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "ouest": true, "est": true },
+          "description": "L'entrée du vaste atrium octogonal : des statues scrutatrices d'hommes-serpents, certaines armées, d'autres munies d'outils de torture ou d'agriculture. Au centre, un bassin d'eau sombre, rempli à ras bord par le ruissellement des niveaux supérieurs.",
+          "note": "Zone 11 du module — Atrium (partie ouest)."
+        },
+        {
+          "x": 1, "y": -2, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "ouest": true, "est": true },
+          "description": "Au cœur de l'atrium, le bassin d'eau sombre, profond de trois mètres, semble traîtreusement paisible — jusqu'à ce qu'une silhouette blême et visqueuse bondisse de l'eau pour étrangler ou rouer de coups quiconque s'approche de la fosse.",
+          "ennemis": ["Étrangleur ×1"],
+          "tresor": "Au fond du bassin, une fois la menace éliminée : une lourde chaîne d'or (100 po), un anneau en argent (100 pa) et 3d10 po de petite joaillerie.",
+          "note": "Zone 11 du module — Le « blême » du bassin (réinterprété comme un étrangleur)."
+        },
+        {
+          "x": 2, "y": -2, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "ouest": true, "est": true },
+          "description": "L'extrémité de l'atrium, percée de plusieurs portes : les lourdes dalles de pierre des caveaux (12-16), celle de la salle des soldats d'argile, et à l'est une porte de pierre finement ouvragée de serpents pleuvant des cieux.",
+          "note": "Zone 11 du module — Atrium (partie est) : les caveaux 12-16, la zone 17 et la zone 18 ouvrent sur cette salle."
+        },
+        {
+          "x": -1, "y": -2, "type": "crypte",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Le passage menant à cette tombe est précédé d'une dalle piégée ; seul un cercueil de pierre trône au centre de la pièce, qui sent les épices d'embaumement.",
+          "piege": "Dalle piégée : onde de choc dirigée vers l'entrée (Vigueur DD 11, 2d8 dégâts de tonnerre, une seule fois).",
+          "tresor": "Dans le cercueil, auprès du squelette inanimé de Xisor le Vert : un parchemin de sort d'onde de choc.",
+          "note": "Zone 12 du module — Tombe de Xisor le Vert."
+        },
+        {
+          "x": 1, "y": -1, "type": "crypte",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Cette tombe est partiellement effondrée : les blocs du plafond ont cédé et interdisent le fond de la pièce. Un raclement s'agite au-delà des décombres — Sparamantur, le squelette du roi-serpent, qui trépigne et frappe à vue quiconque montre le bout de sa tête.",
+          "ennemis": ["Squelette ×1"],
+          "tresor": "Ornements funéraires de Sparamantur, sans grande valeur (10 po).",
+          "note": "Zone 13 du module — Perceptible par un jet de Perception DD 10."
+        },
+        {
+          "x": 1, "y": -3, "type": "crypte",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Une sépulture plus rustre que les autres, aux peintures et gravures grossières, qui sent la décomposition. Le cercueil de pierre renferme les restes mal embaumés de Franbinzar, dernier roi des hommes-serpents — dont la momification ratée a fait un amas visqueux et affamé.",
+          "ennemis": ["Gelée-ocre ×1"],
+          "tresor": "Anneau en argent (20 po) dans le cercueil, seule chose de valeur de la pièce.",
+          "note": "Zone 14 du module — Tombe de Franbinzar : la gelée ocre attaque à vue."
+        },
+        {
+          "x": 2, "y": -3, "type": "trésor",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "La sacristie des prêtres de la tombe supérieure : trois lits, des étagères vermoulues, et une icône de dieu-serpent en argent incrustée de deux éclats d'émeraude qui lui servent d'yeux. Des parchemins intacts, écrits dans une langue inconnue, sont éparpillés au sol.",
+          "tresor": "Icône religieuse en argent aux yeux d'émeraude (200 po) ; parchemins d'une langue inconnue (valeur à négocier ou à traduire).",
+          "note": "Zone 15 du module — Sacristie. Le nom véritable du succube (Baltoplate) figure sur l'un des parchemins."
+        },
+        {
+          "x": 0, "y": -3, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Une tombe inachevée : des outils d'excavation finissent de rouiller au sol, et aucun cercueil n'a jamais été taillé dans la roche.",
+          "note": "Zone 16 du module — Tombe inachevée (salle vide)."
+        },
+        {
+          "x": 2, "y": -1, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Dix-huit statues d'argile de soldats hommes-serpents de taille réelle, au regard sinistre, se dressent en trois rangs de six ; leurs épées rouillées sont inutiles, et elles sont toutes creuses mais vides. La statue au coin sud-ouest dissimule un passage secret.",
+          "note": "Zone 17 du module — Soldats d'argile : passage secret (Perception DD 16) vers la zone 39."
+        },
+        {
+          "x": 3, "y": -2, "type": "escaliers",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Au-delà de la porte de pierre finement ouvragée de serpents pleuvant des cieux, des escaliers s'enfoncent dans les ténèbres. Une légère brise se fait sentir, l'air est plus froid, le silence est total — jusqu'à la troisième volée de marches.",
+          "piege": "Escaliers basculants : au troisième vol, les marches forment une rampe lisse et des épieux jaillissent au bas (Réflexes DD 14, 2d6 dégâts) ; le piège se réarme automatiquement.",
+          "note": "Zone 18 du module — Escaliers piégés."
+        },
+        {
+          "x": 4, "y": -2, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une vaste arène tapissée des boucliers des tribus vaincues par les hommes-serpents, dont cinq encore fonctionnels. Au centre veille un énorme serpent en os, bien vivant : un naga osseux, bien trop puissant pour le groupe — mieux vaut le pousser dans le gouffre, le contourner ou fuir.",
+          "note": "[AJUSTEMENT REQUIS] Naga osseux du module (aucune fiche adaptée dans le bestiaire, FP supérieur à la portée d'un groupe niveau 1) : ne pas lancer de combat frontal, ou le remplacer par une créature FP ≤ 5 (ex. squelette de naga version dégradée)."
+        },
+        {
+          "x": 5, "y": -2, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un étroit chemin de trois mètres longe un gouffre abyssal dont la paroi opposée se perd dans le noir ; le passage est légèrement glissant. Le chemin se fond dans la paroi au nord et mène au reste de la tombe au sud.",
+          "note": "Zone 20 du module — Gouffre et chemin : courir impose une sauvegarde de Réflexes DD 8."
+        },
+        {
+          "x": 6, "y": -2, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une épaisse porte de pierre enfoncée dans le mur, maintenue fermée par une lourde barre minérale. Le piège est identique à celui de la porte du niveau supérieur : soulever la barre, c'est déchaîner le marteau colossal du plafond.",
+          "piege": "Marteau colossal (Réflexes DD 10, 2d6 dégâts contondants ; détection Perception DD 12) ; il enfonce la porte puis se rétracte. Si le groupe vient de 23, la porte ne peut être ouverte qu'en la détruisant.",
+          "note": "Zone 21 du module — Porte de pierre séparant le niveau 2 (20) du niveau 3 (23)."
+        },
+        {
+          "x": 7, "y": -2, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Le couloir descend sur une longue distance avant d'être obstrué par un gros éboulement. L'air se refroidit, le sol devient plus humide, et un sentiment d'insécurité saisit la plupart du groupe.",
+          "note": "Zone 22 du module — L'effondrement (cul-de-sac)."
+        }
+      ]
+    },
+    {
+      "nom": "Niveau 3 — Cœur de la tombe",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Plusieurs bancs, d'anciennes tapisseries et une fontaine asséchée composent cette salle qui sent les champignons séchés et la poussière. Les prêtres hommes-serpents y célébraient des cérémonies de purification — mais une statue d'or manque au centre de la fontaine (Investigation DD 14) : les gobelins l'ont emportée en 47.",
+          "note": "Zone 23 du module — Salle de cérémonie."
+        },
+        {
+          "x": 1, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un long couloir descend en pente douce, ses murs couverts de bas-reliefs et de peintures de serpents, l'air froid et humide.",
+          "note": "Zone 24 du module — Couloir."
+        },
+        {
+          "x": 2, "y": 0, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une pièce vide aux dalles abîmées, dont certaines semblent cassées : le centre est un faux sol de fines dalles soutenues par des bâtons et de fines barres de métal, surmontant une fosse garnie de pics. Seule une corniche de 30 cm au ras des murs est sûre.",
+          "piege": "Faux sol (Réflexes DD 15, 2d10 dégâts perforants) ; une bourse de 32 po est cachée sous les os du fond (recherche DD 16).",
+          "tresor": "Bourse de 32 po, sous les squelettes de petits humanoïdes (gobelins) au fond de la fosse.",
+          "note": "Zone 25 du module — Fosse piégée."
+        },
+        {
+          "x": 3, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Un passage s'écarte du couloir principal vers une porte close, dont le verrou semble s'être corrodé avec le temps. La serrure est sommaire, mais donne accès à la fosse à sacrifices.",
+          "note": "Zone 26 du module — Couloir : serrure crochetable (Dextérité DD 10) ; mène à la salle des esclaves (27)."
+        },
+        {
+          "x": 3, "y": 1, "type": "cellules",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Des entraves de fer rouillées prennent la poussière au sol de cette ancienne salle à esclaves, tapissée de mosaïques. Derrière la porte opposée, un sifflement sourd s'échappe.",
+          "note": "Zone 27 du module — Salle des esclaves."
+        },
+        {
+          "x": 3, "y": 2, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": true },
+          "description": "Un grand dôme orné de fresques d'hommes-serpents triomphants surplombe cette salle à quatre portes : en pierre la brisée (49), l'entrouverte d'où siffle l'air (30) et la fermée sans verrou (27) ; en fer verrouillée celle de la salle du trésor (29).",
+          "note": "Zone 28 du module — Dôme : la clef du trésor (29) est au cou du basilic (38)."
+        },
+        {
+          "x": 2, "y": 2, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Les vestiges du trésor de la tombe : piles de pièces, pierres précieuses et un parchemin, gardés derrière la lourde porte en fer du dôme.",
+          "tresor": "2 200 pc, 900 pa, 160 po, 4 pierres précieuses (deux agates mousse, une obsidienne, un quartz bleu — 10 po chacune) et un parchemin de sort de localisation d'objet.",
+          "note": "Zone 29 du module — Salle du trésor : porte en fer verrouillée (clef portée par le basilic, 38)."
+        },
+        {
+          "x": 4, "y": 2, "type": "puits",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une flamme semble éternelle au fond d'une fosse profonde d'à peu près six mètres : des os carbonisés, des coulures d'or et quelques pierres précieuses y scintillent dans la lueur orangée. Un chemin de 60 cm borde le trou, et l'air vicié qui en monte est sournois.",
+          "piege": "Air vicié de la fosse : quiconque descend doit retenir sa respiration, puis suffoque à court d'air.",
+          "tresor": "Pierres précieuses au fond de la fosse (200 po au total) ; les coulures d'or proviennent de pièces fondues, irrécupérables.",
+          "note": "Zone 30 du module — Fosse sacrificielle."
+        },
+        {
+          "x": 5, "y": 2, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Deux statues de gardes hommes-serpents, incroyablement réalistes et bien plus fines que tous les reliefs de la tombe, flanquent l'unique porte de ce hall. Ce sont en réalité des hommes-serpents pétrifiés, placés là en guise de punition.",
+          "tresor": "Les deux statues pétrifiées se vendent 150 po chacune en grande ville, voire dix fois plus à un mage capable d'en reconnaître la nature.",
+          "note": "Zone 31 du module — Hall gardé (porte non verrouillée, verrou cassé)."
+        },
+        {
+          "x": 6, "y": 2, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une ancienne chambre d'invocation : d'un côté un petit autel où reposent deux bols et une dague ; de l'autre, une « prisonnière » entravée par la cheville, qui prétend avoir été capturée par les gobelins. Elle est en réalité un succube retenu par un cercle magique permanent, qui cherche à charmer un intrus pour briser sa geôle.",
+          "pnj": ["Baltoplate (succube — se fait passer pour un prisonnier des gobelins, entrave illusoire)"],
+          "tresor": "Deux bols en or (15 po chacun) ; dague magique +1 ; un serpent de pierre sinueux derrière l'autel, clef de la porte de la salle du trône (43).",
+          "note": "Zone 32 du module — [AJUSTEMENT REQUIS] Succube FP 7 > 5 : non hostile par défaut, mais en cas de combat, la remplacer par une version affaiblie ou une créature FP ≤ 5."
+        },
+        {
+          "x": 7, "y": 2, "type": "piège",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": true },
+          "description": "Ce couloir est pavé de huit grandes dalles de pierre gris clair ou gris foncé, réparties en apparence au hasard, sous des gravures de plafond évoquant la gueule d'un serpent. Marcher sur une dalle sombre programme une mort lente — mais les dalles claires, plus usées, trahissent le passage sûr (Investigation DD 15).",
+          "piege": "Dalles piégées : les dalles gris foncé déclenchent des lames faucheuses (Réflexes DD 15, 3d6 dégâts tranchants), le piège se réarme seul ; les dalles gris clair sont sûres.",
+          "note": "Zone 34 du module — Corridor piégé."
+        },
+        {
+          "x": 7, "y": 1, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "L'ancienne salle de repos et de méditation des prêtres hommes-serpents : la porte de bois est complètement pourrie, et six oreillers de soie maculés de sang, désagrégés en haillons, ont été réduits en lambeaux par les gobelins.",
+          "note": "Zone 35 du module — Zone de repos des prêtres."
+        },
+        {
+          "x": 7, "y": 3, "type": "autel",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Cette alcôve abrite un autel dédié à l'un des dieux à tête de cobra des hommes-serpents ; la statue, percée à sa base de deux trous assez larges pour un bras, a du jeu et peut pivoter (Perception DD 10).",
+          "piege": "Statue pivotante : à gauche, un gaz empoisonné (vieille fumée d'othur, Vigueur DD 13) jaillit d'un orifice ; à droite, ~400 po se déversent de l'autre.",
+          "tresor": "400 po si la statue est pivotée vers la droite.",
+          "note": "Zone 33 du module — Autel."
+        },
+        {
+          "x": 8, "y": 2, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Des tentures partiellement pourries jonchent le sol, gravé de figures géométriques. Au sud, le couloir descend en pente douce vers les profondeurs du cœur du tombeau.",
+          "note": "Zone 36 du module — Vestibule."
+        },
+        {
+          "x": 8, "y": 3, "type": "piège",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Une fosse piégée identique à celle des couloirs extérieurs : faux sol de fines dalles sur le centre, corniche sûre le long des murs. Le fond, cette fois, ne contient rien d'intéressant.",
+          "piege": "Faux sol (Réflexes DD 15, 2d10 dégâts perforants) ; fond vide.",
+          "note": "Zone 37 du module — Fosse piégée (identique à 25)."
+        },
+        {
+          "x": 8, "y": 4, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": true },
+          "description": "La partie ouest d'une vaste salle creusée à même la roche, parsemée de piliers brisés (huit en tout, en deux rangs) ; le plafond se perd dans les ténèbres où nichent des chauves-souris. Le sol est jonché de morceaux de statues brisées — araignées, chauves-souris et gobelins taillés avec une précision troublante.",
+          "note": "Zone 38 du module — Hall du basilic (partie ouest)."
+        },
+        {
+          "x": 9, "y": 4, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": true },
+          "description": "Au-delà des piliers, un cliquetis de chaînes (Perception DD 12) : un basilic, retenu au plafond par une épaisse chaîne de fer, se tapit dans l'obscurité et tente de pétrifier quiconque s'approche à moins de neuf mètres. La clef de la salle du trésor (29) pend à son collier.",
+          "ennemis": ["Basilic ×1"],
+          "tresor": "Clef de la salle du trésor (29) au collier du basilic ; yeux de basilic très prisés des mages et alchimistes.",
+          "note": "Zone 38 du module — Le basilic peut être évité (piliers, fuite) ; passages secrets vers 39 et, plus ardue, vers le territoire des gobelins (51)."
+        },
+        {
+          "x": 10, "y": 4, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Un tunnel taillé avec soin, dont la porte côté hall était jadis impossible à déceler : le temps a effrité la mosaïque qui recouvrait ses murs, en révélant le contour. Il relie le hall du basilic à la salle des soldats d'argile du niveau supérieur.",
+          "note": "Zone 39 du module — Passage secret (Perception DD 10) : raccourci vers la zone 17."
+        },
+        {
+          "x": 7, "y": 4, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Une antichambre taillée à même la roche de façon segmentée, incrustée de lampes magiques violacées, où flotte un mélange de mille odeurs et d'étranges vapeurs. Xiximantre, sorcier homme-serpent immortel réduit à un corps desséché greffé sur une queue, y accueille les intrus d'un poli « Bonjour, bipèdes » — à moins qu'il ne flaire des pilleurs.",
+          "pnj": ["Xiximantre (sorcier homme-serpent immortel, amoral mais courtois)"],
+          "note": "Zone 40 du module — Croit la cité des serpents toujours vivante en surface ; toute preuve du contraire le met dans une rage folle."
+        },
+        {
+          "x": 7, "y": 5, "type": "trésor",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La réserve de Xiximantre : barils d'herbes antiques et de poudres, fûts d'acide et d'eau croupie, rangées de seringues, forceps et instruments tranchants. Au fond, six couvercles de bronze posés au sol dissimulent des oubliettes où croupissent quatre gobelins à 25 % de leurs points de vie.",
+          "pnj": ["4 gobelins captifs (25 % de leurs pv) entassés dans une oubliette"],
+          "tresor": "Une fiole de safran en poudre (50 po) ; six graines d'une plante disparue (25 po chacune auprès d'un herboriste).",
+          "note": "Zone 41 du module — Porte secrète vers 43 (Perception DD 15) ; Xiximantre ne troque jamais contre monnaie."
+        },
+        {
+          "x": 6, "y": 5, "type": "laboratoire",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Le laboratoire de Xiximantre : verrerie alchimique, éprouvettes et flacons magnifiques dont certains bouillonnent, éclairés de lampes magiques violacées. Aucune toile d'araignée ne les recouvre — tout est utilisé récemment. Le sorcier n'y laisse entrer personne, sauf apprentis ou victimes.",
+          "note": "Zone 42 du module — Porte en fer verrouillée : Xiximantre ne cède ses potions que contre des créatures vivantes."
+        },
+        {
+          "x": 9, "y": 3, "type": "salle du trône",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "La salle du trône, taillée dans la pierre rouge sertie d'or, s'ouvre au-delà de la porte monumentale faite de serpents de pierre entremêlés. Des écailles joliment gravées courent sur les murs et huit miroirs de la taille d'une main se dressent sur des présentoirs ; quiconque s'assoit sur le trône succombe à un désir de souveraineté et de conquête.",
+          "piege": "Malédiction du trône : Charisme DD 14, sinon désir de souveraineté et de conquête (réversible par magie) une fois hors du tombeau.",
+          "tresor": "Trône de pierre rouge et or (250 po, trois personnes au moins pour le soulever) ; 8 miroirs (10 po chacun) ; passage secret derrière une tenture.",
+          "note": "Zone 43 du module — La porte demande le serpent de pierre de la salle 32 ; le passage secret derrière la tenture mène vers 41 et révulse Xiximantre."
+        },
+        {
+          "x": -2, "y": 3, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Un escalier débouche sur un cylindre de roche taillé en alcôve, assez large pour deux personnes debout — véritable sas pivotant. Poussé à gauche, il amène l'alcôve face à trois lances jaillissant de la roche ; poussé à droite, il donne sur la réserve des gobelins.",
+          "piege": "Sas cylindre : gauche = trois lances jaillissantes (+8 à l'attaque, 1d10 dégâts perforants) ; droite = ouverture vers 45.",
+          "note": "Zone 44 du module — Porte en cylindre."
+        },
+        {
+          "x": -1, "y": 3, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une grotte au plafond bas (1 mètre 50) qui empeste la pourriture, les champignons et l'humidité : le sol est couvert de plumes, de chiffons et de bols de graisse. Une fouille consciencieuse des détritus révèle quelques outils et un bracelet sans éclat.",
+          "tresor": "Quatre pioches d'excavation et un bracelet en laiton (sans grande valeur), au prix d'une couche de fiente de chauves-souris.",
+          "note": "Zone 45 du module — Réserve des gobelins."
+        },
+        {
+          "x": 0, "y": 3, "type": "puits",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une grande fosse domine cette pièce sordide, d'où monte une odeur pestilentielle : des cadavres d'animaux recouvrent des cadavres de gobelins dans un amas pourri et couvert de champignons. C'est l'une des expériences ratées de Xiximantre, et le spectacle arrache des haut-le-cœur.",
+          "piege": "Spectacle répugnant : Vigueur DD 8, sinon nausée et fuite de dégoût.",
+          "note": "Zone 46 du module — Fosse de réincarnation (aucun trésor)."
+        },
+        {
+          "x": 1, "y": 3, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": true },
+          "description": "La salle commune des gobelins, où ils mangent des chauves-souris ou se battent entre eux. Dans un coin trône une statue de serpent recouverte d'or, de la taille d'un gobelin — celle que les gobelins ont arrachée à la fontaine de la salle de cérémonie (23).",
+          "ennemis": ["Gobelin ×4"],
+          "tresor": "Statue de serpent plaquée or, de la taille d'un gobelin (250 po) ; rapprochement possible avec la fontaine (Investigation DD 14).",
+          "note": "Zone 47 du module — La salle contient en réalité 2d4 gobelins."
+        },
+        {
+          "x": 2, "y": 3, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Crasse, pourriture et chuchotis dans les ténèbres : des statues grossières de boue et de bâtons peuplent ce dortoir. Les gobelins y dorment, presque invisibles au milieu des débris, et s'éveillent au moindre bruit significatif des pièces adjacentes.",
+          "ennemis": ["Gobelin ×4"],
+          "note": "Zone 48 du module — Dortoir gobelin : 1d6+1 gobelins la nuit, 3d4 le jour, endormis."
+        },
+        {
+          "x": 3, "y": 3, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Une salle partiellement effondrée servant d'armurerie et de poste de guet, à l'odeur fétide. Deux gobelins montent la garde et s'enfuient en hurlant dès qu'ils aperçoivent quelqu'un. La porte brisée donne sur le dôme de la fosse à sacrifices.",
+          "ennemis": ["Gobelin ×2"],
+          "tresor": "Deux fourches, une pile de couverts dans une caisse et une douzaine de bâtons affûtés.",
+          "note": "Zone 49 du module — Salle de garde des gobelins (porte brisée vers 28)."
+        },
+        {
+          "x": 1, "y": 4, "type": "trésor",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Des plantes maladives pourrissent dans le noir, mêlées de pièces d'or, d'armes et de doigts enterrés ; l'odeur de putréfaction, de fumier et de spores est à la limite du supportable. Les gobelins plantent ici tout et n'importe quoi pour voir si ça pousse — et la couronne des rois serpents y a fini ses jours.",
+          "tresor": "28 po et un rubis (30 po) dans la terre ; la couronne des rois serpents (huit serpents d'or et de platine entremêlés, yeux d'émeraude, dents de diamant — ~500 po).",
+          "note": "Zone 50 du module — Ferme des gobelins."
+        },
+        {
+          "x": 0, "y": 4, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un passage secret derrière une porte ardue à déceler (Perception DD 16) : les murs sont lisses et soigneusement taillés, mais le sol est encombré des détritus des gobelins et l'air est chargé d'un relent immonde.",
+          "note": "Zone 51 du module — Passage secret reliant le territoire des gobelins au hall du basilic (38)."
+        },
+        {
+          "x": -1, "y": 4, "type": "escaliers",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Un escalier remonte jusqu'à la surface, sous les racines d'un arbre. Une créature de taille humaine peut s'y faufiler ; dégager un passage plus large exigerait des haches et du temps. Les gobelins l'empruntent chaque nuit.",
+          "note": "Zone 52 du module — Escalier de sortie."
         }
       ]
     }

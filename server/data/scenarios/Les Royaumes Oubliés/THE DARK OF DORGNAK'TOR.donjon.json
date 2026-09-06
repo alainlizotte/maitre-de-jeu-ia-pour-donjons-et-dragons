@@ -1,13 +1,13 @@
 {
-  "id": "ro_the_dark_of_dorgnaktor_donjon",
+  "id": "ro_dorgnaktor_donjon",
   "scenario": "ro_the_dark_of_dorgnaktor",
-  "donjon_id": "ro_the_dark_of_dorgnaktor",
-  "titre": "Donjon du scénario ro_the_dark_of_dorgnaktor (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "Les ténèbres de Dorgnak'tor",
+  "titre": "Dorgnak'tor — cité naine ruinée",
+  "source": "The Dark of Dorgnak'tor (AD&D) — niveaux 1-2 ouverts, autres scellés par le « Maître »",
+  "note_convention": "Factions du module : Igrik'ilthul (flagelleur mental, portes), Horgul Blackfire + 16 duergars (coffre-fort), Xepel (savant derro), 200 derros, ~300 humanoïdes, et Vesherill (Slaad gris, magicien 18e — temple profané). Boss hors plafond FP : ajuster.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "Niveaux 1-2 de Dorgnak'tor",
       "entree": [
         0,
         0
@@ -18,134 +18,170 @@
           "y": 0,
           "type": "entrée",
           "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": 1,
-          "y": 0,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": 2,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Ogre ×1"
-          ]
-        },
-        {
-          "x": 3,
-          "y": 0,
-          "type": "salle vide",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Gnoll ×1"
-          ]
-        },
-        {
-          "x": 4,
-          "y": 0,
-          "type": "laboratoire",
-          "portes": {
             "nord": true,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": "",
+          "description": "L'ancienne route minière remonte vers la vallée cachée de Windhollow. Une patrouille d'humanoïdes — orques et gnolls menés par un chaman — y rôde entre les rochers défrichés par les mineurs nains d'antan.",
           "ennemis": [
-            "Gobelin ×1"
-          ]
+            "Orque ×3",
+            "Gnoll ×1"
+          ],
+          "note": "Patrouille du module (avec chaman). Par la route, embuscade massive : 30-40 humanoïdes et trois lanceurs de sorts — passer par la vallée."
         },
         {
-          "x": 4,
+          "x": -1,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La vallée cachée surplombe l'entrée des cavernes : un bon poste d'observation pour guetter la sortie des groupes de guerre et s'infiltrer quand l'entrée n'est « pratiquement plus gardée ».",
+          "note": "Attendre patiemment le départ d'un groupe de guerre pour entrer sans être repéré.",
+          "ennemis": []
+        },
+        {
+          "x": 0,
           "y": -1,
           "type": "garde",
           "portes": {
-            "nord": false,
+            "nord": true,
             "sud": true,
-            "est": true,
+            "est": false,
             "ouest": false
           },
-          "description": ""
+          "description": "Les portes de Dorgnak'tor : dix orcs y montent la garde sous le fouet d'un surveillant — un ogre magi flanqué de cinq ogres gardes du corps. Derrière eux s'ouvre la porte antique qui mène à la cité ruinée.",
+          "ennemis": [
+            "Orque ×4",
+            "Ogre ×1"
+          ],
+          "piege": "Le surveillant est un ogre magi (vol d'invisibilité, régénération) — repérer ses gardes avant d'agir.",
+          "note": "Si l'infiltration est repérée, le flagelleur mental Igrik'ilthul revient à la tête d'une patrouille."
         },
         {
-          "x": 5,
-          "y": -1,
-          "type": "trésor",
+          "x": 0,
+          "y": -2,
+          "type": "couloir",
           "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": 6,
-          "y": -1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": 7,
-          "y": -1,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
+            "nord": true,
             "sud": true,
             "est": false,
             "ouest": true
           },
-          "description": ""
+          "description": "Les galeries minières pillées depuis longtemps : chariots déraillés, veines d'argent grattées à vif et graffitis orques sur les appuis de pierre. Des gnolls y traquent les rongeurs entre deux rondes.",
+          "ennemis": [
+            "Gnoll ×2"
+          ]
         },
         {
-          "x": 7,
-          "y": 0,
-          "type": "salle du trône",
+          "x": -1,
+          "y": -2,
+          "type": "salle vide",
           "portes": {
             "nord": true,
             "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Le quartier général du clan Urth : des centaines de derros — le clan Urth, deux cents âmes fiévreuses et haineuses — s'y entassent parmi les ruines des salles communes naines, criblées de galeriés creusées dans la roche tendre.",
+          "ennemis": [
+            "Derro ×2"
+          ],
+          "note": "200 derros au total : éviter le combat frontal, passer inaperçu ou semer la discorde."
+        },
+        {
+          "x": 0,
+          "y": -3,
+          "type": "garde",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le quartier des mercenaires : une centaine d'humanoïdes à la solde du « Maître » — bugbears, gnolls et hobgobelins — y « vivent » entre les beuveries et les rondes, armures mal ajustées et trophées nains aux ceintures.",
+          "ennemis": [
+            "Gnoll ×2",
+            "Orque ×2"
+          ],
+          "note": "≈ 100 mercenaires (bugbears, gnolls, hobgobelins) : secteur à contourner."
+        },
+        {
+          "x": 1,
+          "y": -3,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "L'antre des duergars exilés : seize guerriers nains gris, tous mâles, dirigés par Horgul Noirfeu, ont établi leur camp devant le coffre-fort ancestral du clan Bouclier-du-Tonnerre — que le « Maître » les charge d'ouvrir depuis des mois, en vain.",
+          "tresor": "Le coffre-fort des Bouclier-du-Tonnerre toujours inviolé ; armes et armures magiques diverses des duergars.",
+          "pnj": [
+            "Horgul Noirfeu (duergar guerrier 10e niveau) et ses 16 guerriers"
+          ],
+          "note": "Curse/sort : les duergars ne peuvent pas user de leur pouvoir de géant. Alliance possible contre le « Maître ».",
+          "ennemis": []
+        },
+        {
+          "x": -1,
+          "y": -3,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La chambre du savant : grimoires dégoulinants, chandelles grésillantes et instruments de torture soigneusement rangés. Xepel, savant derro de septième niveau, y veille sur le trésor communautaire du clan, chaussons d'escalade aux pieds.",
+          "ennemis": [
+            "Derro ×2"
+          ],
+          "pnj": [
+            "Xepel, savant derro (7e niveau — dague d'assassin +2, bougie d'invocation)"
+          ],
+          "tresor": "Trésor communautaire du clan Urth ; dague d'assassin +2 ; parchemin de 4 sorts divins de 3e niveau.",
+          "note": "La bougie d'invocation (maléfique) est l'objet le plus dangereux de la pièce."
+        },
+        {
+          "x": 0,
+          "y": -4,
+          "type": "couloir",
+          "portes": {
+            "nord": true,
+            "sud": true,
             "est": false,
             "ouest": false
           },
-          "description": "[À RÉDIGER — antre du « Derro », final du scénario « ro_the_dark_of_dorgnaktor ». Reprendre la description du module.]",
+          "description": "Un éboulement trop soigné barre les escaliers descendants : par ordre du « Maître », tous les niveaux inférieurs de la cité ont été murés vivants — seuls les deux premiers niveaux restent ouverts. Des pierres gravées de runes slaadi marquent le sceau.",
+          "piege": "Sceau du Maître : forcer le passage déclencherait l'alerte dans toute la cité.",
+          "note": "Les niveaux 3+ sont scellés pour cacher les projets de conquête du nord.",
+          "ennemis": []
+        },
+        {
+          "x": 0,
+          "y": -5,
+          "type": "salle du trône",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": false
+          },
+          "description": "L'ancien temple nain, profané : les statues de Moradin ont les visages martelés, l'autel sert d'établi à des expériences de chair, et des runes violettes pulsent sur les murs. C'est ici que « le Maître » — Vesherill, Slaad gris, jadis magicien humain de Silverymoon, aspirant « sur-roi » du nord — trame sa conquête depuis deux siècles.",
           "ennemis": [
-            "Derro ×1"
-          ]
+            "Derro ×2"
+          ],
+          "pnj": [
+            "Vesherill, Slaad gris (magicien 18e niveau) — Igrik'ilthul, flagelleur mental/sorcier 10e niveau, y rend parfois compte"
+          ],
+          "tresor": "Trésors amassés pour « louer des alliés plus raffinés » (démons, slaads) ; pierre ionique rouge profond d'Igrik'ilthul.",
+          "note": "[AJUSTEMENT REQUIS] Vesherill (FP très élevé) et Igrik'ilthul (flagelleur mental) dépassent largement le plafond d'un groupe niveau 1 : dégrader, contourner (le tuer est « très improbable » même dans le module) ou réserver à un groupe de haut niveau. Tuer/capturer Igrik'ilthul met fin aux attaques sur Windhollow."
         }
       ]
     }

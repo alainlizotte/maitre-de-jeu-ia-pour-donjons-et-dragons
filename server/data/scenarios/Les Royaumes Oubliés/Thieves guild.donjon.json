@@ -1,143 +1,150 @@
 {
   "id": "ro_thieves_guild_donjon",
   "scenario": "ro_thieves_guild",
-  "donjon_id": "ro_thieves_guild",
-  "titre": "Donjon du scénario ro_thieves_guild (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "ro_thieves_guild_donjon",
+  "titre": "La Guilde des Voleurs de Shadowdale — repaire souterrain et temple oublié de l'Araignée",
+  "source": "Thieves Guild (AD&D 2e, Marko Picek, 1997 ; Forgotten Realms — Shadowdale, englouti). Repaire de la guilde des voleurs et, un étage plus bas, ancien temple sombre de l'Araignée (poison).",
+  "note_convention": "La trappe cachée de la hutte de Sylune mène au tunnel de terre des galeries de la guilde ; un escalier derrière le paillasson à glyphes d'araignée descend vers le temple oublié de l'Araignée. Portes symétriques, carte connexe. Les braconniers (brigands) et hommes d'armes servent la guilde ; les drows du temple sont affaiblis par des années de drogues et de poisons rituels. Le chef de la guilde garde son coffre derrière un mur d'illusion ; la haute prêtresse invoque des araignées géantes en combat final.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Les galeries de la guilde",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le tunnel de terre et de poutres creusé sous la hutte de Sylune : plafond bas à 2,2 mètres, parois de sol fraîchement pelleté et obscurité totale. La trappe s'ouvre sous les pas négligents — c'est l'entrée dérobée du repaire."
         },
         {
-          "x": -1,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": -1, "y": 0, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le poste de garde, une salle moyenne qu'éclaire une petite lanterne à huile scellée au mur. Deux briganers en armure de cuir, lance au poing, veillent sur l'accès aux galeries et ne lâcheront leurs armes sous aucun prétexte.",
+          "ennemis": ["Bandit ×2"]
         },
         {
-          "x": -1,
-          "y": 1,
-          "type": "crypte",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": -2, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "La caverne naturelle : une étroite galerie de granit gris creusée par la nature, non par les hommes, qui se rebouche bientôt sous un amas de terre fraîchement tassée, facile à dégager à coups de pelle."
         },
         {
-          "x": -1,
-          "y": 2,
-          "type": "autel",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": -2, "y": 1, "type": "antichambre",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "La salle commune : une longue table couverte des reliefs d'un festin récent sous une grande lampe à neuf chandelles. Dans le passage est, un fil d'alarme fait tinter une clochette vers le dortoir et donne l'alerte aux braconniers.",
+          "piege": "Fil d'alarme au sol : déclenche une clochette dans le dortoir s'il n'est pas localisé et désamorcé (Repérage et déblocage normaux, ne cause aucun dégât)."
         },
         {
-          "x": 0,
-          "y": 2,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": -1, "y": 1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le dortoir des braconniers : huit lits défaits alignés contre les murs, couvertures froissées d'un sommeil récent. Quiconque sonne l'alarme ou fait trop de bruit les tire du sommeil, arc-boutés et prêts à se battre."
         },
         {
-          "x": 0,
-          "y": 1,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 1, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La soute à armes, fermée par une porte de bois verrouillée : lances, épée longue et épée courte, arbalètes de poing, carreaux, pioches et pelles s'y entassent — de quoi armer tout le repaire.",
+          "tresor": "3 lances, épée longue, épée courte, 2 arbalètes de poing, 50 carreaux, 2 pioches, 2 pelles, 3 carquois."
         },
         {
-          "x": 1,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 1, "y": 1, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La garde du maître : deux hommes d'armes en cotte de mailles, plus aguerris que les braconniers, montent une faction farouche devant la chambre du chef. Ils se battront jusqu'au dernier pour le protéger.",
+          "ennemis": ["Garde ×2"]
         },
         {
-          "x": 2,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 2, "y": 1, "type": "salle du trône",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La chambre du maître de guilde : un grand bureau trône au centre, entouré d'armoires et de classeurs de dossiers. L'homme accueille les intrus d'un ton sec — « Vous n'êtes pas membres de cette guilde » — avant de négocier, attaquer ou recruter.",
+          "ennemis": ["Nécromancien_rouge ×1"]
         },
         {
-          "x": 3,
-          "y": 1,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 2, "y": 0, "type": "trésor",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Derrière un mur d'illusion se dissimule un étroit boyau qui tourne vers l'ouest, au bout duquel repose un grand coffre de métal verrouillé : le magot secret du chef de guilde des Voleurs de Shadowdale.",
+          "tresor": "Coffre verrouillé : 200 po, dague +1, rongeurs de serrure en argent, gemme de topaze."
         },
         {
-          "x": 3,
-          "y": 0,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Nécromancien rouge », final du scénario « ro_thieves_guild ». Reprendre la description du module.]",
-          "ennemis": [
-            "Nécromancien rouge ×1"
-          ]
+          "x": 1, "y": 0, "type": "escaliers",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un petit vestibule de pierre taillée mené au bout d'un couloir, avec un paillasson aux glyphes étranges : une araignée gravée et un texte en langue ancienne — « Temple du poison des Araignées » — que l'on peut déchiffrer. Derrière, des marches plongent vers le niveau inférieur sombre des drows.",
+          "note": "Un personnage maîtrisant les langues anciennes déchiffre le paillasson : « Temple du Poison des Araignées »."
+        }
+      ]
+    },
+    {
+      "nom": "Le temple oublié de l'Araignée",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le vestibule du temple sombre : murs, sol et plafond de blocs de marbre noir massifs et glacés. Une fois le groupe engagé, l'escalier d'entrée s'évanouit derrière eux et un mur se referme — sans la moindre trace de magie, ils sont piégés à l'intérieur."
+        },
+        {
+          "x": -1, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un corridor de marbre noir qui serpente vers le nord, flanqué de part et d'autre d'une rangée de lourds piliers. L'air confine les relents de poussière de pierre et de poison oublié."
+        },
+        {
+          "x": -2, "y": 0, "type": "bibliothèque",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "L'armoire aux poisons : une plaque de pierre à l'entrée annonce, en drow ancien, la bibliothèque à venin. Une grande étagère occupe tout le mur ouest ; un trou dans le mur nord, assez large pour ramper, est gardé par une araignée géante embusquée.",
+          "ennemis": ["Araignée_geante ×1"],
+          "tresor": "Deux fioles de potion de soin du poison, parmi des rangées de venins et d'herbes mortelles."
+        },
+        {
+          "x": -2, "y": 1, "type": "cuisine",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "La cuisine des poisons : un vaste chaudron domine la pièce et l'air y pique d'effluves acides. Un cuisinier drow renifle sa mixture devant une étagère de plantes souterraines ; il ne remarque le groupe que s'il est très bruyant.",
+          "pnj": ["Cuistot drow, maître des poisons"],
+          "note": "[AJUSTEMENT REQUIS] Drow maître des poisons (trait d'épée longue +1, résistance magique 50 %) — pas de clé bestiaire, jouer via fiche."
+        },
+        {
+          "x": -1, "y": 1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La grande salle du temple : une statue colossale d'araignée la domine et huit piliers de marbre soutiennent le plafond. La pièce paraît vide, mais le passage nord est scellé par un mur de force impénétrable.",
+          "tresor": "Petit coffre au coin nord-ouest : 150 po et une dague sacrifielle +3.",
+          "note": "Le passage nord est bloqué par un sort Mur de force : la baguette de désintégration (droites de la prêtresse) est nécessaire pour le lever."
+        },
+        {
+          "x": 0, "y": 1, "type": "autel",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": true },
+          "description": "La pièce la plus sacrilège du sanctuaire : un grand autel de pierre noire trône au nord, marqué de runes arachnéennes. Un bouton dissimulé au coin sud-est, combiné à un autre, ouvre un compartiment secret au cœur de l'autel.",
+          "note": "Le bouton secret du coin sud-est, combiné au bouton de la chambre de la haute prêtresse, révèle le compartiment de l'autel (bougie noire et idole d'araignée)."
+        },
+        {
+          "x": 1, "y": 1, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La prison du temple : quatre cellules exigües ; l'une renferme un prisonnier elfe nommé Eldas, prêt à rejoindre le groupe une fois libéré. Les autres ne gardent que des ossements de défunts, que les alertés pourraient animer.",
+          "pnj": ["Eldas, elfe combattant 2e niveau (prisonnier)"],
+          "note": "Eldas rejoint la troupe s'il est délivré, mais si Yandard le voleur est présent, ce dernier quittera le groupe (il répugne les elfes). Clés sur la ceinture d'un drow endormi des casernes."
+        },
+        {
+          "x": 2, "y": 1, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La caserne des drows : un baraquement de soldats qui attaquent à vue. Dans un coin, un drow drogué dort comme une brique, ignorant le fracas ; sur sa ceinture pendent les clés des cellules, invisibles sans un examen attentif.",
+          "pnj": ["Drows soldats du temple (×3)"],
+          "note": "[AJUSTEMENT REQUIS] Trois drows soldats (épées courtes, résistance magique 50 %) — pas de clé bestiaire ; la clé de prison est sur la ceinture du drow endormi."
+        },
+        {
+          "x": 2, "y": 0, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Le quartier des prêtresses : un long couloir aux deux portes latérales (nord et sud). Les prêtresses drows attaquent dès qu'on les surprend ; au fond, un mur d'illusion abrite une niche contenant la baguette de désintégration, seule arme capable de lever le mur de force.",
+          "pnj": ["Prêtresses drows (×2, clerics 3e niveau)"],
+          "tresor": "Baguette de désintégration (2 charges) dans une niche dissimulée derrière le mur d'illusion.",
+          "note": "[AJUSTEMENT REQUIS] Deux clercs drows 3e niveau (résistance magique 55 %, sorts : blessure légère, bénédiction, personne immobilisée) — pas de clé bestiaire."
+        },
+        {
+          "x": 1, "y": 0, "type": "puits",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le débarcadère du temple : des planches de bois surplombent une rivière souterraine noire. Un canoë lévite, suspendu environ cinq mètres au-dessus du sol — magie que dispel ne peut dissiper — avec deux rames à dextérité à l'intérieur."
+        },
+        {
+          "x": 0, "y": 2, "type": "salle du trône",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Le dernier hall sous l'autel : quatre grands piliers de marbre noir soutiennent le plafond. La haute prêtresse drow tourne le dos aux intrus, contemplant un téléporteur d'où deux flagelleurs mentaux viennent de s'enfuir avant qu'il ne se volatilise. Elle se retourne : « Vous seriez sages de fuir… mais vous ne sortirez pas d'ici vivants. »",
+          "ennemis": ["Araignée_geante ×2"],
+          "pnj": ["Haute prêtresse drow du temple de l'Araignée"],
+          "tresor": "Deux coffres de fer derrière des murs d'illusion (nord et sud) : épée longue +1, 300 po, parchemin de ténèbres continues ; carreaux empoisonnés (×3), 250 po, symbole sacré de Lolth.",
+          "note": "[AJUSTEMENT REQUIS] Haute prêtresse drow 5e niveau (résistance magique 65 %, sorts d'invocation d'insectes/araignées) — pas de clé bestiaire ; elle ne fuit jamais et frappe la mêlée une fois les araignées vaincues. Bouton secret présent en plus des deux coffres."
         }
       ]
     }

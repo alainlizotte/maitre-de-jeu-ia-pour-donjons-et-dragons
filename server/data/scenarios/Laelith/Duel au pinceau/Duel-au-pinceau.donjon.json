@@ -2,141 +2,159 @@
   "id": "laelith_duel_au_pinceau_donjon",
   "scenario": "laelith_duel_au_pinceau",
   "donjon_id": "laelith_duel_au_pinceau",
-  "titre": "Donjon du scénario laelith_duel_au_pinceau (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "La résidence de Valdenath — Duel au pinceau",
+  "source": "Aidedd.org — Duel au pinceau (scénario original Denis Beck, adaptation blueace) : atelier d'Edhelran, quartier de la Martre, maison de la cour et hôtel particulier de Valdenath (rez-de-chaussée et 1er étage).",
+  "note_convention": "Scénario 5e d'origine réinterprété avec les fiches D&D 3.5 du bestiaire. Gardes représentés par la fiche Garde (FP 1). Valdenath et Mitrias (grands prêtres, clercs niveau 14) sont hors plafond FP : en note [AJUSTEMENT REQUIS]. Le trompe-l'œil de la taverne, les passages secrets, la serrure de la galerie et le glyphe de la chambre ont été conservés fidèlement.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "La Main qui Travaille et l'hôtel de Valdenath — rez-de-chaussée",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Sur l'entrée de la place des Sept Royaumes, un attroupement inhabituel s'est formé devant les Étals de la Belle œuvre. Sur le parvis, deux chevalets portant des toiles vierges côte à côte : Van Belem le barbu et le jeune demi-elfe Edhelran s'affrontent en duel pictural sous le regard des maîtres de la guilde. Une colombe aux ailes peintes va se poser sur l'épaule du modèle désigné, le personnage le plus charismatique du groupe.",
+          "pnj": ["Van Warol (Premier Pinceau de la guilde, juge du duel)", "Edhelran (peintre demi-elfe, vainqueur du duel)", "Van Belem (peintre de la guilde, rival amer)"],
+          "note": "Contexte — le modèle désigné par la colombe sera la victime du sort de possession ; la toile du vainqueur disparaît dès la nuit suivante."
         },
         {
-          "x": 1,
-          "y": 0,
-          "type": "crypte",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -1, "type": "tableau",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Sous les combles d'une bâtisse à moitié en ruine, la mansarde d'Edhelran, au plafond de verre, est encombrée de toiles et de tableaux prodigieusement fidèles. Un grand lit défait, une table et un chevalet portant quelques vêtements composent tout le mobilier ; des traces de lutte et une lettre de menace gisent près de l'entrée. Aymotin, qui partage le logis, raconte la disparition d'Edhelran et de la toile du duel.",
+          "pnj": ["Aymotin (ami d'Edhelran, terrorisé)"],
+          "note": "L'atelier d'Edhelran, échelle des Toits pointus — traces de lutte, lettre : « Edhelran sera tué s'il prévient qui que ce soit ». Aymotin craint les représailles."
         },
         {
-          "x": 2,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 0, "y": -2, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Au-dessous de l'atelier, la chambre du vieux tisserand Ebolor déborde de monde : sa femme et leurs six enfants y couchent dans une promiscuité pauvre mais chaleureuse. L'homme, frustre et taciturne, le visage ravagé de tics, livre un maigre indice : hier, dans l'entrée, il a croisé un homme de forte corpulence portant à la main droite un anneau d'or orné de sept pierres de couleurs différentes. Il sait aussi qu'Edhelran fréquente la taverne de la Martre, au bord de la faille de l'Inlam.",
+          "pnj": ["Ebolor (vieux tisserand chauve)"],
+          "note": "Indice — l'homme à l'anneau d'or (sept pierres) et la taverne de la Martre ; dès que le groupe quitte la maison, il est filé par un fouineur."
         },
         {
-          "x": 2,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": -1, "y": -2, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "L'intérieur de l'estaminet, décoré en trompe-l'œil, semble avoir les dimensions d'un palais : fausses arrière-salles et escaliers fantômes qui mènent à des murs. C'est la grande salle enfumée où peintres, sculpteurs, poètes et danseurs se retrouvent autour de chopes d'hydromel. Le patron Piquetoile, torse nu et couvert de tatouages signés par de grands maîtres, connaît peu Edhelran — mais la description de l'homme à l'anneau éveille sa méfiance.",
+          "pnj": ["Piquetoile (patron de la taverne, jovial et tatoué)"],
+          "note": "Étape d'enquête — Persuasion DD 15 pour apprendre le nom d'Atkin, escroc de haut vol suspecté de tenir un atelier de faussaires place du Pilori."
         },
         {
-          "x": 2,
-          "y": 2,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 0, "y": -3, "type": "cellules",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Prise dans une rafle en sortant du quartier des artistes, le groupe est séparé des autres suspects et conduit dans les cellules voûtées de la maison de la cour. Jusque dans ce cachot, une haute autorité les attend : son excellence Erkiel, baron de Ravine et juge à la cour commune, qui les a fait espionner puis amener ici.",
+          "pnj": ["Erkiel (baron de Ravine, juge à la cour commune)"],
+          "note": "Étape scénarisée — le juge révèle l'enlèvement d'Edhelran par les sbires du temple du Crâne et remet au groupe les cartons d'invitation pour la réception chez Valdenath (bal costumé, échelle des Illusionnistes)."
         },
         {
-          "x": 2,
-          "y": 3,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": -4, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Le portail de l'hôtel particulier de Valdenath, au cœur de l'échelle des Illusionnistes, est tenu par quatre gardes en armes qui contrôlent les cartons d'invitation. Masqués et déguisés, les personnages gagnent le vestibule dallé où résonnent déjà les musiques de la réception.",
+          "ennemis": ["Garde ×4"],
+          "note": "Rez-de-chaussée — 4 des 12 gardes du pavillon ; ils refoulent poliment les sans-invitation."
         },
         {
-          "x": 3,
-          "y": 3,
-          "type": "abattoir",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -5, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Dans l'antichambre en bas des escaliers, quatre gardes interdisent tout passage vers l'étage : deux montent la garde en permanence, deux autres effectuent de petites rondes toutes les trente minutes. Une lanterne éclaire faiblement la volée de marches et le début du couloir vers la salle de banquet.",
+          "ennemis": ["Garde ×4"],
+          "note": "Rez-de-chaussée — 4 des 12 gardes ; première infraction : reconduite ferme, récidive : moins tendres."
         },
         {
-          "x": 3,
-          "y": 2,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 1, "y": -5, "type": "salle vide",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "De longues tables couvertes de victuailles garnissent la salle du banquet, où deux gardes veillent en sentinelles parmi les convives. Les personnages y croisent le prêche vibrant du père Fricottin et la quête qui suit son sermon.",
+          "pnj": ["Le père Fricottin (prêcheur de la réception)"],
+          "ennemis": ["Garde ×2"],
+          "note": "Rez-de-chaussée — 2 des 12 gardes."
         },
         {
-          "x": 4,
-          "y": 2,
-          "type": "cellules",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": -6, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Vaste salle de réception éclairée de lanternes où se tient le bal costumé : la cantatrice Criceline entame son tour de chant tandis que la belle Johanna s'entiche des personnages. L'architecte Le-Corpenché, Grand Élaborateur des Plans du Roi-Dieu, fait volontiers admirer son ouvrage — et se délier la langue moyennant boisson. Deux gardes veillent en sentinelle, et un pickpocket rôde parmi les invités.",
+          "pnj": ["Criceline (le Rossignol de Laelith, cantatrice)", "Le-Corpenché (architecte de la maison)", "Johanna (ravissante enquiquineuse)", "Pickpocket (invité voleur)"],
+          "ennemis": ["Garde ×2"],
+          "note": "Rez-de-chaussée — 2 des 12 gardes. Faire boire Le-Corpenché révèle le réduit secret de la bibliothèque et le passage du puits ; un pickpocket tente de vider les poches."
         },
         {
-          "x": 5,
-          "y": 2,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Nymphe (FP 7). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "x": 0, "y": -6, "type": "puits",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Dans le jardin clos à l'ouest de la maison s'ouvre un vieux puits. Quelques arceaux en fer incrustés dans la paroi circulaire permettent de descendre environ trois mètres jusqu'à une petite niche, d'où part un passage secret menant à un long et sombre couloir sous la maison.",
+          "piege": "Passage secret dans le puits : Fouille DD 25 (DD 15 si l'architecte Le-Corpenché en a parlé). L'échelle de fer remonte à la verticale de la cheminée de la chambre de Valdenath (étage).",
+          "note": "Le jardin, à l'ouest — le passage du puits est l'accès discret au premier étage."
+        }
+      ]
+    },
+    {
+      "nom": "Premier étage de l'hôtel de Valdenath",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "escaliers",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "En haut de l'escalier à la rampe sombre, un palier dessert les pièces du premier étage de l'hôtel. Nulle porte n'est fermée à clef en temps normal, mais quiconque y est surpris par les gardes est reconduit fermement en bas — une première fois.",
+          "note": "Accès par l'escalier gardé (antichambre) ou par le puits du jardin ; toutes les portes comportent une serrure, aucune n'est fermée à clef."
+        },
+        {
+          "x": 0, "y": -1, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Six lits de camp alignés sous les murs nus : d'ordinaire six soldats occupent cette chambre de gardes, mais ce soir elle est vide, tous les gardes étant de service au rez-de-chaussée.",
+          "note": "Chambre des gardes (zone 1) — vide ce soir."
+        },
+        {
+          "x": 0, "y": -2, "type": "trésor",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Derrière une porte fermée à clef s'ouvre une galerie chargée de bibelots et d'objets d'art offerts par les grands de ce monde à Valdenath : un véritable trésor, d'une valeur de plus de 10 000 pièces d'or.",
+          "tresor": "Bibelots et objets d'art pour plus de 10 000 po (principalement des cadeaux diplomatiques adressés à Valdenath, chef de la diplomatie du royaume des Deux Lacs).",
+          "piege": "Porte fermée à clef : crochetage DD 25 (outils de voleur).",
+          "note": "Galerie d'art (zone 2) — à leur niveau, les personnages n'ont quasiment aucune chance d'ouvrir cette porte ; voler ici condamnerait le groupe à la moitié du cloaque aux trousses."
+        },
+        {
+          "x": 0, "y": -3, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Six chambres richement décorées, tendues de soie et meublées d'un lit, d'une chaise, d'un coffre et d'une table de nuit : les appartements des invités du grand prêtre, vides ce soir.",
+          "note": "Chambres des invités (zone 3) — vides."
+        },
+        {
+          "x": -1, "y": -3, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Un oratoire où Valdenath vient méditer devant un autel sombre et une idole en forme de dragon noir, en priant le dieu Baine. Les murs portent plusieurs objets d'art sacrés ; l'encens et les cendres refroidies alourdissent l'air.",
+          "tresor": "Objets d'art religieux pour environ 2 000 po.",
+          "note": "Oratoire (zone 4) — le lieu de méditation du grand prêtre."
+        },
+        {
+          "x": 0, "y": -4, "type": "salle du trône",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Dans une ambiance de tapis précieux et de bois laqué, ce bureau sert de cadre à la rencontre secrète entre Mitrias, grand prêtre du Nuage, et Valdenath. Une énorme glace sans tain occupe le mur du fond : de l'autre côté, dans le réduit, le peintre enlevé exécute le portrait rituel de Mitrias.",
+          "note": "[AJUSTEMENT REQUIS] Valdenath (grand prêtre du Crâne et de la Taupe, clerc niveau 14, LN) et Mitrias (grand prêtre du Nuage) sont bien au-delà de FP 5 — tout affrontement direct est perdu d'avance ; jouer l'infiltration, la conversation et la fuite."
+        },
+        {
+          "x": 0, "y": -5, "type": "bibliothèque",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Les murs de cette pièce croulent sous les rayonnages d'ouvrages consacrés aux sujets les plus divers. Un passage secret, dissimulé derrière les livres, mène au réduit où travaille le peintre enlevé.",
+          "piege": "Passage secret vers le réduit (zone 7) : Perception DD 20 (DD 10 si l'architecte Le-Corpenché en a parlé).",
+          "note": "Bibliothèque (zone 6)."
+        },
+        {
+          "x": -1, "y": -5, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Dans ce réduit dissimulé au plafond bas, Edhelran, les yeux cernés, exécute le portrait de Mitrias en observant son modèle à travers le miroir sans tain du bureau. Deux hommes de main de Valdenath, des fanatiques voués corps et âme à leur maître, le surveillent sans relâche.",
+          "ennemis": ["Garde ×2"],
+          "pnj": ["Edhelran (peintre demi-elfe, prisonnier, contraint de peindre)"],
+          "note": "Réduit (zone 7) — les hommes de main sont représentés par la fiche Garde (FP 1) ; libérer Edhelran et récupérer la toile met fin au rituel."
+        },
+        {
+          "x": 0, "y": -6, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Une grande pièce meublée de sofas et ornée de tapisseries : le fumoir où Valdenath aime se détendre. Des tabacs de toutes sortes s'y entreposent, mais nulle drogue — le grand prêtre déteste tout ce qui altère la pensée.",
+          "note": "Fumoir (zone 8) — pièce de détente, sans danger."
+        },
+        {
+          "x": 1, "y": -6, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Une chambre luxueusement meublée garde des secrets précieux : c'est ici que repose le portrait peint lors du duel. Mais sa porte piégée déclenche les runes explosives d'un glyphe de protection qui libère une sphère acide de six mètres de rayon.",
+          "piege": "Glyphe de protection (runes explosives) sur la porte : l'ouvrir libère une sphère de 6 m de rayon centrée devant elle — sauvegarde de Dextérité, sinon 5d8 dégâts d'acide (moitié en cas de réussite).",
+          "tresor": "Le portrait du duel peint par Edhelran (l'enjeu de la quête) et un parchemin de mot de rappel (téléporte le lecteur au cœur du temple de la Taupe).",
+          "note": "Chambre de Valdenath (zone 9) — le passage secret du puits débouche derrière la cheminée ; Valdenath est dans son bureau (0,-4)."
         }
       ]
     }

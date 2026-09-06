@@ -2,12 +2,12 @@
   "id": "ro_to_find_a_gate_donjon",
   "scenario": "ro_to_find_a_gate",
   "donjon_id": "ro_to_find_a_gate",
-  "titre": "Donjon du scénario ro_to_find_a_gate (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "À la recherche d'un portail — les Ruines de Gate",
+  "source": "Kit module : To Find a Gate (AD&D 2e, Les Royaumes Oubliés — « The Ruins of Gate ») ; cartes Gate Level 1 / Forest of Gate / Spine of the World ; bestiaire D&D 3.5 local.",
+  "note_convention": "Le module ne fixe aucun plan : les personnages, aveuglés, traversent le bastion sur un « circuit de confusion ». Le manifeste modélise les lieux-clés (palier #1A, salles de garde #1–#7, salle de l'énigme choisie parmi #11/13/14/15, entrée des Portails, salle des portails) sur une grille serpentin. Zythalarlr (beholder) n'existe pas dans le bestiaire : il reste en PNJ, avec note [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "Niveau 1 — le bastion des Ruines de Gate",
       "entree": [
         0,
         0
@@ -19,128 +19,227 @@
           "type": "entrée",
           "portes": {
             "nord": false,
-            "sud": true,
-            "est": false,
+            "sud": false,
+            "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "Au bord du ravin, la gueule noire et puante des Ruines de Gate s'ouvre dans la rocaille, cerclée des talismans du clan gobelours : ossements de demi-humains, scalps desséchés et hampes de bois plantées en cercle. Un escalier circulaire de pierre s'enfonce en spirale dans les ténèbres du bastion.",
+          "ennemis": [
+            "Gobelin ×2",
+            "Worg ×2"
+          ],
+          "note": "Huit gobelins montés sur worgs surveillent l'approche depuis les hauteurs ; deux cavaliers filent avertir le bastion par un passage secret dès qu'ils repèrent les aventuriers."
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La salle de garde nord qui jouxte le palier #1A : huit gobelours vétérans y rechargent dix arbalètes lourdes derrière des meurtrières bouchées à la boue, guettant le moindre signe de rébellion chez ceux qu'on fait descendre.",
+          "ennemis": [
+            "Gobelours ×8"
+          ],
+          "note": "Avec la salle #2, ils déclenchent un feu croisé d'arbalètes dans le palier #1A si le piège est activé."
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Un couloir bas aux torches fétides, où l'escorte fait résonner bottes et armes à travers les ombres ; les murs ruissellent d'humidité et la fumée âcre voile les rares lueurs.",
+          "note": "Premier épisode du circuit destiné à désorienter les captifs aveuglés."
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Un poste avancé hérissé de guisarmes : les longues lames dressent leurs éclairs dans l'ombre dès qu'une file de silhouettes passe, les guerriers adossés à la pierre glacée.",
+          "ennemis": [
+            "Gobelours ×4"
+          ]
+        },
+        {
+          "x": 3,
+          "y": 1,
+          "type": "garde",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "La garde rapprochée du chef d'escouade Thragol, morgensterns au poing et boucliers levés : c'est ici que les nouveaux venus sont longuement jaugés, sous les rires gras, avant d'être conduits au palier de l'aveuglement.",
+          "ennemis": [
+            "Gobelours ×4"
+          ],
+          "pnj": [
+            "Thragol, chef de l'escouade d'accueil (gobelours)"
+          ],
+          "note": "Thragol parle un commun convenable ; les autres gobelours refusent tout nom et plaisantent sur le goût des demi-humains."
+        },
+        {
+          "x": 2,
+          "y": 1,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Huit vétérans mêlant lances, boucliers et épées, prêts à fondre sur quiconque écarterait le rang ; l'air y sent la graisse, le cuir huilé et l'os broyé.",
+          "ennemis": [
+            "Gobelours ×6"
+          ]
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "type": "antichambre",
+          "portes": {
+            "nord": true,
+            "sud": true,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le palier où s'arrête l'escalier : étroit (1,5 m sur 4,5 m), jonché d'ossements et maculé de sang séché. Les parois sont plaquées d'une épaisse couche de boue, d'herbe et de brindilles ; les portes, fermées à clé, sont usées par un fréquent va-et-vient. C'est ici que les aventuriers sont ligotés et aveuglés avant la longue marche.",
+          "piege": "Meurtrières percées dans les murs nord et sud : si les hôtes se rebiffent, les gobelours poussent les bouchons de boue et ouvrent un feu croisé d'arbalètes lourdes, dix arbalètes chargées de chaque côté et une réserve de soixante-quinze carreaux.",
+          "note": "Un passage secret permet aux éclaireurs gobelins d'entrer et de sortir du bastion sans être vus."
         },
         {
           "x": 0,
           "y": 1,
-          "type": "piège",
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La garde de morgensterns et de boucliers qui ferme la marche de l'escorte : silencieuse, impassible, elle encadre le groupe jusque dans les profondeurs du bastion.",
+          "ennemis": [
+            "Gobelours ×4"
+          ]
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "garde",
           "portes": {
             "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Le dernier rempart avant les salles du spectateur : huit vétérans mêlant lances longues et haches de bataille, dont les armes de belle facture trahissent l'enseignement de Zythalarlr.",
+          "ennemis": [
+            "Gobelours ×6"
+          ]
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "garde",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La salle de garde sud qui jouxte le palier #1A : huit gobelours aux arbalètes lourdes, immobiles derrière la meurtrière de boue, prêts à cisailler l'espace d'un éclair.",
+          "ennemis": [
+            "Gobelours ×8"
+          ],
+          "note": "En cas d'alerte, les sifflets des chefs d'escouade déclenchent le rassemblement de toute la force du clan."
+        },
+        {
+          "x": 2,
+          "y": 2,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Le long couloir du circuit de confusion : les guides tournent autour des captifs, frappent les parois, reviennent sur leurs pas — tout est fait pour brouiller chaque bruit et chaque odeur de torchère.",
+          "note": "Le trajet peut durer plusieurs jours, en boucles et en huit, avec des haltes de campement pour achever de désorienter les aventuriers."
+        },
+        {
+          "x": 2,
+          "y": 3,
+          "type": "salle du trône",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La grande salle choisie pour l'épreuve : au centre trône une hideuse créature ronde de près de deux mètres, gueule baveuse garnie de dents de dagues, pédoncules oculaires frémissants — mais ce n'est qu'une illusion. Derrière un mur d'illusion se tiennent le véritable Zythalarlr, le chaman, le chef du clan et quatre chefs d'escouade ; une cage de fer attend ceux qui disposent de quatre heures pour résoudre l'énigme.",
+          "ennemis": [
+            "Gobelours ×4"
+          ],
+          "pnj": [
+            "Zythalarlr, le Spectateur (beholder) — fiche à créer",
+            "Chaman et chef du clan gobelours",
+            "Les quatre chefs d'escouade gobelours"
+          ],
+          "note": "[AJUSTEMENT REQUIS] Zythalarlr (beholder) n'a pas de fiche dans le bestiaire (FP très élevé) : créer sa fiche 3.5. Sans la bonne réponse (« l'homme »), l'assemblée attaque ; au premier coup de sifflet les salles adjacentes débouchent en un round et les 240 combattants du clan arrivent en quatre rounds."
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "type": "puits",
+          "portes": {
+            "nord": false,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "description": "Un puits d'évasion s'ouvre dans un angle de la salle : fosse béante et noire qui plonge vers les niveaux inférieurs du bastion — la route de fuite silencieuse du spectateur et, qui sait, le chemin de quelque horreur de l'Underdark.",
+          "note": "Chacune des salles où Zythalarlr peut élire domicile possède un tel puits."
         },
         {
-          "x": -1,
-          "y": 1,
+          "x": 1,
+          "y": 3,
           "type": "entrée",
           "portes": {
             "nord": false,
-            "sud": true,
+            "sud": false,
             "est": true,
-            "ouest": false
+            "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Gobelin ×1"
-          ]
+          "description": "Un bloc de pierre noire de six mètres de côté, percé d'une unique arche haute de deux mètres d'où filtre une faible lumière : l'entrée des Portails. On ordonne aux aventuriers d'y pénétrer, seuls, les liens enfin coupés."
         },
         {
-          "x": -1,
-          "y": 2,
+          "x": 0,
+          "y": 3,
           "type": "trésor",
           "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": -2,
-          "y": 2,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
-        },
-        {
-          "x": -2,
-          "y": 1,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -3,
-          "y": 1,
-          "type": "crypte",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -4,
-          "y": 1,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": -4,
-          "y": 2,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -5,
-          "y": 2,
-          "type": "salle du trône",
-          "portes": {
             "nord": false,
             "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": "[À RÉDIGER — antre du « Worg », final du scénario « ro_to_find_a_gate ». Reprendre la description du module.]",
-          "ennemis": [
-            "Worg ×1"
-          ]
+          "description": "L'intérieur du bloc est bien plus vaste que son enveloppe — la magie y tord l'espace. La salle de quinze mètres de côté aligne le long de trois murs vingt blocs de pierre aux couleurs variées : ce sont les portails, chacun menant vers un plan d'existence différent.",
+          "tresor": "Les vingt portails permanents : bleu (Eau), noir (Énergie négative), gris (Fumée), brun (Terre), rouge (Feu), bleu clair (Glace), gris tacheté de blanc (Vase), cristal (Énergie positive), gris acier (Mechanus), jaune (Arcadia), vert (Mont Célestia), orange (Élysée), vert et blanc (Olympe), rouge sombre (Bytopia), rouge sombre et jaune (Abysse), blanc (Sigil), ménagerie (Pandémonium), violet (Terres Extérieures), gris (Fauves), rose (Arborea).",
+          "note": "L'aventure s'achève ici : aux joueurs de choisir leur destination — ou d'ourdir la reconquête des ruines."
         }
       ]
     }

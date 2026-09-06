@@ -2,156 +2,98 @@
   "id": "divers_army_of_the_damned_donjon",
   "scenario": "divers_army_of_the_damned",
   "donjon_id": "divers_army_of_the_damned",
-  "titre": "Donjon du scénario divers_army_of_the_damned (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Le Domaine de Mauer — l'armée maudite de Siegfried",
+  "source": "Kit « divers_army_of_the_damned » — module « Army of the Damned » (MtG : Innistrad), chapitre 5 « The Perfect Storm », Domaine de Mauer (zones A1–A10, plan de Sean Ellison). Adaptation D&D 3.5 avec le bestiaire local.",
+  "note_convention": "Siegfried Reinholdt, alchimiste nécromancien, a fui Shadowgrange après l'enlèvement de sa promise Katarina par les vampires Voldaren et s'est retranché dans le domaine de Mauer pour y forger une armée de morts-vivants. Les zones numérotées du module (A1 grandes portes, A2 grand hall, A3 salon ouest, A4 chambre secrète, A5 salle à manger, A6 cuisine, A7 écuries, A8 cellier, A9 escaliers de la tour, A10 laboratoire) sont mappées en salle fidèles sur une grille serpentin. Les créatures 5e ont été transposées sur les fiches du bestiaire local (FP ≤ 5) ; les maîtres du module hors plafond (Lambert FP 8, Shilgengar, Siegfried) sont signalés en note [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Domaine de Mauer",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Deux vantaux d'argent miroitants, dressés comme de grands miroirs, ferment l'entrée du domaine de Mauer et reflètent quiconque s'en approche. Une voix tonitruante monte des portes et pose une énigme — mais elles ne s'ouvriront pas sans la bonne réponse, car ces portes sont en réalité deux mimiques.",
+          "ennemis": ["mimique ×2"],
+          "note": "L'énigme : « Toujours courant / jamais marchant, parfois babillant / mais ne parlant jamais » — réponse : une rivière. Forcer les vantaux ou se tromper déclenche l'attaque des deux mimiques (elles se jettent hors de leur cadre, langue-pseudopode étreignante et morsure vicieuse ; ne poursuivent pas hors de la clairière). 900 XP partagés si l'énigme est résolue ou les mimiques vaincues."
         },
         {
-          "x": 1,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 1, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le grand hall ruisselle de pluie sous sa voûte effondrée : colonnes de marbre brisées, vitraux éclatés jetant des reflets rouges et violets aux éclairs, et six armures rouillées et poussiéreuses montant une garde posthume le long des murs. Au centre, la tour de pierre perce le plafond ; une porte de laiton luisante en garde l'accès.",
+          "ennemis": ["creature_artificielle_de_taille_tp ×2"],
+          "piege": "Sur la porte de laiton, une inscription minuscule presque invisible : « lisez ce texte à voix haute ». La prononcer déclenche des runes explosives : explosion de 6 m de rayon, 3d8 de foudre (Réflexes DD 14, moitié si réussite). La déclencher ou la dissiper éveille les armures animées de la salle."
         },
         {
-          "x": 1,
-          "y": 1,
-          "type": "garde",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Goule ×1"
-          ]
+          "x": 2, "y": 0, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un petit salon aux murs bleu pâle délavés, lacérés des lambeaux de portraits de famille déchirés ; des fauteuils à coussins mous entourent une table de bois cerclée de cerfs gravés, et une bibliothèque couvre le mur ouest. Derrière une ligne de poudre d'argent tracée sur le seuil, un homme aux allures de noble cathar vêtu de cuir clouté clame avoir été fait prisonnier par le « fou du manoir ».",
+          "ennemis": [],
+          "pnj": ["Lambert Spinne, vampire de guerre (prisonnier d'un cercle magique contre le mal)"],
+          "tresor": "Deux parchemins de déguisement cachés dans ses bottes ; tomes poussiéreux (10-30 po chacun), dont « Les Eaux sacrées de Sumnerryl » (150 po aux druides de Kessig) et « Chute de la Gloire », livre creux contenant un sablier d'or au sable de rubis (400 po).",
+          "note": "[AJUSTEMENT REQUIS] Lambert (vampire, FP 8 — hors plafond) essaie de faire briser la ligne de poudre d'argent (cercle magique contre le mal) pour s'échapper ; il promet richesses, informations ou faveurs en échange de sa libération. Négocier peut offrir une Horde de trésor CR 5 (DMG p137) ou une faveur des vampires Voldaren."
         },
         {
-          "x": 2,
-          "y": 1,
-          "type": "puits",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Loup ×1"
-          ]
+          "x": 3, "y": 0, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Derrière la bibliothèque du salon ouest (tirer le livre « Camoflage et ses applications pratiques » fait pivoter le meuble), une chambre secrète que nul habitant du domaine ne connaît : une vasque d'argent bouillonnante, nimbée d'une lumière d'aube, au centre d'une mosaïque où un héron d'argent et un bouc fiélon courent une éternelle poursuite. Une inscription céleste cerne le rebord : « Bénédiction pour les justes ; malédiction pour les cupides. »",
+          "note": "Fontaine de Bennu : qui en boit une première fois reçoit une vision (passé ou avenir) et un bénéfice magique unique (1d4 : sacrifice, vaillance passée, inspiration ou gloire future), consommable au moment choisi. Boire une seconde fois attire la défaveur de Bennu (niveau d'épuisement). Lieu de repos idéal — personne ne connaît cette pièce."
         },
         {
-          "x": 2,
-          "y": 0,
-          "type": "couloir",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
+          "x": 4, "y": 0, "type": "abattoir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Sous de hautes voûtes, la grande salle à manger est devenue un abattoir : trois longues tables croulent sous des monceaux de corps en putréfaction — têtes, bras, jambes et troncs triés en piles macabres au milieu d'écuelles et de cornes à boire. Le démon-cuisinier Shilgengar, carapace de chitine hérissée d'épines, y dépèce nuit et jour les cadavres des chariots funèbres, assisté de ses cinq mains-griffes.",
+          "ennemis": ["exterieur_chaos_extraplanaire_mal_de_taille_g ×1"],
+          "tresor": "Sur les tables, le couperet de boucher (arme magique du module) ; en fouillant les corps, deux anneaux de platine (75 po chacun), une bourse (15 pc, 13 pe, potion de vitalité) et une main tranchée serrant une baguette de projectiles magiques.",
+          "note": "[AJUSTEMENT REQUIS] Shilgengar (seigneur-démon de la gueule de cendre, cf. barlgura) et ses cinq mains-griffes travaillent sans relâche ; sous 20 PV il s'enfuit par le monte-plats vers le laboratoire. Le monte-charge de la tour (monte-plats) grimpe au sommet : manivelle DC 5 à 15 en Force selon la charge, ou escalade (DC 10 / 15 sur les parois lisses)."
         },
         {
-          "x": 3,
-          "y": 0,
-          "type": "laboratoire",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Zombie ×1"
-          ]
+          "x": 5, "y": 0, "type": "cuisine",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Un fracas de crise résonne derrière la porte : céramique écrasée, plaques de métal heurtant la pierre, grognements gutturaux et aboiements anxieux. Quatre créatures à la peau rouge cuivrée, hérissées d'épines, sautillent entre les fourneaux — un chaudron où flotte un soulier, un garde-manger hétéroclite — et s'égosillent sur la « sauce verte » qui manque : Shilgengar les a menacées d'anéantissement.",
+          "ennemis": ["exterieur_extraplanaire_mal_de_taille_p ×2"],
+          "note": "Les quatre diablotins charmbreakers sont pris de panique : ils proposeront aux héros de les aider à cuisiner, et drogueront le plat de Shilgengar (potion d'endormissement) pour laisser passer le groupe. Le tunnel secret révélé par la dryade Eudora (le bosquet) débouche derrière un placard de cette cuisine — entrée discrète dans le manoir."
         },
         {
-          "x": 3,
-          "y": -1,
-          "type": "crypte",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Kobold ×1"
-          ]
+          "x": 5, "y": 1, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Les écuries, petit bâtiment ouvert plaqué au mur est du manoir, abritent les chariots funèbres rafistolés qui ramènent les corps des villages. Autour du domaine, des silhouettes boueuses et loqueteuses creusent sans relâche une tranchée circulaire, projetant la gadoue en gestes saccadés : la horde de Siegfried, occupée à fortifier son antre.",
+          "ennemis": ["zombie ×3"],
+          "note": "Vingt zombies creusent la tranchée autour du domaine ; ils ignorent les passants tant qu'on ne les attaque pas, auquel cas 1d6+3 zombies voisins se ruent. Aucun trésor, mais les ornières des chariots funèbres trahissent la route de l'armée maudite vers les terres du sud."
         },
         {
-          "x": 3,
-          "y": -2,
-          "type": "garde",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 4, "y": 1, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un escalier de bois s'enfonce sous le domaine jusqu'à un cellier voûté transformé en geôle : de part et d'autre s'alignent des cellules de cinq pieds de large, closes de portes de fer à barreaux scellées. Une odeur de terre mouillée, de vieille ferraille et d'os imprègne la maçonnerie antique de la secte des paladins.",
+          "note": "Le kit s'interrompt ici (texte du module tronqué) : le contenu des cellules est laissé au MJ — voir le module original « The Perfect Storm » si disponible : captifs promis à l'atelier, morts-vivants en réserve ou dépôt de corps pour les chariots funèbres."
         },
         {
-          "x": 4,
-          "y": -2,
-          "type": "abattoir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 3, "y": 1, "type": "escaliers",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un escalier de pierre en colimaçon monte dans le fût de la tour, taillé dans l'antique maçonnerie des paladins fondateurs. Le grondement de l'orage fait vibrer la pierre à chaque volée, et des rubans de lumière pâle dansent dans l'ombre au-dessus : le chemin mène au laboratoire d'orage du sommet.",
+          "piege": "En accédant à la tour, se souvenir de la porte de laiton du grand hall (runes explosives, 3d8 de foudre, Réflexes DD 14) ; au sommet, la foudre frappe les paratonnerres (voir la salle du trône). Le monte-plats de la salle à manger peut aussi grimper par ce puits (manivelle ou escalade)."
         },
         {
-          "x": 5,
-          "y": -2,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « divers_army_of_the_damned ». Reprendre la description du module.]",
-          "ennemis": [
-            "Ombre ×1"
-          ],
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Vampire (FP 8). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "x": 2, "y": 1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Passé les premières marches, le boyau se heurte à un mur de terre et de pierre tassée : Siegfried a fait remblayer quasiment tout le second étage, bouchant les fenêtres de plâtre et de moellons pour couper toute approche par les murs. On rampe et on se faufile dans une obscurité compacte pour gagner le sommet de la tour.",
+          "note": "Les rubans de lumière pâle ondulant près de la tour (garde de radiance) sont de pure énergie : ils sèchent les morts-vivants et les fiélons (1d6 de dégâts lumineux par tour, Volonté DD 15 sinon effrayés 1 min) mais restent inoffensifs pour les mortels."
+        },
+        {
+          "x": 1, "y": 1, "type": "salle du trône",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Au sommet de la tour, sous une sphère de métal géante crépitante d'éclairs et des instruments déments qui descendent en tubes le long des murs, Siegfried règne sur son laboratoire d'orage. Dans une cuve, sa création ultime attend les derniers coups de foudre qui donneront vie à sa plus grande abomination, tandis qu'un quasit lui murmure des secrets fiélons à l'oreille.",
+          "ennemis": ["exterieur_extraplanaire_mal_de_taille_p ×1"],
+          "pnj": ["Siegfried Reinholdt, alchimiste nécromancien — le maître de l'armée maudite"],
+          "tresor": "La quête se conclut ici : le résonateur de Katarina (objet de la quête, confié à Siegfried) et les notes nécro-alchimiques du maître sur son armée maudite.",
+          "note": "[AJUSTEMENT REQUIS] Siegfried est un alchimiste-nécromancien hors plafond (FP > 5), assisté du quasit Qarr (représenté ici par un extraplanaire maléfique de taille P) ; sa création ultime (skaab / colosse de chair) s'éveille dans l'orage. Ajuster les fiches ou réserver ce sommet à un groupe de niveau supérieur. Sur le toit : foudre fréquente (1 sur 1d6 à chaque tour au sommet, 8d6 — Réflexes DD 15) et garde de radiance hostile aux morts-vivants."
+        },
+        {
+          "x": 0, "y": 1, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Au-delà du repaire de Siegfried, sous le fût de la tour, une porte de pierre ancienne scelle le caveau de la secte de paladins qui fonda le domaine il y a des millénaires : or, reliques et joyaux s'y sont accumulés dans la pénombre. « Des richesses inouïes attendent ceux qui osent explorer les antiques profondeurs du domaine. »",
+          "tresor": "Trésor antique des paladins fondateurs — coffres d'or, reliques saintes et gemmes, à distribuer selon la campagne (par ex. une Horde de trésor CR 5) : la récompense des braves enfouie sous la tour.",
+          "note": "Salle de récompense post-finale : le module promet « des richesses inouïes » pour les explorateurs des anciennes profondeurs — doser en fonction du niveau du groupe."
         }
       ]
     }

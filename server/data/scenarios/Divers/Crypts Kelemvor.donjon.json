@@ -2,12 +2,12 @@
   "id": "divers_crypts_kelemvor_donjon",
   "scenario": "divers_crypts_kelemvor",
   "donjon_id": "divers_crypts_kelemvor",
-  "titre": "Donjon du scénario divers_crypts_kelemvor (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Les Cryptes de Kelemvor",
+  "source": "The Crypts of Kelemvor (Dragon+ n°18, de Thomas Foss et Scott Fitzgerald Gray) — one-shot D&D pour personnages de niveau 3 à 5, adapté d'une quête de Neverwinter Online. Les héros doivent rallumer les brasiers de l'équilibre et rapporter les sceaux brisés pour contenir la horde de morts-vivants du liche Idris.",
+  "note_convention": "Manifeste construit sur les 13 zones numérotées du module (trois niveaux reliés par des escaliers, reportés en une grille serpentine sur un seul étage). Les créatures 5e absentes du bestiaire 3.5 (wight, crâne flamboyant) sont réinterprétées sur les gabarits locaux et signalées en note.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "Les Cryptes de Kelemvor",
       "entree": [
         0,
         0
@@ -23,83 +23,57 @@
             "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "L'escalier de pierre s'enfonce sous le temple de Kelemvor jusqu'à une porte de bois qui se verrouille derrière vous avec un bruit sinistre. Dans la petite salle, un foyer éteint et un sac de toile abandonné rappellent le poste de garde d'un prêtre. Au nord, une lourde porte de pierre sans poignée attend son levier de laiton, tandis qu'au sud une herse rouillée condamne un couloir plongé dans les ténèbres.",
+          "tresor": "Potion de soins au parfum de brandy, dans le sac de toile laissé par le prêtre de garde.",
+          "note": "Le prêtre de Kelemvor remet une lanterne, une pierre à feu et une tige d'acier avant d'enfermer le groupe : seul leur étincelle peut allumer les brasiers de l'équilibre."
         },
         {
           "x": 1,
           "y": 0,
-          "type": "escaliers",
+          "type": "antichambre",
           "portes": {
             "nord": false,
             "sud": false,
             "est": true,
             "ouest": true
           },
-          "description": ""
+          "description": "Carrefour de trois directions : une herse de fer à l'ouest, une porte de pierre au nord, et à l'est une salle où se dresse une statue de Kelemvor aux mains ouvertes. Une pièce de marbre — le premier sceau brisé — repose aux pieds de la statue, tandis que l'alcôve opposée est jonchée d'ossements, restes des squelettes massacrés par les Pilleurs de tombes.",
+          "note": "La porte de pierre au nord restera close jusqu'à ce que la clé de la chapelle (zone 8) soit tournée ; elle débloque alors l'accès aux niveaux inférieurs."
         },
         {
           "x": 2,
           "y": 0,
-          "type": "autel",
+          "type": "crypte",
           "portes": {
             "nord": false,
             "sud": false,
             "est": true,
             "ouest": true
           },
-          "description": "",
+          "description": "Immense crypte aux voûtes soutenues par des piliers, où trois sarcophages ornés bordent le mur du fond — l'un d'eux a perdu son couvercle. Au centre, un brasier de marbre à hauteur de taille, gravé du symbole de Kelemvor, est prêt à être embrasé ; un corps mutilé gît devant lui, et dans l'ombre des sarcophages une horde de zombies attend que le groupe s'approche.",
           "ennemis": [
-            "Ogre ×1"
-          ]
+            "Zombie ×8"
+          ],
+          "tresor": "Parchemin de prière de soins (prayer of healing) près du corps de l'acolyte, plus une tige d'acier et une pierre à feu supplémentaires.",
+          "note": "Allumer le brasier inflige 3d10 dégâts radiants aux morts-vivants dans son rayon pendant 3 rounds. Des portes de pierre déjà levées mènent vers les zones 4 et 5."
         },
         {
           "x": 3,
           "y": 0,
-          "type": "cellules",
+          "type": "piège",
           "portes": {
             "nord": false,
             "sud": true,
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Loup ×1"
-          ]
+          "description": "Toute petite chambre funéraire : un sarcophage plus orné que ceux de la grande crypte, un zombie détruit affalé à son pied et, plantée dans le mur, une lance jaillie de l'une des deux meurtrières — les restes d'un piège autrefois destiné à la défense des lieux.",
+          "piege": "Plaques de pression au sol et ancien piège à lance hors d'usage : aucun danger réel, mais de quoi rendre les explorateurs nerveux.",
+          "note": "Rien de valeur à glaner dans cette salle."
         },
         {
           "x": 3,
           "y": 1,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
-        },
-        {
-          "x": 4,
-          "y": 1,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Zombie ×1"
-          ]
-        },
-        {
-          "x": 4,
-          "y": 2,
           "type": "crypte",
           "portes": {
             "nord": true,
@@ -107,47 +81,140 @@
             "est": false,
             "ouest": true
           },
-          "description": ""
+          "description": "Les murs sont couverts de bas-reliefs mêlant le symbole de Kelemvor à des inscriptions magiques, qui vibrent d'une magie de garde et de contrainte perceptible à la détection de la magie. Au mur du fond, un sarcophage très orné, serti de gros rubis rouges, abrite déjà un occupant depuis longtemps réveillé.",
+          "ennemis": [
+            "Goule ×1"
+          ],
+          "tresor": "Quatre gemmes de sardonyx serties sous le couvercle du sarcophage, 10 po pièce.",
+          "note": "Au moindre contact, le couvercle s'envole et un wight en armure de chevalier attaque (réinterprété par la fiche Goule 3.5 du bestiaire local). Les wards de la salle l'affaiblissent, emplissent la pièce d'une lueur rouge pulsante et referment la porte ; un loquet caché la rouvre de l'intérieur."
         },
         {
-          "x": 3,
-          "y": 2,
-          "type": "trésor",
+          "x": 2,
+          "y": 1,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Dans cette intersection, deux portes de pierre sont séparées par un levier, un sarcophage occupe une alcôve et une statue de Kelemvor tient un sceau brisé entre ses mains. Tirer le levier ouvre les deux portes à la fois et dévoile un antre muré de toiles, dont les occupants — d'énormes araignées-loups — ne goûtent guère la visite.",
+          "ennemis": [
+            "Araignée_géante ×3"
+          ],
+          "tresor": "Dans les toiles du nid : une bourse de 15 po et une fine épée courte à poignée et fourreau d'argent, à la facture drow (20 po).",
+          "note": "Le sceau brisé se récupère sans peine tant qu'on n'ouvre pas les portes. Une araignée réduite à quelques points de vie s'échappe par un étroit tunnel menant à la surface."
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le long du mur est, une statue de Kelemvor porte un sceau brisé à ses pieds ; à l'ouest, un brasier attend sous une bannière effilochée aux couleurs du dieu des morts. Quatre sarcophages ornés se devinent dans les coins et près de l'entrée — celui du fond, brisé en deux, renferme un mouvement grouillant.",
+          "ennemis": [
+            "Zombie ×1"
+          ],
+          "tresor": "Trois parchemins de dévotion en loques (10 po auprès d'un temple) et un collier d'argent au symbole de Torm (50 po), dans le sarcophage cassé.",
+          "note": "Le zombie furieux qui bondit du sarcophage brisé utilise les statistiques d'un zombie-ogre (gabarit Ogre 3.5, mais de taille M)."
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "autel",
           "portes": {
             "nord": false,
             "sud": true,
             "est": true,
             "ouest": false
           },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "description": "La salle s'évase en chapelle : plafond voûté à trente pieds, lumière magique venue du nord, ossements épars partout. Sept sarcophages et des cercueils de bois empilés occupent le sud-ouest, des squelettes surgissent de derrière un pilier où une statue tient un sceau brisé ; au-delà des alcôves, une estrade surélevée porte le brasier de l'équilibre sous un bas-relief des balances de Kelemvor, curieusement inclinées vers la gauche.",
+          "ennemis": [
+            "Squelette ×6",
+            "Zombie ×2"
+          ],
+          "piege": "Plaque de pression dérobée en haut des marches de l'estrade : une gerbe de pointes jaillit des pieds de la victime (VD 14 Dex, 2d8 dégâts perçants).",
+          "tresor": "La cuirasse, en bon état mais sale, du clerc mort dévoré par les zombies dans l'alcôve ouest.",
+          "note": "Une grande clé de laiton scellée sous le bas-relief ne peut être retirée : la tourner rétablit l'équilibre des balances et ouvre, au loin, la porte de pierre du carrefour (zone 2), seule voie vers les niveaux inférieurs. À l'extrémité nord, des gravats et une corde effilochée marquent l'entrée du tunnel par où les Pilleurs de tombes ont gagné la chapelle."
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Derrière la porte de pierre désormais levée, un étroit réduit abrite un levier qui commande une seconde porte — déjà ouverte et calée d'un coin de fer — au-delà de laquelle un escalier raide plonge dans le noir.",
+          "note": "Escalier vers le niveau inférieur (salle des gardes). La seconde porte a été calée par les Pilleurs de tombes ; un loquet caché rouvre la porte du carrefour de l'intérieur."
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Un corridor sombre s'ouvre ensuite sur un carrefour en T : le bras oriental est effondré, le bras occidental s'achève sur une herse levée et calée, derrière laquelle on devine des marches. Des carreaux d'arbalète brisés jonchent le pied de la colonne sud-ouest — indice discret du piège qui arrose le passage.",
+          "piege": "Plaques de pression dissimulées sous la poussière du sol : quatre carreaux d'arbalète jaillissent de la paroi nord (+4 pour toucher, 1d10 dégâts perçants), répartis au hasard entre les victimes du couloir.",
+          "note": "Au-delà de la herse, l'escalier descend plus bas encore."
+        },
+        {
+          "x": 2,
+          "y": 2,
+          "type": "escaliers",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "L'escalier de pierre descend vers un palier puis tourne vers le nord ; des lueurs vacillantes dansent par intermittence sur les murs. En bas, à côté d'une porte de pierre laissée ouverte et calée, une statue de Kelemvor tient un sceau brisé.",
+          "note": "Des voix lointaines s'élèvent comme en pleine dispute : les Pilleurs de tombes, dans la salle des gardes."
+        },
+        {
+          "x": 3,
+          "y": 2,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Le sol de cette chambre est éventré juste devant la porte par une fosse à pointes écroulée, quinze pieds de large, qu'un étroit rebord permet de contourner ; au centre, le brasier de l'équilibre attend, éteint. Sur l'autre rive, dans la pénombre, deux silhouettes arpentent devant une porte de pierre surdimensionnée, en pleine dispute sur la manière de forcer un passage scellé de puissants wards.",
+          "pnj": [
+            "Les Pilleurs de tombes — Samulkin Farcaster (mage), Gromlik Trois-Dents (guerrier), Cailyassa Forgedawn (archère)"
+          ],
+          "piege": "Fosse à pointes écroulée au centre : le contournement exige une réussite (VD 10 Dex) ; en cas de chute, un jet de sauvegarde (VD 12 Dex) évite le pire — 3d6 dégâts perçants en cas d'échec.",
+          "tresor": "Si les Pilleurs de tombes sont vaincus : armes et armures ordinaires, trois potions de soins, pièces et gemmes pour 45 po et un objet magique consommable peu courant au choix du MJ.",
+          "note": "L'éclat du brasier, une fois allumé, désactive les wards de la porte qu'on peut alors ouvrir au levier. Les Pilleurs peuvent être alliés, rivaux ou ennemis selon la tournure de la négociation (VD 14 Charisme) ; leur prêtresse a été dévorée plus haut dans le donjon."
         },
         {
           "x": 3,
           "y": 3,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": 3,
-          "y": 4,
-          "type": "salle du trône",
+          "type": "crypte",
           "portes": {
             "nord": true,
             "sud": false,
             "est": false,
             "ouest": false
           },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « divers_crypts_kelemvor ». Reprendre la description du module.]",
+          "description": "Chambre funéraire au plafond bas : une statue de Kelemvor dans l'angle nord-est devant un grand coffre, un sarcophage unique à l'ouest — marqué de crânes et d'inscriptions thayennes — entouré de quatre piédestaux dont l'un porte un livre de prières poussiéreux. Un acolyte mort depuis longtemps gît devant la tombe, et du sarcophage monte un martèlement sourd : quelque chose s'est réveillé à votre arrivée.",
           "ennemis": [
-            "Ombre ×1"
-          ]
+            "Mort-vivant_de_taille_M ×1"
+          ],
+          "tresor": "Le coffre des offrandes à Kelemvor, au pied de la statue : gemmes et pièces pour 200 po au total.",
+          "note": "Le vengeur du sarcophage est un crâne flamboyant (flameskull) : absent du bestiaire 3.5, il est redéfini par le gabarit Mort-vivant de taille M (FP 3) enrichi de sorts de feu et d'éclair — fiche à générer via Outil_ImageMonstre si besoin. La lumière du brasier de la zone précédente l'affaiblit. La porte de sortie, sans levier, mène par un escalier à une porte dissimulée dans un mausolée près du temple."
         }
       ]
     }

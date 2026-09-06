@@ -1,148 +1,146 @@
 {
   "id": "laelith_le_collier_de_zark_donjon",
   "scenario": "laelith_le_collier_de_zark",
-  "donjon_id": "laelith_le_collier_de_zark",
-  "titre": "Donjon du scénario laelith_le_collier_de_zark (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "La maison Bagosh et le cloaque",
+  "titre": "La serrurerie Bagosh et le cloaque — Le Collier de Zark",
+  "source": "Aidedd.org — Le Collier de Zark (Stefan Schultz & Dorothea Sautter, adaptation blueace), zones 1-10 de la maison Bagosh, maison abandonnée, cloaque et parcours d'initiation A-H du module",
+  "note_convention": "Structure fidèle au module (10 zones numérotées + entrée du cloaque + parcours d'initiation A-H). Maison des Bagosh au-dessus, maison abandonnée et cloaque en sous-sol ; portes secrètes vers la maison abandonnée (cour) et vers le cloaque (cave). Monstres réinterprétés avec les fiches D&D 3.5 du bestiaire (module 5e d'origine).",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Maison Bagosh et cloaque",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "L'atelier du serrurier Bagosh, reconnaissable à sa grande enseigne en forme de clef, sent la limaille et la pierre froide : une petite cheminée avec une enclume fixe, un vaste établi et des étagères basses croulant sous les cadenas. Dans la rue, les mendiants et les enfants vous dévisagent avec méfiance, et une fenêtre à l'étage est grande ouverte.",
+          "pnj": ["Lana (servante de Sophia, se cache à l'étage ; grande boucles d'oreilles en cuivre)"],
+          "tresor": "Coffret plat dans le tiroir de l'établi (cadenas sophistiqué, Dextérité DD 20 avec outils de voleur) : 70 po.",
+          "note": "Zone 1 — Porte d'entrée fermée : convaincre Lana de faire entrer (Charisme DD 12)."
         },
         {
-          "x": 0,
-          "y": 1,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 1, "y": 0, "type": "cuisine",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": true },
+          "description": "Une cuisine très simple : un fourneau dans un coin, une porte donnant sur la cour et un escalier de bois menant à l'étage. Sous l'escalier, un rideau cache des marches qui descendent vers une minuscule cave à bouteilles. C'est ici que Zark fut attaché à un pied de table, la veille, pendant le rendez-vous de Lana et Sandor.",
+          "note": "Zone 2 — La cave sous l'escalier n'abrite que des bouteilles de vin (sans valeur)."
         },
         {
-          "x": 1,
-          "y": 1,
-          "type": "cellules",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Chien ×1"
-          ]
+          "x": 1, "y": -1, "type": "couloir",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": true },
+          "description": "Un petit couloir du premier étage, baigné de la lumière de deux fenêtres donnant sur la rue. Il dessert les chambres des demi-frères Bagosh, silencieuses sous les toits.",
+          "note": "Zone 4 — Premier étage, accessible depuis la cuisine."
         },
         {
-          "x": 1,
-          "y": 2,
-          "type": "salle vide",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Rat ×1"
-          ]
+          "x": 0, "y": -1, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Une chambre propre et bien rangée de serrurier consciencieux : un lit, une petite table, un bahut et quelques cintres. Sous le lit repose un petit coffre fermé à clé.",
+          "tresor": "Coffre sous le lit (Dextérité DD 15 avec outils de voleur) : dague dans son fourreau et assortiment de clés à étiquettes de bois inscrites en écriture secrète.",
+          "note": "Zone 5 — Les clés correspondent aux doubles fabriqués par Istvan à l'insu de ses clients."
         },
         {
-          "x": 1,
-          "y": 3,
-          "type": "garde",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 2, "y": -1, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Le repaire de Sandor, entre vagabond et homme d'affaires : tentures murales, grand lit couvert de tissus moelleux et une belle rapière accrochée au chevet. L'armoire entrouverte laisse voir des vêtements en cours de rangement.",
+          "tresor": "Sac dissimulé sous le matelas : 40 po et 140 pa. Dans le tiroir de la table, un livre de compte couvert de numéros et d'initiales au jargon de voleur.",
+          "note": "Zone 6 — Le livre de compte trahit la vraie activité de Sandor, charretier de façade."
         },
         {
-          "x": 2,
-          "y": 3,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 2, "y": 0, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une cour commune sombre et exiguë desservant plusieurs maisons mitoyennes : bois de chauffage entassé contre les murs, seaux et cuve à lessive. Deux petites remises en bois bordent le fond — la première pleine de paniers d'osier et de cruches cassées, la seconde entrouverte et vide.",
+          "note": "Zone 3 — Dans la remise vide, une brique mobile (Perception DD 14 ; un nain double son bonus de maîtrise) fait pivoter sans bruit le bloc vers la maison abandonnée."
         },
         {
-          "x": 3,
-          "y": 3,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 2, "y": 1, "type": "cuisine",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "L'ancienne cuisine de la maison abandonnée : la fenêtre extérieure est condamnée, mais le plafond en partie écroulé laisse passer le jour. La pièce est vide, la poussière du sol nue troublée par des traces de pas récentes.",
+          "note": "Zone 7 — Accès par la porte secrète de la cour (zone 3). Traces de pas fraîches (Perception DD 14)."
         },
         {
-          "x": 3,
-          "y": 4,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 3, "y": 1, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Cette pièce n'a presque plus de plafond et sa porte sur la rue est murée ; l'escalier de l'ancien étage est enterré sous les gravats et les poutres cassées. Six rats géants se cachent sous l'amas de décombres.",
+          "ennemis": ["Rat géant ×6"],
+          "note": "Zone 8 — Les rats se sentent menacés et attaquent dès qu'on déplace les débris."
         },
         {
-          "x": 4,
-          "y": 4,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 3, "y": 2, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "L'ancienne boutique des Bagosh a perdu presque tout son plafond, mais contrairement aux autres pièces, les débris y ont été largement remués. Sous l'escalier effondré se devine une descente vers la cave.",
+          "note": "Zone 9 — Investigation DD 15 pour comprendre que l'enchevêtrement de poutres se soulève si l'on retire celle du dessous ; force cumulée d'au moins 14 pour libérer l'accès."
         },
         {
-          "x": 5,
-          "y": 4,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "[À RÉDIGER — antre du « Cube gélatineux », final du scénario « laelith_le_collier_de_zark ». Reprendre la description du module.]",
-          "ennemis": [
-            "Cube gélatineux ×1"
-          ]
+          "x": 3, "y": 3, "type": "crypte",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Un escalier de briques descend vers une vaste cave voûtée, basse de plafond et qui sent le moisi, dans une obscurité totale. La salle est vide et les traces de pas s'arrêtent au bas des marches. Une pierre manque dans le mur, à hauteur d'épaule d'un humain.",
+          "note": "Zone 10 — Perception DD 10 pour remarquer la pierre manquante ; l'anneau qu'elle cache ouvre une porte secrète vers le cloaque."
+        },
+        {
+          "x": 2, "y": 3, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le cloaque de Laelith : un labyrinthe de couloirs de la hauteur d'un homme, aux cloisons de briques récentes dissimulant des mécanismes. Le passage se divise en T, avec d'un côté une porte banale marquée d'une croix rouge — danger, dans le langage des voleurs — et de l'autre une galerie qui s'enfonce dans les entrailles de la cité.",
+          "note": "Un cube gélatineux quasi translucide attend dans la branche du labyrinthe, irrésistiblement attiré par la lumière. Porte secrète vers la salle de délibération, très bien protégée (DD 25 — hors de portée de personnages de niveau 1-2)."
+        },
+        {
+          "x": 1, "y": 3, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La première salle du parcours d'initiation des apprentis-voleurs : une pièce vide, à peine meublée d'une misérable paillasse et d'un coffre cadenassé, un rideau masquant maladroitement une porte. Dès le seuil franchi, la porte d'entrée se referme seule et se verrouille.",
+          "piege": "Cadenas du coffre (Dextérité DD 10 avec outils de voleur) armé d'une aiguille enduite de venin de serpent dilué (Vigueur DD 11, 2d6 poison). Le coffre ne contient que du sable et un écriteau : « C'est simple, hein ? ».",
+          "note": "Parcours A — Épreuve d'initiation de la guilde de voleurs de Laelith."
+        },
+        {
+          "x": 0, "y": 3, "type": "autel",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Sur une petite table adossée au mur repose un coffret aux reflets argentés ; la pièce ne contient rien d'autre. En face de l'entrée, une porte de fer haute d'un mètre cinquante n'a ni serrure, ni poignée, ni gonds — seul un anneau attire le regard.",
+          "piege": "Le sol devant la table est truqué (Perception DD 15) : un fagot de bois s'abat sur l'imprudent. Actionner l'anneau fait tomber des pierres de la voûte (Réflexes DD 12 ou 1d8 contondant) ; la porte, elle, se pousse simplement.",
+          "note": "Parcours B — Le coffre est vide. Messages : « Regarde où tu mets les pieds ! » puis « Dernier avertissement, dorénavant chaque pas, chaque geste compte ! »."
+        },
+        {
+          "x": 0, "y": 4, "type": "bibliothèque",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Un bureau, des étagères garnies de livres et trois fauteuils devant une fausse cheminée : l'atmosphère est presque chaleureuse. Un coffret richement orné trône sur le bureau, et un fil tendu traverse la pièce à dix centimètres du sol.",
+          "piege": "Le fil déclenche l'alarme n°1 dans la salle de délibération ; déplacer les livres sans précaution déclenche l'alarme n°2. La pseudo-cheminée pivote (simple poussée) pour dégager le passage.",
+          "tresor": "Coffret fermé par une serrure complexe (Dextérité DD 15 avec outils de voleur) : 20 pc d'épreuve. Bourse de 40 pc cachée derrière une cloison, au fond des tiroirs du bureau.",
+          "note": "Parcours C — La clé du coffret est dissimulée dans un des livres piégés."
+        },
+        {
+          "x": 1, "y": 4, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Au centre de cette galerie trône une statue dont les yeux sont figurés par deux petites boules de jade ; dix portraits d'éminents personnages aux vêtements chargés ornent les murs. Sur l'un des tableaux, en face de la porte, un motif n'est pas peint : c'est un véritable trou de serrure.",
+          "piege": "Arracher les yeux de jade de leur orbite déclenche l'alarme n°3. La serrure du tableau se crochète (Dextérité DD 20 avec outils de voleur) ou s'ouvre avec la clé du coffret du bureau.",
+          "tresor": "60 pc cachés derrière le tableau de l'office ; yeux de jade sous alarme (précieux).",
+          "note": "Parcours D — Une grille communique avec la pièce voisine : faire tourner d'un demi-tour le deuxième et l'avant-dernier barreau pour la soulever."
+        },
+        {
+          "x": 2, "y": 4, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Quatre armoires vitrées exposent un capharnaüm d'objets : bijoux sertis, vaisselle, statuettes d'ivoire, talismans d'os et de plumes, animaux empaillés, armes finement travaillées — autant de bibelots sans valeur. Les étagères tiennent par un équilibre minutieusement calculé.",
+          "piege": "Le moindre poids en plus ou en moins sur une étagère déclenche l'alarme n°4 ; un fil tendu devant la porte déclenche l'alarme n°5.",
+          "tresor": "Trois bourses de 20 pc dissimulées au fond d'une des armoires.",
+          "note": "Parcours E — Intelligence DD 12 pour se rendre compte que tout ce fatras est sans valeur."
+        },
+        {
+          "x": 3, "y": 4, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Un lit à baldaquin, une table de chevet et une armoire composent cette chambre du parcours. Dans l'armoire, un fil tendu surveille les vieux vêtements pendus, et un coffret verrouillé est enfoui dessous.",
+          "piege": "Bouger les vêtements de l'armoire déclenche l'alarme n°6 ; appuyer inutilement sur la poignée de la porte suivante déclenche l'alarme n°7. Serrure du coffret : Dextérité DD 25 avec outils de voleur — la clé est dans les plis des draps du lit.",
+          "tresor": "Coffret de l'armoire : 60 pc.",
+          "note": "Parcours F — Les sept alarmes du parcours sonnent ici, dans la salle de délibération voisine."
+        },
+        {
+          "x": 3, "y": 5, "type": "salle du trône",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Une salle de réunion : deux tables disposées en T entourées d'une dizaine de chaises, six supports de torches dont trois allumés. Deux cloches sont suspendues au mur, leurs cordelettes disparaissant dans le plafond : on y compte les coups des alarmes du parcours.",
+          "ennemis": ["Bandit ×3"],
+          "tresor": "Gros sac en toile sur un meuble : 3100 pc et deux masques de velours noir rehaussés d'argent (25 po chacun). Sandor porte 18 po et une pierre porte-bonheur (+1 aux jets) ; ses compères 16 pa et 21 pc à eux deux.",
+          "note": "Final — Sandor (demi-elfe, chef du groupe « de la faille ») et 2 compères attendent le chef de guilde pour l'expertise des pierres du collier ; arrivée d'Hermès Soliman et d'un prêtre de Waukyne selon le nombre d'alarmes sonnées. [AJUSTEMENT REQUIS — Sandor est un capitaine : rehausser ses statistiques de bandit]"
+        },
+        {
+          "x": 2, "y": 5, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Une pièce secrète plus petite que la salle de délibération, avec une table, quatre chaises et deux supports de torches vides. Un beau bouclier est accroché au mur.",
+          "tresor": "Bouclier magique +1.",
+          "note": "Parcours H — Salle derrière un rideau ; si plus de deux alarmes ont sonné, les hommes de Soliman s'y cachent pour assaillir le groupe par-derrière."
         }
       ]
     }

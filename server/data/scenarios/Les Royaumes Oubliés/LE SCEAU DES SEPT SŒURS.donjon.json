@@ -2,12 +2,12 @@
   "id": "ro_le_sceau_des_sept_sœurs_donjon",
   "scenario": "ro_le_sceau_des_sept_sœurs",
   "donjon_id": "ro_le_sceau_des_sept_sœurs",
-  "titre": "Donjon du scénario ro_le_sceau_des_sept_sœurs (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Le Sceau des Sept Sœurs — les donjons de la campagne (forge de l'Anneau, caves de Cormaeryn, tanière du tigre)",
+  "source": "Campagne « Le Sceau des Sept Sœurs » (D&D 3.5, Luc de Cremoux) — chapitres introductif, 1 (Dans la Gueule du Loup) et 2 (Du Soleil et des Larmes).",
+  "note_convention": "Les trois donjons clés présents dans le kit de rédaction : la tanière du tigre sanguinaire (scénario d'introduction), les caves du château de Cormaeryn (chap. 1) et la forge de l'Anneau de l'Hiver sous l'Anauroch (chap. 2, salles 1 à 32 du module). Les nagas ténébreux et le tigre sanguinaire (FP > 5) ne figurent pas au bestiaire local à FP ≤ 5 : ils sont signalés en note [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
+      "nom": "La forge de l'Anneau de l'Hiver (Anauroch)",
       "entree": [
         0,
         0
@@ -19,60 +19,16 @@
           "type": "entrée",
           "portes": {
             "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": 0,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
-        },
-        {
-          "x": -1,
-          "y": 1,
-          "type": "crypte",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Ombre ×1",
-            "Orque ×1"
-          ]
-        },
-        {
-          "x": -1,
-          "y": 2,
-          "type": "garde",
-          "portes": {
-            "nord": true,
             "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": "",
-          "ennemis": [
-            "Licorne ×1",
-            "Aigle ×1"
-          ]
+          "description": "La Salle du Conseil : les murs sont ornés de gravures retraçant l'histoire de la forge, depuis sa création par les géants jusqu'à la forge de l'Anneau avec les magiciens elfes et les forgerons nains. Fauteuils de métal (mages Néther), de bois sculpté (elfes) et sièges de pierre (nains) se répartissent le long des murs, autour d'un vaste cercle gravé mêlant Moradin, Azuth et Corellon Larethian.",
+          "note": "L'escalier vers l'étage supérieur est irrémédiablement comblé par des gravats ; un passage secret vers la salle des enchantements est dissimulé (Fouille DD 25, 20 en recherche active)."
         },
         {
-          "x": 0,
-          "y": 2,
+          "x": 1,
+          "y": 0,
           "type": "salle vide",
           "portes": {
             "nord": false,
@@ -80,13 +36,149 @@
             "est": true,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Centaure ×1"
-          ]
+          "description": "La chambre du Maître Forgeron, figée dans son état initial : au moindre courant d'air, le lit, le bureau, le fauteuil et les livres des étagères s'effondrent en poussière. Seul reste suspendu à un crochet au-dessus du bureau un magnifique marteau de forge.",
+          "tresor": "Le marteau de forge du Maître Forgeron, suspendu au-dessus du bureau — conseillé pour forger la lame indispensable au passage secret.",
+          "note": "S'emparer du marteau avec précaution : le reste du mobilier ne survit pas au moindre dérangement."
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "trésor",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La chambre forte : les placards à portes blindées, jadis emplis de gemmes, d'or et de minerai magique, sont vides. Il reste quelques petits lingots de métaux rares (titane, plomb, nickel, aluminium, cobalt) nécessaires à l'alliage, et un squelette d'humain — victime du piège en W — gît dans l'un des placards.",
+          "tresor": "Lingots de métaux rares permettant de réaliser l'alliage requis pour pénétrer la salle des enchantements.",
+          "note": "Un Miroir d'Opposition est fixé au mur du fond, à masquer d'un rideau."
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "L'antichambre des quartiers des forgerons nains : mobilier de pierre finement taillée aux proportions naines, agréable et doux au toucher. La salle commune voisine, aux inscriptions Dethek et gravures, recèle des alliages secrets et techniques de forge connues des seuls nains.",
+          "piege": "Zone de téléportation (point W) à l'entrée de l'antichambre : chaque PJ qui marche dessus est projeté sans bruit dans les cellules de la chambre forte (Volonté DD 24 pour résister).",
+          "tresor": "Inscriptions Dethek des salle commune et chambres : alliages secrets et techniques de forge réservées aux nains.",
+          "note": "Un érudit y consacrant le temps nécessaire peut y découvrir les secrets des métallurgistes nains (salles 4 à 8)."
+        },
+        {
+          "x": 4,
+          "y": 0,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Les chambres des forgerons nains : un dortoir composé d'une salle commune et de chambres individuelles, tout en pierre finement taillée aux proportions naines. Une atmosphère presque douce émane de ces pièces abandonnées depuis des siècles.",
+          "note": "Si un compagnon disparaît sans un bruit, c'est qu'il a franchi la zone de téléportation de l'antichambre : fouillez la chambre forte."
+        },
+        {
+          "x": 4,
+          "y": 1,
+          "type": "salle vide",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Trois remises d'entrepôts dans lesquelles s'amoncelle tout un bric-à-brac : outils, ustensiles de cuisine et résidus de forge. Sous les tas hétéroclites sommeillent des sacs de charbon de bois et de coke, ainsi que des barres de minerai de fer.",
+          "tresor": "Sacs de charbon de bois, de coke et barres de minerai de fer — le combustible et le métal pour réactiver la forge.",
+          "note": "Salles 9, 10 et 11 du module."
+        },
+        {
+          "x": 3,
+          "y": 1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Les anciennes chambres des magiciens elfes : chaque porte est close d'une serrure magique scellée d'un Symbole de Douleur. Les murs, ornés de motifs floraux, d'arabesques et de runes magiques, sont un rare témoignage de l'ancienne magie elfique.",
+          "piege": "Symbole de Douleur scellé sur les portes magiquement fermées des chambres des mages elfes (salles 12 à 14).",
+          "note": "Ces gravures sont autant d'œuvres d'art que de leçons pour quiconque souhaite apprendre les premiers secrets de la magie elfique."
+        },
+        {
+          "x": 2,
+          "y": 1,
+          "type": "laboratoire",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La forge à proprement parler : deux enclumes flanquent l'entrée, un vaste foyer trône au centre avec une évacuation de fumée vers l'extérieur, et un tuyau de terre réfractaire brisé part du mur de gauche. Un levier surmonté d'un marteau de métal se dresse au-dessus de l'enclume de gauche, une molette réglant le flux d'air de la soufflerie.",
+          "note": "C'est ici — après réparation — que doit être forgée la lame du Maître de la Forge."
         },
         {
           "x": 1,
+          "y": 1,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La soufflerie : cuves et tuyaux de cuivre, aujourd'hui tous obstrués par le sable. Un complexe mécanisme de leviers et d'engrenages actionne un marteau hydraulique, entraîné par une roue à aube alimentée par le bassin de refroidissement.",
+          "note": "Nettoyer les tuyaux et débrayer la roue à aube permet de contrôler le marteau ; le couloir voisin sert de stockage aux chariots."
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La salle des gardes : une table, deux bancs et des arbalètes accrochées aux murs, tombés en morceaux depuis longtemps. La poussière y est épaisse et le silence total — personne ne garde ces lieux depuis des siècles.",
+          "note": "Aucune présence ici : les seuls dangers actifs de la forge sont les pièges et les esquiveurs que les nagas connaissent par cœur."
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "couloir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Les gisements : des rails de chariots longent des veines de charbon ET de fer — une rareté sur un même site — tandis qu'une rivière d'eau exceptionnellement pure et glacée disparaît dans un siphon sous la roche. Le conduit le plus au nord n'est bloqué que par des planches et quelques gravats.",
+          "piege": "Dalle-piège (point G) au bout du conduit : un pas déclenche le jaillissement de pointes métalliques depuis les murs (5d6, Réflexes DD 20 pour la moitié).",
+          "note": "L'eau de la rivière rassasie instantanément pour une journée. Les nagas ténébreux (FP 8 > 5, à ajuster) attaquent principalement par ici et connaissent les pièges — [AJUSTEMENT REQUIS]."
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "L'ancienne entrée de la forge, barrée par des éboulis, où gisent les restes d'une porte massive en bois bardée de fer sur laquelle subsiste une magie latente.",
+          "piege": "Symbole de Mort enveloppant le battant de porte effondré : il se déclenche si l'on soulève le reste de bois couché à terre (salle 18).",
+          "note": "Accès condamné par les éboulis : la voie d'entrée des PJs passe par les gisements et les mines."
+        },
+        {
+          "x": 2,
           "y": 2,
           "type": "puits",
           "portes": {
@@ -95,67 +187,327 @@
             "est": true,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Satyre ×1"
-          ]
+          "description": "Le bassin de refroidissement : une cuve de marbre profonde de deux mètres, sculptée de gravures d'êtres élémentaires de l'eau, aujourd'hui vide et salie de poussière. Une trappe est visible au fond, laissant deviner de l'eau derrière.",
+          "piege": "Ouvrir la trappe inonde le bassin depuis une rivière souterraine ; refermée sur l'eau, elle laisse l'eau stagner et les nagas peuvent s'infiltrer par là.",
+          "note": "Une canalisation part vers l'Ouest jusqu'à la soufflerie ; remplir le bassin est nécessaire pour activer le marteau hydraulique."
         },
         {
-          "x": 2,
+          "x": 3,
           "y": 2,
-          "type": "escaliers",
+          "type": "trésor",
           "portes": {
             "nord": false,
             "sud": false,
             "est": true,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Loup ×1"
-          ]
+          "description": "Le repaire des nagas ténébreux : un gisement rendu inaccessible par un siphon d'une vingtaine de mètres, où les serpents-mages entreposent leur trésor. Dans un coin traîne ce qui reste de la jambe de Gardakroz : un os et une botte.",
+          "tresor": "1900 pièces d'argent, 100 pièces de platine, un parchemin de magie profane (Rayon de Givre, Confusion mineure), un parchemin de magie divine (Cacophonie, Résistance aux énergies destructrices), un Bouclier +1, une Potion d'Endurance de l'Ours, un Elixir de déplacement furtif, 3 pierres de lune (50 po chacune) et un saphir bleu (1000 po).",
+          "note": "Les nagas ténébreux (FP 8 > 5) ne figurent pas au bestiaire à FP ≤ 5 — [AJUSTEMENT REQUIS]. La botte de Gardakroz se compare au portrait trouvé à Lunargent."
         },
         {
-          "x": 3,
+          "x": 4,
           "y": 2,
-          "type": "crypte",
+          "type": "salle vide",
           "portes": {
             "nord": false,
             "sud": true,
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Chameau ×1"
-          ]
+          "description": "Le cellier : de larges armoires de bois vermoulues servaient à ranger les denrées périssables de la cuisine, profitant de la fraîcheur du bassin voisin. Il n'en reste que de la poussière et des planches rongées.",
+          "note": "Les salaisons, elles, restaient dans la cuisine ; rien de précieux ici (salle 24)."
+        },
+        {
+          "x": 4,
+          "y": 3,
+          "type": "salle vide",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "La cave à vins : basse de plafond, ses casiers à bouteilles alignés le long du mur Ouest ne contiennent plus que des bouteilles vides, et deux tonneaux au fond abritent un résidu qui s'apparente plus à du vinaigre qu'à du nectar.",
+          "piege": "Piège à ressort au fond du couloir à droite : inspecter le mur en quête d'un passage secret déclenche le mur qui se projette sur le PJ (8d6, Réflexes DD 20 pour la moitié).",
+          "note": "Un passage secret est dissimulé au fond du passage de la cave à vins (salle 25)."
         },
         {
           "x": 3,
           "y": 3,
-          "type": "escaliers",
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le réfectoire : il ne reste dans cette grande salle qu'une longue table de bois massive et plusieurs chaises, en bon état malgré les années. Un buffet du mur Est contient encore vaisselle et couverts, sans autre valeur qu'archéologique.",
+          "note": "La qualité du bois a épargné ce mobilier des ravages du temps (salle 26)."
+        },
+        {
+          "x": 2,
+          "y": 3,
+          "type": "cuisine",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La cuisine : des fourneaux pour une dizaine de personnes, des crochets au plafond pour suspendre les charcuteries, et une évacuation de fumée vers l'extérieur. Un regard sur la canalisation reliant le bassin à la soufflerie permet d'y puiser l'eau.",
+          "note": "Quelques ustensiles sans valeur subsistent (salle 27)."
+        },
+        {
+          "x": 1,
+          "y": 3,
+          "type": "salle vide",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le dortoir des humains : cette grande salle abritait les gardes et les forgerons humains. Il n'en reste que des paillasses poussiéreuses et de petites tables, souvenirs d'une communauté disparue (salle 28).",
+          "note": "Aucun indice particulier ; s'arrêter ici, c'est perdre du temps au cœur d'un donjon actif."
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "type": "laboratoire",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La salle des enchantements : un pentacle trône au milieu de la pièce, entouré d'étagères encore garnies d'éprouvettes et de fioles poussiéreuses. Une très puissante magie hante encore les lieux : les objets magiques des PJs s'animent (et le font réellement s'ils s'attardent trop) et un magicien ressent vite un violent mal de tête.",
+          "note": "C'est ici qu'il faut prononcer la lame et les objets à enchanter — le cœur magique de la forge (salle 29)."
+        },
+        {
+          "x": 0,
+          "y": 4,
+          "type": "garde",
           "portes": {
             "nord": true,
             "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "La salle d'invocation : elle abritait des créatures gardiennes enchantées chargées de protéger les trésors de la forge. Il n'en reste que des squelettes — et les esprits fantômes de ces gardiens, des Hurleurs « améliorés » dont le hurlement glacé déchire l'esprit.",
+          "ennemis": [
+            "Hurleur ×2"
+          ],
+          "piege": "Hurlement des esprits gardiens : perte de 5 points de Sagesse (Volonté DD 20).",
+          "note": "Palliatif : laisser des paquets de viande — les créatures sont mortes de faim et ne leur seront que de peu d'utilité (salle 30)."
         },
         {
-          "x": 4,
-          "y": 3,
-          "type": "salle du trône",
+          "x": 1,
+          "y": 4,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La prison, conçue pour emprisonner les créatures invoquées, servait aussi à stocker les objets précieux et les dernières créations. Derrière une grille fermée à clé ne subsistent qu'un autel de pierre et un présentoir portant un mince rouleau de parchemin.",
+          "tresor": "Le parchemin de Kartas Couronne-de-Guerre : « J'ai consciencieusement tout nettoyé. Le trésor sera en lieu sûr, bien plus sûr que cette cache à la portée du premier venu ! »",
+          "note": "La grille ferme à clé ; l'anneau tant recherché n'est plus là — seule piste, le passage secret du Maître de la Forge (salle 31)."
+        },
+        {
+          "x": 2,
+          "y": 4,
+          "type": "couloir",
           "portes": {
             "nord": false,
             "sud": false,
             "est": false,
             "ouest": true
           },
-          "description": "[À RÉDIGER — antre du « Tigre », final du scénario « ro_le_sceau_des_sept_sœurs ». Reprendre la description du module.]",
+          "description": "Le passage secret : une main gravée dans le mur du fond, frappée d'une inscription en Dethek proclamant que « seul un Maître de la Forge peut pénétrer ces lieux ». Une fente discrète est creusée à gauche de la main, prête à recevoir une lame.",
+          "note": "Il faut réactiver la forge, forger la lame et la glisser dans la fente pour ouvrir l'accès aux salles suivantes ; une main de participant à la création de l'objet ouvre l'empreinte (salle 32)."
+        }
+      ]
+    },
+    {
+      "nom": "Caves du château de Cormaeryn",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Au bout de l'escalier du château, un passage secret donne accès aux caves. Un couloir d'où partent plusieurs portes — certaines fermant des geôles, d'autres des lieux de stockage — s'ouvre devant les PJs ; l'une d'elles, entrebâillée, laisse échapper des crépitements de feu.",
+          "note": "Accès uniquement par le monte-plats du château, que le comte actionne d'un levier secret ; les gardes patrouillent dans l'escalier."
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le couloir des caves, bordé de portes dont certaines ferment des geôles austères. Depuis l'une d'elles, entrouverte, monte un rougeoiement et un crépitement inquiétants.",
+          "note": "C'est l'épreuve des engrenages qui attend au bout : le comte observe les réactions du groupe via sa Boule de Cristal."
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Les geôles du château. Dans l'une d'elles croupit Sarah, jeune fille du village dont la disparition alarmait les habitants lors du scénario « Promenons-nous dans les bois ».",
+          "pnj": [
+            "Sarah, jeune fille du village disparue et emprisonnée"
+          ],
+          "note": "La libérer résonne avec l'enquête du scénario d'introduction."
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "type": "piège",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "La salle des engrenages : un homme est suspendu à une chaîne reliée à un levier par un complexe système d'engrenages. Un Mur de Force et une zone d'anti-magie empêchent d'approcher le prisonnier, qui pend au-dessus d'un feu crépitant.",
+          "piege": "Épreuve morale : abaisser le levier vers la gauche remonte le prisonnier, vers la droite le plonge dans les flammes — en réalité une puissante illusion (le feu ne tue pas).",
+          "note": "Se tromper de côté n'a pas de conséquence néfaste ; le comte juge moins le choix que les valeurs et la réaction du groupe."
+        },
+        {
+          "x": 3,
+          "y": 1,
+          "type": "abattoir",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Une grande salle faiblement éclairée : dès que les PJs y pénètrent, la porte se referme et des portes secrètes s'ouvrent, libérant tigres et gorilles sanguinaires — un par PJ. Le comte juge ici les capacités de combat et de travail d'équipe de chacun.",
+          "ennemis": [
+            "Tigre ×1",
+            "Gorille sanguinaire ×1"
+          ],
+          "note": "Épreuve finale de recrutement : survivre prouve la valeur martiale du groupe."
+        },
+        {
+          "x": 2,
+          "y": 1,
+          "type": "bibliothèque",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La bibliothèque du comte : tapisseries aux murs et rayonnages emplis d'ouvrages d'histoire locale, de chasse et de noblesse. Le Comte, installé à la fenêtre avec trois gardes, y attend les PJs, la main posée sur une Boule de Cristal qui lui a permis de suivre toute la soirée.",
+          "pnj": [
+            "Le Comte Cormaeryn"
+          ],
+          "note": "C'est ici que les PJs apprennent la véritable mission : retrouver l'Anneau de l'Hiver caché dans l'Anauroch."
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le corps de garde, toujours occupé : une cinquantaine de gardes patrouillent les chemins de ronde et les étages du château, et le capitaine Maelyn veille sur les entrées. Les éventuels intrus des compagnies marchandes restent, eux, invisibles.",
+          "ennemis": [
+            "Garde ×2"
+          ],
+          "pnj": [
+            "Maelyn, capitaine des gardes de Cormaeryn"
+          ],
+          "note": "Les gardes empêcheront tout invité de gagner les parties privées du château, notamment la bibliothèque par la voie normale."
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "antichambre",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "L'armurerie du château, réquisitionnée le temps de la fête pour une table de jeu derrière laquelle officie un croupier au « Jacques le Noir ». Certains jetons, gravés d'une inscription particulière, servent à faire passer discrètement des messages codés.",
+          "note": "Une halte parmi les animations de la Longue-Nuit ; les jetons « de chance » du croupier sont autant de relais codés."
+        }
+      ]
+    },
+    {
+      "nom": "Tanière du tigre sanguinaire (forêt de Cormaeryn)",
+      "entree": [
+        0,
+        0
+      ],
+      "salles": [
+        {
+          "x": 0,
+          "y": 0,
+          "type": "entrée",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Au terme d'une piste menée parmi les bois, un réseau de petites grottes au sein duquel la créature a élu domicile. Les empreintes relevées sur le corps d'Elisabeth désignent une bête quadrupède de grande taille, munie de griffes acérées.",
+          "note": "La piste longe une petite rivière descendue par la créature pour semer ses poursuivants ; suivre ces traces prend plusieurs heures."
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "La piste s'enfonce vers les grottes le long de la rivière : morsures profondes, dépouilles laissées à moitié dévorées et non emportées — un comportement qui n'est pas celui d'un prédateur naturel.",
+          "note": "Le corps n'ayant pas été emporté, les PJs peuvent soupçonner une créature magiquement modifiée plutôt qu'un simple fauve."
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "La tanière proprement dite. Au moment où les PJs l'explorent, la créature rentre de la chasse : un tigre démesuré, rendu plus fort et plus agressif par un rituel magique — un tigre « sanguinaire ».",
           "ennemis": [
             "Tigre ×1"
-          ]
+          ],
+          "note": "Le module désigne un tigre sanguinaire (FP 8 > 5, à ajuster) — [AJUSTEMENT REQUIS]. Une fois mort, l'étude révèle qu'il s'agit d'un tigre normal soumis à un rituel, lié à la caravane du Priakos."
         }
       ]
     }

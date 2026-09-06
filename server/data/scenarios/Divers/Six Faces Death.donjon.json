@@ -2,16 +2,13 @@
   "id": "divers_six_faces_death_donjon",
   "scenario": "divers_six_faces_death",
   "donjon_id": "divers_six_faces_death",
-  "titre": "Donjon du scénario divers_six_faces_death (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "Le Cube 1717 — la Forteresse aux six faces (Six Faces of Death)",
+  "source": "SIX FACES OF DEATH — Dragon+ #21 (Jason Bradley Thompson, D&D 5e) : adaptation D&D 3.5 du Cube 1717, forteresse cubique d'Acheron échouée en mer des Épées, au large de Faerûn.",
+  "note_convention": "Cube 1717, la forteresse cubique aux six faces surgie des flots : un étage unique condense fidèlement les zones 6.x du module (sas et gravité, postes de garde, baraquements, morgue, temple, siphon d'âmes, trésor, antre d'Avnas, réception, chirurgie, prison, salle des machines). La malédiction pixel (sauvegardes, niveaux physiques et mentaux) et l'eau du Styx sont au cœur du climat. Ennemis hors plafond FP ou absents du bestiaire (Vargo le seigneur-crâne, prédateur d'acier, render gris, berbalang, merregons et vétérans pixelés) signalés en note [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "La Forteresse-Cube",
+      "entree": [0, 0],
       "salles": [
         {
           "x": 0,
@@ -23,11 +20,121 @@
             "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "À la lisière de la mer des Épées, l'« île changeante » n'est pas une terre mais le sommet émergé du Cube 1717, forteresse d'Acheron. Une porte de métal s'ouvre sur un sas de quarante pieds menant à un battant intérieur, puis à une galerie de briques lumineuses qui plonge dans les entrailles de l'édifice. Un interrupteur de gravité confine l'espace : la descente y est aisée, la remontée exige de la méthode.",
+          "note": "Avnas se sert de la main coupée d'un hobgobelin loyal pour ouvrir les portes ; les créatures chaotiques peinent à les franchir. Zones 6.1/6.2 du module."
         },
         {
           "x": 1,
           "y": 0,
+          "type": "couloir",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Un carrefour à trois voies aux murs de métal riveté, où des échelles s'enfoncent vers d'obscurs boyaux. Une paire de lunettes pixel gît au fond d'un puits — quiconque les chausse perçoit l'état véritable des salles maudites, dépouillées de leur masque cubique.",
+          "tresor": "Lunettes pixel : laissent voir l'aspect non-maudit des pièces du Cube.",
+          "note": "Zones 6.3/6.4 du module — carrefour. La malédiction pixel et le brouillard du Styx imprègnent l'air."
+        },
+        {
+          "x": 2,
+          "y": 0,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Poste de garde éclairé de panneaux blancs : tables et bancs gris, armes cubiques aux râteliers. Des soldats pixelés sans visage se tiennent contre les murs — s'ils ne voient pas les intrus comme de grotesques mutants, ils proposent de les escorter vers la salle de réception plutôt que de se battre.",
+          "ennemis": ["Squelette ×1"],
+          "note": "Trois merregons et trois vétérans pixelés montent ici la garde (zone 6.8) ; en cas de violence, un soldat court alerter le seigneur-crâne."
+        },
+        {
+          "x": 2,
+          "y": 1,
+          "type": "escaliers",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Un puits de vingt pieds aux quatre faces garnies d'échelles relie les niveaux supérieurs et intermédiaires du Cube. La magie qui faisait léviter marchandises et prisonniers est morte ; on ne circule plus qu'à la force des bras, dans le gémissement des tuyaux.",
+          "note": "Passage vertical de la face 6, autrefois sustentation magique (zones 6.15/6.27) — tout départ de poursuite y est périlleux."
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "type": "cellules",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Baraquements supérieurs : des coursives superposées bordent des cellules de métal noir aux couchettes, casiers et lits superposés. Des distributeurs-blocs crachent de l'eau en boîtes de papier ciré et une pâte mâchée de chair de lemures, tandis que des douches de slime blanc nettoient les soldats.",
+          "note": "Neuf merregons et neuf vétérans pixelés s'y reposent par roulement (zone 6.11) : traverser ce dortoir discrètement est plus sage que d'y livrer bataille."
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "type": "crypte",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": true,
+            "ouest": false
+          },
+          "description": "La morgue glacée du Cube : des rangées de tables de métal et de tiroirs muraux débordent de corps humains, hobgobelins et duergars, dépecés et dévalisés. Les morts se lèvent au commandement du seigneur-crâne — une cuve à acide, au coin du local, dissout les surplus en quelques rounds.",
+          "ennemis": ["Squelette ×2", "Zombie ×1"],
+          "note": "Quarante-trois squelettes et soixante-quatorze zombies pixelés gisent ici (zone 6.21) ; si plus de six corps sont détruits, tous se soulèvent. Cuve d'acide : 6d6 dégâts par round au contact."
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "type": "piège",
+          "portes": {
+            "nord": true,
+            "sud": false,
+            "est": true,
+            "ouest": false
+          },
+          "description": "Une salle dévastée aux poutrelles tordues, au plancher éventré sur des ténèbres sans fond. Toutes les six secondes, une lueur pulse et un corps nu apparaît en plein vol, hurle, puis s'abîme quatre cents pieds plus bas — un nouveau damné renaît pour mourir, à chaque cycle.",
+          "piege": "Siphon d'âmes (zone 6.14) : pour descendre, Force DD 17 tous les 50 pieds (2d6 dégâts des tôles, chute de 20d6 à l'échec). Le plancher se répare en une semaine si l'Engine-Cœur survit.",
+          "note": "Les âmes renaissantes sont d'alignement loyal mauvais ; secourues, elles perdent tout souvenir… puis se transforment en vétérans pixelés au bout d'une heure."
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "type": "autel",
+          "portes": {
+            "nord": false,
+            "sud": false,
+            "est": true,
+            "ouest": true
+          },
+          "description": "Le temple du Cube : une nef aux voûtes ornées, des bancs noirs alignés face à un énorme bloc de métal gravé d'un visage sans nez. L'antique statue de Bane, dieu de la tyrannie, gît sur le flanc, profanée et remplacée par l'effigie de l'Archquadrone ; des hymnes en infernal courent encore sur les murs.",
+          "note": "Une fois par jour, les gardes pixelés viennent y prier (zone 6.12) : 1 chance sur 6 d'y surprendre trois merregons et trois vétérans en adoration."
+        },
+        {
+          "x": 2,
+          "y": 2,
+          "type": "garde",
+          "portes": {
+            "nord": false,
+            "sud": true,
+            "est": false,
+            "ouest": true
+          },
+          "description": "Un second poste de garde, jumeau du premier : tables grises, armes au bloc, lumières blanches. Des soldats pixelés y montent la garde devant un puits d'échelles, tout près des forges grondantes.",
+          "ennemis": ["Squelette ×1"],
+          "note": "Trois merregons et trois vétérans pixelés (zones 6.19/6.20) ; les fracas des forges voisines y parviennent étouffés."
+        },
+        {
+          "x": 2,
+          "y": 3,
           "type": "trésor",
           "portes": {
             "nord": true,
@@ -35,117 +142,81 @@
             "est": false,
             "ouest": true
           },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "description": "Derrière une porte haute gravée des cinq têtes de Tiamat s'amoncelle le trésor des seigneurs d'Acheron : pièces, urnes de gemmes, armes et armures de légende. Un brasier à tête de diable, sculpté d'un seul quartz rose, brûle d'un encens qui empoisonne l'air de la salle.",
+          "piege": "Glyphe de doigt de la mort (Volonté DD 18) sur la porte pour tout intrus hormis le seigneur-crâne ; encens vénéneux : 6d6 poison, Vigueur DD 18, tant que la porte reste close (zone 6.26).",
+          "tresor": "35 000 po, 120 000 pa, 42 000 pc ; urnes de gemmes (108 000 po) ; brasier de rose quartz (15 000 po) ; armes et armures magiques : cottes +1, armure de résistance au nécrotique, épée longue +2, lance +2, cor des Valhalla (bronze), heaume de téléportation, etc.",
+          "note": "Le butin des empires disparus, amassé pour un grand seigneur d'Acheron."
         },
         {
           "x": 1,
-          "y": -1,
-          "type": "crypte",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Derro ×1"
-          ]
-        },
-        {
-          "x": 1,
-          "y": -2,
-          "type": "entrée",
+          "y": 3,
+          "type": "laboratoire",
           "portes": {
             "nord": false,
-            "sud": true,
-            "est": false,
+            "sud": false,
+            "est": true,
             "ouest": true
           },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
+          "description": "L'antre d'Avnas, l'architecte derro du Cube : des courbes folles déchirent la géométrie des couloirs, et des cubes de papier peint remisent la porte secrète. Sur la planche à dessin s'étalent les plans de l'immense forteresse cubique et des constructions de rêve — fleurs, boyaux et coquillages.",
+          "ennemis": ["Derro ×1"],
+          "pnj": ["Avnas, la derro savant (architecte folle du Cube, alliée nominale du seigneur Vargo)"],
+          "tresor": "Collection de dés de 200 livres (dont 50 livres de valeur : 12 000 po) ; cinq dés magiques cachés (dé à œil, dé-crâne) ; le livre des motifs.",
+          "note": "[AJUSTEMENT REQUIS] Avnas change de personnalité au d6 (obsession, paranoïa, lucidité…). Moxon, son render gris pixelé, la protège et un défenseur de pierre garde la table à dessin (hors plafond, zone 6.17)."
         },
         {
           "x": 0,
-          "y": -2,
-          "type": "escaliers",
+          "y": 3,
+          "type": "antichambre",
           "portes": {
             "nord": false,
             "sud": true,
             "est": true,
             "ouest": false
           },
-          "description": "",
-          "ennemis": [
-            "Zombie ×1"
-          ]
+          "description": "La salle de réception : divans anguleux, bureaux de métal, classeurs débordant de registres en infernal — les noms des âmes condamnées au service de Bane, de Loviatar et de Tiamat. Un être ailé à la peau rouge y accueille les nouveaux venus comme de simples morts, jaugeant leur intelligence.",
+          "pnj": ["Bunch, le berbalang (courtisan du seigneur-crâne)"],
+          "note": "[AJUSTEMENT REQUIS] Bunch le berbalang évalue les têtes intelligentes destinées au Trône aux six faces, joue l'hôte, propose gîte et téléportation — et trahit aussitôt si cela sert Vargo (zone 6.13)."
         },
         {
           "x": 0,
-          "y": -1,
-          "type": "bibliothèque",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
-        },
-        {
-          "x": -1,
-          "y": -1,
-          "type": "escaliers",
+          "y": 4,
+          "type": "abattoir",
           "portes": {
             "nord": true,
             "sud": false,
             "est": true,
             "ouest": false
           },
-          "description": ""
+          "description": "La salle d'opération, moite d'un brouillard d'eau du Styx : carrelage bleu et vert, table chirurgicale, armoires de scalpels et placard croulant sous les têtes coupées. Les notes de Vargo, en deux écritures rageuses, dissèquent comment ajouter des têtes nouvelles et jauger l'intelligence des victimes.",
+          "note": "[AJUSTEMENT REQUIS] Sladek le mage pixelé s'y trouve parfois (50 %) et poursuit ses expériences alchimiques (zone 6.22)."
         },
         {
-          "x": -1,
-          "y": -2,
-          "type": "piège",
+          "x": 1,
+          "y": 4,
+          "type": "cellules",
           "portes": {
             "nord": false,
-            "sud": true,
-            "est": false,
+            "sud": false,
+            "est": true,
             "ouest": true
           },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "description": "La prison de haute sécurité : des oubliettes de trente pieds s'ouvrent sous une lumière blanche, leurs barreaux de métal gravés de sentences infernales. La cellule du seigneur-crâne proclame : « Sédition, sédition, sédition — décapité, têtes fusionnées en un corps, ressuscité, un million de condamnations à vie. »",
+          "note": "Les corps des prisonniers d'Earl Andromalius pendent encore aux chaînes, victimes de cruelles expériences magiques (zone 6.24)."
         },
         {
-          "x": -2,
-          "y": -2,
-          "type": "garde",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
-        },
-        {
-          "x": -2,
-          "y": -1,
+          "x": 2,
+          "y": 4,
           "type": "salle du trône",
           "portes": {
-            "nord": true,
+            "nord": false,
             "sud": false,
             "est": false,
-            "ouest": false
+            "ouest": true
           },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « divers_six_faces_death ». Reprendre la description du module.]",
-          "ennemis": [
-            "Ombre ×1"
-          ]
+          "description": "Au cœur exact du Cube bat la salle des machines : vannes, tuyaux, vapeur rouge et l'immense carcasse de l'Archquadrone éventrée. Sur une plateforme de métal, le Trône aux six faces — six sièges adossés couronnés de ventouses crâniennes — attend son seigneur ; un anneau d'acier gris se déroule autour de l'Engine-Cœur pour le défendre.",
+          "ennemis": ["Ombre ×1"],
+          "pnj": ["Vargo, le seigneur-crâne (maître du Trône aux six faces)"],
+          "note": "[AJUSTEMENT REQUIS] Le véritable maître est Vargo, seigneur-crâne à trois têtes (hors plafond, ici figuré par une ombre incarnant sa puissance). Le prédateur d'acier pixelé défend l'Engine-Cœur ; détruire celui-ci lève la malédiction (zone 6.28)."
         }
       ]
     }

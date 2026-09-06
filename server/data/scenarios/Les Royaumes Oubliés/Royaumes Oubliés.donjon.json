@@ -1,164 +1,166 @@
 {
   "id": "ro_royaumes_oublies_donjon",
   "scenario": "ro_royaumes_oublies",
-  "donjon_id": "ro_royaumes_oublies",
-  "titre": "Donjon du scénario ro_royaumes_oublies (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "La forteresse de Cryptejardin",
+  "titre": "La Forteresse de Cryptejardin — bastion du Zhentarim, temple de Garagos et donjon de Monagar Sythael",
+  "source": "Kit « ro_royaumes_oublies » (85 544 caractères) — scénario D&D 3.5 Les Royaumes Oubliés : la forteresse de Cryptejardin, bastion du Noir Réseau dans les Marches d'Argent (village de Sang-Noir, forêt de Cryptejardin).",
+  "note_convention": "Les cinq niveaux du module (tunnel et souterrains, caves, cellules et salle de torture, chambres des prêtres, donjon) sont ramenés à un seul étage en grille serpentine, les escaliers matérialisant les transitions. Ennemis issus du bestiaire (FP ≤ 5) ; les humanoïdes (agents du Zhentarim, prêtres de Garagos, bourreau, mageciel Vendell) et les chefs hors plafond figurent en « pnj »/« note ». Vendell est absent durant la visite (en chasse sur sa manticore). Rencontres d'approche fidèles au module : patrouilles gobelinoïdes (4 gobelins + gobelours), krenshar, araignée-sabre, ours brun et meute de loups rabattus par Vendell.",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "La forteresse de Cryptejardin",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Au pied du pic rocheux qui porte la forteresse, une toile de la couleur de la pierre, tapissée de lichen, dissimule l'orifice du tunnel de secours. Derrière, une caverne naturelle se termine par une épaisse grille de métal, close.",
+          "note": "Tunnel de repli des bâtisseurs : le trouver par hasard est difficile (Fouille DD25), mais simple si l'on sait quoi chercher (DD10). La grille s'actionne par un levier situé à l'intérieur ; l'ouvrir fait un vacarme qui alerte les gobelins de la salle de garde."
         },
         {
-          "x": 0,
-          "y": -1,
-          "type": "antichambre",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": -2, "y": -1, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Le tunnel taillé de main d'homme, large de trois mètres, aux angles droits bien nets, remonte le rocher dans une pénombre moite. Des torches fichées dans des anneaux de métal, tous les cinq mètres, éclairent la pierre nue d'une lueur vacillante."
         },
         {
-          "x": -1,
-          "y": -1,
-          "type": "autel",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Manticore ×1",
-            "Krenshar ×1"
-          ]
+          "x": -1, "y": -1, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La salle de garde des gobelins : un feu de camp se consume au centre, et des caisses et des barriques de denrées encombrent chaque mur. Une demi-douzaine de peaux-vertes y monte la garde, prêts à donner l'alarme au moindre bruit.",
+          "ennemis": ["Gobelin ×4"],
+          "note": "Six gobelins au total ; s'ils ont été attirés par le fracas de la grille du tunnel, il n'en reste que deux. En forêt, les patrouilles de la forteresse comptent quatre gobelins menés par un gobelours (sergent)."
         },
         {
-          "x": -2,
-          "y": -1,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Ours brun ×1",
-            "Hyène ×1"
-          ]
+          "x": 0, "y": -1, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": true },
+          "description": "Cette salle est occupée par une grande table de bois éclairée de bougies, jonchée de pièces et de dés à jouer. Trois hommes vêtus de sombre se redressent, armes dégainées, dès que l'ombre d'un intrus franchit la porte.",
+          "pnj": "3 agents du Zhentarim",
+          "tresor": "16 PA et des dés à jouer éparpillés sur la table.",
+          "note": "Si l'arrivée du groupe est fracassante, ces Zhents donnent l'alerte et rejoignent les gardes gobelins de la salle voisine."
         },
         {
-          "x": -3,
-          "y": -1,
-          "type": "cellules",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Griffon ×1",
-            "Orque ×1"
-          ]
+          "x": 1, "y": -1, "type": "escaliers",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Des marches étroites montent en tournant sur plusieurs dizaines de mètres, rendues glissantes par une humidité tenace. Une chaussée traîtresse attend le marcheur trop pressé, qui dégringolerait sur la pierre.",
+          "note": "Test en REF (DD10) pour conserver l'équilibre ; échec = chute de 1d6 PV. L'escalier débouche dans les caves de la forteresse."
         },
         {
-          "x": -3,
-          "y": -2,
-          "type": "abattoir",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Magmatique ×1",
-            "Squelette ×1"
-          ]
+          "x": 1, "y": -2, "type": "couloir",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Dans les caves, un long couloir est illuminé par des pots d'huile enflammée suspendus au plafond par des chaînes. Les Zhents surveillent les salles voisines tandis que les prêtres de Garagos veillent sur leur temple, plus loin.",
+          "note": "L'escalier F de ce niveau est piégé (fléchettes, Détection DD25) ; les occupants lui préfèrent l'escalier G. La manière d'aborder les caves décide de l'attitude des prêtres : parlement ou bain de sang."
         },
         {
-          "x": -3,
-          "y": -3,
-          "type": "antichambre",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Gobelours ×1",
-            "Gobelin ×1"
-          ]
+          "x": 0, "y": -2, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une salle remplie de caisses vides ou fermées, où la moisissure pique les narines dès le pas franchi. Une fouille minutieuse épargne enfin quelques denrées encore saines au milieu des réserves avariées.",
+          "tresor": "Environ 10 rations journalières comestibles (la majeure partie des caisses est avariée)."
         },
         {
-          "x": -3,
-          "y": -4,
-          "type": "puits",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Loup ×1",
-            "Chat ×1"
-          ]
+          "x": -1, "y": -2, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La cave à vins : des tonneaux collés les uns aux autres, pour la plupart mis en perce ou vidés, oubliés là depuis des lustres. Un seul tonneau, intact, recèle un vin capiteux d'une très belle venue.",
+          "tresor": "Un tonneau encore plein d'un vin capiteux et de très bonne qualité."
         },
         {
-          "x": -4,
-          "y": -4,
-          "type": "salle vide",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": -2, "y": -2, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Dans cette salle aux deux coffres, un prêtre de Garagos et deux Zhentilars se déchirent à voix haute. L'un jure que son dieu est mort, les autres que Tempus a pris la guerre ; la discorde fait trembler les murs.",
+          "pnj": "Prêtre de Garagos et 2 agents du Zhentarim (en dispute)",
+          "note": "Une écoute discrète (Déplacement silencieux DD10) révèle la faille entre le culte et le Noir Réseau — une discorde exploitable pour s'allier aux prêtres."
         },
         {
-          "x": -5,
-          "y": -4,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Troll », final du scénario « ro_royaumes_oublies ». Reprendre la description du module.]",
-          "ennemis": [
-            "Troll ×1"
-          ]
+          "x": -2, "y": -3, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Une salle nue, sans meuble ni décoration, d'où deux hommes armés d'arbalètes surveillent le couloir venant de la montée. Les carreaux sont prêts, les sangles ajustées.",
+          "pnj": "2 agents du Zhentarim (arbalètes légères)",
+          "note": "S'ils ont reçu l'alerte, ils tirent sans sommation (carreaux ×12 chacun)."
+        },
+        {
+          "x": -1, "y": -3, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Le petit temple de Garagos : un autel figurant un barbare à six bras armés d'épées trône parmi des tapisseries couleur de sang. Le symbole doré des six bras entrecroisés s'y répète jusque sur la pierre du sol.",
+          "tresor": "Une coupe en or (30 PO) posée sur l'autel, vide et propre.",
+          "note": "Lieu saint des « Pilleurs de Sang » (prêtres de Garagos), où ils officient lorsqu'ils tiennent les caves."
+        },
+        {
+          "x": 0, "y": -3, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La salle de réunion du culte : une grande table entourée de six chaises, un âtre où crépite un feu nourri. Quatre prêtres s'y pressent, dont Frère Llammer, le second du Grand Prêtre, qui voudrait bien voir le dos des Zhents.",
+          "pnj": "Frère Llammer, prêtre de Garagos (second du Grand Prêtre)",
+          "note": "Frère Llammer peut devenir un allié précieux si le groupe se montre adroit ; entrer l'arme au poing, c'est se faire des ennemis mortels."
+        },
+        {
+          "x": 1, "y": -3, "type": "puits",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Au centre de la salle, un bassin circulaire creusé dans la pierre retient une eau d'une pureté cristalline. Son fond est jonché de pointes de flèches et de fragments de lames, offrandes brisées dédiées à Garagos.",
+          "tresor": "Métal des armes brisées au fond du bassin (50 PO une fois récupéré).",
+          "note": "La légende locale veut que lorsque Garagos redeviendra dieu de la Guerre, le bassin fournisse une arme enchantée de grande puissance."
+        },
+        {
+          "x": 1, "y": -4, "type": "cellules",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Un cachot verrouillé (crochetage DD15) aux chaînes pendues au mur, paille souillée et vieux bol dans un coin. C'est ici qu'Eylistrée fut enchaînée et torturée avant de s'enfuir vers les plaines.",
+          "pnj": "Eylistrée (Elya), agent des Ménestrels (amnésique, en fuite)",
+          "tresor": "Petit parchemin caché sous la paille (Fouille DD15) : le message d'Eylistrée à Khelben Bâton-Noir.",
+          "note": "Trouver ce parchemin accomplit la mission du scénario : il prouve l'identité de l'elfe amnésique et dévoile le projet du Noir Réseau sur les routes."
+        },
+        {
+          "x": 0, "y": -4, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un homme gît dans cette cellule, attaché par les poignets, le regard vide et le corps zébré de marques. Ruppert Lafran, rôdeur capturé par les gobelins, a été torturé jusqu'à perdre toute étincelle de vie.",
+          "pnj": "Ruppert Lafran, rôdeur (prisonnier torturé)",
+          "note": "Soigné magiquement, il ne songe qu'à fuir la forteresse et n'apportera aucun renfort au combat."
+        },
+        {
+          "x": -1, "y": -4, "type": "abattoir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une table couverte de sang plus ou moins séché occupe presque toute la pièce, flanquée d'une étagère d'outils sinistres. Dans un coin, un homme aiguise une dague à la forme étrange, sans se presser.",
+          "pnj": "Bourreau du Zhentarim",
+          "note": "Le bourreau n'hésitera pas à employer sa dague sacrificielle contre les intrus qui viennent troubler son travail."
+        },
+        {
+          "x": -2, "y": -4, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "La salle de garde du niveau des cellules : une table ronde entourée de bancs, deux armoires sans portes regorgeant de vaisselle et de victuailles. Des factions du Noir Réseau s'y relaient pour surveiller les cachots.",
+          "ennemis": ["Orque ×1"],
+          "pnj": "Bedogr, orque guerrier de 4e niveau, capitaine d'une phalange de Zhentilars",
+          "note": "Bedogr est plus coriace qu'un orque du bestiaire (guerrier G4) : ajuster sa fiche et lui donner une épée courte de qualité."
+        },
+        {
+          "x": -2, "y": -5, "type": "cuisine",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "La cuisine du culte s'organise autour d'un âtre et d'un plan de travail où mijotent les repas d'une dizaine de convives. Seul le cuisinier s'y affaire, un grand gaillard qui préfère la poêle à l'épée.",
+          "pnj": "Albor, cuisinier de la forteresse (frère d'Ygor Marsgon, non-combattant)",
+          "note": "Albor hurlera pour donner l'alarme, à moins que son frère Ygor ne le calme ; attaqué, il fuira plutôt que de se battre."
+        },
+        {
+          "x": -1, "y": -5, "type": "laboratoire",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une pièce coquette qui contraste avec le reste de l'étage : tapis rouge brodé d'une boule de feu, lit digne d'une noble maison de Padhiver, armoire finement ouvragée. C'est la chambre du mageciel Vendell, défendue par un sortilège sur la poignée.",
+          "piege": "Porte de Vendell piégée : décharge électrique (1d6 PV) sur la poignée, 6d6 PV si la porte est défoncée ; mot de passe « Chembryl » pour la désamorcer (ou crochetage DD25).",
+          "tresor": "Grimoire de sorts de bas niveau dans l'armoire — le premier grimoire de Vendell.",
+          "pnj": "Vendell, mage du Noir Réseau (absent, en chasse)",
+          "note": "Vendell survole les abords sur sa manticore en traquant Eylistrée ; il peut revenir à tout moment. Son passage secret mène au trésor de la salle voisine."
+        },
+        {
+          "x": 0, "y": -5, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Derrière la tapisserie du mur est, un passage secret ouvre sur une petite pièce où deux coffres ouverts débordent d'objets précieux. C'est le butin amassé par le mageciel au fil de ses campagnes pour Château-Zhentil.",
+          "tresor": "Objets précieux et curiosités pour 2 500 PO (Fouille DD15 pour déceler le passage)."
+        },
+        {
+          "x": 1, "y": -5, "type": "crypte",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Au plus profond du pic, une caverne humide sent la charogne et les os mâchonnés. Un troll y rôde, vestige vivace des antres qui firent jadis la sinistre réputation de Cryptejardin.",
+          "ennemis": ["Troll ×1"],
+          "note": "C'est dans de telles cavernes que Merind, le vieil habitué du Loup de la Crypte, perdit ses compagnons autrefois. Le troll se régénère : le feu et l'acide restent ses faiblesses."
+        },
+        {
+          "x": 2, "y": -5, "type": "salle du trône",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Au sommet du rocher, le donjon : la cour résonne des dernières ardeurs du culte, dont le gros des agents du Noir Réseau s'est retranché. Monagar Sythael, capitaine zhent, et Themyst Lavaster, Grand Prêtre de Garagos, s'y reprochent l'échec de leur alliance fatale.",
+          "ennemis": ["Gobelin ×2"],
+          "pnj": "Monagar Sythael (capitaine du Zhentarim, proche de Fzoul Chembryl) ; Themyst Lavaster (Grand Prêtre de Garagos)",
+          "note": "Final du scénario : alertés, les Ménestrels et les Mains Grises donnent l'assaut dans la cour ; Khelben Bâton-Noir paraît par un portail magique une fois Sythael vaincu. Gobelins alliés de la forteresse encore présents aux côtés des défenseurs."
         }
       ]
     }

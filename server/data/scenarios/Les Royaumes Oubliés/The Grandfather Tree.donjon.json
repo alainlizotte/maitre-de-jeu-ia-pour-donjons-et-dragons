@@ -2,155 +2,300 @@
   "id": "ro_the_grandfather_tree_donjon",
   "scenario": "ro_the_grandfather_tree",
   "donjon_id": "ro_the_grandfather_tree",
-  "titre": "Donjon du scénario ro_the_grandfather_tree (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "The Grandfather Tree — les Salles de la Brume",
+  "source": "The Grandfather Tree, aventure AD&D pour les Royaumes Oubliés (sous le chêne-animal « Grand-Père », Forêt des Hautes Terres). Renvois du module : FR5 The Savage Frontier, The North (boxed set), Dragon Magazine, The Book of Artifacts, Pages from the Mages, Dungeon Magazine.",
+  "note_convention": "Cartographie serpentine des Salles de la Brume sous le Grand-Père, de l'enfourchure du fût (échelle de 85 pieds) jusqu'à la Salle de la Création des Races. Types fidèles aux zones (antichambre d'entrée, autel de l'Ours Bleu, crypte des prêtres en pots, puits, laboratoire des potions, salle du trône de la Horde). Combats limités au FP ≤ 5 du bestiaire ; les forces hors plafond (esprit gardien des jarres, Tantra Hagra/annis, golems de pierre, ours ailé, serpent astral bicéphale) sont signalées en notes [AJUSTEMENT REQUIS].",
   "etages": [
     {
       "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Au cœur de la Haute-Forêt, le chêne de l'Ancêtre — « Grand-Père » — dresse sa masse noueuse au-dessus des autres arbres, entouré de quatre chênes nains et d'un cairn de monolithes. L'endroit est terre sacrée pour les tribus barbares du Nord, et une présence tutélaire y nie toute localisation, scrutation ou téléportation à l'approche du tronc. Une trappe s'ouvre à 21 m de hauteur, dans l'enfourchure du fût, au-dessus d'une échelle qui s'enfonce dans le bois creux.",
+          "note": "Sous les branches, alliés de la tribu de l'Arbre-Fantôme et fidèles de Mielikki, Silvanus, Eldath ou Rillifane Rallathil guérissent à double vitesse."
         },
         {
-          "x": 0,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": 0, "type": "escaliers",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "L'échelle de bois sombre et lisse plonge à travers le fût entièrement évidé, 26 m durant, baignée d'une obscurité sèche et tiède. Les échelons, polis par des générations de passages, mènent au cœur des racines du Grand-Père.",
+          "note": "Le boyau est étroit : difficile d'y combattre ; toute retraite s'y orchestrera dans l'ordre inverse de la descente."
         },
         {
-          "x": -1,
-          "y": 1,
-          "type": "antichambre",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Lion ×1"
-          ]
+          "x": 2, "y": 0, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Salle minuscule aux parois de terre et de racines, plafond à 1,5 m, où l'air sec et chaud est zébré de traces inextricablement mêlées. À droite, un boyau bas court vers une porte de bronze ternie dans son cadre de fer rouillé, verrouillée par deux barres croisées ; à gauche, une pente douce s'enfonce vers les profondeurs.",
+          "note": "La porte de bronze est condamnée : son passage n'est qu'un cul-de-sac cadenassé ; suivre la pente."
         },
         {
-          "x": -1,
-          "y": 2,
-          "type": "salle vide",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Worg ×1"
-          ]
+          "x": 3, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Passage en pente douce, par endroits plus large, dont le plafond de terre se creuse sous les racines. Le sol nu est couvert de pistes entrecroisées qu'aucun ranger ne saurait déchiffrer."
         },
         {
-          "x": 0,
-          "y": 2,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Gnoll ×1"
-          ]
+          "x": 3, "y": 1, "type": "autel",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Dans une alcôve de pierre, une statue d'ours-grizzli, assise sur ses hanches, veille une dague au manche d'os sculpté d'un lion aux yeux de rubis. La statue pivote sur sa base : à droite, un grêle de lances jaillit du plafond ; à gauche, un panneau secret découvre un coffre de fer rouillé.",
+          "ennemis": ["Ours_brun ×1"],
+          "tresor": "Coffre secret : gants de peau d'ours griffés et collier de griffes et de dents, objets sacrés de l'Ours Bleu ; la dague est une Tueuse de Lions +3 (+4 contre les félins), unique.",
+          "piege": "Pivoter la statue à droite : 16 lances tombent (sauvegarde vs paralysie, moitié des dégâts 1d6×16). Le coffre est verrouillé et piégé d'un symbole de cécité (sauvegarde vs magie).",
+          "note": "Prendre les objets sacrés anime l'ours, qui pourchasse le porteur, se retire à 0 PV et reprend sa chasse après 5 rounds de repos."
         },
         {
-          "x": 1,
-          "y": 2,
-          "type": "couloir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
+          "x": 2, "y": 1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Large salle où trône une cuve de bois à demi-pleine d'eau fraîche, entourée de quatre bancs de chêne finement sculpté. Une étagère de bois pourri garde des cuillères gravées d'ours et d'aigles ; une caisse gonflée d'humidité recèle l'attirail d'un ancien bain rituel.",
+          "tresor": "Miroir d'argent terni (10 po), racloir en omoplate d'ours sculptée, hochet en corne de cerf (sacrés de l'Ours Bleu) et, sous l'argile et les poudres colorées, un couteau d'obsidienne au manche d'os et rubis brut (400 po)."
         },
         {
-          "x": 2,
-          "y": 2,
-          "type": "abattoir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Gobelin ×1"
-          ]
+          "x": 1, "y": 1, "type": "tableau",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Sur les quatre murs, des peintures naïves exécutées aux pigments naturels : des ours qui chassent, des arbres qui marchent, des hommes qui terrassent des monstres. Le dôme de terre, lardé de racines vives, demeure volontairement nu."
         },
         {
-          "x": 3,
-          "y": 2,
-          "type": "laboratoire",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": 1, "type": "cuisine",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Salle oblongue au centre légèrement surélevé, percée d'un étroit conduit qui remonte jusqu'à l'air libre — trop étroit même pour un halfelin. Le foyer est encore tiède, récemment alimenté ; selon l'heure, une poussière de lumière descend par la cheminée.",
+          "note": "Les pistes de la couche de terre sont récentes mais trop mêlées pour être déchiffrées."
         },
         {
-          "x": 4,
-          "y": 2,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": 2, "type": "couloir",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Une lourde porte de chêne ferré, arrachée de son cadre, gît à plat, entourée d'orques morts. La protection magique qui la scellait a été dissipée de force — c'était la porte d'entrée de l'antique sanctuaire."
         },
         {
-          "x": 5,
-          "y": 2,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "[À RÉDIGER — antre du « Troll », final du scénario « ro_the_grandfather_tree ». Reprendre la description du module.]",
-          "ennemis": [
-            "Troll ×1"
-          ],
-          "note": "[ADJUSTEMENT REQUIS] Créatures du module trop puissantes pour un groupe niveau 1 (FP > 5, refusées par la garde de combat) : Annis (FP 6). Replacer manuellement une version dégradée, un groupe de créatures plus faibles, ou réserver à un groupe de niveau supérieur."
+          "x": 1, "y": 2, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La plus vaste salle encore découverte (7 m sur 4), sous une coupole de racines en lattis, avec un foyer central qui fume encore. Six gobelins et deux worgs s'affairent autour d'un bassin de pierre à demi-plein d'eau fraîche où flottent quelques feuilles.",
+          "ennemis": ["Gobelin ×6", "Worg ×2"],
+          "tresor": "Louche d'obsidienne en forme d'ours, sans aucune marque d'outil, aux yeux de deux topazes de feu (500 po), sacrée de l'Ours Bleu."
+        },
+        {
+          "x": 2, "y": 2, "type": "abattoir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Plafond à peine à 1,2 m, air vicié de formique : deux vastes salles jonchées de cuir déchiqueté, de cuvettes de sang figé et de squelettes presque dépouillés d'orques, de gobelins et de worgs. Des fourmis noires géantes y pullulent, emportant peaux et chairs vers leurs tunnels.",
+          "note": "Ne pas déranger les fourmis : elles ramassent et filent ; un passage prudent ne les inquiète pas. Fourmis géantes non répertoriées : à jouer comme vermine (FP ≤ 1) si nécessaire."
+        },
+        {
+          "x": 3, "y": 2, "type": "garde",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une odeur âcre de fumée flotte dans cette grande salle aux deux issues. Autour de feux mourants, une demi-douzaine de gnolls meurtris et crottés pansent à peine leurs plaies — les rescapés de l'armée de Tantra Hagra.",
+          "ennemis": ["Gnoll ×6"],
+          "tresor": "Les gnolls portent 3 pa, 4 po et quatre diamants (30 po chacun).",
+          "note": "Ils combattent jusqu'à perdre un tiers des leurs, puis se replient ou parlementent avec les intrus."
+        },
+        {
+          "x": 3, "y": 3, "type": "crypte",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Un couloir bas (0,8 m) serpente jusqu'à un cul-de-sac où six grandes jarres de terre de 2 m d'envergure veillent en cercle. Chacune contient un vieil homme desséché, prêtre momifié d'un âge révolu — et les briser libère un esprit gardien.",
+          "tresor": "Dans les jarres, 300 po de gemmes et de pierres précieuses variées.",
+          "note": "[AJUSTEMENT REQUIS] L'esprit gardien (frappé seulement au fer +2 ou magique, insensible au renvoi sur sol sacré, magic jar quotidien) dépasse le plafond : à ajuster ou à déjouer par la ruse."
+        },
+        {
+          "x": 2, "y": 3, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Ce tunnel interminable finit par s'élargir en une salle de 1,8 m de plafond, jonchée de feuilles mortes et de brindilles où seule la bande des fourmis a laissé des traces. Sous les détritus, une fosse neuve et grossière attend, hérissée de piquants.",
+          "piege": "Fosse à piquants récente (1d12 piquants, 1d4 chacun) ; à l'autre bout, des bâtons ensorcelés se muent en six serpents (venin mortel ; un dispel magic ôte les deux sortilèges)."
+        },
+        {
+          "x": 1, "y": 3, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Les parois de racines épaisses suspendent de nombreux squelettes humains et demi-humains d'âges divers, dont douze cadavres frais — gnolls, orques, gobelins. Au centre, une dépression creuse abrite un petit tas de trésor.",
+          "ennemis": ["Squelette ×3"],
+          "tresor": "Dans la dépression : 200 pc, 30 pa et 400 po de gemmes variées.",
+          "note": "Toucher au trésor éveille les squelettes de guerriers qui se décrochent des racines."
+        },
+        {
+          "x": 0, "y": 3, "type": "garde",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "La fumée de grands feux de camp emplit cette salle où une troupe dense d'orques monte la garde. Trois issues percent les murs ; ils attendent le retour de leur maîtresse et guettent le premier messager.",
+          "ennemis": ["Orque ×4"],
+          "tresor": "3 po, 40 pa, 30 pc, dix broches de fer d'un pied frappées du sceau de Mirabar (7 à 10 po) et cinq gemmes taillées (50 po).",
+          "note": "Si plus de la moitié tombe, ils parlementent ; sinon quelques-uns filent prévenir Tantra Hagra."
+        },
+        {
+          "x": 0, "y": 4, "type": "crypte",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Cinq torches mourantes dans des parois de terre éclairent une chambre de 16 m où s'alignent d'énormes caissons de la taille de cercueils, à demi ensevelis. Des gobelins caquetants, juchés sur les coffres, s'efforcent de les desceller tandis que six worgs tournent.",
+          "ennemis": ["Gobelin ×4", "Worg ×2"],
+          "tresor": "Dans un cercueil, une lance sacrée de l'Arbre-Fantôme (hampe de chêne blanc, pointe d'obsidienne, +2, +3 contre les créatures du mal chaotique, +4 extraplanaires) ; sous les dalles, 900 po de gemmes, 300 pa de rubis et vingt saphirs étoilés (100 po pièce)."
+        },
+        {
+          "x": 1, "y": 4, "type": "abattoir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un couloir étroit, érodé par l'eau, où l'on perçoit un goutte-à-goutte lointain ; le sol vaseux porte de grandes traces griffues. Au centre, six trolls dévorent ce qui reste de trois orques et lèvent la tête à l'entrée des aventuriers.",
+          "ennemis": ["Troll ×3"],
+          "tresor": "Sur les orques défunts : 6 po, 2 pa, une semaine de rations de fer, trois torches, trois flasques d'huile et un sachet de cuir d'herbes séchées (aconit, ail, feuille de pipe, belladone).",
+          "note": "Trolls régénérants : frapper au feu ou à l'acide, ou fuir."
+        },
+        {
+          "x": 2, "y": 4, "type": "puits",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La caverne basse s'ouvre sur un grand bassin d'eau douce dominé par un rocher moussu, tache blanche scintillante au sommet. Quatorze gobelours hurlent de plaisir tandis que dix des leurs, attachés, pataugent vers le rocher glissant.",
+          "ennemis": ["Gobelours ×4"],
+          "tresor": "Sur le rocher, une coupe de jade pur incrustée d'or et de gemmes (6 000 po), pleine de quatre rubis étoilés (1 500 po pièce) et de deux anneaux d'or à spinelle — l'un ordinaire (850 po), l'autre anneau de marche aquatique.",
+          "note": "Le rocher est moussu et très glissant (-45 % en escalade) ; chuter dans le bassin n'a d'autre conséquence que le ridicule."
+        },
+        {
+          "x": 3, "y": 4, "type": "piège",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une nouvelle fosse hérissée de piquants barre ce replat, à demi dissimulée sous un bâchage léger saupoudré de terre. Elle se repère facilement pour peu qu'on s'arrête pour regarder.",
+          "piege": "Fosse à piquants : 1d12 piquants, 1d4 dégâts par piquant."
+        },
+        {
+          "x": 3, "y": 5, "type": "piège",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Deux passages jumeaux, récents, commandent l'accès au trésor. Un fil tendu presque invisible court à hauteur de tibia, juste avant une volée prête derrière le mur.",
+          "piege": "Fil tendu : 60 fléchettes enduites de poison de sommeil (1d10 touchent ; sauvegarde vs poison à -2)."
+        },
+        {
+          "x": 2, "y": 5, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Haute salle au plafond de racines mortes, où quatre coffres de fer rouillés, à demi ensevelis, exhalent une odeur de rouille et de terre. Sur l'un d'eux repose un paquet de tissu moisi noué sur un tube à parchemins.",
+          "tresor": "Les quatre coffres : 60 diamants (20 po), 200 rhodochrosites taillées (5 pa), 100 agates-œil (10 po) et 30 alexandrites (100 po). Le paquet recèle quatre pages d'un parchemin de sorts nécromantiques de 1er niveau (anime les animaux morts, oreilles spectrales, yeux spectraux, voix spectrale)."
+        },
+        {
+          "x": 1, "y": 5, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Autour d'un maigre feu, neuf hommes-lézards en barding de cuir, froids et raides, dévisagent les intrus sans un geste. L'un d'eux se lève lentement, la main ouverte : ces créatures de la tribu avancée parlent orque, gnoll et bugbear — et ne veulent que sortir.",
+          "pnj": ["Neuf hommes-lézards de la tribu avancée : pacifiques, ils racontent tout ce qu'ils savent en échange d'un passage sûr"]
+        },
+        {
+          "x": 0, "y": 5, "type": "garde",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Au bout d'un passage incurvé, une colonne d'orques professionnels s'engouffre, menée par un porte-étendard à la bannière d'une araignée noire borgne sur champ bleu délavé d'os et de sang. Ils sont crottés mais disciplinés, en cottes de mailles renforcées d'acier.",
+          "ennemis": ["Orque ×4"],
+          "tresor": "Officiers : 30 po, 4 pc, 2 ep ; l'orog de la garde de Tantra Hagra porte deux phioles de poison type A, un flacon de poison paralysant, une dague de parade +2 et un anneau de protection +2.",
+          "note": "Orog non répertorié : jouer en orque endurci (FP 1/2)."
+        },
+        {
+          "x": 0, "y": 6, "type": "trésor",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Derrière une porte aux trois fils piégeurs, une pièce au sol de terre, où un grand coffre de fer rouillé s'équilibre sur deux coffrets démantibulés. Quelques orques en armure boueuse y campent, arbalètes tendues vers la porte.",
+          "ennemis": ["Orque ×3"],
+          "piege": "Trois pièges à fil sur la porte, chacun libérant 60 fléchettes (3d6 aux créatures à moins de 3 m, à chaque déclenchement).",
+          "tresor": "Grand coffre : 40 lingots d'argent de la Trésorerie de Luskan (1 000 pa) et 30 jades bruts (20 po). Dans les coffrets : le Livre de Shangalar « le Noir », livret d'électrum repoussé à quatre feuillets, lourd de runes d'une langue morte."
+        },
+        {
+          "x": 1, "y": 6, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Sous un dôme de 4,5 m vaporeux de fumée, dix gobelours, quatre gnolls trapus et quatre loups grands comme des poneys festoient aux cendres de la salle. Un fil tendu au seuil, une nasse lestée garnie de grelots et de crochets, sonne l'alarme du dîner.",
+          "ennemis": ["Gobelours ×4", "loup_atroce ×2", "Gnoll ×2"],
+          "piege": "Fil tendu + nasse lestée, sonnée et crochue, qui s'abat à l'entrée (force pour s'en arracher) et attire la meute.",
+          "tresor": "6 po, 10 pa, 6 pc et quatre croissants bleus de Silverymoon (2 pa chacun hors de la ville)."
+        },
+        {
+          "x": 2, "y": 6, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "La terre cède sous la dalle, et une paire de grandes portes de pierre, forcées de haute lutte, s'ouvrent sur une pile de dix barbares en cuir blanc fraîchement tués. Douze barbares vêtus de cuir bleu discutent à voix basse, haches de guerre hautes, pendant que des gobelours fouillent les corps et des trolls grignotent les morts.",
+          "ennemis": ["Troll ×1", "Gobelours ×2"],
+          "tresor": "6 po, 2 pa et 2 pp sur les barbares tués.",
+          "note": "Les Barbares de l'Ours Bleu sont charmés (charm person, suggestion, geas) par Tantra Hagra, qu'ils tiennent pour l'avatar de leur esprit-ours démoniaque : à jouer comme guerriers humains endurcis."
+        },
+        {
+          "x": 3, "y": 6, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": true },
+          "description": "La pièce porte les traces d'un combat récent et sent le brûlé — poil, chair, cuir. Le toit naturel et les murs de pierre morte trahissent l'entrée de l'antique sanctuaire ; au sud-est, une large zone calcinée dit l'usage d'un fireball.",
+          "note": "Les orques ont épuisé la magie de la porte double en s'y jetant en masse."
+        },
+        {
+          "x": 4, "y": 6, "type": "autel",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Salle immense aux parois de racines et de rocs, voûte perdue dans la fumée. Face à l'entrée, un grand dais de pierre fêlé soutient les restes fracassés d'une statue d'ours : les orbites vides portent des traces d'outils, et la cache arrière a été dûment dépouillée."
+        },
+        {
+          "x": 4, "y": 7, "type": "couloir",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Un long passage étroit court longtemps pour finir en cul-de-sac contre un gros rocher. Le pousser exige une force totale de 46.",
+          "note": "De l'autre côté du rocher, le monde et le ciel n'attendent qu'un bon coup d'épaule."
+        },
+        {
+          "x": 4, "y": 8, "type": "autel",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Il faut tailler son passage à l'arme dans une épaisse roncière de mûres pour fouler une clairière ronde, au bassin de pierre desséché et craquelé de 4 m de diamètre. Quatre piliers de 3 m marquent les points cardinaux, et une statue de Mielikki veille au centre : les fidèles de la Dame de la Forêt qui s'y reposent guérissent à pas double et repartent bénis."
+        },
+        {
+          "x": 3, "y": 7, "type": "salle du trône",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Vaste salle de pierre ajustée où se presse une troupe hétéroclite — hobgobelins, orques, trolls, gnolls, gobelours, loups-monstrueux et worgs. Debout au milieu, une femme barbare de 2,4 m à la peau bleue, aux cheveux de corbeau, lève son bâton runique lumineux : « Non ! Le pouvoir du bassin est à moi ! », et la masse grouillante se rue.",
+          "ennemis": ["Hobgobelin ×2", "Orque ×3", "Gnoll ×2", "Gobelours ×2", "Troll ×2", "Worg ×2", "loup_atroce ×2"],
+          "tresor": "Sur la masse défaite : 24 po, 415 pc, 24 pa, 45 pe et 44 gemmes (345 po cumulés).",
+          "pnj": ["Tantra Hagra, la fausse avatar de l'esprit-ours (annis déguisée en barbare bleue)"],
+          "note": "[AJUSTEMENT REQUIS] Tantra Hagra (annis FP 6) et son troll garde-du-corps (plate de fer rouillée, heaume du Ténèbre) dépassent le plafond : jouer la ruse, l'action ou la fuite."
+        },
+        {
+          "x": 2, "y": 7, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Salle de 6 m sur 12, ensevelie sous une poussière et des toiles d'araignée d'une densité surnaturelle, posées par magie. Au fond, un dais couvert de runes : quiconque s'y tient immobile le temps d'un round est téléporté sans erreur dans les ruines de Mhiilamniir.",
+          "piege": "Dais de téléportation magique (sans retour assuré) : la cité elfique en ruines abrite un dragon vert mature et son butin."
+        },
+        {
+          "x": 1, "y": 7, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Salle immense de 24 m, piliers de pierre espacés de 3 m, flanqués de torchères de bronze en forme d'ours. Au fond, deux statues de femmes de 2,7 m aux yeux de cristal veillent des portes grises fermées.",
+          "piege": "Dans le mur nord, deux alcôves piégées (dalle-piège écrasante). Si les statues ne reçoivent pas un rayon lumineux dans les yeux à l'ouverture des portes, elles pivotent et attaquent (nuage de paralysie).",
+          "note": "Réponse à l'énigme gravée en lettres lumineuses : « l'étoile », prononcée en commun pour ouvrir les portes. Désactiver les gardiennes en braquant un miroir sur leurs yeux de cristal."
+        },
+        {
+          "x": 0, "y": 7, "type": "bibliothèque",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Salle sombre et muette (3 m sur 9) dont le mur ouest, vert pâle, ruisselle d'une eau claire vers un bassin au sol. Y flotte une sphère de cristal argenté, grosse comme une pomme, qui irradie la magie et résiste à tout esprit : c'est un livre de vilenie qui se projette dans l'esprit de quiconque la concentre.",
+          "tresor": "Au fond du bassin : 2 pa, 7 po, 40 pc, 2 pp et cinq croissants de platine de Waterdeep (5 po là-bas, 2 po ailleurs), frappés en 1262 durant les Guerres des Guildes."
+        },
+        {
+          "x": 0, "y": 8, "type": "cuisine",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Derrière les portes, une puanteur d'air clos, de moisi et de pourriture : des sacs de grain en décomposition montent presque au plafond, grouillants de vers et de charançons. Dans un réduit du fond, sept fûts de terre peinte, bouchons de caoutchouc en tête, contiennent chacun environ 950 litres d'alcool de grain pur.",
+          "tresor": "Sept tonneaux d'alcool de grain quasi pur — boisson, carburant ou monnaie d'échange en ville."
+        },
+        {
+          "x": 1, "y": 8, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Salle immense au toit de pierre en berceau à 6 m, poussiéreuse, aux lustres rouillés et au sol orné d'une mosaïque de 13 m : un serpent bicéphale à capuchon de cobra, lové, prêt à frapper. À l'entrée, le serpent paraît de l'Astral et demande pourquoi l'on trouble son sommeil.",
+          "note": "Il pose l'énigme des « jambes » ; bonne réponse et il retourne se coucher. Le combattre est suicidaire (MR 89 %, souffles de feu et de cécité) : hors plafond, à jouer en énigme."
+        },
+        {
+          "x": 2, "y": 8, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Salle nue et poussiéreuse (3 m sur 9), en apparence vide — sinon qu'un petit coffret de laiton repose au centre, posé sur le plan astral, invisible aux yeux ordinaires. Coffret non verrouillé mais doublement piégé.",
+          "tresor": "Quatre plaques d'or martelé, gravées de runes et de sigils de sorts inconnus : quatre des légendaires Parchemins de Nether (balise téléportation, arc électrique, flamestrike de Flamsterd, rêve-sort).",
+          "piege": "Deux pièges magiques (21e niveau) : trappe d'âme au premier contact, contact vampirique (2d4 niveaux) au second."
+        },
+        {
+          "x": 3, "y": 8, "type": "trésor",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Une porte secrète s'ouvre sur un réduit moite où un tonneau de sciure pourrie et un rouleau de tissu rouge en parfait état trônent au milieu de rien. La sciure recèle des saphirs de feu ; le rouleau, une véritable pièce de brocart aux oiseaux de proie, s'envole au mot « whisk ».",
+          "tresor": "Saphirs de feu taillés (5 600 po) et tapis volant de 2,7 m sur 1,8 (quatre personnes, mot de commande « whisk » — hurlé).",
+          "piege": "Deux pièges à l'entrée : nuage aveuglant (2d4 rounds, sauvegarde vs poison) et nuage empoisonné mortel (30 PV en cas de sauvegarde réussie)."
+        },
+        {
+          "x": 3, "y": 9, "type": "trésor",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Un verrou fantaisie, à mi-passage, enclenche une mécanique derrière le mur : tourné à gauche, il neutralise le piège de la salle suivante. La chambre du fond, faiblement éclairée, ne renferme qu'un tableau de neuf chevilles.",
+          "tresor": "La cinquième cheville libère une lance à pointe d'acier en forme de pelle, +3, de retour, +4 contre les dragons.",
+          "piege": "Troisième cheville : le toit s'ouvre et déverse 64 rochers (10d8). Passer entre les lampes déclenche une volée de fléchettes barbelées (3d4+2) ; désamorçage des chevilles à -35 %."
+        },
+        {
+          "x": 2, "y": 9, "type": "laboratoire",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une porte à nuage empoisonné précède un passage mortaisé de 6 m puis une salle de 6 m sur 9, sous la même voûte de pierre. Une grande table de bois pourri croule de fioles et de bocaux, certains brisés, leur contenu répandu en flaques.",
+          "tresor": "Quatre rounds de fouille : potion de vol (3d4 rounds), protection contre les projectiles normaux (1d4), protection contre les morts-vivants normaux (2d4) et une potion de phase.",
+          "piege": "Gaz empoisonné à la porte : 1d8 points de dégâts, sauvegarde vs poison pour n'en subir aucun."
+        },
+        {
+          "x": 1, "y": 9, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Deux couloirs aveugles de pierre, plafond à 3,6 m, gardent l'accès à la salle de la Création des Races. Le premier cul-de-sac porte un glyphe de warding sur son mur du fond ; le second, traversé de quatre fils, bascule d'abord deux pots d'huile puis un feu grégeois.",
+          "piege": "Glyphe de warding (slay living : sauvegarde vs mort magique, sinon mort) ; dans le second passage, fils répétés (2d8+4 par piège) et glyphe de trappe d'âme sur la porte du fond."
+        },
+        {
+          "x": 0, "y": 9, "type": "laboratoire",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Salle immense (48 m sur 33, voûte à 9 m), brillamment éclairée de lampes magiques, dominée par un ours ailé cornu aux serres d'aigle assis sur un tas de butin, au centre d'un bassin d'acide fumant. Deux statues de lézards géants, de part et d'autre du seuil, commencent à bouger ; au mur, une grande plaque de cercles concentriques cerne un point noir.",
+          "tresor": "Sur le dais : 5 516 po de statuettes d'or et de platine, ornements religieux, 285 gemmes taillées et, sous le tas, des objets magiques (baguette de guérison en ivoire, cotte de mailles +2, arc long +2, corne de brume, trois bougies d'invocation, robe aux couleurs scintillantes, onguent de Keoghtom) et le coffret d'ivoire du Grimoire de Glandar.",
+          "piege": "Bassin d'acide au centre : 2d4 points de dégâts au contact.",
+          "note": "[AJUSTEMENT REQUIS] Golems de pierre (FP 11) et ours ailé gardien (hors bestiaire) dépassent le plafond : jouer la ruse, l'énigme ou la fuite."
         }
       ]
     }

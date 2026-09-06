@@ -2,160 +2,209 @@
   "id": "laelith_lauberge_du_sanglier_gris_donjon",
   "scenario": "laelith_lauberge_du_sanglier_gris",
   "donjon_id": "laelith_lauberge_du_sanglier_gris",
-  "titre": "Donjon du scénario laelith_lauberge_du_sanglier_gris (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "titre": "L'auberge du Sanglier Gris — la cave, la mine et la tour",
+  "source": "Aidedd.org — L'auberge du Sanglier Gris (Michael Hoffman, adapt. blueace), zones 1-26 du module",
+  "note_convention": "Aventure 5e pour 4 PJ de niveau 3 réinterprétée en D&D 3.5 (bestiaire du MJ). Prélude hors manifeste : arrestation par Grifeix dans la salle commune de l'auberge (les gardes désarment et dépouillent les PJ). Le manifeste couvre la cave de l'auberge, la mine abandonnée (zones 1-16), les grottes des troglodytes (17-22) puis la tour du baron (23-26), en grille en serpentin. Monstres aux FP ≤ 5 (bestiaire.json) ; les écarts sont signalés en note [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Réseau souterrain",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Petite cave voûtée n'éclairée que par une torche qui se meurt, où s'alignent trois gros tonneaux de vin hauts comme un homme, deux tonneaux plus petits et une étagère de cruches vides. Ligotés et désarmés après l'arrestation par les hommes du baron Grifeix, les personnages guettent le passage de Zelda, l'épouse de l'aubergiste, qui laisse tomber discrètement un couteau (Perception DD 10) avant de repartir. Le gros tonneau du milieu cache l'issue : son couvercle, puis son fond, s'ouvrent vers la salle effondrée.",
+          "pnj": ["Zelda (épouse de l'aubergiste, compatissante, laisse un couteau)"],
+          "note": "Zone prélude — la cave de l'auberge. Le couteau coupe les liens ; une fois le fond du tonneau franchi, le retour par l'auberge est compromis."
         },
         {
-          "x": 1,
-          "y": 0,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 1, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Salle au sol et aux murs rongés de moisissures, à l'air confiné : un escalier s'éboule après quelques marches et un grand trou béant s'ouvre au centre. Cet ancien passage secret, jamais utilisé, reliant l'auberge à la mine, plonge 4 à 5 mètres plus bas et ne permet pas de revenir sur ses pas. Plus loin, le couloir bute sur un effondrement de 3 mètres dont l'autre bord est fermé par un panneau de bois levé par un levier caché dans la salle voisine.",
+          "piege": "Fosse d'effondrement du couloir : chute de 3 m, 1d6 dégâts contondants ; panneau de bois à franchir à l'aide du levier (Investigation DD 10) et des planches de la salle 2.",
+          "note": "Zone 1 — la salle effondrée. Le saut compromet le retour à l'auberge ; il faut des planches (salle 2) pour traverser la fosse."
         },
         {
-          "x": 1,
-          "y": 1,
-          "type": "autel",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Sanglier ×1",
-            "Corbeau ×1"
-          ]
+          "x": 2, "y": 0, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Ancienne salle de garde transformée en bric-à-brac : planches contre un mur, armoire et coffre de chêne fermé à clé, table renversée, deux chaises cassées et un bouclier rond de bois gisant à terre. L'armoire renferme une veste de cuir, une pioche, un marteau, des clous, une scie et un fil à plomb, le coffre des torches, un allume-feu et une corde de 15 mètres. Derrière les planches, un levier lève le panneau du couloir (Investigation DD 10), mais ne tient que si on le maintient.",
+          "tresor": "Armoire : veste de cuir, pioche (1d6), marteau (1d6), clous, scie, fil à plomb ; coffre : 6 torches, allume-feu, corde de chanvre de 15 m.",
+          "note": "Zone 2 — équipement de secours et armes provisoires indispensables."
         },
         {
-          "x": 2,
-          "y": 1,
-          "type": "escaliers",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Ogre ×1",
-            "Rat ×1"
-          ]
+          "x": 3, "y": 0, "type": "couloir",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Couloir haut d'à peine 2 mètres, vétuste, l'air étouffant, ponctué d'éboulis ; un nain ne douterait pas une seconde qu'il s'agit d'une mine abandonnée depuis des années. Sur la gauche, des poutres cassées ont enseveli le squelette d'un guerrier dont la chemise de mailles, le bouclier +1 et la hache d'armes sont remarquablement conservés ; sur la droite, des étais réguliers rendent le passage rassurant. Au premier embranchement, un amas de pierres laisse entrevoir une faible lueur au-delà.",
+          "tresor": "Squelette dans les éboulis : chemise de mailles, bouclier +1 et hache d'armes en bon état.",
+          "note": "Zone 3 — couloir de la mine ; la faible lueur annonce le secteur des kobolds."
         },
         {
-          "x": 3,
-          "y": 1,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Troglodyte ×1"
-          ]
+          "x": 4, "y": 0, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Pièce complètement obscure dont la plus grande partie du sol est inondée d'une eau sale à la mauvaise odeur, percée dans le bas des murs de plusieurs trous grossiers : une fissure dans l'angle laisse l'eau s'écouler sans discontinuer. À la moindre avancée dans la flaque profonde de 30 cm, une nuée de rats grouille hors des trous.",
+          "ennemis": ["Nuée_de_rats ×1"],
+          "note": "Zone 4 — la pièce inondée à éclairer pour être visible ; la nuée surgit dès qu'on touche l'eau."
         },
         {
-          "x": 3,
-          "y": 2,
-          "type": "crypte",
-          "portes": {
-            "nord": true,
-            "sud": true,
-            "est": false,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Squelette ×1"
-          ]
+          "x": 4, "y": 1, "type": "piège",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Un petit escalier creusé dans le sol descend dans ce recoin dont le fond est recouvert de planches vermoulues, étayé par de fortes poutres ; un vieux panier usé traîne près d'une lampe à huile vide. Les planches dissimulent un vieux puits de 3 mètres qui s'effondre au premier pas — une mésaventure qui peut se révéler heureuse, car une épée longue en parfait état gît au fond.",
+          "piege": "Planches vermoulues sur puits de 3 m : Réflexes DD 12 sinon chute (1d6 dégâts contondants).",
+          "tresor": "Au fond du puits : épée longue en parfait état de conservation.",
+          "note": "Zone 5 — la salle du puits."
         },
         {
-          "x": 3,
-          "y": 3,
-          "type": "puits",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Chien ×1"
-          ]
+          "x": 3, "y": 1, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un rideau de cuir masque à moitié l'entrée de cette salle illuminée de deux torches, où quatre kobolds jouent aux osselets autour d'une table. À peine vous aperçoivent-ils qu'ils bondissent, dagues en main. Contre le mur du fond, deux grands placards renferment javelines, boucliers, plats et gobelets, et l'une des portes porte un parchemin en kobold de noms et de jours de garde.",
+          "ennemis": ["Kobold ×4"],
+          "tresor": "Placards : quatre javelines et quatre boucliers ; parchemin des rotations de garde (Intelligence DD 15).",
+          "note": "Zone 6 — salle de garde ; 20 % de chance d'une patrouille de 4 kobolds entre les salles 6 et 10 (ils fuient chercher des renforts vers la salle 11 à demi-effectifs)."
         },
         {
-          "x": 2,
-          "y": 3,
-          "type": "escaliers",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Kobold ×1"
-          ]
+          "x": 2, "y": 1, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Grande salle environ un mètre en contrebas, atteinte par une rampe de planches : deux wagonnets de bois sur petites roues, l'un aux trois-quarts plein de gravats, l'autre vide, sous trois torches fichées dans des supports de fer, dans un air très étouffant. Trois nains au regard détruit y détachent à la pioche et au marteau une roche chargée d'argent pour le compte de leurs geôliers. Ils raconteront leur sort mais refuseront de se rebeller, n'en ayant ni la force ni le courage.",
+          "pnj": ["Trois nains esclaves des kobolds (brisés physiquement et mentalement, non combattants)"],
+          "note": "Zones 7-8 — la galerie en exploitation. Ils délivrent les informations de l'encadré (12 nains capturés, 2 morts, ~15 kobolds, humains et troglodytes signalés)."
         },
         {
-          "x": 2,
-          "y": 2,
-          "type": "antichambre",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": 1, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Pièce garnie de dix couchettes superposées où se reposent quatre nains, avec une table et quatre chaises au centre. À votre entrée, ils se réveillent en sursaut, d'abord effrayés, puis se résignent : comme leurs compagnons de la galerie, ils livreront des informations mais refuseront toute rébellion.",
+          "pnj": ["Quatre nains esclaves (informations, refusent de combattre)"],
+          "note": "Zone 9 — quartier des nains."
         },
         {
-          "x": 1,
-          "y": 2,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « laelith_lauberge_du_sanglier_gris ». Reprendre la description du module.]",
-          "ennemis": [
-            "Ombre ×1"
-          ]
+          "x": 0, "y": 1, "type": "dépôt",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Dépôt d'appareils et d'outils : wagon de bois, grande table de travail à étau, enclume près d'un feu dont la fumée s'évade par de fines fissures, deux lampes à huile et une corde de 15 mètres aux murs. Traînent au sol un pot de graisse, une scie, deux marteaux, une centaine de clous et des sacs vides, tandis qu'un grand tonneau d'eau s'appuie contre un mur. Cachées derrière le pot de graisse, deux fioles attendent : de l'huile à lampe et une potion de soins.",
+          "tresor": "Fioles cachées derrière le pot de graisse : huile à lampe et potion de soins.",
+          "note": "Zone 10 — le dépôt."
+        },
+        {
+          "x": 0, "y": 2, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Dans le couloir, un kobold monte la garde face à cette salle où trois autres sont attablés, un placard étroit adossé au mur derrière eux. Ces sentinelles surveillent les entrées et sorties de la mine et ont pour ordre de ne quitter leur poste sous aucun prétexte. Le placard recèle une armure de cuir cloutée ayant naguère appartenu à un nain, un marteau de guerre et une sacoche de 300 pièces d'argent.",
+          "ennemis": ["Kobold ×4"],
+          "tresor": "Placard : armure de cuir cloutée, marteau de guerre, sacoche de 300 pa.",
+          "note": "Zone 11 — la salle de livraison ; les kobolds ne fuiront pas."
+        },
+        {
+          "x": 1, "y": 2, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Des braseros projettent de grandes ombres sur les parois de ce grand atelier à l'odeur piquante ; dans une niche, un haut fourneau reçoit le minerai et une rigole longe le mur en charriant ce qui semble être de l'argent en fusion. Deux kobolds emplissent le fourneau, deux autres puisent le métal pour le verser dans un moule, un cinquième coule des pièces dans un profond récipient de pierre déjà bien garni. Le fracas du four couvre les bruits de combat et les kobolds, s'ils sont attaqués, fuient d'abord vers la salle 13.",
+          "ennemis": ["Kobold ×5"],
+          "tresor": "Environ 1 500 pièces d'argent (15 kg) dans le récipient de pierre.",
+          "note": "Zone 12 — la frappe de la monnaie."
+        },
+        {
+          "x": 2, "y": 2, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "L'eau ruisselle le long des murs et goutte du plafond de ce dortoir où une douzaine de paillasses sont disposées au centre ; dix kobolds s'y reposent, acculés — ils ne peuvent fuir et combattent à mort. Leur butin est dissimulé sous une grosse pierre au sol, n'attendant qu'une main fouilleuse.",
+          "ennemis": ["Kobold ×10"],
+          "tresor": "Sous une grosse pierre : 250 pièces d'argent et deux gros grenats (150 po chacun).",
+          "note": "Zone 13 — quartiers des kobolds."
+        },
+        {
+          "x": 3, "y": 2, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une lourde porte de bois garnie de ferrures, à la grosse poignée de fer forgé, protège cette pièce éclairée de deux lampes à huile : grande table et tabouret au centre, petite table aux dimensions humaines et coffre verrouillé contre le mur. Deux kobolds sont assis à la petite table, épée courte et bouclier de bois à portée de main, quand surgit du couloir le maître des lieux : l'ogre à longue barbe, chef du secteur, sous les ordres directs des hommes du baron. La clef du coffre pend à son cou.",
+          "ennemis": ["Kobold ×2", "Ogre ×1"],
+          "piege": "Coffret piégé dans le coffre : un scorpion pique le premier curieux qui l'ouvre.",
+          "tresor": "Coffre verrouillé (clef au cou de l'ogre) : conserves, deux bouteilles d'eau-de-vie, une potion de forme gazeuse, un coffret de 500 pa et un coffret piégé ; l'ogre porte aussi la grande clef de la salle 23 (déjà ouverte).",
+          "note": "Zone 14 — quartiers de l'ogre, chef de la mine."
+        },
+        {
+          "x": 4, "y": 2, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Six kobolds comptent des pièces d'argent à une grande table, les versant par lots de mille dans des coffrets, leurs dagues posées devant eux, tandis qu'un septième somnole dans un coin la tête appuyée sur un bouclier de bois. C'est d'ici que partent les patrouilles chargées de surveiller les nains et que les coffrets gagnent la tour. Dérangés dans leur travail, ils saisissent leurs armes en un clin d'œil, sans accepter aucune négociation.",
+          "ennemis": ["Kobold ×7"],
+          "tresor": "Cinq coffrets de 1 000 pa chacun (10 kg), prêts pour la tour.",
+          "note": "Zone 15 — salle commune des kobolds ; combat à mort."
+        },
+        {
+          "x": 4, "y": 3, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "Quatre kobolds occupent en permanence cette salle : deux jouent sur une sorte d'échiquier, un troisième reste assis au fond et le dernier épie le couloir par un judas, la main sur un levier. À votre arrivée, la sentinelle abaisse le levier : une trappe s'ouvre dans le couloir en face, précipitant quiconque s'y trouve dans une fosse peu profonde tapissée de tessons et d'éclats de verre coupants. Les kobolds attaquent aussitôt — mais si la chance tourne, ils tenteront d'acheter leur vie avec leur trésor.",
+          "ennemis": ["Kobold ×4"],
+          "piege": "Trappe du couloir (levier de la sentinelle) : Réflexes DD 20 sinon chute de 1,5 m sur tessons (1d6 dégâts tranchants).",
+          "tresor": "40 pa (la rançon que proposeront les kobolds en cas de défaite).",
+          "note": "Zone 16 — salle de garde ; le seul piège fabriqué par les kobolds depuis leur arrivée dans la mine."
+        },
+        {
+          "x": 3, "y": 3, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Vaste caverne haute éclairée du jour, au sol de rocailles couvertes d'humus et de feuilles : une excavation grillagée abrite une effroyable horreur crochue dressée par les troglodytes, et un passage au fond donne à l'air libre, au-dessus du lac, à une dizaine de mètres de hauteur. Six troglodytes ne cherchent pas d'abord le combat et préfèrent négocier le passage contre des pièces ; libérée, l'horreur crochue se jette sur tout ce qu'elle rencontre, sauf sur ses maîtres.",
+          "ennemis": ["Troglodyte ×6", "Grick ×1"],
+          "note": "Zone 17 — la salle des troglodytes. Négociation possible ; le grick (FP 3) représente l'horreur crochue derrière la grille ; saut dans le lac possible en dernière extrémité (10 m)."
+        },
+        {
+          "x": 2, "y": 3, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Un feu brûle dans un coin de cette grotte et éclaire six troglodytes accroupis — deux femelles et quatre jeunes adultes — occupés à rôtir un gros morceau de viande à la broche, la fumée s'évadant par une fente du plafond. Ils ne cherchent pas le combat au premier abord, mais sauront se défendre s'il le faut, les jeunes se battant comme des adultes.",
+          "ennemis": ["Troglodyte ×6"],
+          "tresor": "Cachés sous des pierres dans un coin : sept petits sacs totalisant 700 pa.",
+          "note": "Zone 18 — camp des troglodytes."
+        },
+        {
+          "x": 1, "y": 3, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une étendue d'eau à la profondeur variable entre 75 cm et 1,25 m couvre la majeure partie de cette grotte très sombre, bordée de stalactites et de stalagmites ; l'issue est obstruée par un gros filet où gisent casque à cornes, épée rouillée à la lame brisée, ossements humains et animaux et une gourde vide. Au plafond, trois araignées géantes se tiennent tapies : dès qu'on approche de la toile, elles se jettent sur ce qu'elles imaginent être leurs proies.",
+          "ennemis": ["Araignée_géante ×3"],
+          "note": "Zone 19 — la caverne des stalactites ; les araignées attaquent dès qu'on s'approche du filet."
+        },
+        {
+          "x": 0, "y": 3, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Une vaste caverne de forme allongée plongée dans le noir, où une odeur âpre pique le nez : quantité d'herbe et de feuillage entassés et un grand nombre d'ossements et de crânes blanchis jonchent le sol, marquant le gîte d'un gros fauve. C'est alors qu'un couple d'ours des cavernes, flairant les intrus, arrive du passage de droite à pas feutrés. Toute intrusion les irrite, mais ils ne poursuivront pas les trouble-fêtes très loin.",
+          "ennemis": ["Ours_noir ×2"],
+          "note": "Zone 20 — caverne de l'ours. Les ours des cavernes du module sont trop forts pour le bestiaire FP ≤ 5 (ours sanguinaire FP 7) : représentés par des ours noirs (FP 2). [AJUSTEMENT REQUIS]"
+        },
+        {
+          "x": 0, "y": 4, "type": "salle vide",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Grotte de forme allongée haute de 5 à 7 mètres, aux colonnes de stalagmites, où des dizaines de chauves-souris pendent au plafond ; dans l'angle opposé, une étroite cheminée naturelle laisse tomber un filet de lumière dix mètres au-dessus du sol, hors de portée. Juste sous la cheminée, le squelette d'un elfe s'est écrasé dans un tas de feuilles à demi pourries.",
+          "ennemis": ["Chauve_souris ×10"],
+          "tresor": "Sur le squelette d'elfe : une cape de protection en très bon état et une bourse de cuir moisie contenant 15 po.",
+          "note": "Zone 21 — la grotte des chauves-souris. Nuée de chauves-souris représentée par dix chauves-souris (FP 1/10) ; une partie attaque dans la panique."
+        },
+        {
+          "x": 1, "y": 4, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "L'ouverture irrégulière de cette dernière grotte donne sur une épaisse végétation en bord du lac : il est tout à fait possible, en grimpant un peu, de rejoindre la route de Muïck — ou, mieux encore, de revenir à l'auberge. C'est l'échappatoire naturelle du réseau souterrain.",
+          "note": "Zone 22 — l'entrée de la grotte (sortie vers le lac). Une fois dehors, retour possible à l'auberge : équipement récupéré, Grifeix et son capitaine sont repartis."
+        },
+        {
+          "x": 2, "y": 4, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une lourde porte de chêne percée dans de puissantes murailles de pierre s'ouvre sur le sous-sol d'une tour carrée, gardé par trois soldats au blason du fief de Muïck — certains, pire encore, étaient à l'auberge lors de la capture. Un escalier de bois longe les parois vers 6 mètres plus haut, tandis qu'un monte-charge à grue pivotante attend qu'on y hisse deux coffrets de pièces d'argent.",
+          "ennemis": ["Garde ×3"],
+          "tresor": "Deux coffrets de pièces d'argent en cours de chargement (10 kg chacun) ; bourses des gardes : 13 pc, 13 po et 24 pc.",
+          "note": "Zone 23 — le sous-sol de la tour, unique accès à la mine. La porte n'est pas verrouillée (la grande clef est sur l'ogre de la salle 14) ; les soldats appellent leurs compagnons de l'étage."
+        },
+        {
+          "x": 3, "y": 4, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": true },
+          "description": "Une grande porte à double battants donne à l'air libre, un trou de ravitaillement s'ouvre au centre et l'escalier continue de monter : le rez-de-chaussée de la tour s'anime. Sept soldats vont et viennent — deux manœuvrent le monte-charge, cinq fument la pipe ou s'affairent à l'extérieur autour d'un chariot attelé de deux bœufs, en attendant d'y charger les coffres.",
+          "ennemis": ["Garde ×7"],
+          "tresor": "Chariot : deux coffrets de 1 000 pa déjà chargés ; bourses des gardes : 20 pc, 19 pc, 5 po, 18 pc, 8 po, 12 po et 13 po.",
+          "note": "Zone 24 — le rez-de-chaussée de la tour."
+        },
+        {
+          "x": 4, "y": 4, "type": "salle vide",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "Pièce de vie simple — armoire, lit, table, trois tabourets et une cheminée — dont un escalier plus étroit continue de monter de l'autre côté. L'armoire ne renferme que des biens personnels sans valeur ; sur la table, à côté d'un pichet de vin, sont posés les livres de sorts et de prières confisqués aux personnages à l'auberge.",
+          "tresor": "Sur la table : les livres de sorts et de prières pris aux personnages dans l'auberge.",
+          "note": "Zone 25 — le premier étage de la tour."
+        },
+        {
+          "x": 4, "y": 5, "type": "antichambre",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Au sommet de la tour, deux lieutenants du jeune baron devisent en admirant les reflets de la lune sur le lac, pendant que leurs hommes travaillent en dessous. Ils seront certainement alertés par les bruits de combat montés de la base et iront prêter main-forte aux soldats sans hésiter.",
+          "ennemis": ["Chenaille ×2"],
+          "tresor": "Bourses des lieutenants : 10 po et 11 po.",
+          "note": "Zone 26 — le deuxième étage. Les deux lieutenants (malfrats) sont représentés par des chenailles (FP 1/3)."
         }
       ]
     }

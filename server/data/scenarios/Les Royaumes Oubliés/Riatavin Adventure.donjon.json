@@ -1,146 +1,105 @@
 {
   "id": "ro_riatavin_adventure_donjon",
   "scenario": "ro_riatavin_adventure",
-  "donjon_id": "ro_riatavin_adventure",
-  "titre": "Donjon du scénario ro_riatavin_adventure (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "Les ruines du temple oublié",
+  "titre": "L'Indépendance de Riatavin — ruines du temple de la pointe des Monts des Flocons",
+  "source": "RIATAVIN'S INDEPENDENCE (AD&D, Terres d'Intrigue, DR1370 Uktar) — temple ruine abritant le Brand d'Azuth",
+  "note_convention": "Archenal le Puissant (Mage-Home) aidera Riatavin si le groupe récupère le Brand d'Azuth dans le temple oublié, refuge des créatures des « Neuf ». Les chefs (Dragar, Xerxes initié, Treflar de Malar, Egen, Horthraxis) portent le tatouage des Neuf — jeu équilibré : x9 pentagrammes et griffe enflammée. Dragons jeunes et chefs hors plafond : en note [AJUSTEMENT REQUIS].",
   "etages": [
     {
-      "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "nom": "Le temple oublié",
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "À la pointe sud des Monts des Flocons, entre l'Esprit Planant et la tour d'Orgoth, un temple antique éventré déborde de créatures du mal. Une vieille magie en interdit l'entrée aux puissants lanceurs de sorts — c'est pour cela qu'Archenal a délégué la récupération du Brand d'Azuth à des aventuriers.",
+          "note": "La caravane attaquée par Tregen et ses bandits est passée par ici : le groupe peut aider le maître caravane Jonathan Stell (Mille-Têtes) en route."
         },
         {
-          "x": 1,
-          "y": 0,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": -1, "y": 0, "type": "garde",
+          "portes": { "nord": true, "sud": false, "est": true, "ouest": false },
+          "description": "Le parvis du temple, camp retranché de la tribu gobeline de la Cornemark : feux de camp, huttes de branchages et peaux tannées. Les sentinelles montent la garde entre les colonnes abattues, vigilantissimes depuis l'arrivée de leurs nouveaux maîtres.",
+          "ennemis": ["Gobelin ×2"],
+          "note": "La tribu Cornemark compte 80 à 110 gobelins, menés par Egen (chef 3 DV). Ils servent les « Neuf » avec entrain."
         },
         {
-          "x": 1,
-          "y": 1,
-          "type": "laboratoire",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Gobelin ×1"
-          ]
+          "x": 0, "y": -1, "type": "couloir",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "La nef effondrée : la grand-voûte écroulée a laissé le ciel entrer dans le sanctuaire, transformant la salle en campement désordonné. C'est ici que Tregen et ses bandits ont établi leur taverne de fortune — butin et gourdes trônent sur l'autel brisé.",
+          "ennemis": ["Gobelin ×1"],
+          "note": "Tregen (seigneur-bandit) et 22 bandits campent entre le parvis et la crypte."
         },
         {
-          "x": 0,
-          "y": 1,
-          "type": "garde",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": -1, "y": -1, "type": "cellules",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "La crypte des captifs : d'anciens caveaux du temple servent de geôles aux survivants du convoi attaqué par Tregen. Des marchands et palefreniers, faibles et attachés, y attendent une rançon qui ne viendra jamais seule.",
+          "pnj": ["Prisonniers de la caravane de Jonathan Stell"],
+          "note": "Les libérer rend Jonathan Stell éternellement reconnaissant (la Mille-Têtes est une richesse en relations)."
         },
         {
-          "x": -1,
-          "y": 1,
-          "type": "piège",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 0, "y": -2, "type": "bibliothèque",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Le scriptorium calciné : étagères de pierre remplies de cendres et de parchemins roussis au milieu des statues de prêtres d'Azuth. C'est ici que le groupe peut arracher aux ruines les fragments qui parlent du Brand — la torche d'argent à la flamme blanche qui triple les sorts.",
+          "tresor": "Fragments de parchemins sur le Brand d'Azuth et sur la marche du temple.",
+          "note": "Cette salle attire aussi l'attention des bandits ; le tatouage des « Neuf » arbre les chefs (neuf pentagrammes, griffe enflammée)."
         },
         {
-          "x": -2,
-          "y": 1,
-          "type": "couloir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": -2, "type": "autel",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "La chambre des Neuf : une salle rituelle où sont marqués les chefs des factions — croix pentagrammes, cercles de runes et griffe enflammée au centre, gravés à même la pierre. C'est d'ici que Xérxès, l'initié des Neuf, scelle ses pactes avec les chefs du mal.",
+          "pnj": ["Xérxès, initié des Neuf (magicien 6e niveau)"],
+          "note": "[AJUSTEMENT REQUIS] Xérxès représente les Neuf sans en être membre ; il espère le devenir. Les tatouages accordent un pouvoir personnel à chacun des chefs."
         },
         {
-          "x": -3,
-          "y": 1,
-          "type": "crypte",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -3, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Le sanctuaire de Beshaba, profané : la déesse de la malchance a trouvé ici des autels dressés par sa prêtresse Iltharis. Encens noir, ossements de marcheurs exposés et brûlures de rituel emplissent l'air de lourdes fumées grises.",
+          "ennemis": ["Gobelin ×1"],
+          "pnj": ["Iltharis, prêtresse de Beshaba"],
+          "note": "[AJUSTEMENT REQUIS] Iltharis (prêtresse de Beshaba) officie ici ; ses malédictions défient les novices."
         },
         {
-          "x": -4,
-          "y": 1,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 1, "y": -3, "type": "salle du trône",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "L'îlot de Dragar-des-Ténèbres : une salle haute où campent une trentaine de guerriers aguerris sous les ordres du bras des « Neuf ». Dragar les a dressés, montés et conduits à la prise du temple.",
+          "ennemis": ["Orque ×1"],
+          "pnj": ["Dragar-des-Ténèbres, guerrier des Neuf (6e niveau)"],
+          "note": "[AJUSTEMENT REQUIS] Dragar mène 36 guerriers de 1er-2e niveau et porte le tatouage des Neuf (pouvoir personnel)."
         },
         {
-          "x": -5,
-          "y": 1,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -4, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Le repaire du chef Egen : peaux, crânes de randonneurs et trophées de guerre ornent l'antre de la Corne Sanglante. Le chef gobelin y reçoit ses sous-chefs autour d'un chaudron bouillonnant.",
+          "ennemis": ["Gobelin ×3"],
+          "pnj": ["Egen, chef de la tribu de la Cornemark"],
+          "note": "Egen est un chef gobelin de 3 DV (jouer comme un gobelin supérieur : cf. note)."
         },
         {
-          "x": -6,
-          "y": 1,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "[À RÉDIGER — antre du « Ombre », final du scénario « ro_riatavin_adventure ». Reprendre la description du module.]",
-          "ennemis": [
-            "Ombre ×1"
-          ]
+          "x": 1, "y": -4, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "L'antre du loup : repaire de Treflar de Malar, sanglante falaise de dévotion à la Bête à la hache sanglante. Trois loups-garous (sangliers-garous) y somnolent entre deux chasses meurtrières, les flancs encore rougis.",
+          "ennemis": ["Loup-garou ×1"],
+          "pnj": ["Treflar de Malar, prêtre de Malar"],
+          "note": "Treflar conduit trois sangliers-garous (loup-garou en fiche)."
+        },
+        {
+          "x": 0, "y": -5, "type": "laboratoire",
+          "portes": { "nord": false, "sud": true, "est": true, "ouest": false },
+          "description": "Le repaire de Xérxès : caisses d'objets volés, cornues, ingrédients d'alchimie et croquis de portes. L'initié des Neuf y griffonne des projets d'invocation et d'alliances — les plans du raid sur Riatavin y sont étalés.",
+          "ennemis": ["Gobelin ×1"],
+          "pnj": ["Xérxès, initié des Neuf (magicien 6e)"],
+          "tresor": "Potion et couples de composants d'alchimie, plans du pacte avec Horthraxis.",
+          "note": "« Leur but : mort, esclavage et destruction pour tous. »"
+        },
+        {
+          "x": 1, "y": -5, "type": "trésor",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": true },
+          "description": "La tanière de Horthraxis, jeune dragon noir : un sanctuaire antique transformé en nid, où le trésor s'accumule — c'est dans ce tas que repose le Brand d'Azuth, torche d'argent chaude d'une flamme blanche lumineuse.",
+          "ennemis": ["Loup-garou ×1"],
+          "pnj": ["Horthraxis, jeune dragon noir"],
+          "tresor": "LE BRAND D'AZUTH (torche d'argent, feu blanc luisant : tripler sorts, durée et dégâts) — et le trésor grandissant du jeune dragon.",
+          "note": "[AJUSTEMENT REQUIS] Horthraxis (jeune dragon noir) est hors plafond — approche par la ruse, le vol ou l'escamotage conseillée. Pacte des Neuf : richesse et « nouveau corps » contre son obéissance lors du signal."
         }
       ]
     }

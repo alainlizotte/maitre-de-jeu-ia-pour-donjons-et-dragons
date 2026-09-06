@@ -1,151 +1,141 @@
 {
-  "id": "laelith_à_la_chasse_aux_gobs_donjon",
+  "id": "laelith_chasse_aux_gobs_donjon",
   "scenario": "laelith_à_la_chasse_aux_gobs",
-  "donjon_id": "laelith_à_la_chasse_aux_gobs",
-  "titre": "Donjon du scénario laelith_à_la_chasse_aux_gobs (BROUILLON)",
-  "source": "[BROUILLON GÉNÉRÉ — affiner à partir du module : voir le PDF du scénario dans server/data/scenarios/]",
-  "note_convention": "Brouillon auto-généré : disposition déterministe, créatures détectées automatiquement dans le texte du module (résumé FR/EN). À affiner : descriptions fidèles, placement exact des rencontres/trésors/pièges, PNJ, second étage si nécessaire.",
+  "donjon_id": "L'antre des gobelins",
+  "titre": "L'antre des gobelins — À la chasse aux gobs",
+  "source": "Aidedd.org — À la chasse aux gobs (Thierry Lemaire), zones 1-17 du module",
+  "note_convention": "Structure fidèle au module (17 zones + piège X). Plafonds ~3 m ; couloirs obscurs, salles de vie éclairées de torches. Monstres réinterprétés avec les fiches D&D 3.5 du bestiaire (module 5e d'origine).",
   "etages": [
     {
       "nom": "Rez-de-chaussée",
-      "entree": [
-        0,
-        0
-      ],
+      "entree": [0, 0],
       "salles": [
         {
-          "x": 0,
-          "y": 0,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Une grotte naturelle dont l'entrée est bloquée par une grosse porte en bois cerclée de fer, fermée à clef (Dextérité DD 10 avec outils de voleur, Force DD 15 pour l'enfoncer). Deux gobelins censés monter la garde y somnolent près d'un feu éteint.",
+          "ennemis": ["Gobelin ×2"],
+          "tresor": "12 po et 16 pc sur les deux gardes endormis.",
+          "note": "Zone 1 — les gobelins dorment : surprise possible au premier round."
         },
         {
-          "x": 1,
-          "y": 0,
-          "type": "puits",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": false,
-            "ouest": true
-          },
-          "description": ""
+          "x": 0, "y": -1, "type": "piège",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Au premier carrefour des couloirs, le passage qui file droit semble banal — mais le sol y est recouvert d'une large toile camouflée de terre et de débris, dissimulant une fosse profonde de trois mètres.",
+          "piege": "Fosse (Perception DD 10) : chute de 3 m, 1d6 dégâts contondants au premier personnage qui passe dessus.",
+          "note": "Zone X du module — Le piège."
         },
         {
-          "x": 1,
-          "y": 1,
-          "type": "couloir",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Orque ×1"
-          ]
+          "x": -1, "y": -1, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "L'obscurité de cette petite pièce est trouée par les instruments de torture accrochés aux murs : tenailles, fers rougis, fouets. Un chevalet occupe le centre, sur lequel est attaché un halfelin méconnaissable, couvert de marques de torture : Gandelme le Dextre, en visite chez son frère de Fial la semaine passée. Épuisé et déshydraté (0 pv, épuisement 4), il ne peut ni marcher ni combattre.",
+          "pnj": ["Gandelme le Dextre (halfelin roublard, prisonnier, épuisé)"],
+          "note": "Zone 4 — La salle de torture. Un soin lui permet de marcher ; il supplie qu'on retrouve son équipement (zone 17)."
         },
         {
-          "x": 0,
-          "y": 1,
-          "type": "laboratoire",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "ennemis": [
-            "Gobelin ×1"
-          ]
+          "x": 0, "y": -2, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Cette grotte naturelle, plongée dans le noir, sert de râtelier : des armes de facture médiocre sont adossées à la paroi — fronde et pierres, javelines, marteaux de guerre, épée longue, arbalète lourde et carreaux, morgensterns — ainsi qu'une cuirasse humaine, une cotte de mailles naine et huit boucliers de bois. À droite, en contrebas, une porte en bois entrouverte mène vers le complexe creusé.",
+          "note": "Zone 2 — La salle d'armes."
         },
         {
-          "x": 0,
-          "y": 2,
-          "type": "trésor",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "",
-          "ennemis": [
-            "Chat ×1"
-          ]
+          "x": 0, "y": -3, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "La porte de cette salle est fermée à clef, mais la serrure est sommaire (Dextérité DD 10 avec outils de voleur). À l'intérieur s'entassent le butin des vols de la tribu : rouleaux de tissus, poteries, une selle de cheval, des outils de paysan. Quatre torches éteintes sont accrochées aux piliers de bois.",
+          "piege": "Serrure grossière : crochetage DD 10 (outils de voleur) ou forçage.",
+          "note": "Zone 3 — L'entrepôt."
         },
         {
-          "x": -1,
-          "y": 2,
-          "type": "trésor",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": "",
-          "tresor": "[À RÉDIGER — trésor du module]"
+          "x": 0, "y": -4, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Une vaste pièce en grande partie vide dont l'angle sud forme un monceau de nourriture : viandes suspendues, fruits séchés, alcools et légumes — de quoi nourrir la tribu entière pendant des jours.",
+          "note": "Zone 5 — La réserve de nourriture."
         },
         {
-          "x": -2,
-          "y": 2,
-          "type": "couloir",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": true,
-            "ouest": true
-          },
-          "description": ""
+          "x": 1, "y": -4, "type": "cuisine",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Deux torches éclairent cette pièce presque vide : un fourneau au feu rougeoyant dont la fumée s'échappe par un trou au plafond, des casseroles sales et une nourriture peu ragoûtante qui mijote.",
+          "note": "Zone 6 — La cuisine."
         },
         {
-          "x": -3,
-          "y": 2,
-          "type": "piège",
-          "portes": {
-            "nord": true,
-            "sud": false,
-            "est": true,
-            "ouest": false
-          },
-          "description": "",
-          "piege": "[À RÉDIGER — piège du module (DD, dégâts, effets)]"
+          "x": 0, "y": -5, "type": "salle vide",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Six paillasses de petite taille bordent cette chambre, et deux gobelins jouent aux dés autour d'une table ronde en bois, absorbés par leur partie. Un coffre fermé à clef repose dans un coin.",
+          "ennemis": ["Gobelin ×2"],
+          "tresor": "Coffre fermé (252 pc) — la clef est sur l'un des gobelins.",
+          "note": "Zone 7 — Une chambre de gobelins."
         },
         {
-          "x": -3,
-          "y": 1,
-          "type": "entrée",
-          "portes": {
-            "nord": false,
-            "sud": true,
-            "est": true,
-            "ouest": false
-          },
-          "description": ""
+          "x": 1, "y": -5, "type": "garde",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Deux paillasses de taille humaine et une grosse bourse : c'est ici que dorment les hobgobelins du complexe — pour l'heure absents, attablés dans la salle commune voisine.",
+          "tresor": "Bourse : 11 po et 1 pp.",
+          "note": "Zone 8 — La chambre des hobgobelins."
         },
         {
-          "x": -2,
-          "y": 1,
-          "type": "salle du trône",
-          "portes": {
-            "nord": false,
-            "sud": false,
-            "est": false,
-            "ouest": true
-          },
-          "description": "[À RÉDIGER — antre du « Gobelours », final du scénario « laelith_à_la_chasse_aux_gobs ». Reprendre la description du module.]",
-          "ennemis": [
-            "Gobelours ×1"
-          ]
+          "x": 0, "y": -6, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "De grandes tables entourées de bancs remplissent la salle commune. Deux créatures de taille humaine aux traits de gobelins — des hobgobelins — y dévorent leur repas, épées longues au côté mais boucliers posés sur la table, convaincus que tout bruit vient des leurs. À l'écoute à la porte, on les entend parler gobelin.",
+          "ennemis": ["Hobgobelin ×2"],
+          "note": "Zone 9 — La salle commune : si l'un meurt, l'autre crie pour alerter les zones 7 et 10."
+        },
+        {
+          "x": 1, "y": -6, "type": "salle vide",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Six paillasses vides et deux gobelins profondément endormis : un simple combat en salle commune ne suffit pas à les réveiller, mais des cris les feraient accourir.",
+          "ennemis": ["Gobelin ×2"],
+          "note": "Zone 10 — Une chambre de gobelins (dormeurs profonds)."
+        },
+        {
+          "x": 0, "y": -7, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "En ouvrant cette porte, vous découvrez une créature massive et informe — le gobelours signalé autour de Fial — de profil, occupé à fourrer un petit sac sous sa paillasse. Son morgenstern est à portée de main ; il n'a pas de bouclier. Il attaque quiconque entre sans frapper.",
+          "ennemis": ["Gobelours ×1"],
+          "tresor": "Petit sac caché sous la paillasse : 40 po.",
+          "note": "Zone 11 — La chambre du gobelours."
+        },
+        {
+          "x": -1, "y": -7, "type": "trésor",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Cette salle sans lumière est dissimulée derrière un passage secret (Investigation DD 15). Six statuettes d'ivoire y reposent aux côtés de deux fioles de potion de soins et d'un grand coffre ouvert.",
+          "tresor": "Six statuettes d'ivoire (60 po au total) ; deux potions de soins (2d4+2 pv) ; coffre : 2000 pc, 1000 pa, 70 po.",
+          "note": "Zone 12 — La salle du trésor (passage secret, Investigation DD 15)."
+        },
+        {
+          "x": 0, "y": -8, "type": "salle du trône",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "La plus vaste salle du complexe : au fond, sur un trône de bois trône le chef de la tribu, entouré de trois gobelins d'arme qui attaquent à vue. De grands tapis recouvrent les pans de mur. Le chef est un poltron : dès que le tour tourne mal, il fait pivoter son trône (Investigation DD 15, ou DD 5 si on l'a vu agir) et fuit par le passage secret derrière.",
+          "ennemis": ["Gobelin ×4"],
+          "tresor": "24 pa sur chaque gobelin.",
+          "note": "Zone 13 — La salle du trône : le chef = gobelin normal poltron + passage secret derrière le trône."
+        },
+        {
+          "x": -1, "y": -8, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Cette pièce baigne dans l'obscurité. Au fond, pieds et poings liés par une corde, se trouve Lanéa, la fille du forgeron Thron que le groupe est venu chercher — elle n'a pas été maltraitée et vous reconnaît aussitôt. Si Gandelme n'a pas encore été trouvé, elle révèle l'avoir aperçue la veille : il faut absolument le secourir avant de partir.",
+          "pnj": ["Lanéa (fille de Thron, prisonnière, saine et sauve)"],
+          "note": "Zone 16 — La cellule : l'objectif de la quête."
+        },
+        {
+          "x": 0, "y": -9, "type": "laboratoire",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Cette pièce est fermée à clef (crochetage DD 15, Force DD 15 pour l'enfoncer). Des étagères croulent sous des pots et fioles sans étiquette, entourés de matériel d'alchimiste en désordre : les ingrédients de l'apprenti de la chambre voisine, qu'aucun magicien ne saurait identifier.",
+          "piege": "Serrure : crochetage DD 15 (outils de voleur) ou forçage DD 15.",
+          "note": "Zone 14 — Le laboratoire."
+        },
+        {
+          "x": -1, "y": -9, "type": "antichambre",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Un bureau de belle facture, une chaise, un tapis épais et un lit : cette chambre sent nettement meilleure que le reste de l'antre. Elric, jeune apprenti alchimiste humain, y travaille sur son grimoire — ou y dort, selon l'heure. Beau parleur, il prétendra être prisonnier des gobelins pour mieux s'enfuir dès qu'il en aura l'occasion ; il détient la clef de la zone 14.",
+          "pnj": ["Elric (apprenti alchimiste humain, trompeur)"],
+          "note": "Zone 15 — La chambre de l'alchimiste : vivait ici de son plein gré, promettait de transformer le fer en or."
+        },
+        {
+          "x": 0, "y": -10, "type": "antichambre",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Cette chambre est étonnamment bien décorée : un vrai lit, des tapis au sol et aux murs, deux torches éteintes. Sur un sac à dos posé au pied du lit sont posés un bouclier et une épée courte de petite taille — l'équipement de Gandelme, capturé il y a une semaine. Le sac contient aussi un sac d'explorateur, des outils de voleur et 20 po.",
+          "tresor": "Bouclier, épée courte, sac d'explorateur, outils de voleur et 20 po de Gandelme.",
+          "note": "Zone 17 — La chambre du chef : l'équipement de Gandelme s'y trouve."
         }
       ]
     }

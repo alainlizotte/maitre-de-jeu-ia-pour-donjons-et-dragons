@@ -1016,6 +1016,29 @@ def _charger_etage(donjon: dict[str, Any], etage: int) -> None:
     donjon["courant"] = d["courant"]
 
 
+def chemin_image_salle(
+    data_dir: str, donjon_id: str, etage: int, x: int, y: int,
+    existant: bool = False,
+) -> str:
+    """Chemin du PNG de cache d'une salle — MÊME convention que le runtime.
+
+    Le nom inclut l'ÉTAGE (`slug_<etage>_<x>_<y>.png`) : sans lui, deux
+    salles de coordonnées identiques sur des étages différents partageaient
+    la même illustration (bug observé en pré-génération de Dues for the
+    Dead). `existant=True` : retombe sur l'ancien nom sans étage pour les
+    caches de l'étage 0 produits avant la correction (évite de tout
+    régénérer).
+    """
+    slug = (str(donjon_id or "salle") or "salle").lower().replace(" ", "_")
+    cache_dir = os.path.join(data_dir, "images_salles")
+    dest = os.path.join(cache_dir, f"{slug}_{int(etage)}_{x}_{y}.png")
+    if existant and int(etage) == 0:
+        legacy = os.path.join(cache_dir, f"{slug}_{x}_{y}.png")
+        if os.path.isfile(legacy) and not os.path.isfile(dest):
+            return legacy
+    return dest
+
+
 async def _illustrer_salle(
     ctx: ToolContext,
     donjon: dict[str, Any],
@@ -1033,13 +1056,14 @@ async def _illustrer_salle(
         return "—"
     from ..image.helpers import generer_averti, lieu_prompt
     salle = salles[(nx, ny)]
-    slug = (str(donjon.get("id", "salle")) or "salle").lower().replace(" ", "_")
+    etage = int(donjon.get("etage", 0) or 0)
+    dest = chemin_image_salle(ctx.data_dir, str(donjon.get("id") or ""),
+                              etage, nx, ny)
     cache_dir = os.path.join(ctx.data_dir, "images_salles")
     try:
         os.makedirs(cache_dir, exist_ok=True)
     except OSError:
         return "—"
-    dest = os.path.join(cache_dir, f"{slug}_{nx}_{ny}.png")
     if os.path.isfile(dest):
         img_src = "cache"
     else:
@@ -1083,7 +1107,7 @@ async def _illustrer_salle(
             nx=nx,
             ny=ny,
             dest=dest,
-            slug=slug,
+            slug=(str(donjon.get("id") or "salle") or "salle").lower().replace(" ", "_"),
         )
         img_src = "—"
     if img_src != "—":

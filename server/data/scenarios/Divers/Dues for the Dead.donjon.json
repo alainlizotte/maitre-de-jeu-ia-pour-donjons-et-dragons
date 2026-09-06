@@ -1,0 +1,135 @@
+{
+  "id": "dues_for_the_dead_catacombes",
+  "scenario": "divers_dues_for_the_dead",
+  "donjon_id": "Catacombes du Cimetière de Valhingen",
+  "titre": "Catacombes de Valhingen — Dues for the Dead",
+  "source": "DDEP01-1 : Dues for the Dead (Phlan, Valhingen Graveyard)",
+  "note_convention": "Disposition simplifiée du plan officiel : zones numérotées comme dans le module. Les monstres sont exprimés avec les fiches D&D 3.5 du bestiaire local (réinterprétation des stats 5e du module).",
+  "etages": [
+    {
+      "nom": "Galleries hautes",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": true },
+          "description": "L'escalier de pierre descend depuis le porche du cimetière vers une galerie voûtée. Des bas-reliefs représentent des prêtres de Kelemvor en prière, maculés de taches noires qui semblent pulser. Une odeur de terre humide et d'encens froid flotte dans l'air. Au nord, une arche ouvre sur la salle des banquets funèbres ; à l'ouest, un couloir mène vers la fosse aux os.",
+          "pnj": ["Cassyt (acolyte de Kelemvor, guide des visiteurs)"],
+          "note": "Le clerc de la partie (Doomguide Yovir Glandon en amont) confie le groupe à Cassyt qui connaît les galleries hautes."
+        },
+        {
+          "x": -1, "y": 0, "type": "puits",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Une chambre circulaire presque remplie par une fosse ronde bordée d'ossements humanoïdes. Un passage étroit de trente centimètres longe le mur entre la lèvre de la fosse et la pierre. Les os ont été jetés là sans respect par un ancien culte funéraire (zone 5).",
+          "piege": "Pente glissante d'ossements : chute dans la fosse (Dextérité DD 10) — pas de monstre, mais bruit et fouille possible.",
+          "note": "Zone 4 du module — The Bone Pit."
+        },
+        {
+          "x": 0, "y": -1, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": true },
+          "description": "Une salle étonnamment paisible : lanternes colorées, brûle-parfums, longues tables de planches sur tréteaux. Les familles modestes de Phlan y célèbrent les banquets funèbres gratuits offerts par les fidèles de Kelemvor. Une pièce du coin sud est scellée par une grille de fer verrouillée (réserve du banquet).",
+          "note": "Zone 2 du module — Funerary Banquet Hall (repère « a » sur la carte). Grille : crochetage DD 15."
+        },
+        {
+          "x": -1, "y": -1, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Cette aile accueillait les cultes funéraires privés de Phlan. Une chambre contient des rangées d'animaux de poterie faits des cendres des défunts ; une autre suspend des milliers d'os disjoints à de fins fils de fer ; la dernière, embaumée par la fumée de braseros, abrite des corps préservés couchés sur des litières.",
+          "ennemi_note": "Rencontres errantes possibles (table d4 du module : goules 1d4, zombies 1d6, squelettes 1d6).",
+          "note": "Zone 5 du module — Funerary Cults."
+        },
+        {
+          "x": 1, "y": -1, "type": "crypte",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Une ville souterraine de cryptes modélisées d'après les maisons de la surface. La Nécropole s'étire sur des centaines de pieds ; on pourrait l'explorer des jours sans en voir la fin. Cassyt et les fidèles de Kelemvor y enterrent la plupart des nouveaux défunts. Une rumeur place quelque part ici la tombe cachée de Miltiades, paladin mort-vivant légendaire.",
+          "pnj": ["Cassyt (connaît parfaitement cette section)"],
+          "note": "Zone 13 du module — The Necropolis and Beyond. Parfait pour ancrer la trame (Piscine de Radiance, Miltiades)."
+        },
+        {
+          "x": 0, "y": -2, "type": "crypte",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Les cryptes des premières familles de Phlan : marchands prospères, dirigeants, officiers. Une qualité de musée en émane — des dioramas de squelettes richement vêtus posés autour de tables à dîner, de bureaux d'écriture, de fauteuils de luxe, parmi leurs biens les plus chers. Chaque porte est scellée d'une grille de fer verrouillée.",
+          "piege": "Grilles verrouillées (crochetage DD 15, forcage Force DD 15) ; alarme des gardes du cimetière si forcées bruyamment.",
+          "note": "Zone 3 du module — First Families of Phlan."
+        },
+        {
+          "x": 0, "y": -3, "type": "escaliers",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Le passage descend par des marches de pierre usées vers une pièce carrée de quinze pieds. Des escaliers de bois vermoulu s'enroulent autour d'une statue étrange — un humanoïde à quatre bras aux traits insectoïdes tenant un parchemin, une plume et un crâne — et plongent dans l'obscurité, vingt pieds plus bas.",
+          "piege": "Escaliers branlants (zone 6) : Dextérité DD 10 par personnage sous peine de chute (1d6 dégâts) et de vacarme.",
+          "note": "Zone 6 du module — Rickety Stairs : descende vers Les Bas Tombeaux (étage -1)."
+        }
+      ]
+    },
+    {
+      "nom": "Les Bas Tombeaux",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "escaliers",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Le pied des escaliers branlants. La statue à quatre bras domine la pièce du haut de la cage d'escalier ; l'air y est plus froid et l'obscurité plus dense qu'au-dessus.",
+          "note": "Bas de la zone 6 — arrivée depuis les galleries hautes."
+        },
+        {
+          "x": 0, "y": -1, "type": "antichambre",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": true },
+          "description": "Une chambre semi-circulaire dont les murs sont bordés de près d'une centaine de loculi, chacun renfermant les os d'un ou plusieurs défunts de Phlan. Un obélisque se dresse au centre, ses quatre faces couvertes de runes célestes décrivant les vies vertueuses des interdits.",
+          "piege": "Aucun — salle de jonction des Bas Tombeaux.",
+          "note": "Zone 8 du module — Obelisk. Inscription en céleste (Histoire DD 15 pour identifier)."
+        },
+        {
+          "x": -1, "y": -1, "type": "piège",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Des cryptes évoquant les pires criminels de l'histoire de Phlan : meurtriers et victimes sont figés dans des dioramas de cauchemar — trois enfants squelettiques étranglant un homme, une foule « noyant » un squelette dans un fauteuil. Les pièges posés par la sentinelle de Rorreth jonchent le passage.",
+          "ennemis": ["Kobold ×1"],
+          "piege": "Trappes et objets piégés par le culte (zone 12) : attaque au bruit qui réveille la sentinelle de la zone 14a.",
+          "note": "Zone 12 du module — Crime Scenes."
+        },
+        {
+          "x": 1, "y": -1, "type": "crypte",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Des niches proches du sol sont remplies d'os empilés, et des crânes alignés coiffent une corniche. Une inscription en ancien commun, dégagée de sa poussière, promet : « Une question parle-toi, et ces défunts répondront. » Les défunts d'ici répondent comme un speak with dead à qui les consulte respectueusement.",
+          "note": "Zone 11 du module — Talking Dead : excellent outil d'enquête (indices sur Rorreth, la Piscine de Radiance)."
+        },
+        {
+          "x": 0, "y": -2, "type": "cellules",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Les murs de cette section sont bordés de niches funéraires contenant des squelettes — mais des squelettes VOUS fixent également depuis le plafond, pris dans un plâtre séculaire. Soudain, cinq d'entre eux se libèrent et s'écrasent au sol pour attaquer.",
+          "ennemis": ["Squelette ×5"],
+          "note": "Zone 9 du module — Skeletal Ceiling : 5 squelettes animés par Rorreth tombent du plafond (embuscade)."
+        },
+        {
+          "x": -1, "y": -2, "type": "crypte",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Les bas tombeaux proprement dits : des galeries basses où dormaient les pauvres de Phlan. Des sarcophages jumeaux y ont été fraîchement violés ; une odeur de charogne flotte. Des goules rôdent, attirées par la corruption qui émane du repaire du nécromancien.",
+          "ennemis": ["Goule ×2"],
+          "piege": "Dalles instables : bruit → risque d'alerter la zone 14a.",
+          "note": "Zones 7a/7b du module — The Low Tombs (piège de tonnerre sur les sarcophages jumeaux)."
+        },
+        {
+          "x": 0, "y": -3, "type": "trésor",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Une figure momifiée en habits magnifiques trône sur un siège incrusté d'ivoire et de pierres fines : Sedrair II, noble excentrique de la vieille Phlan. Une dague dorée à la main droite, une balance dans la main gauche, une couronne d'or et d'argent terni — qui semble flotter au-dessus de sa tête, gardée par un glyphe d'intelligence. Le tout drapé de toiles d'araignée.",
+          "tresor": "Dague dorée de cérémonie (50 pc) ; couronne de Sedrair II (200 pc, glyphe de défense : sauvegarde de Volonté DD 13 sinon étourdissement 1d4 rounds).",
+          "piege": "Glyphe sur la couronne (détection DD 15, désamorçage DD 13).",
+          "note": "Zone 10 du module — The Tomb of Sedrair II."
+        },
+        {
+          "x": 0, "y": -4, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Cette antichambre sert de poste aux serviteurs du Culte du Dragon. Le fouillis est récent : tonneaux, cordes et palan servant à descendre les corps, baril renversé. Un kobold somnole dans un fauteuil en bois près d'une ouverture dans le mur du fond ; de la terre fraîchement retournée jonche le sol.",
+          "ennemis": ["Kobold ×1", "Zombie ×2"],
+          "note": "Zone 14a du module — The Sentry : le kobold donne l'alarme vers 14b s'il n'est pas neutralisé discrètement (infiltration)."
+        },
+        {
+          "x": 0, "y": -5, "type": "salle du trône",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "Le repaire du nécromancien. Des parchemins, des fioles et des instruments de rituel couvrent un bureau de travail ; un cercle de runes d'argent gravé dans le sol luit faiblement. Rorreth Monforoth, Mage Rouge de Thay en robe écarlate, emballe précipitamment son havresac — un chevalier thayen et un fanatique du Culte du Dragon le gardent, avec des serviteurs morts-vivants et des kobolds d'armes.",
+          "ennemis": ["Nécromancien rouge ×1", "Squelette ×2", "Zombie ×1", "Kobold ×2"],
+          "tresor": "Journal personnel de Rorreth (plans sur la Piscine de Radiance) ; ordres signés Rath Modar ; bourse du culte (75 pc) ; cercle de téléportation (fuite scriptée du mage).",
+          "note": "Zone 14b du module — combat final. Rorreth s'enfuit par son cercle de téléportation (script du module, round par round) ; le capturer vivant fournit les indices de fin d'aventure."
+        }
+      ]
+    }
+  ]
+}

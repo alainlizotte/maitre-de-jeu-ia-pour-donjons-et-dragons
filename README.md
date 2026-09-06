@@ -55,11 +55,19 @@ connectent depuis leur navigateur sur le réseau local.
 ### Exploration & carte du donjon (synchronisation garantie)
 - **Carte du donjon procédurale rendue en SVG** : salles explorées, portes, étages
   (rez-de-chaussée → sous-sols), position du groupe en direct.
+- **Plans de donjons fidèles aux scénarios** : un fichier `*.donjon.json` à côté du
+  PDF d'un module décrit le plan canonique (salles, positions, portes, descriptions,
+  ennemis, trésors, pièges, PNJ, étages nommés). `carte_donjon_entrer` charge ce plan
+  au lieu du procédural — la carte se révèle toujours salle par salle, mais sa
+  disposition et son contenu collent au scénario (ex. *Dues for the Dead* inclus).
+  Brouillons automatiques pour les autres modules :
+  `py scripts/generer_donjon_scenario.py --scenario <id>` (détection des créatures du
+  module dans le texte FR/EN, disposition déterministe connexe, à affiner à la main).
 - **La carte est injectée dans le prompt du MJ** (salle courante, portes réellement
   ouvertes, descriptions figées des salles) : la narration ne peut plus inventer une porte
   ou une salle absente — `carte_donjon_explorer` refuse toute direction sans porte en
   listant les portes existantes.
-- **Descriptions canoniques figées** par salle (protectées contre la réinvention) : en
+- **Descriptions canoniques figées** par salle (protégées contre la réinvention) : en
   revenant sur ses pas, le groupe retrouve la salle **à l'identique** (décor + état des
   lieux : monstres vaincus, coffres vidés…), y compris après sortie/retour du donjon.
 - **Voyage hors donjon** conforme au SRD : durée réelle (vitesse, terrain, marche forcée),
@@ -205,8 +213,11 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 ├── cartes/                 ← cartes de référence servies aux joueurs
 ├── config/                 ← config.example.yaml (+ config.yaml gitignored)
 ├── knowledge_import/       ← corpus RAG local (gitignored, apportez vos textes)
-├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées, simulation)
-└── tests/                  ← 200 tests pytest déterministes (combat, carte, fiches, E2E)
+├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées,
+│                             génération de manifestes de donjons par scénario,
+│                             simulation)
+└── tests/                  ← 216 tests pytest déterministes (combat, carte,
+                              manifestes de scénario, fiches, E2E)
 ```
 
 ## 🔒 Note juridique

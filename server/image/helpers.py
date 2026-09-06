@@ -307,6 +307,19 @@ _SALLES_FR_EN: dict[str, str] = {
     "temple": "temple",
     "salle": "hall",
     "salle de rituel": "ritual chamber",
+    "depot": "storehouse",
+    "bureau": "study",
+    "chambre": "bedroom",
+    "cellier": "wine cellar",
+    "cave": "cellar",
+    "salon": "sitting room",
+    "atelier": "workshop",
+    "salle de reunion": "council chamber",
+    "reduit": "hidden room",
+    "verandah": "veranda",
+    "magasin": "shop",
+    "echelle": "ladder",
+    "fenetre": "window room",
 }
 
 # Mots de noms de donjons (slug → anglais) ; « des/du » → « of the » donne

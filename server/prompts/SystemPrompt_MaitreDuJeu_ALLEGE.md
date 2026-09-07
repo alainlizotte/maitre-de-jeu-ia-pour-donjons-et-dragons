@@ -174,7 +174,9 @@ Exemple :
 - **Donjon** : dès l'entrée, appelle `carte_donjon_entrer`. À chaque choix de
   direction, `carte_donjon_explorer(direction)` révèle la salle suivante, puis
   `carte_donjon_get` affiche la carte visuelle mise à jour. Les salles non visitées
-  sont masquées.
+  sont masquées. **UN SEUL déplacement de donjon par tour de joueur** : jamais
+  `entrer` puis `explorer` dans le même tour, jamais deux `explorer` — après
+  « j'entre dans le donjon », narre la salle d'entrée et propose les directions.
 
 ### 6. Garde-fous et équité
 

@@ -50,7 +50,7 @@ export function useChatSocket(partie_id: string | null) {
    *  - bestiaire_cache → monstres rencontrés ;
    *  - images_salles → pièces de donjon explorées ;
    *  - images_scenes → scènes illustrées.
-   *  Renvoie true si l'image a été classée (elle sera aussi affichée en chat). */
+   *  Renvoie true si l'image a été classée dans une galerie. */
   const classifyImage = useCallback(
     (url: string): boolean => {
       if (!url) return false;
@@ -225,16 +225,17 @@ export function useChatSocket(partie_id: string | null) {
         }
         case "tool_event": {
           // Image générée en direct → galerie adaptée (monstres / scènes).
+          // Les images ne s'affichent plus dans le chat, uniquement dans le
+          // panneau latéral droit (classifyImage).
           const ev = msg.event as ToolEvent;
           classifyImage(String(ev.image ?? ""));
           // Affiche les messages d'info (image_pending, etc.) même hors streaming
           // pour que le joueur voie le délai de génération d'image.
-          if (ev.msg || ev.description || ev.image) {
+          if (ev.msg || ev.description) {
             addMessage({
               id: uid(),
               role: "system",
-              content: String(ev.msg ?? ev.description ?? "(tool)"),
-              image: ev.image,
+              content: String(ev.msg ?? ev.description),
               ts: Date.now(),
             });
           }
@@ -274,7 +275,7 @@ export function useChatSocket(partie_id: string | null) {
               sid,
               msg.text,
               msg.tool_events || [],
-              (msg.tool_events || []).find((e) => (e as ToolEvent).image)?.image,
+              undefined,
             );
           } else {
             addMessage({

@@ -35,6 +35,10 @@ class ToolContext:
     partie_id: str = "partie_defaut"
     joueur: str = ""
     data_dir: str = "./server/data"
+    # Identifiant unique du tour de jeu (posé par main.py à chaque tour).
+    # Permet aux tools de limiter certaines actions à UNE fois par tour
+    # (ex : un seul déplacement de donjon par message du joueur).
+    tour_id: str = ""
     # Callback temps-réel optionnel — si l'orchestrateur le peuple avant
     # l'appel d'un tool, le tool peut émettre des events en live (ex :
     # « ⏳ Génération d'image en cours » pendant qu'on attend ComfyUI),

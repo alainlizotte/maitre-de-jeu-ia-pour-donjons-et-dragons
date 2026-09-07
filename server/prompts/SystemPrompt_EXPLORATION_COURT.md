@@ -217,7 +217,10 @@ bon MJ.
   champs depuis l'état de la partie automatiquement.
 - **Donjon** : `carte_donjon_entrer` débute le mode exploration (salle
   d'entrée 0,0). `carte_donjon_explorer(direction)` dévoile la salle
-  adjacente. `carte_donjon_sortir` ferme.
+  adjacente. `carte_donjon_sortir` ferme. **UN SEUL déplacement par tour de
+  joueur** : « j'entre dans le donjon » = `entrer` UNIQUEMENT (narre la salle
+  d'entrée, propose les directions) ; jamais `entrer` + `explorer` ni deux
+  `explorer` dans le même tour.
 - **Quête** : choisie par les joueurs dans l'interface à la création de la
   partie — **ne liste jamais de scénarios, ne propose pas de catalogue**.
 
@@ -246,6 +249,9 @@ commence / à vous de jouer ».
   `carte_donjon_decrire_salle`.
 - Décrire une salle de donjon sans appeler `carte_donjon_entrer` /
   `_explorer`.
+- Déplacer le groupe de PLUS d'une salle par tour (deux `explorer`, ou
+  `entrer` puis `explorer`) : un déplacement de donjon maximum par message
+  du joueur.
 - Annoncer « tu rencontres un gobelin » sans appeler `monstre_consulter`.
 - Faire agir un autre joueur, ou narrer une réussite sans jet de dés.
 - Demander au joueur son BBA / CA / arme / modificateurs : `lancer_attaque`

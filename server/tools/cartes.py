@@ -514,6 +514,34 @@ async def carte_joueurs_get(ctx: ToolContext) -> ToolResult:
 # --------------------------------------------------------------------------- #
 #  Tools — donjon progressif
 # --------------------------------------------------------------------------- #
+# 🔒 Verrou « 1 déplacement de donjon par tour de joueur ». La boucle de
+# l'orchestrateur (itérations multiples, appels groupés, rejeux correctifs)
+# permettait au modèle d'enchaîner `carte_donjon_entrer` PUIS
+# `carte_donjon_explorer` — ou deux `explorer` — sur un simple « j'entre dans
+# le donjon » : le groupe se retrouvait une salle trop loin. Ce verrou en
+# mémoire limite le groupe à UN déplacement par `tour_id` (id unique posé sur
+# le ctx par main.py à chaque tour ; vide hors tour → verrou inactif).
+_MOUVEMENTS_TOUR: dict[str, str] = {}  # partie_id -> tour_id déjà déplacé
+
+_MVT_REFUS = (
+    "🚫 UN SEUL déplacement de donjon par tour de joueur : le groupe a DÉJÀ "
+    "changé de salle ce tour-ci. Narre la salle courante (description, "
+    "portes, contenu) et propose les directions au joueur — le prochain "
+    "déplacement attendra son prochain message."
+)
+
+
+def _mouvement_deja_fait(ctx: ToolContext) -> bool:
+    """True si le groupe a déjà été déplacé pendant ce tour (même tour_id)."""
+    return bool(ctx.tour_id) and _MOUVEMENTS_TOUR.get(ctx.partie_id) == ctx.tour_id
+
+
+def _marquer_mouvement(ctx: ToolContext) -> None:
+    """Enregistre que le groupe a été déplacé pendant ce tour."""
+    if ctx.tour_id:
+        _MOUVEMENTS_TOUR[ctx.partie_id] = ctx.tour_id
+
+
 @tool
 async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     """
@@ -541,6 +569,10 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             ),
         )
     # Vérifier si ce donjon a déjà été exploré dans cette partie.
+    # (Le garde-fou « déjà dans ce donjon » ci-dessus est un no-op : il ne
+    # déplace personne et ne consomme donc pas le quota de déplacement.)
+    if _mouvement_deja_fait(ctx):
+        return ToolResult(text=_MVT_REFUS)
     archive = (etat.get("donjons_exploreres") or {}).get(donjon_id)
     if archive and archive.get("grille"):
         # Restaurer l'état antérieur du donjon (grille + descriptions/états
@@ -614,6 +646,7 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             )
     etat["donjon"] = donjon
     etat["phase"] = "exploration"
+    _marquer_mouvement(ctx)
     err = _sauver_etat(ctx, etat)
     if err:
         return ToolResult(text=f"❌ {err}")
@@ -1238,6 +1271,8 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         )
     courant = list(donjon.get("courant", [0, 0]))
     cx, cy = courant
+    if _mouvement_deja_fait(ctx):
+        return ToolResult(text=_MVT_REFUS)
     salles = _grille_vers_dict(donjon.get("grille", []))
     cour = salles.get((cx, cy))
     if cour and not cour.get("portes", {}).get(d):
@@ -1270,6 +1305,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     donjon["salles_visitees"] = salles_vis
     _sync_etage(donjon)
     etat["donjon"] = donjon
+    _marquer_mouvement(ctx)
     err = _sauver_etat(ctx, etat)
     if err:
         return ToolResult(text=f"❌ {err}")

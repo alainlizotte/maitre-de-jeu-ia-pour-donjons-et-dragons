@@ -1,5 +1,6 @@
 // Colonne centrale — fil de discussion + champ de saisie. Rendu Markdown
-// des narrations DM (+ images /tool_event), statut "thinking", participants.
+// des narrations DM, statut "thinking", participants. Les images (salles,
+// monstres, scènes) ne s'affichent que dans le panneau latéral droit.
 
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
@@ -26,13 +27,6 @@ function MessageView({ m }: { m: ChatMessage }) {
   if (m.role === "system") {
     return (
       <div className="my-2 text-center text-xs text-stone-500 max-w-[90%] mx-auto">
-        {m.image ? (
-          <img
-            src={m.image}
-            alt={m.content}
-            className="max-h-48 mx-auto rounded shadow mb-1"
-          />
-        ) : null}
         <div
           className="inline-block text-left bg-stone-800/50 rounded px-3 py-2 prose-chat text-stone-400"
           // eslint-disable-next-line react/no-danger
@@ -52,13 +46,6 @@ function MessageView({ m }: { m: ChatMessage }) {
       />
       {m.streaming && (
         <div className="text-xs text-stone-500 thinking mt-1">…</div>
-      )}
-      {m.image && !m.streaming && (
-        <img
-          src={m.image}
-          alt="illustration"
-          className="mt-2 max-h-60 rounded shadow"
-        />
       )}
     </div>
   );

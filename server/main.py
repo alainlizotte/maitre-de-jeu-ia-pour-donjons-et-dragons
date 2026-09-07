@@ -2532,6 +2532,12 @@ async def _handle_say(
             # 4. Boucle d'orchestration : LLM ↔ tools → narration + events + patches.
             ctx = _ctx(partie_id, player)
             ctx.on_event = on_event
+            # Id unique de CE tour : les tools (ex : verrou « 1 déplacement
+            # de donjon par tour » dans cartes.py) s'appuient dessus pour
+            # borner certaines actions à une seule fois par message joueur.
+            # Les rejeux correctifs ci-dessous réutilisent le même ctx et
+            # donc le même tour_id — le quota de déplacement reste global.
+            ctx.tour_id = uuid.uuid4().hex
 
             # Des dégâts viennent d'être résolus par le moteur serveur (pre-run)
             # ? Le LLM les reformule alors légitimement dans sa narration — on

@@ -42,10 +42,16 @@ Consignes pour les phases hors combat.
   choisisse. **UN SEUL déplacement par tour** : jamais `carte_donjon_entrer`
   ET `carte_donjon_explorer` dans le même tour, jamais deux `explorer` à la
   suite — « j'entre dans le donjon » = salle d'entrée uniquement, on narre
-  cette salle et on attend le choix de direction du joueur. **Étages** : certaines salles sont des **escaliers** ; quand un
-  joueur décide de monter ou descendre, appelle `carte_donjon_etage("monter"|
-  "descendre")` — un nouvel étage démarre à sa salle d'escaliers et les étages
-  déjà explorés reprennent exactement où le groupe les a laissés.
+   cette salle et on attend le choix de direction du joueur. **Étages** :
+   certaines salles sont des **escaliers** ; quand un joueur décide de monter
+   ou descendre, appelle `carte_donjon_etage("monter"|"descendre")` — un
+   nouvel étage démarre à sa salle d'escaliers et les étages déjà explorés
+   reprennent exactement où le groupe les a laissés. ⚠️ **« Monter/
+   descendre » ≠ direction de la carte** : « nous descendons l'escalier »,
+   « on descend à l'étage du dessous » = `carte_donjon_etage("descendre")`,
+   JAMAIS `carte_donjon_explorer("sud")`. « Descendre » un étage et « aller
+   au sud » sont deux actions différentes ; sur la carte, « descendre » ne
+   signifie PAS « vers le sud ».
 
 - **Découverte de piège** : décris le piège, fais-le déclencher, **affiche le jet de
   sauvegarde** via `lancer_sauvegarde(type, mod, DD, source)` et annonce l'issue +

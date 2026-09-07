@@ -149,6 +149,25 @@ def test_entree_charge_le_plan_du_scenario():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_entree_liste_les_portes_existantes():
+    """Le résultat de `carte_donjon_entrer` DOIT lister les portes réelles de
+    la salle d'entrée : au tour d'entrée, le bloc « CARTE DU DONJON » du
+    prompt système n'existe pas encore (donjon créé mid-tour) — sans ligne
+    dédiée dans le tool, le petit modèle inventait des sorties (bug observé
+    en partie : narration « nord, sud, est » pour une entrée nord+ouest)."""
+    d = tempfile.mkdtemp(prefix="dnd35_manifeste_portes_")
+    try:
+        _setup_scenario(d)
+        r = asyncio.run(carte_donjon_entrer(_ctx(d), "Crypte Portes"))
+        # L'entrée (0,0) du manifeste n'ouvre QU'AU NORD : la ligne doit
+        # la lister et interdire toute autre direction.
+        assert "Portes EXISTANTES dans la salle d'entrée : nord." in r.text, (
+            r.text)
+        assert "SEULES sorties" in r.text, r.text
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def test_explorer_reste_contenu_canonique():
     d = tempfile.mkdtemp(prefix="dnd35_manifeste_")
     try:
@@ -171,6 +190,30 @@ def test_explorer_reste_contenu_canonique():
         r2 = asyncio.run(carte_donjon_decrire_salle(
             _ctx(d), "Une autre description inventée."))
         assert "CONSERVÉE" in r2.text
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_explorer_precise_arrivee_et_contenu_des_portes():
+    """Anti-bug réel : en entrant au NORD dans la salle des banquets, le MJ
+    narrait « vous êtes entrés par l'EST » et inventait le contenu des
+    passages (« au sud, un escalier… »). Le résultat du tool DOIT préciser
+    la porte PAR LAQUELLE le groupe arrive et ce qui est connu derrière
+    chaque porte (visité = description figée ; inexploré = rien ne est su)."""
+    d = tempfile.mkdtemp(prefix="dnd35_manifeste_arrivee_")
+    try:
+        _setup_scenario(d)
+        asyncio.run(carte_donjon_entrer(_ctx(d), "Crypte Arrivée"))
+        r = asyncio.run(carte_donjon_explorer(_ctx(d), "nord"))
+        # Direction d'arrivée explicite (l'entrée était au SUD de la salle).
+        assert "ARRIVÉ ICI par la porte SUD" in r.text, r.text
+        # Derrière la porte SUD : l'entrée, DÉJÀ VISITÉE, avec sa description.
+        assert "porte SUD → (0,0) « entrée » DÉJÀ VISITÉE" in r.text, r.text
+        assert "Le vestibule du scénario test." in r.text, r.text
+        # Derrière la porte NORD : inexploré — rien ne doit être improvisé.
+        assert "porte NORD" in r.text and "NON exploré" in r.text, r.text
+        # L'info persiste dans l'état pour le bloc « source de vérité ».
+        assert _etat(d)["donjon"]["arrivee_par"] == "sud"
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

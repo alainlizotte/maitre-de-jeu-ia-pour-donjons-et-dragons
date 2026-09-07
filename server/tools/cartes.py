@@ -587,13 +587,26 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
         donjon.setdefault("courant", [0, 0])
         donjon.setdefault("etage", 0)
         donjon.setdefault("etages", {})
+        donjon["arrivee_par"] = None
         _sync_etage(donjon)
         courant = donjon["courant"]
         cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
+        _salles = {}
+        for _s in (donjon.get("grille") or []):
+            try:
+                _salles[(int(_s["x"]), int(_s["y"]))] = _s
+            except (KeyError, TypeError, ValueError):
+                continue
+        portes_c = _portes_ouvertes(_salles.get((cx, cy)))
+        bloc_p = _bloc_portes(donjon, _salles.get((cx, cy)) or {})
         msg_restore = (
             f"🔄 Vous retournez dans **{donjon_id}** — "
             f"salle actuelle restaurée ({cx},{cy}), "
-            f"{len(donjon.get('salles_visitees', []))} salles déjà explorées."
+            f"{len(donjon.get('salles_visitees', []))} salles déjà explorées. "
+            "Portes EXISTANTES ici : "
+            + (", ".join(portes_c) if portes_c else "AUCUNE (cul-de-sac)")
+            + " — n'invente AUCUNE autre sortie."
+            + (("\n\n" + bloc_p) if bloc_p else "")
         )
     else:
         # 📜 Plan CANONIQUE du scénario ? (fichier `<nom>.donjon.json` à
@@ -609,6 +622,8 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
                 (s for s in (donjon.get("grille") or []) if s.get("visitee")),
                 None,
             )
+            donjon["arrivee_par"] = None
+            portes0 = _portes_ouvertes(entree0)
             msg_restore = (
                 f"📜 Vous entrez dans **{donjon.get('id')}** — plan du "
                 f"scénario chargé ({nb_salles} salles, {nb_etages} étage(s), "
@@ -616,12 +631,18 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
                 "Suis FIDÈLEMENT les descriptions canoniques et le contenu "
                 "des salles (ennemis, trésors, pièges, PNJ) — n'improvise "
                 "ni salle ni rencontre hors module.\n\n"
+                "🚪 Portes EXISTANTES dans la salle d'entrée : "
+                + (", ".join(portes0) if portes0 else "AUCUNE (cul-de-sac)")
+                + ". ⚠️ Ce sont les SEULES sorties : n'invente et ne narre "
+                  "AUCUNE autre direction, même si le module suggère "
+                  "d'autres passages.\n\n"
                 + (
                     f"Entrée : {entree0.get('type')} — « "
                     f"{str(entree0.get('description') or '')[:300]} »"
                     if entree0 else ""
                 )
                 + _bloc_contenu_salle(entree0 or {})
+                + (("\n\n" + _bloc_portes(donjon, entree0 or {})) if entree0 else "")
             )
         else:
             entree = {
@@ -638,6 +659,7 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
                 "courant": [0, 0],
                 "etage": 0,
                 "etages": {},
+                "arrivee_par": None,
             }
             _sync_etage(donjon)
             msg_restore = (
@@ -966,6 +988,90 @@ def _donjon_depuis_manifeste(man: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
 
+def _portes_ouvertes(salle: dict[str, Any] | None) -> list[str]:
+    """Portes OUVERTES d'une salle, dans l'ordre géographique.
+
+    Utilisée par les résultats des tools (`entrer`, `explorer`, `etage`) :
+    le MJ n'a que ces directions-là comme sorties narables — toute autre
+    direction mentionnée dans la narration désynchroniserait la carte.
+    """
+    p = (salle or {}).get("portes") or {}
+    return [d for d in ("nord", "est", "sud", "ouest") if p.get(d)]
+
+
+def _portes_detaillees(
+    donjon: dict[str, Any], salle: dict[str, Any]
+) -> list[str]:
+    """Lignes « porte → ce qui est CONNU derrière », ordre géographique.
+
+    Anti-hallucination : le petit modèle inventait le contenu des passages
+    (« au sud, un escalier… », « à l'est, la galerie où vous êtes entrés »)
+    alors que la carte dit autre chose. Chaque porte ouverte est annotée :
+    salle DÉJÀ VISITÉE (type + description figée) ou passage NON exploré
+    (rien n'est su — et rien ne doit être improvisé). Les salles du
+    manifeste pas encore visitées restent masquées (révélation progressive).
+    """
+    x = int(salle.get("x", 0) or 0)
+    y = int(salle.get("y", 0) or 0)
+    salles = _grille_vers_dict(donjon.get("grille", []))
+    lignes: list[str] = []
+    for d in ("nord", "est", "sud", "ouest"):
+        if not (salle.get("portes") or {}).get(d):
+            continue
+        dx, dy = DIRECTIONS[d]
+        voisin = salles.get((x + dx, y + dy))
+        if voisin is not None and voisin.get("visitee"):
+            desc = str(voisin.get("description") or "").strip()[:120]
+            lignes.append(
+                f"   - porte {d.upper()} → ({x + dx},{y + dy}) « "
+                f"{voisin.get('type', '?')} » DÉJÀ VISITÉE"
+                + (f" : « {desc} »" if desc else "")
+            )
+        else:
+            lignes.append(
+                f"   - porte {d.upper()} → passage NON exploré : tu ne sais "
+                "RIEN de ce qu'il y a derrière — n'invente ni pièce ni contenu."
+            )
+    return lignes
+
+
+def _bloc_portes(
+    donjon: dict[str, Any],
+    salle: dict[str, Any],
+    arrivee_par: str | None = None,
+) -> str:
+    """Bloc « portes » pour les résultats des tools de déplacement :
+    détail par porte +, si connu, la porte PAR LAQUELLE le groupe vient
+    d'entrer (le MJ confondait la direction d'arrivée avec une sortie)."""
+    lignes = _portes_detaillees(donjon, salle)
+    if not lignes:
+        return ""
+    entete = "🚪 Portes de cette salle (ce qui est CONNU derrière chacune) :"
+    if arrivee_par in _OPP:
+        entete += (
+            f"\n   ⬅️ Le groupe est ARRIVÉ ICI par la porte "
+            f"{arrivee_par.upper()} — ne la confonds PAS avec une sortie."
+        )
+    return entete + "\n" + "\n".join(lignes)
+
+
+def _bloc_escalier(salle: dict[str, Any]) -> str:
+    """Rappel injecté quand le groupe se trouve dans une salle d'escalier :
+    « monter/descendre » = CHANGEMENT D'ÉTAGE (`carte_donjon_etage`), PAS une
+    direction de la carte. Sans ce rappel, le petit modèle transformait
+    « nous descendons l'escalier » en `carte_donjon_explorer("sud")` et le
+    groupe se retrouvait dans la salle voisine au lieu de l'étage inférieur."""
+    if (salle.get("type") or "").strip().lower() not in _TYPES_ESCALIER:
+        return ""
+    return (
+        "🪜 ESCALIER dans cette salle : « monter » ou « descendre » = "
+        "CHANGER D'ÉTAGE via `carte_donjon_etage(direction=\"monter\"|"
+        "\"descendre\")` — JAMAIS `carte_donjon_explorer`. « Descendre » "
+        "l'escalier n'est PAS « aller au sud » : les directions nord/sud/"
+        "est/ouest restent des portes normales."
+    )
+
+
 def _bloc_contenu_salle(salle: dict[str, Any]) -> str:
     """Bloc « contenu canonique » (manifeste de scénario) pour le résultat
     de `carte_donjon_explorer` : le MJ DOIT le respecter (ennemis du module,
@@ -1247,9 +1353,11 @@ def _lancer_generation_salle(
 @tool
 async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     """
-    Déplace le groupe dans la direction indiquée à partir de la salle courante.
-    Dévoile la salle adjacente (et la génère si inconnue). Renvoie sa
-    description et une nouvelle carte mise à jour.
+    Déplace le groupe dans la direction indiquée à partir de la salle courante,
+    SUR L'ÉTAGE ACTUEL uniquement. Dévoile la salle adjacente (et la génère si
+    inconnue). Renvoie sa description et une nouvelle carte mise à jour.
+    Pour changer d'étage via un escalier (« monter/descendre »), utilise
+    `carte_donjon_etage` — PAS cet outil.
 
     Cohérence des retours : si la salle cible a DÉJÀ été visitée, le tool
     restitue sa description enregistrée et l'état dans lequel le groupe
@@ -1279,10 +1387,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         # Refus INFAILLIBLE : on liste les portes réellement présentes pour
         # que le MJ ne narre JAMAIS un passage inexistant (désynchronisation
         # narration ↔ carte observée en partie réelle).
-        disp = [
-            k for k in ("nord", "est", "sud", "ouest")
-            if cour.get("portes", {}).get(k)
-        ]
+        disp = _portes_ouvertes(cour)
         return ToolResult(text=(
             f"🚫 Pas de porte au {d} depuis la salle courante ({cx},{cy}). "
             f"Portes réellement présentes ici : "
@@ -1300,6 +1405,9 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     opp = _OPP[d]
     salles[(nx, ny)].setdefault("portes", {})[opp] = True
     donjon["courant"] = [nx, ny]
+    # Mémorise PAR QUELLE porte le groupe est entré ici : le bloc de vérité
+    # du prompt l'affichera pour éviter toute confusion arrival ↔ sortie.
+    donjon["arrivee_par"] = opp
     donjon["grille"] = _dict_vers_grille(salles)
     salles_vis = list(set(donjon.get("salles_visitees", []) + [f"{nx},{ny}"]))
     donjon["salles_visitees"] = salles_vis
@@ -1319,11 +1427,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         return ToolResult(text=f"❌ Erreur SVG : {e}")
     url = _url_for(path, ctx.data_dir)
     salle = salles[(nx, ny)]
-    porte_ligne = (
-        f"Portes visibles : "
-        + ", ".join([k for k, v in salle.get("portes", {}).items() if v])
-        + "."
-    )
+    bloc_p = _bloc_portes(donjon, salle, arrivee_par=opp)
     if deja_visitee:
         # ── Salle déjà visitée : restituer la description et l'état figés ──
         # (description MJ, ou secours déterministe si jamais figée).
@@ -1341,7 +1445,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         if etat_stocke:
             texte += f"État tel que laissé : « {etat_stocke} »\n"
         texte += (
-            f"{porte_ligne}\n\n"
+            f"{bloc_p}\n\n"
             "⚠️ NE RÉINVENTE PAS cette salle : reprends FIDÈLEMENT la "
             "description et l'état ci-dessus (ce qui a été fait reste fait : "
             "monstres vaincus, coffres vidés…), puis narre seulement ce que "
@@ -1352,7 +1456,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         # module est déjà figée — le MJ la narre fidèlement, sans l'inventer.
         texte = (
             f"🚶 Vous avancez au {d} → salle ({nx},{ny}) — type : "
-            f"**{salle.get('type','?')}**. {porte_ligne}\n\n"
+            f"**{salle.get('type','?')}**. {bloc_p}\n\n"
             f"📜 **Salle DU SCÉNARIO** — description canonique du module "
             f"(narre-la à l'identique, sans rien inventer) : « "
             f"{str(salle.get('description')).strip()[:600]} »"
@@ -1360,7 +1464,7 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     else:
         texte = (
             f"🚶 Vous avancez au {d} → salle ({nx},{ny}) — type : "
-            f"**{salle.get('type','?')}**. {porte_ligne}\n\n"
+            f"**{salle.get('type','?')}**. {bloc_p}\n\n"
             "📌 Salle NOUVELLE : narre-la, puis FIGE sa description via "
             "`carte_donjon_decrire_salle(description=…, etat_des_lieux=…)` — "
             "ce fil garantit qu'en revenant ici, la salle sera retrouvée "
@@ -1390,8 +1494,9 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         salle_img = salle.get("image_url")
         if salle_img:
             img_line = f"\n\n🖼️ Illustration salle ({img_src}) : {salle_img}"
+    bloc_esc = _bloc_escalier(salle)
     return ToolResult(
-        text=texte + img_line,
+        text=texte + img_line + (("\n\n" + bloc_esc) if bloc_esc else ""),
         state_patch={"donjon": donjon, "carte_donjon": url},
     )
 
@@ -1443,6 +1548,7 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
         nouvel_etage = etage_actuel - 1
     _sync_etage(donjon)           # archive l'étage qu'on quitte
     _charger_etage(donjon, nouvel_etage)
+    donjon["arrivee_par"] = None  # arrivée par l'escalier, pas par une porte
     etat["donjon"] = donjon
     err = _sauver_etat(ctx, etat)
     if err:
@@ -1461,15 +1567,23 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
          if s.get("x") == pos[0] and s.get("y") == pos[1]),
         None,
     ) if pos else None
+    portes_arr = _portes_ouvertes(salle_arrivee)
+    bloc_p = _bloc_portes(donjon, salle_arrivee or {})
     return ToolResult(
         text=(
             f"🪜 Vous empruntez l'escalier "
             f"({'descendez vers le sous-sol' if descendre else 'remontez'} → "
             f"**{_nom_etage(nouvel_etage, donjon)}**). Salle actuelle "
             f"({pos[0]},{pos[1]}). "
+            "Portes EXISTANTES ici : "
+            + (", ".join(portes_arr) if portes_arr else "AUCUNE (cul-de-sac)")
+            + " — n'invente AUCUNE autre sortie. "
             f"Le groupe poursuit son exploration du donjon.\n\n🖼️ Carte : {url}"
         )
-        + (_bloc_contenu_salle(salle_arrivee) if salle_arrivee else ""),
+        + (("\n\n" + bloc_p) if bloc_p else "")
+        + (_bloc_contenu_salle(salle_arrivee) if salle_arrivee else "")
+        + (("\n\n" + _bloc_escalier(salle_arrivee or {}))
+           if _bloc_escalier(salle_arrivee or {}) else ""),
         state_patch={"donjon": donjon, "carte_donjon": url},
     )
 

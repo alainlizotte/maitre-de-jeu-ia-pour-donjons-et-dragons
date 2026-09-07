@@ -127,6 +127,18 @@ def _donjon_bloc(etat: dict[str, Any]) -> str:
         "  Portes EXISTANTES : "
         + (", ".join(portes_cur) if portes_cur else "AUCUNE (cul-de-sac)")
     )
+    arr = str(donjon.get("arrivee_par") or "").strip().lower()
+    if arr in ("nord", "est", "sud", "ouest"):
+        lignes.append(
+            f"  ⬅️ Le groupe y est ENTRÉ par la porte {arr.upper()} : c'est "
+            "d'où il VIENT — ne la décris JAMAIS comme une sortie ni comme "
+            "menant à un lieu inconnu."
+        )
+    try:
+        from ..tools.cartes import _portes_detaillees
+        lignes.extend(_portes_detaillees(donjon, cur))
+    except Exception:                                        # noqa: BLE001
+        pass
     lignes.append("Plan des salles connues (x,y — type — portes ouvertes) :")
     for xy in sorted(salles)[:_MAX_SALLES_BLOC]:
         s = salles[xy]
@@ -143,6 +155,18 @@ def _donjon_bloc(etat: dict[str, Any]) -> str:
         "refuse les directions sans porte. Une salle revisitée se narre "
         "d'après sa description figée — jamais réinventée."
     )
+    try:
+        from ..tools.cartes import _TYPES_ESCALIER
+        if (cur.get("type") or "").strip().lower() in _TYPES_ESCALIER:
+            lignes.append(
+                "🪜 ESCALIER dans la salle COURANTE : « monter/descendre "
+                "l'escalier » = CHANGEMENT D'ÉTAGE via `carte_donjon_etage("
+                "direction=\"monter\"|\"descendre\")` — JAMAIS "
+                "`carte_donjon_explorer`. « Descendre » n'est PAS « aller "
+                "au sud » : ce sont deux actions différentes."
+            )
+    except Exception:                                        # noqa: BLE001
+        pass
     lignes.append("===============================================")
     return "\n".join(lignes)
 

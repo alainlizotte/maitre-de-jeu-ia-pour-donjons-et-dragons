@@ -125,6 +125,25 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
     if (sendSay) sendSay(`Je vais au ${dir}`);
   };
 
+  // Escalier : monter/descendre ne sont possibles que depuis une salle
+  // « escaliers » (mêmes types que _TYPES_ESCALIER côté serveur), et la
+  // montée exige un étage au-dessus (0 = rez-de-chaussée).
+  const etageActuel = typeof donjon?.etage === "number" ? donjon.etage : 0;
+  const dansEscalier = [
+    "escaliers",
+    "escalier",
+    "escalier du donjon",
+    "escaliers du donjon",
+  ].includes((salleCourante?.type ?? "").trim().toLowerCase());
+  const peutMonter = dansEscalier && etageActuel > 0;
+  const peutDescendre = dansEscalier;
+  const titreMonter = !dansEscalier
+    ? "Aucun escalier dans cette salle"
+    : "Remonter d'un étage (escalier)";
+  const titreDescendre = !dansEscalier
+    ? "Aucun escalier dans cette salle"
+    : "Descendre d'un étage (escalier)";
+
   const ordreDirs = ["ouest", "nord", "sud", "est"] as const;
   const fleches: Record<string, string> = {
     nord: "↑",
@@ -136,6 +155,9 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
   const btnZoom =
     "w-6 h-6 rounded bg-stone-800/90 hover:bg-stone-700 border border-stone-600 " +
     "text-stone-200 text-xs leading-none flex items-center justify-center transition-colors";
+  const btnZoomOff =
+    "w-6 h-6 rounded bg-stone-900 border border-stone-800 text-stone-600 " +
+    "text-xs leading-none flex items-center justify-center cursor-not-allowed";
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -146,15 +168,17 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
           {sendSay && (
             <>
               <button
-                className={btnZoom}
-                title="Remonter d'un étage (escalier)"
+                className={peutMonter ? btnZoom : btnZoomOff}
+                title={titreMonter}
+                disabled={!peutMonter}
                 onClick={() => sendSay("Nous montons l'escalier vers l'étage supérieur")}
               >
                 ↑
               </button>
               <button
-                className={btnZoom}
-                title="Descendre d'un étage (escalier)"
+                className={peutDescendre ? btnZoom : btnZoomOff}
+                title={titreDescendre}
+                disabled={!peutDescendre}
                 onClick={() => sendSay("Nous descendons l'escalier vers l'étage inférieur")}
               >
                 ↓

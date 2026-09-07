@@ -411,14 +411,28 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
   const pj = useParty((s) => s.state)?.pj?.find((p) => p.nom === nom);
   const f = (ficheQuery.data?.fiche ?? {}) as Record<string, unknown>;
 
+  // Visionneuse plein écran : clic sur le portrait de la fiche → agrandissement.
+  const [portraitAgrandi, setPortraitAgrandi] = useState(false);
+
   // Fermeture au clavier (Échap), cohérent avec les autres modales.
+  // Si le portrait est agrandi, Échap ne ferme que la visionneuse.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !portraitAgrandi) onClose();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, [onClose, portraitAgrandi]);
+
+  // Échap ferme la visionneuse du portrait quand elle est ouverte.
+  useEffect(() => {
+    if (!portraitAgrandi) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPortraitAgrandi(false);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [portraitAgrandi]);
 
   const identite = {
     nom: (f.nom as string) ?? nom,
@@ -473,8 +487,48 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
           <img
             src={portraitUrl}
             alt={identite.nom}
-            className="w-full max-h-44 object-contain rounded border border-stone-700 mb-3"
+            className="w-full max-h-44 object-contain rounded border border-stone-700 mb-3 cursor-zoom-in"
+            title="Cliquer pour afficher en grand"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPortraitAgrandi(true);
+            }}
           />
+        )}
+
+        {/* Visionneuse plein écran du portrait (au-dessus de la fiche) */}
+        {portraitAgrandi && portraitUrl && (
+          <div
+            className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center p-4 z-[60]"
+            onClick={() => setPortraitAgrandi(false)}
+          >
+            <div
+              className="relative w-full h-full max-w-4xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-2 shrink-0">
+                <span className="text-amber-200 font-serif text-lg">{identite.nom}</span>
+                <button
+                  onClick={() => setPortraitAgrandi(false)}
+                  className="w-9 h-9 rounded-full bg-stone-800 border border-stone-600 text-stone-300 hover:text-white text-sm"
+                  title="Fermer (Échap)"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="relative flex-1 min-h-0 rounded border border-stone-700 overflow-hidden bg-stone-950">
+                <img
+                  src={portraitUrl}
+                  alt={`Portrait : ${identite.nom}`}
+                  draggable={false}
+                  className="absolute inset-0 w-full h-full object-contain select-none"
+                />
+              </div>
+              <p className="text-[10px] text-stone-500 mt-1.5 text-center italic shrink-0">
+                Cliquez n'importe où ou Échap pour fermer.
+              </p>
+            </div>
+          </div>
         )}
 
         <div className={`grid gap-2 mb-3 ${chargeMax != null ? "grid-cols-4" : "grid-cols-3"}`}>

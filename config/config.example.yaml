@@ -27,6 +27,8 @@ llm:
 
   temperature: 0.75
   top_p: 0.9
+  presence_penalty: 1.5         # pénalise les tokens déjà présents (Qwen 3.5)
+  repetition_penalty: 1.0       # pénalité de répétition (1.0 = neutre)
   max_context_tokens: 32768   # llama.cpp : ctx-size (-c 32768, -ngl 99)
   max_tokens: 8192            # budget max de tokens générés par réponse (-n 8192)
 

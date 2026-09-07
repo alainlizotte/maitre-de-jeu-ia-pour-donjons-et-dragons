@@ -191,6 +191,8 @@ class OllamaClient:
             "messages": [m.to_openai() for m in messages],
             "temperature": temperature if temperature is not None else self.cfg.temperature,
             "top_p": self.cfg.top_p,
+            "presence_penalty": self.cfg.presence_penalty,
+            "repetition_penalty": self.cfg.repetition_penalty,
             "stream": False,
         }
         # Budget de génération (llama.cpp : -1 par défaut ; on borne pour
@@ -261,6 +263,8 @@ class OllamaClient:
             "messages": [m.to_openai() for m in messages],
             "temperature": temperature if temperature is not None else self.cfg.temperature,
             "top_p": self.cfg.top_p,
+            "presence_penalty": self.cfg.presence_penalty,
+            "repetition_penalty": self.cfg.repetition_penalty,
             "stream": True,
         }
         if getattr(self.cfg, "max_tokens", 0) and self.cfg.max_tokens > 0:

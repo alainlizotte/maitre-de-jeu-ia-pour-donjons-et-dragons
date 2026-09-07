@@ -20,6 +20,12 @@ class LLMConfig:
     model: str = "gemma-4-E4B-it-Q4_0"
     temperature: float = 0.75
     top_p: float = 0.9
+    # Pénalités de sampling transmises à llama.cpp dans le payload
+    # OpenAI-compatible (champs `presence_penalty` / `repetition_penalty`).
+    # presence_penalty : pénalise les tokens déjà sortis (>0 = plus de variété).
+    # repetition_penalty : pénalité de répétition (1.0 = neutre).
+    presence_penalty: float = 0.0
+    repetition_penalty: float = 1.0
     max_context_tokens: int = 16384
     # Budget max de tokens générés par réponse (llama.cpp / Ollama).
     # 0 ou négatif = illimité (défaut serveur).

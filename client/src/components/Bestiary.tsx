@@ -239,17 +239,91 @@ export function findMonsterEntry(
   return undefined;
 }
 
+/** Visionneuse plein écran d'une image de fiche monstre — z-[60] pour passer
+ *  au-dessus des modales (z-50) ; clic n'importe où ou Échap pour fermer. */
+function ImageLightbox({
+  src,
+  alt,
+  onClose,
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center p-4 z-[60]"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      <div
+        className="relative w-full h-full max-w-4xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-2 shrink-0">
+          <span className="text-amber-200 font-serif text-lg">{alt}</span>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-stone-800 border border-stone-600 text-stone-300 hover:text-white text-sm"
+            title="Fermer (Échap)"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="relative flex-1 min-h-0 rounded border border-stone-700 overflow-hidden bg-stone-950">
+          <img
+            src={src}
+            alt={alt}
+            draggable={false}
+            onError={(e) => {
+              // PNG/JPG manquant → placeholder SVG du même slug, sinon masqué.
+              const el = e.target as HTMLImageElement;
+              if (!el.src.endsWith(".svg")) {
+                el.src = src.replace(/\.(png|jpg|jpeg|webp)$/i, ".svg");
+              } else {
+                el.style.display = "none";
+              }
+            }}
+            className="absolute inset-0 w-full h-full object-contain select-none"
+          />
+        </div>
+        <p className="text-[10px] text-stone-500 mt-1.5 text-center italic shrink-0">
+          Cliquez n'importe où ou Échap pour fermer.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** Fiche détaillée d'un monstre — utilisée par le panneau Bestiary et le popup. */
 export function MonsterFiche({
   monster,
   imageUrl,
   onBack,
+  zoomOuvert: zoomExterne,
+  onZoomChange,
 }: {
   monster: MonsterEntry;
   imageUrl?: string;
   onBack?: () => void;
+  /** Zoom contrôlé par le parent (modale) pour coordonner Échap ; sinon état local. */
+  zoomOuvert?: boolean;
+  onZoomChange?: (ouvert: boolean) => void;
 }) {
   const src = imageUrl ?? `/data/bestiaire_cache/${monster.cle}.png`;
+  const [zoomInterne, setZoomInterne] = useState(false);
+  const zoomOuvert = zoomExterne ?? zoomInterne;
+  const setZoomOuvert = onZoomChange ?? setZoomInterne;
   return (
     <div className="text-sm">
       {onBack && (
@@ -274,7 +348,12 @@ export function MonsterFiche({
       <img
         src={src}
         alt={monster.nom}
-        className="w-full max-h-40 object-contain rounded mb-2"
+        className="w-full max-h-40 object-contain rounded mb-2 cursor-zoom-in"
+        title="Cliquer pour afficher en grand"
+        onClick={(e) => {
+          e.stopPropagation();
+          setZoomOuvert(true);
+        }}
         onError={(e) => {
           // PNG/JPG manquant → placeholder SVG du même slug, sinon masqué.
           const el = e.target as HTMLImageElement;
@@ -285,6 +364,13 @@ export function MonsterFiche({
           }
         }}
       />
+      {zoomOuvert && (
+        <ImageLightbox
+          src={src}
+          alt={monster.nom}
+          onClose={() => setZoomOuvert(false)}
+        />
+      )}
       <StatLine label="PV" value={`${monster.pv} (${monster.dv})`} />
       <StatLine label="CA" value={String(monster.ca)} />
       <StatLine label="Vitesse" value={monster.vitesse} />
@@ -318,17 +404,30 @@ export function MonsterSheetModal({
     queryFn: fetchBestiaire,
   });
 
+  // Visionneuse plein écran : Échap ne ferme que la visionneuse quand ouverte.
+  const [portraitAgrandi, setPortraitAgrandi] = useState(false);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !portraitAgrandi) onClose();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, [onClose, portraitAgrandi]);
+
+  useEffect(() => {
+    if (!portraitAgrandi) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPortraitAgrandi(false);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [portraitAgrandi]);
 
   const entry = findMonsterEntry(data ?? [], nom, url);
 
   return (
+    <>
     <div
       className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
       onClick={onClose}
@@ -351,7 +450,12 @@ export function MonsterSheetModal({
         {isLoading ? (
           <p className="text-stone-500 text-sm">Chargement de la fiche…</p>
         ) : entry ? (
-          <MonsterFiche monster={entry} imageUrl={url} />
+          <MonsterFiche
+            monster={entry}
+            imageUrl={url}
+            zoomOuvert={portraitAgrandi}
+            onZoomChange={setPortraitAgrandi}
+          />
         ) : (
           <div className="text-sm">
             <h3 className="font-serif text-amber-200 text-base font-bold mb-1 pr-8">
@@ -363,7 +467,12 @@ export function MonsterSheetModal({
             <img
               src={url}
               alt={nom}
-              className="w-full max-h-40 object-contain rounded mb-2"
+              className="w-full max-h-40 object-contain rounded mb-2 cursor-zoom-in"
+              title="Cliquer pour afficher en grand"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPortraitAgrandi(true);
+              }}
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = "none";
               }}
@@ -376,6 +485,11 @@ export function MonsterSheetModal({
         )}
       </div>
     </div>
+    {/* Visionneuse plein écran (monstre hors bestiaire), au-dessus de la fiche */}
+    {portraitAgrandi && (
+      <ImageLightbox src={url} alt={nom} onClose={() => setPortraitAgrandi(false)} />
+    )}
+    </>
   );
 }
 

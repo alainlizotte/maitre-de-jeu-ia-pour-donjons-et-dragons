@@ -27,10 +27,16 @@ llm:
 
   temperature: 0.75
   top_p: 0.9
-  presence_penalty: 1.5         # pénalise les tokens déjà présents (Qwen 3.5)
-  repetition_penalty: 1.0       # pénalité de répétition (1.0 = neutre)
+  presence_penalty: 0.3         # pénalise les tokens déjà présents — rester
+                                # BAS (≤ 0.5) : à 1.0+ un petit modèle dégénère
+                                # en boucles sans fin (tour MJ figé en réflexion)
+  repetition_penalty: 1.05      # pénalité de répétition (1.0 = neutre)
   max_context_tokens: 32768   # llama.cpp : ctx-size (-c 32768, -ngl 99)
   max_tokens: 8192            # budget max de tokens générés par réponse (-n 8192)
+
+  # Watchdogs anti-blocage du streaming (keep-alives SSE sans contenu).
+  max_stream_seconds: 300      # durée TOTALE max d'une génération streamée
+  stale_stream_seconds: 90     # max sans AUCUN token de contenu
 
   # Stratégie de function-calling.
   # "native"   : envoie le schéma JSON des tools au backend (support Gemma 4 limité).
@@ -69,7 +75,9 @@ game:
   default_frame: "Côte des Épées (Faerûn)"
   max_history_events: 50
   max_recap_chars: 6000
-  stream_to_clients: true      # le MJ stream-token sa réponse aux joueurs
+  stream_to_clients: false     # réponses du MJ livrées EN BLOC ; passer à
+                               # true pour afficher la narration token par
+                               # token (streaming) au fil de la génération
   block_messages_during_think: false  # bloquer l'envoi de messages pendant que le MJ travaille
 
 image:

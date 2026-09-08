@@ -23,6 +23,8 @@ class LLMConfig:
     # Pénalités de sampling transmises à llama.cpp dans le payload
     # OpenAI-compatible (champs `presence_penalty` / `repetition_penalty`).
     # presence_penalty : pénalise les tokens déjà sortis (>0 = plus de variété).
+    # ⚠️ RESTER BAS (≤ 0.5) : à 1.0+ un petit modèle dégénère en boucles sans
+    # fin (générations de plusieurs minutes, tour MJ figé « en réflexion »).
     # repetition_penalty : pénalité de répétition (1.0 = neutre).
     presence_penalty: float = 0.0
     repetition_penalty: float = 1.0
@@ -30,6 +32,14 @@ class LLMConfig:
     # Budget max de tokens générés par réponse (llama.cpp / Ollama).
     # 0 ou négatif = illimité (défaut serveur).
     max_tokens: int = 8192
+    # Watchdogs anti-blocage du streaming (le httpx read-timeout ne suffit
+    # pas : des keep-alives SSE peuvent arriver sans AUCUN token utile).
+    # - max_stream_seconds   : durée TOTALE max d'une génération streamée.
+    # - stale_stream_seconds : max sans AUCUN token de contenu (pings exclus).
+    # Au déclenchement, la narration partielle est conservée et le tour se
+    # termine normalement au lieu de rester figé « en réflexion ».
+    max_stream_seconds: int = 300
+    stale_stream_seconds: int = 90
     tool_mode: str = "prompt"        # "native" | "prompt" | "auto"
     detect_simulation: bool = True
     max_tool_iterations: int = 10

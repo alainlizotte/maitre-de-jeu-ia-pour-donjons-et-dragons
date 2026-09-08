@@ -13,6 +13,7 @@ export function useChatSocket(partie_id: string | null) {
 
   // Callbacks du store capturés une fois (évite re-render storm).
   const addMessage = useParty((s) => s.addMessage);
+  const setMessages = useParty((s) => s.setMessages);
   const removeMessage = useParty((s) => s.removeMessage);
   const appendDelta = useParty((s) => s.appendDelta);
   const finalizeStream = useParty((s) => s.finalizeStream);
@@ -94,6 +95,15 @@ export function useChatSocket(partie_id: string | null) {
     const sock = new ChatSocket(partie_id);
     sockRef.current = sock;
 
+    // Reconnexion : le serveur ré-attribue les registres (connexions ET
+    // authentification des parties protégées) PAR CONNEXION. On invalide le
+    // marqueur de join pour que le `joined`/`auth_required` de la nouvelle
+    // connexion déclenche un re-join — sans lui, le client reconnnecté ne
+    // recevait plus aucun broadcast (écran gelé jusqu'à un F5).
+    sock.onOpen(() => {
+      lastJoinRef.current = "";
+    });
+
     // Applique des patches d'état au store + effets de bord associés
     // (re-fetch REST sur pj_updated, galeries d'images, retrait des monstres
     // détruits). Utilisé par le push immédiat « state_patches » ET par le
@@ -129,6 +139,9 @@ export function useChatSocket(partie_id: string | null) {
         case "sys":
           if (msg.event === "joined") {
             // Rejeu de l'historique persisté (role user|assistant).
+            // setMessages (et non addMessage) : le `joined` arrive à chaque
+            // (re)connexion WS — on REMPLACE le fil au lieu de dupliquer
+            // toute l'histoire après une reconnexion.
             const replayed: ChatMessage[] = (msg.history || [])
               .filter((h) => h.role === "user" || h.role === "assistant")
               .map((h, i) => ({
@@ -137,7 +150,8 @@ export function useChatSocket(partie_id: string | null) {
                 content: h.content,
                 ts: 0,
               }));
-            replayed.forEach((m) => addMessage(m));
+            setMessages(replayed);
+            streamId.current = null;
             setParticipants(msg.participants || []);
             // Historique chat d'équipe.
             if (msg.team_history && msg.team_history.length > 0) {

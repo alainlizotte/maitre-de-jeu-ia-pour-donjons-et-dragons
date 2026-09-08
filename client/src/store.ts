@@ -98,6 +98,9 @@ interface PartyStore {
   addSalle: (s: EncounterMonster) => void;
 
   addMessage: (m: ChatMessage) => void;
+  /** Remplace TOUT le fil (rejeu de l'historique au `joined`) — utilisé au
+   *  re-join après reconnexion WS pour éviter les doublons de messages. */
+  setMessages: (m: ChatMessage[]) => void;
   /** Retire un message du fil (reset de l'aperçu streamé périmé). */
   removeMessage: (id: string) => void;
   appendDelta: (streamId: string, text: string) => void;
@@ -264,6 +267,8 @@ export const useParty = create<PartyStore>((set) => ({
     ),
 
   addMessage: (m) => set((st) => ({ messages: [...st.messages, m] })),
+
+  setMessages: (m) => set({ messages: m }),
 
   removeMessage: (id) =>
     set((st) => ({ messages: st.messages.filter((m) => m.id !== id) })),

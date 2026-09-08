@@ -152,6 +152,11 @@ export function useChatSocket(partie_id: string | null) {
               }));
             setMessages(replayed);
             streamId.current = null;
+            // La reconnexion a pu rater le `status done` de fin de tour :
+            // l'historique fraîchement rechargé inclut la dernière narration,
+            // l'indicateur de réflexion doit être levé (sinon l'UI reste
+            // bloquée sur « Le MJ réfléchit... / finalise la scène… »).
+            setThinking(false);
             setParticipants(msg.participants || []);
             // Historique chat d'équipe.
             if (msg.team_history && msg.team_history.length > 0) {

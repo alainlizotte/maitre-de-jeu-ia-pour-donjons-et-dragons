@@ -1504,7 +1504,31 @@ class Orchestrator:
             # casse. On relance avec un correctif qui re-cite l'action du
             # joueur — les deltas déjà streamés sont remplacés par le dm final.
             if narration.strip() and result.corrections < 3:
-                echo = trouve_repetition(narration, work)
+                # EXCEPTION : re-visite d'une salle à description FIGÉE. Le
+                # tool `carte_donjon_explorer` ordonne alors explicitement de
+                # re-narrer À L'IDENTIQUE (« Description enregistrée » /
+                # « REPARCOURREZ ») : la répétition y est LÉGITIME. Sans cette
+                # exception, l'anti-répétition rejetait la re-description,
+                # enchaînait les relances et le modèle inventait n'importe
+                # quoi pour « faire nouveau » (soin spontané halluciné,
+                # PV > PV max — bug réel).
+                dernier_tool = next(
+                    (m for m in reversed(work) if m.role == "tool"),
+                    None,
+                )
+                revisite_froide = bool(
+                    dernier_tool
+                    and dernier_tool.content
+                    and (
+                        "REPARCOURREZ" in dernier_tool.content
+                        or "DÉJÀ VISITÉE" in dernier_tool.content
+                        or "Description enregistrée" in dernier_tool.content
+                    )
+                )
+                echo = (
+                    None if revisite_froide
+                    else trouve_repetition(narration, work)
+                )
                 if echo:
                     result.corrections += 1
                     # (c) L'aperçu streamé est une répétition périmée : reset

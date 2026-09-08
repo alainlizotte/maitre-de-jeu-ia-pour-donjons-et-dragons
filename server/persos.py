@@ -963,12 +963,14 @@ def enregistrer_personnage_partie(
         "race": fiche.get("race", ""),
         "classe": fiche.get("classe", ""),
         "niveau": fiche.get("niveau", 1),
+        "xp": fiche.get("xp", 0),
         "pv": fiche.get("pv", 0),
         "pv_max": fiche.get("pv_max", 0),
         "ca": fiche.get("ca", 10),
         "carac": fiche.get("carac", {}),
         "sauvegardes": fiche.get("sauvegardes", {}),
         "bab": fiche.get("bab", 0),
+        "conditions": fiche.get("conditions", []),
         "alignement": fiche.get("alignement", ""),
     }
     pj_list = etat.get("pj") or []

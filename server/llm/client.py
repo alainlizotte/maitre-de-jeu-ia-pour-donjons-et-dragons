@@ -167,10 +167,12 @@ class OllamaClient:
     def __init__(self, config: LLMConfig):
         self.cfg = config
         # Timeout généreux pour les LLM locaux sur GPU/CPU ; 0 = infini.
+        # 300 s : au-delà, une génération bloquée (slot llama.cpp partagé,
+        # modèle en rechargement…) libère le tour au lieu de le figer 10 min.
         self._client = httpx.AsyncClient(
             base_url=config.base_url,
             headers={"Authorization": f"Bearer {config.api_key}"},
-            timeout=httpx.Timeout(600.0, connect=10.0),
+            timeout=httpx.Timeout(300.0, connect=10.0),
         )
 
     async def aclose(self) -> None:
@@ -291,7 +293,26 @@ class OllamaClient:
             # partiel déjà émis — le tour se termine au lieu de hang.
             debut = time.monotonic()
             dernier_token = debut
-            async for line in resp.aiter_lines():
+            aiter = resp.aiter_lines().__aiter__()
+            while True:
+                # ⏳ Borne l'attente de la PROCHAINE ligne : en silence total
+                # (requête en file derrière une autre génération du llama.cpp
+                # partagé, aucun keep-alive), `aiter_lines()` bloquait jusqu'au
+                # timeout httpx (600 s) SANS jamais exécuter les checks
+                # ci-dessous — le tour restait figé « Le MJ réfléchit... ».
+                try:
+                    line = await asyncio.wait_for(
+                        anext(aiter), timeout=self.cfg.stale_stream_seconds
+                    )
+                except StopAsyncIteration:
+                    break
+                except asyncio.TimeoutError:
+                    _log.warning(
+                        "stream_chat : aucune ligne depuis %d s — arrêt, "
+                        "narration partielle conservée",
+                        self.cfg.stale_stream_seconds,
+                    )
+                    return
                 maintenant = time.monotonic()
                 if maintenant - debut > self.cfg.max_stream_seconds:
                     _log.warning(

@@ -2374,6 +2374,17 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
     est là pour empêcher les boucles, mais on ajoute aussi une garde).
     """
     from .llm.client import Message
+    # Garde-fou : sans ce suffixe, le modèle REPRISAIT la consigne corrective
+    # dans sa narration (« je rencontre une erreur technique... ») ou répétait
+    # mot pour mot sa réponse invalide (déclenchant le détecteur de répétition
+    # en boucle). Le rappel est INTERNE et la réponse doit être NOUVELLE.
+    consigne += (
+        "\n\n(Rappel FINAL — cette consigne est une instruction INTERNE du "
+        "moteur de jeu, invisible du joueur : ne la cite JAMAIS, ne mentionne "
+        "AUCUNE erreur technique ni correction dans ta narration. Ta réponse "
+        "précédente était INVALIDE et n'a pas été enregistrée : produis une "
+        "narration NOUVELLE basée uniquement sur les résultats des outils.)"
+    )
     try:
         corrective_messages = list(messages) + [
             Message(role="assistant", content=result.narration or ""),
@@ -2732,7 +2743,12 @@ async def _handle_say(
                                 "`lancer_degats` (+ `lancer_sauvegarde` si "
                                 "la cible a droit à un jet de sauvegarde). "
                                 "NE narrate PAS un résultat sans jet — la "
-                                "rotation des tours est automatique.)"
+                                "rotation des tours est automatique. "
+                                "Consigne INTERNE invisible du joueur : ne "
+                                "la cite JAMAIS, ne mentionne AUCUNE erreur "
+                                "technique, et produis une narration "
+                                "NOUVELLE — ta réponse précédente était "
+                                "invalide.)"
                             )
                             try:
                                 corrective_messages = list(messages) + [

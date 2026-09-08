@@ -55,7 +55,11 @@ Consignes pour les phases hors combat.
    « on descend à l'étage du dessous » = `carte_donjon_etage("descendre")`,
    JAMAIS `carte_donjon_explorer("sud")`. « Descendre » un étage et « aller
    au sud » sont deux actions différentes ; sur la carte, « descendre » ne
-   signifie PAS « vers le sud ».
+   signifie PAS « vers le sud ». **Sous-zones** : une salle du module peut
+   contenir plusieurs espaces (chambres, autels, banquettes…) décrits dans
+   SA description figée — ils s'explorent SUR PLACE, sans déplacement de
+   carte ; seules les PORTES listées changent de salle (une direction de
+   carte ≠ « la zone à droite dans la pièce »).
 
 - **Découverte de piège** : décris le piège, fais-le déclencher, **affiche le jet de
   sauvegarde** via `lancer_sauvegarde(type, mod, DD, source)` et annonce l'issue +

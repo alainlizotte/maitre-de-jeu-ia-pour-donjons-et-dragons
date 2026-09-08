@@ -876,6 +876,7 @@ async def fiche_perso_mettre_a_jour(
     # Champs numériques vitaux : coercion stricte — un LLM peut envoyer
     # "15 PV" ou du texte libre qui corromprait la fiche (puis ferait
     # crasher les tools de soins/dégâts à la lecture).
+    pv_borne = None
     if keys[0] in ("pv", "pv_max", "ca", "bab", "niveau", "or", "initiative") \
             and len(keys) == 1:
         try:
@@ -888,6 +889,16 @@ async def fiche_perso_mettre_a_jour(
                     "(ex. valeur=\"12\")."
                 )
             )
+        # ⚠️ Borne PV ≤ PV max (règle 3.5) : sans ce plafond, un « soin »
+        # inventé par le modèle produisait 16/15 PV (bug réel).
+        if keys[0] == "pv":
+            try:
+                plafond = int(fiche.get("pv_max") or 0)
+                if plafond > 0 and v > plafond:
+                    pv_borne = plafond
+                    v = plafond
+            except (TypeError, ValueError):
+                pass
 
     cur: Any = fiche
     for k in keys[:-1]:
@@ -941,10 +952,13 @@ async def fiche_perso_mettre_a_jour(
     # l'état de partie pour que le front voie la fiche évoluer en direct.
     if keys[0] in ("pv", "pv_max", "ca", "conditions") and len(keys) == 1:
         idx = _sync_pj(ctx, nom, {keys[0]: v})
+        mention = (
+            f" (borné à PV max {pv_borne} — règle 3.5)" if pv_borne is not None else ""
+        )
         return ToolResult(
             text=(
                 f"✅ Fiche de {nom} mise à jour : {champ} = "
-                f"{json.dumps(v, ensure_ascii=False)}"
+                f"{json.dumps(v, ensure_ascii=False)}{mention}"
             ),
             state_patch=_patch_pj(nom, idx, {keys[0]: v}),
         )

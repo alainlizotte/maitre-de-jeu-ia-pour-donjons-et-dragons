@@ -19,15 +19,24 @@ connectent depuis leur navigateur sur le réseau local.
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD |
-| **Qualité** | **200 tests pytest** (moteur de combat, carte, fiches, scénarios, E2E sans LLM) |
+| **Qualité** | **224 tests pytest** (moteur de combat, carte, fiches, scénarios, E2E sans LLM) |
 | **Images** | ComfyUI (monstres, portraits, salles, scènes) — optionnel |
 | **Données** | Inventaire & encombrement (poids PHB 3.5), mémoire de campagne persistante |
+
+## 📸 Captures d'écran
+
+| | |
+|---|---|
+| ![Salon de jeu — exploration](screenshots/01-salon-jeu-exploration.png) | ![Combat tour par tour](screenshots/02-combat-tour-par-tour.png) |
+| *Salon de jeu : chat du MJ, carte du donjon en direct, galerie des pièces illustrées.* | *Combat : ordre d'initiative, tour actif par joueur, galerie des monstres rencontrés.* |
+| ![Fiche de monstre](screenshots/03-fiche-monstre.png) | ![Fiche de personnage](screenshots/04-fiche-personnage.png) |
+| *Fiche de monstre 3.5 complète (bestiaire officiel) avec portrait généré.* | *Fiche de PJ : PV, CA, BBA, charge transportée, XP, apparence, inventaire.* |
 
 ## ✨ Fonctionnalités
 
 ### Table multijoueur temps réel
 - **Salon de jeu en ligne** : création/rejoindre une partie, optionnellement protégée par mot
-  de passe ; chat partagé avec narration du MJ en streaming token par token.
+  de passe ; chat partagé avec narration du MJ (en bloc ou token par token, configurable).
 - **Fiches de personnages complètes** : création guidée (caractéristiques, race, classe,
   compétences plafonnées selon INT/niveau, dons limités selon niveau) puis consultation et
   modification à tout moment — PV, conditions, sorts, équipement.
@@ -51,6 +60,31 @@ connectent depuis leur navigateur sur le réseau local.
   régularisés mécaniquement — la narration ne peut plus créer de fiction sans effet.
 - **Barres de progression visibles** : XP (niveau actuel → suivant) et **charge transportée**
   (poids kg / charge max) sur les cartes PJ en jeu, les fiches et l'accueil.
+
+### Robustesse — « le serveur décide, le LLM narre »
+- **Mécanique d'abord, prose ensuite** : les jets (tours de monstres, XP,
+  clôtures) sont résolus par le moteur serveur, puis narrés par un appel LLM
+  dédié **sans outils** (résultats imposés) — jamais l'inverse ; repli bloc
+  brut si l'appel échoue.
+- **Rattrapage des déplacements** : « je vais au nord » narré en prose sans
+  `carte_donjon_explorer` est rejoué avec un correctif — l'outil arbitre
+  (refus si pas de porte), la carte ne reste plus figée ni désynchronisée.
+- **Anti-répétition intelligente** : une narration qui recopie un tour
+  précédent est relancée ; les re-descriptions de salles à description figée
+  restent légitimes (exception dédiée).
+- **Bornes anti-blocage** : chaque appel LLM (300 s), chaque stream (90 s sans
+  token, 300 s au total) et chaque envoi WS (5 s) est borné — un tour ne peut
+  plus rester figé indéfiniment, même derrière un backend LLM partagé ou en
+  rechargement.
+- **WS résilient** : heartbeat ping/pong avec reconnexion automatique, re-join
+  transparent (parties protégées comprises), historique remplacé au `joined`
+  (fin des doublons), indicateur de réflexion levé au retour.
+- **Conformité 3.5 garantie** : PV bornés au maximum, rattrapage des soins
+  narrés sans tool, XP répercutée sur la fiche ET l'état de partie, fiches
+  par compte utilisateur (comparaison insensible à la casse, renommage suivi
+  par le fichier, rattachement des fiches orphelines).
+- **Galerie d'images réactive** : une nouvelle image (monstre, pièce, scène)
+  active automatiquement son onglet dans la colonne droite.
 
 ### Exploration & carte du donjon (synchronisation garantie)
 - **Carte du donjon procédurale rendue en SVG** : salles explorées, portes, étages
@@ -144,7 +178,7 @@ py -m uvicorn server.main:app --port 8000            # → http://127.0.0.1:8000
 
 ## 🧪 Tests
 
-200 tests déterministes (sans LLM ni GPU) couvrent le moteur de combat complet (initiative,
+224 tests déterministes (sans LLM ni GPU) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
 refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, les
 scénarios et le pipeline d'orchestration :
@@ -164,6 +198,8 @@ py -m pytest tests -q
 | `llm.detect_simulation` | `true` | Corrige les « simulations » textuelles d'outils |
 | `llm.unload_after_turn` | `true` | Libère la VRAM après le tour (ou délai `unload_delay_minutes`) |
 | `game.combat_turn_timeout_seconds` | `300` | Passe automatiquement le tour d'un joueur silencieux |
+| `llm.stream_to_clients` | `false` | Narration livrée en bloc (`true` = token par token) |
+| `llm.max_stream_seconds` | `300` | Durée max d'une génération streamée (watchdog anti-blocage) |
 | `rag.enabled` | `false` | Base de connaissances ChromaDB (règles D&D 3.5) |
 | `rag.source_dir` | `./knowledge_import` | Corpus `.txt/.md` à ingérer |
 | `rag.embedding_model` | `embeddinggemma` | Modèle d'embeddings dédié (llama.cpp, conteneur `llamaembed`) |

@@ -159,25 +159,44 @@ function EncounterGallery() {
   const isMonstres = masterOn && actif === "monstres";
   const isSalles = masterOn && actif === "salles";
 
-  // Une nouvelle image arrive → on bascule sur son onglet automatiquement
-  // (seulement si l'onglet existe, i.e. config + maître l'autorisent).
-  const prevCounts = useRef({ m: monsters.length, sl: salles.length, s: scenes.length });
+  // Une nouvelle image arrive (ajout OU remise en tête — un même monstre
+  // re-rencontré réutilise son URL) → on bascule sur son onglet
+  // automatiquement (seulement si l'onglet existe, i.e. config + maître
+  // l'autorisent). Priorité : monstres (début de combat) > pièces
+  // (déplacement vers une nouvelle pièce) > scènes.
+  // Les 5 premières secondes après le montage sont ignorées : c'est la
+  // fenêtre de réhydratation depuis l'état serveur (sans quoi un simple
+  // F5 déclencherait des bascules fantômes).
+  const prevHeads = useRef({
+    m: monsters[0]?.url,
+    sl: salles[0]?.url,
+    s: scenes[0]?.url,
+  });
+  const mountTime = useRef(Date.now());
   useEffect(() => {
-    if (!masterOn) {
-      prevCounts.current = { m: monsters.length, sl: salles.length, s: scenes.length };
-      return;
-    }
-    if (sallesOn && salles.length > prevCounts.current.sl) {
+    const heads = {
+      m: monsters[0]?.url,
+      sl: salles[0]?.url,
+      s: scenes[0]?.url,
+    };
+    const prev = prevHeads.current;
+    prevHeads.current = heads;
+    if (!masterOn) return;
+    if (Date.now() - mountTime.current < 5000) return; // réhydratation
+    if (monstresOn && heads.m && heads.m !== prev.m) {
+      setOnglet("monstres");
+      setSelectedM(0);
+      setReplie(false);
+    } else if (sallesOn && heads.sl && heads.sl !== prev.sl) {
       setOnglet("salles");
       setSelectedSl(0);
       setReplie(false);
-    } else if (scenesOn && scenes.length > prevCounts.current.s) {
+    } else if (scenesOn && heads.s && heads.s !== prev.s) {
       setOnglet("scenes");
       setSelectedS(0);
       setReplie(false);
     }
-    prevCounts.current = { m: monsters.length, sl: salles.length, s: scenes.length };
-  }, [monsters.length, salles.length, scenes.length, masterOn, sallesOn, scenesOn]);
+  }, [monsters, salles, scenes, masterOn, monstresOn, sallesOn, scenesOn]);
 
   // Fermeture de l'agrandissement au clavier.
   useEffect(() => {

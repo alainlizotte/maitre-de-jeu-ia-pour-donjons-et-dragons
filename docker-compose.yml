@@ -92,7 +92,6 @@ services:
       -ctv q8_0
       --jinja
       --flash-attn on
-      --sleep-idle-seconds 300
     deploy:
       resources:
         reservations:

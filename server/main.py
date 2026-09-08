@@ -67,6 +67,18 @@ _ACTION_COMBAT_RE = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
+# Détection d'une INTENTION de déplacement de donjon (« Je vais au nord »,
+# bouton de la carte, « direction ouest »…) → si le MJ narre l'arrivée sans
+# appeler `carte_donjon_explorer`, l'état et la carte ne bougent PAS (bug
+# réel : le modèle narrait le déplacement en prose, carte figée). Un rejeu
+# correctif force l'outil, qui arbitre (refus si pas de porte).
+_MOVE_INTENT_RE = _re_mod.compile(
+    r"^\s*(?:je\s+(?:vais|souhaite\s+aller|passe|avance)\s+(?:au|à l'|a l'|vers\s+le\s+|vers\s+la\s+)?"
+    r"|on\s+va\s+(?:au|à l'|a l')?|allons\s+(?:au|à l'|a l')?|direction\s+)?"
+    r"\s*(nord|sud|est|ouest)\s*[.!?]*\s*$",
+    _re_mod.IGNORECASE,
+)
+
 # Détection d'un combat narré EN PROSE par le LLM (le petit modèle écrit
 # parfois « Le combat commence ! Le zombie charge… » et enchaîne jets/dégâts
 # dans la narration SANS appeler `engager_combat`). Le serveur rattrape alors
@@ -341,6 +353,93 @@ def _orchestrator(app: FastAPI) -> Orchestrator:
         detect_simulation=cfg.llm.detect_simulation,
         max_iterations=cfg.llm.max_tool_iterations,
     )
+
+
+# --------------------------------------------------------------------------- #
+#  Narration des mécaniques de combat résolues par le serveur
+# --------------------------------------------------------------------------- #
+#  Philosophie demandée à la table : le SERVEUR exécute d'abord toute la
+#  mécanique (jets des monstres, stabilisations, clôture/XP), PUIS le LLM
+#  narre ces résultats. Fini les blocs bruts « ⚙️ Mécanique du tour » qui
+#  venaient CONTREDIRE la prose du LLM après coup.
+_MOTS_COMMUNS_EVENTS = {
+    "attaque", "attaques", "dégâts", "degats", "dégat", "touché", "touche",
+    "toucher", "manqué", "manque", "total", "formule", "jets", "bruts",
+    "bonus", "mécanique", "mecanique", "tour", "tours", "round", "rounds",
+    "invalide", "mourant", "morte", "mort", "détruit", "detruit", "combat",
+    "victoire", "défaite", "defaite", "griffe", "griffes", "morsure",
+    "coup", "coups", "grâce", "grace", "stabilisation", "stabilisé",
+    "stabilise", "serveur", "résolus", "resolus", "dernier", "message",
+    "événements", "evenements", "expérience", "experience", "points",
+    "initiative", "passé", "passe", "condition", "conditions", "arme",
+}
+
+
+def _mecanique_deja_narree(events: list[str], narration: str) -> bool:
+    """True si la narration du LLM intègre déjà les événements mécaniques
+    (assez de combattants/objets cités dans les events se retrouvent dans la
+    prose). Évite de DOUBLER une narration correcte avec le bloc brut
+    « ⚙️ Mécanique résolue par le serveur » — la duplication donnait
+    l'impression que le serveur « corrigeait » le MJ après coup. En cas de
+    doute on renvoie False (le bloc brut reste le filet de sécurité)."""
+    if not events:
+        return True
+    bas = (narration or "").lower()
+    mots: set[str] = set()
+    for ev in events:
+        for w in _re_mod.findall(r"[A-Za-zÀ-ÿ'’]{4,}", ev):
+            lw = w.lower()
+            if lw not in _MOTS_COMMUNS_EVENTS:
+                mots.add(lw)
+    if not mots:
+        return False
+    cites = sum(1 for w in mots if w in bas)
+    return cites >= 2 and cites >= len(mots) // 3
+
+
+async def _narrer_mecaniques_serveur(
+    app: FastAPI, events: list[str], contexte: str = ""
+) -> str:
+    """Narre les événements mécaniques DÉJÀ résolus par le moteur serveur
+    (jets des monstres, coups de grâce, XP…) via un appel LLM SANS tools.
+
+    C'est le chaînon « mécanique d'abord, narration ensuite » : le serveur
+    joue, le LLM reformule en prose fidèle — jamais l'inverse. Retourne ""
+    en cas d'échec : l'appelant retombe sur le bloc brut historique."""
+    if not events:
+        return ""
+    consignes = (
+        "Tu es le maître du jeu D&D 3.5. Voici la liste EXACTE des jets et "
+        "effets mécaniques DÉJÀ résolus par le moteur de jeu serveur "
+        "(attaques, dégâts, stabilisations, fin de combat, XP).\n"
+        "RÈGLES ABSOLUES :\n"
+        "1. Narre ces événements de façon vivante et CONCISE (1 à 3 courts "
+        "paragraphes), à la 2ᵉ personne pour les héros.\n"
+        "2. Respecte EXACTEMENT les résultats : qui touche, qui rate, quels "
+        "dégâts, quels PV restants, qui meurt. Cite les totaux clés "
+        "(« jet 17 vs CA 15 ») sans recopier tous les détails.\n"
+        "3. N'INVENTE AUCUN jet, dégât ou événement absent de la liste ; "
+        "n'ajoute aucun monstre, aucun renfort, aucune action bonus.\n"
+        "4. N'appelle AUCUN outil : tout est déjà résolu et inscrit.\n"
+        "5. Ne pose AUCUNE question et ne demande l'avis de personne : le "
+        "serveur affiche lui-même la ligne « au tour de… » quand c'est "
+        "l'heure.\n"
+        "6. De la prose narrative uniquement : pas de titre, pas de liste à "
+        "puces, pas de section « mécanique »."
+    )
+    contenu = (
+        (("Contexte : " + contexte.strip() + "\n\n") if contexte.strip() else "")
+        + "Événements mécaniques à narler :\n\n"
+        + "\n\n".join(events)
+    )
+    messages = [
+        Message(role="system", content=consignes),
+        Message(role="user", content=contenu),
+    ]
+    res = await app.state.client.chat(
+        messages, temperature=min(0.6, cfg.llm.temperature)
+    )
+    return (res.content or "").strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -1017,8 +1116,12 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         raise HTTPException(status_code=400, detail="Le nom du personnage est requis.")
 
     # Collision inter-comptes : le fichier est global (fiche_<slug>.json).
+    # Comparaison insensible à la casse : les fiches créées via les tools MJ
+    # portent le pseudo WS (« alain »), les comptes leur casse d'origine.
     existante = persos_mod.charger_fiche(data_dir, nom)
-    if existante and str(existante.get("proprietaire", "")) != utilisateur:
+    if existante and not persos_mod._meme_compte(
+        existante.get("proprietaire"), utilisateur
+    ):
         raise HTTPException(
             status_code=409,
             detail=f"Un personnage nommé « {nom} » existe déjà (autre compte). "
@@ -1676,9 +1779,11 @@ async def _ws_envoi(ws: WebSocket, payload: dict) -> None:
     """Envoi WS tolérant : si le client se déconnecte pendant un tour MJ
     long, tout `send_json` ultérieur lève (RuntimeError/WebSocketDisconnect)
     et faisait planter le handler ASGI entier. On avale au lieu de crasher —
-    le `finally` de `ws_chat` fait déjà le ménage dans les registres."""
+    le `finally` de `ws_chat` fait déjà le ménage dans les registres.
+    L'envoi est aussi BORNÉ (5 s) : un TCP mort sans FIN bloquerait sinon
+    l'envoi (et donc la boucle du handler) pendant des minutes."""
     try:
-        await ws.send_json(payload)
+        await asyncio.wait_for(ws.send_json(payload), timeout=5.0)
     except Exception:                                        # noqa: BLE001
         pass
 
@@ -1736,6 +1841,14 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
 
             mtype = msg.get("type")
             player = (msg.get("player") or "Joueur").strip()
+
+            if mtype == "ping":
+                # Heartbeat client → serveur : garde la connexion vivante
+                # (NAT/proxy) et détecte vite les TCP morts ; sans réponse,
+                # le client force une reconnexion au lieu d'attendre un
+                # envoi ultérieur qui n'arrive jamais (écran gelé).
+                await _ws_envoi(ws, {"type": "pong"})
+                continue
 
             if mtype == "join":
                 # Un personnage sélectionné est OBLIGATOIRE pour rejoindre :
@@ -2671,6 +2784,53 @@ async def _handle_say(
             except Exception as e:
                 print(f"[dnd35] 5bis rejeu failed: {e}")
 
+            # 5bis-e. 🗺️ Déplacement de donjon narré SANS outil. Le joueur
+            # demande une direction (« Je vais au nord », bouton de la carte…)
+            # mais le MJ narre l'arrivée en prose sans appeler
+            # `carte_donjon_explorer` : l'état ne bouge PAS, la carte reste
+            # figée (bug réel : le modèle narrait « tu traverses le passage
+            # est » sans tool). Ré-invoque une fois avec un correctif — le
+            # tool serveur arbitre (refus si pas de porte dans ce mur).
+            try:
+                _etat_move = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _move_match = _MOVE_INTENT_RE.match((text or "").strip())
+                _deja_explorer = any(
+                    tc.get("name") == "carte_donjon_explorer"
+                    for tc in result.tool_calls_trace
+                )
+                if (
+                    _etat_move.get("phase") != "combat"
+                    and (_etat_move.get("donjon") or {}).get("id")
+                    and _move_match
+                    and not _deja_explorer
+                ):
+                    _dir = _move_match.group(1).lower()
+                    print(
+                        "[dnd35] Déplacement donjon narré sans tool "
+                        f"({text!r}) — rejeu avec correctif"
+                    )
+                    await _rejoue_correctif(
+                        orch, messages, ctx, result, on_event,
+                        (
+                            "(Rappel système MJ — ⚠️ ERREUR : le joueur veut "
+                            f"se déplacer au **{_dir}** mais tu as narré le "
+                            "déplacement SANS appeler `carte_donjon_explorer` "
+                            "— l'état et la carte n'ont PAS bougé. Appelle "
+                            "MAINTENANT `carte_donjon_explorer(direction=\""
+                            f"{_dir}\")`, attends le résultat, puis narre la "
+                            "salle D'APRÈS CE RÉSULTAT (description, portes "
+                            "réelles, contenu canonique). Sans l'outil, le "
+                            "déplacement n'a pas eu lieu — n'invente NI "
+                            "salle NI passage.)"
+                        ),
+                        "déplacement donjon",
+                    )
+            except Exception as e:                               # noqa: BLE001
+                print(f"[dnd35] 5bis-e rejeu déplacement failed: {e}")
+
             # 5bis-b. ⚔️ Rattrapage des invoquations non enregistrées.
             # Le joueur annonce une invoquation/renfort en combat mais le MJ
             # l'a narrée en prose sans appeler combat_ajouter_combattant (le
@@ -2802,21 +2962,31 @@ async def _handle_say(
 
             # ⚙️ MOTEUR DE COMBAT SERVEUR (post-tour).
             # 1) Les événements mécaniques résolus AVANT le tour LLM
-            #    (pre-run : tours de monstres, skips…) sont ajoutés à la
-            #    narration finale pour que la table les voie TOUJOURS, même
-            #    si le LLM les a mal intégrés.
+            #    (pre-run : tours de monstres, skips…) ne sont ré-ajoutés en
+            #    bloc brut QUE si le LLM ne les a PAS intégrés à sa
+            #    narration — la duplication systématique donnait
+            #    l'impression d'une « correction » serveur après coup.
             # 2) Si le PJ courant a consommé son action standard pendant ce
             #    tour (attaque/soin/jet…), la rotation avance automatiquement ;
             #    le moteur joue les tours suivants (monstres, incapables)
             #    jusqu'au prochain PJ actif et clôture le combat
             #    (victoire/défaite) avec XP officielle + mémoire. Le LLM
             #    n'a PLUS à gérer la rotation : c'est garanti ici.
+            # 3) Ces événements post-tour sont NARRÉS par le LLM (appel sans
+            #    tools, résultats imposés) — mécanique d'abord, prose ensuite ;
+            #    le bloc brut n'est plus que le repli si l'appel échoue.
+            # 4) Si le combat continue, une ligne DÉTERMINISTE « au tour de
+            #    X (joueur Y) de décider une action » est ajoutée : le LLM
+            #    confondait les tours et demandait « que fait le monstre ? ».
             try:
-                if events_pre:
+                if events_pre and not _mecanique_deja_narree(
+                    events_pre, result.narration
+                ):
                     result.narration += (
                         "\n\n⚙️ _Mécanique résolue par le serveur :_\n\n"
                         + "\n\n".join(events_pre)
                     )
+                if events_pre:
                     result.state_patches.extend(patches_pre)
 
                 apres = PartyState(
@@ -2853,10 +3023,35 @@ async def _handle_say(
                         timeout_secondes=cfg.game.combat_turn_timeout_seconds,
                     )
                     if res_post.events:
-                        result.narration += (
-                            "\n\n⚙️ _Mécanique du tour (serveur) :_\n\n"
-                            + "\n\n".join(res_post.events)
-                        )
+                        # ⏱️ Borne dur : sur un llama.cpp local partagé avec
+                        # d'autres applis (open-webui…), cet appel narratif
+                        # peut attendre le slot pendant des minutes — sans
+                        # cette limite le tour restait figé « en réflexion »
+                        # après un combat. Au-delà de 90 s : repli bloc brut.
+                        try:
+                            nar_post = await asyncio.wait_for(
+                                _narrer_mecaniques_serveur(
+                                    app,
+                                    res_post.events,
+                                    contexte=str(
+                                        (apres.get("lieu") or {}).get("nom") or ""
+                                    ),
+                                ),
+                                timeout=90.0,
+                            )
+                        except (asyncio.TimeoutError, Exception) as e_nar:  # noqa: BLE001
+                            print(
+                                "[dnd35] Narration mécaniques échouée/timeout "
+                                f"(repli bloc brut) : {e_nar}"
+                            )
+                            nar_post = ""
+                        if nar_post:
+                            result.narration += "\n\n" + nar_post
+                        else:
+                            result.narration += (
+                                "\n\n⚙️ _Mécanique du tour (serveur) :_\n\n"
+                                + "\n\n".join(res_post.events)
+                            )
                     if res_post.patches:
                         result.state_patches.extend(res_post.patches)
                     if res_post.combat_termine:
@@ -2868,6 +3063,25 @@ async def _handle_say(
                         data_dir=str(cfg.abs(cfg.paths.data_dir)),
                         partie_id=partie_id,
                     ).load()
+                    # ⚔️ Ligne de relance DÉTERMINISTE : quand la mécanique a
+                    # fait avancer la rotation jusqu'à un PJ, la table doit
+                    # savoir QUI décide maintenant — sans dépendre du LLM
+                    # (qui « demandait » au joueur ce que faisait un monstre).
+                    if apres.get("phase") == "combat":
+                        actif_suivant = str(
+                            apres.get("courant_tour_pour") or ""
+                        ).strip()
+                        pj_suivant = next(
+                            (p for p in (apres.get("pj") or [])
+                             if str(p.get("nom") or "") == actif_suivant),
+                            None,
+                        )
+                        if pj_suivant is not None and actif_suivant:
+                            result.narration += (
+                                f"\n\n⚔️ **Au tour de {actif_suivant}** "
+                                f"(joueur {pj_suivant.get('joueur')}) de "
+                                "décider une action."
+                            )
             except Exception as e:                                   # noqa: BLE001
                 print(f"[dnd35] Moteur de combat post-tour échoué (ignoré) : {e}")
 

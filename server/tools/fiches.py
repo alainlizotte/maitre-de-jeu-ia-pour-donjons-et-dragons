@@ -477,6 +477,10 @@ async def fiche_perso_creer(
     fiche = {
         "nom": nom,
         "joueur": joueur,
+        # Propriétaire = pseudo du joueur émetteur (comparaison insensible à
+        # la casse côté /api/persos) : sans ce champ, la fiche devenait
+        # invisible dans « Mes personnages » (orpheline, bug constaté).
+        "proprietaire": joueur,
         "race": race,
         "classe": classe,
         "niveau": int(niveau),
@@ -694,6 +698,8 @@ async def fiche_perso_creer_rapide(
     fiche = {
         "nom": nom,
         "joueur": joueur,
+        # Propriétaire = pseudo du joueur émetteur (cf. fiche_perso_creer).
+        "proprietaire": joueur,
         "race": race,
         "classe": classe,
         "niveau": int(niveau),
@@ -858,6 +864,7 @@ async def fiche_perso_mettre_a_jour(
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    ancien_nom = str(fiche.get("nom") or "").strip()
 
     try:
         v: Any = json.loads(valeur)
@@ -893,6 +900,43 @@ async def fiche_perso_mettre_a_jour(
         _save_fiche(ctx, nom, fiche)
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
+
+    # Renommage du personnage (champ top-level « nom ») : le FICHIER doit
+    # suivre (fiche_<slug>.json), sinon toutes les lectures par le nouveau
+    # nom échouent (❌ Aucune fiche trouvée / GET 404 / DELETE 500 — bug
+    # observé en partie réelle : srghsdryrsy renommé « Demi-orc Barbare »).
+    if keys == ["nom"] and isinstance(v, str) and v.strip() \
+            and _slug(v.strip()) != _slug(ancien_nom):
+        nouveau_slug = _slug(v.strip())
+        ancien_slug = _slug(ancien_nom)
+        ancien_path = os.path.join(_fiches_dir(ctx), f"fiche_{ancien_slug}.json")
+        nouveau_path = os.path.join(_fiches_dir(ctx), f"fiche_{nouveau_slug}.json")
+        if os.path.exists(nouveau_path):
+            return ToolResult(
+                text=(
+                    f"❌ Impossible de renommer : une fiche existe déjà pour "
+                    f"« {v.strip()} » (fiche_{nouveau_slug}.json). Choisis un "
+                    "autre nom."
+                )
+            )
+        try:
+            os.replace(ancien_path, nouveau_path)
+        except OSError as e:
+            return ToolResult(
+                text=(
+                    f"❌ Contenu mis à jour mais renommage du fichier "
+                    f"impossible ({e}) — la fiche reste lisible sous "
+                    f"l'ancien nom."
+                )
+            )
+        return ToolResult(
+            text=(
+                f"✅ Fiche renommée : « {ancien_nom} » → « {v.strip()} » "
+                f"(fichier fiche_{nouveau_slug}.json)."
+            ),
+            state_patch={"pj_updated": v.strip()},
+        )
+
     # Si le champ touche l'entrée PJ affichée (pv, pv_max, ca…), on synchronise
     # l'état de partie pour que le front voie la fiche évoluer en direct.
     if keys[0] in ("pv", "pv_max", "ca", "conditions") and len(keys) == 1:

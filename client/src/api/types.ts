@@ -148,7 +148,10 @@ export type WsMessage =
   | { type: "stream_reset" }
   | { type: "dm"; text: string; tool_events?: ToolEvent[]; state_patches?: unknown[] }
   | { type: "team_msg"; player: string; text: string }
-  | { type: "audio_signal"; player: string; signal: Record<string, unknown> };
+  | { type: "audio_signal"; player: string; signal: Record<string, unknown> }
+  // Heartbeat : réponse du serveur au ping du client (consommé par ws.ts,
+  // jamais routé vers l'UI).
+  | { type: "pong" };
 
 // --------------------------------------------------------------------------- //
 //  REST DTOs.

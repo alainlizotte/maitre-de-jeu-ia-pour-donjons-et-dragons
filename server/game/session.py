@@ -21,6 +21,9 @@ from typing import Any, Optional
 
 from ..llm.client import Message
 
+# Durée maximale d'un envoi WS individuel (cf. `PartySession.broadcast`).
+_ENVOI_TIMEOUT_S = 5.0
+
 
 # --------------------------------------------------------------------------- #
 #  Session d'une partie
@@ -159,11 +162,21 @@ class PartySession:
         )
 
     async def broadcast(self, payload: dict[str, Any]) -> None:
-        """Envoie un payload JSON à toutes les connexions actives de la partie."""
+        """Envoie un payload JSON à toutes les connexions actives de la partie.
+
+        Chaque envoi est borné dans le temps (5 s) : un socket à moitié mort
+        (page rafraîchie, coupure réseau silencieuse — pas de FIN TCP) fait
+        autrement HANGER `send_json` pendant des minutes. Le tour MJ restait
+        alors bloqué « en réflexion » : le message était parti aux connexions
+        vivantes mais le statut final (`done`) n'était jamais diffusé et le
+        verrou `thinking` jamais relâché. En cas de dépassement, la connexion
+        est considérée morte et purgée."""
         dead: list[Any] = []
         for ws in list(self.connections):
             try:
-                await ws.send_json(payload)
+                await asyncio.wait_for(
+                    ws.send_json(payload), timeout=_ENVOI_TIMEOUT_S
+                )
             except Exception:
                 dead.append(ws)
         for ws in dead:

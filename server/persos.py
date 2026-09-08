@@ -640,6 +640,19 @@ def resume_dons_competences(fiche: dict[str, Any]) -> str:
     return " · ".join(parties)
 
 
+def _meme_compte(a: Any, b: Any) -> bool:
+    """Comparaison de comptes insensible à la casse/espaces.
+
+    Les fiches créées via les tools MJ portent le pseudo WS du joueur
+    (« alain ») quand les comptes authentifiés ont leur casse d'origine
+    (« Alain ») : une égalité stricte faisait DISPARAÎTRE les personnages
+    de la liste « Mes personnages » (bug « j'ai perdu mes personnages »).
+    """
+    sa = str(a or "").strip().casefold()
+    sb = str(b or "").strip().casefold()
+    return bool(sa) and sa == sb
+
+
 def lister_fiches(data_dir: str, proprietaire: Optional[str] = None) -> list[dict[str, Any]]:
     """Liste toutes les fiches (ou celles d'un propriétaire), triées par nom."""
     dossier = fiches_dir(data_dir)
@@ -658,7 +671,9 @@ def lister_fiches(data_dir: str, proprietaire: Optional[str] = None) -> list[dic
         except (json.JSONDecodeError, OSError):
             continue
         if isinstance(fiche, dict) and fiche.get("nom"):
-            if proprietaire is None or fiche.get("proprietaire") == proprietaire:
+            if proprietaire is None or _meme_compte(
+                fiche.get("proprietaire"), proprietaire
+            ):
                 resultats.append(fiche)
     resultats.sort(key=lambda f: str(f.get("nom", "")).lower())
     return resultats
@@ -924,6 +939,18 @@ def enregistrer_personnage_partie(
         return None
     if not proprio and joueur_fiche and joueur_fiche.lower() != joueur.strip().lower():
         return None
+
+    # Rattachement progressif : une fiche sans propriétaire (créée avant le
+    # multi-comptes, ou par les tools avant le correctif) est attribuée au
+    # compte qui la joue — elle apparaît alors dans « Mes personnages ».
+    if not proprio:
+        fiche["proprietaire"] = joueur.strip()
+        try:
+            with open(chemin_fiche(data_dir, nom_personnage), "w",
+                      encoding="utf-8") as f:
+                json.dump(fiche, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
 
     state = PartyState(data_dir=data_dir, partie_id=partie_id)
     etat = state.load()

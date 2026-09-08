@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Optional
 
@@ -281,7 +282,31 @@ class OllamaClient:
             # Les tokens `<|channel>thought`...`<channel|>` arrivent chunk par chunk.
             think_buf = ""
             in_think = False
+            # ⏱️ Watchdogs anti-blocage : le read-timeout httpx (600 s) ne
+            # protège pas contre un flux qui continue d'envoyer des keep-alives
+            # SSE sans jamais produire de contenu (observé en partie réelle :
+            # génération Qwen dégénérée, tour MJ figé « en réflexion » pendant
+            # des minutes). Deux limites applicatives : durée TOTALE et durée
+            # SANS token de contenu. Au déclenchement on conserve le texte
+            # partiel déjà émis — le tour se termine au lieu de hang.
+            debut = time.monotonic()
+            dernier_token = debut
             async for line in resp.aiter_lines():
+                maintenant = time.monotonic()
+                if maintenant - debut > self.cfg.max_stream_seconds:
+                    _log.warning(
+                        "stream_chat : durée totale dépassée (%.0f s > %d s) — "
+                        "arrêt, narration partielle conservée",
+                        maintenant - debut, self.cfg.max_stream_seconds,
+                    )
+                    return
+                if maintenant - dernier_token > self.cfg.stale_stream_seconds:
+                    _log.warning(
+                        "stream_chat : aucun token de contenu depuis %.0f s "
+                        "(> %d s) — arrêt, narration partielle conservée",
+                        maintenant - dernier_token, self.cfg.stale_stream_seconds,
+                    )
+                    return
                 if not line or not line.startswith("data:"):
                     continue
                 chunk_str = line[len("data:") :].strip()
@@ -297,6 +322,7 @@ class OllamaClient:
                     content = delta.get("content") or ""
                     if not content:
                         continue
+                    dernier_token = time.monotonic()
                     # Machine à états : détecter `<|channel>thought` et `<channel|>`
                     think_buf += content
                     if in_think:

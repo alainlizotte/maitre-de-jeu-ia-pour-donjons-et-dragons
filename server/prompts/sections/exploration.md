@@ -39,7 +39,11 @@ Consignes pour les phases hors combat.
   direction, `carte_donjon_explorer(direction)` révèle la salle suivante, puis
   `carte_donjon_get` affiche la carte visuelle mise à jour. Les salles non visitées
   sont masquées. Propose toujours 2-3 directions visibles au joueur pour qu'il
-  choisisse. **UN SEUL déplacement par tour** : jamais `carte_donjon_entrer`
+  choisisse. ⚠️ **JAMAIS de déplacement narré sans l'outil** : « le groupe
+  traverse le passage est… » SANS `carte_donjon_explorer` = le déplacement
+  n'a PAS eu lieu (la carte et l'état restent figés) — appelle TOUJOURS
+  l'outil d'abord, puis narre la salle d'après son résultat. **UN SEUL
+  déplacement par tour** : jamais `carte_donjon_entrer`
   ET `carte_donjon_explorer` dans le même tour, jamais deux `explorer` à la
   suite — « j'entre dans le donjon » = salle d'entrée uniquement, on narre
    cette salle et on attend le choix de direction du joueur. **Étages** :

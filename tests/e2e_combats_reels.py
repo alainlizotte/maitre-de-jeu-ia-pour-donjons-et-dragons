@@ -634,13 +634,22 @@ def nettoyer(pid: str):
 async def phase_setup():
     os.makedirs(TMP, exist_ok=True)
     bilan = Bilan.neuf()
-    # Nettoyage total : supprimer TOUTES les anciennes fiches PJ pour que
-    # le LLM ne trouve PAS de fiche existante et soit obligé de créer avec
-    # fiche_perso_creer_rapide (les anciennes fiches de runs précédents
-    # faisaient que le LLM appelait mettre_a_jour au lieu de creer_rapide,
-    # causant des créations manquantes dans la liste pj).
+    # Nettoyage ciblé : supprimer UNIQUEMENT les fiches des PJ de test pour
+    # que le LLM retrouve les outils de création (fiche_perso_creer_rapide)
+    # au lieu de mettre_a_jour. ⚠️ JAMIS de balayage global fiche_*.json :
+    # il effaçait LES FICHES RÉELLES des joueurs (Camille, Barbouk… perdues).
     import glob
+    def _slug_pj(j: str) -> str:
+        nf = unicodedata.normalize("NFKD", j)
+        return re.sub(r"[^A-Za-z0-9_-]+", "_",
+                      "".join(c for c in nf
+                              if not unicodedata.combining(c))
+                      ).strip("_").lower()
     for fp in glob.glob(os.path.join(DATA, "fiches", "fiche_*.json")):
+        base = os.path.splitext(os.path.basename(fp))[0]  # fiche_<slug>
+        slug = base[len("fiche_"):] if base.startswith("fiche_") else base
+        if slug not in {_slug_pj(j) for j in JOUEURS}:
+            continue
         try:
             os.unlink(fp)
         except OSError:

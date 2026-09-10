@@ -228,6 +228,7 @@ interface ItemFiche {
   nom?: string;
   name?: string;
   quantite?: number | string;
+  qte?: number | string;
   poids_kg?: number | string;
   description?: string;
 }
@@ -243,7 +244,7 @@ function ItemListe({ items }: { items: ItemFiche[] }) {
   return (
     <ul className="space-y-1">
       {items.map((it, i) => {
-        const qte = it.quantite != null ? Number(it.quantite) : 1;
+        const qte = Number(it.quantite ?? it.qte ?? 1);
         const poids = it.poids_kg != null && Number(it.poids_kg) > 0
           ? `${Number(it.poids_kg)} kg`
           : null;
@@ -274,7 +275,15 @@ function InventaireBloc({ fiche }: { fiche: Record<string, unknown> }) {
   const equipement = liste(fiche.equipement);
   const inventaire = liste(fiche.inventaire);
   const armes = liste(fiche.armes);
-  if (!equipement.length && !inventaire.length && !armes.length) return null;
+  // Déduplication : les tools d'inventaire miroient TOUT l'inventaire dans
+  // `equipement` ET `inventaire` — sans filtre, chaque objet s'affichait
+  // deux fois (« Porté / équipé » + « Sac »). On ne montre sous
+  // « Porté / équipé » que les objets absents du sac.
+  const cleItem = (it: ItemFiche) =>
+    `${(it.nom ?? it.name ?? "").trim().toLowerCase()}|${Number(it.quantite ?? it.qte ?? 1)}`;
+  const clesSac = new Set(inventaire.map(cleItem));
+  const porteSeul = equipement.filter((it) => !clesSac.has(cleItem(it)));
+  if (!porteSeul.length && !inventaire.length && !armes.length) return null;
   return (
     <div className="mt-2 rounded bg-stone-800/40 border border-stone-800 p-2">
       <div className="text-xs text-stone-500 mb-1">Inventaire</div>
@@ -284,10 +293,10 @@ function InventaireBloc({ fiche }: { fiche: Record<string, unknown> }) {
           <ItemListe items={armes} />
         </div>
       )}
-      {equipement.length > 0 && (
+      {porteSeul.length > 0 && (
         <div className="mb-1.5">
           <div className="text-[11px] text-amber-300/80 mb-0.5">Porté / équipé</div>
-          <ItemListe items={equipement} />
+          <ItemListe items={porteSeul} />
         </div>
       )}
       {inventaire.length > 0 && (

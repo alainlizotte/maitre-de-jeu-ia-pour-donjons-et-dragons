@@ -342,6 +342,29 @@ def _save_fiche(ctx: ToolContext, nom: str, fiche: dict[str, Any]) -> str:
     respecte pas le schéma `data/fiches/schema_fiche.json`. L'appelant est
     attendu convertir cette exception en `ToolResult(error=...)`.
     """
+    # Auto-réparation : une entrée d'équipement/inventaire malformée (nom
+    # porté en CLÉ du dict par le LLM — partie dc4dd5aa : « equipement »
+    # remplacé par {"clé_de_fer_rouillee": 1, ...}) fait échouer la
+    # validation pour TOUT outil qui sauvegarde ensuite la fiche (même un
+    # simple patch de PV). On répare au point de passage unique des
+    # écritures — seulement si une entrée est effectivement malformée, pour
+    # ne pas toucher aux fiches créées par le formulaire.
+    for champ in ("equipement", "inventaire"):
+        brut = fiche.get(champ)
+        if not isinstance(brut, list):
+            continue
+        if all(
+            isinstance(e, dict) and str(e.get("nom") or "").strip()
+            for e in brut
+        ):
+            continue
+        from .inventaire import _inventaire as _inv_repare  # tardif (cycle)
+        repare = _inv_repare({"inventaire": brut})
+        fiche[champ] = [
+            ({k: v for k, v in e.items() if k != "description"}
+             if champ == "equipement" else e)
+            for e in repare
+        ]
     validator = _load_schema_fiche(ctx)
     if validator is not None:
         errors = sorted(validator.iter_errors(fiche), key=lambda e: e.path)

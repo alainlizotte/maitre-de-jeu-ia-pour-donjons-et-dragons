@@ -29,14 +29,25 @@ _log = logging.getLogger("dnd35.llm.client")
 
 
 # --------------------------------------------------------------------------- #
-#  Thinking stripping (Gemma 4 utilise <|channel>thought...<channel|>)
+# Thinking stripping — deux formats :
+# - Gemma 4 : <|channel>thought...<channel|>
+# - Qwen 3/3.5 : <think>...</think> (raisonnement parfois aussi renvoyé par
+#   llama.cpp --jinja dans `reasoning_content`, champ qu'on ignore).
 # --------------------------------------------------------------------------- #
 import re
 _THINK_RE = re.compile(r"<\|channel>thought\b.*?<channel\|>", re.DOTALL)
+# <think>...</think> fermé.
+_THINK_QWEN_RE = re.compile(r"<think\s*>.*?</think\s*>", re.DOTALL)
+# <think> NON fermé : tout ce qui suit l'ouverture est du raisonnement —
+# la réponse visible est vide (relance corrective côté orchestrateur).
+_THINK_QWEN_OUVERT_RE = re.compile(r"<think\s*>.*\Z", re.DOTALL)
+# </think> orphelin (raisonnement déjà séparé par le backend, le close-tag
+# fuit seul en tête de content).
+_THINK_QWEN_ORPHELIN_RE = re.compile(r"</?think\s*>")
 
 
 def _strip_thinking(text: str, strip_spaces: bool = True) -> str:
-    """Supprime les blocs de réflexion Gemma 4 du texte de réponse.
+    """Supprime les blocs de réflexion (Gemma 4 / Qwen) du texte de réponse.
 
     `strip_spaces=False` : variante pour le streaming par delta — on ne
     touche PAS aux espaces/retours à la ligne en début/fin de fragment,
@@ -46,6 +57,9 @@ def _strip_thinking(text: str, strip_spaces: bool = True) -> str:
     if not text:
         return text
     out = _THINK_RE.sub("", text)
+    out = _THINK_QWEN_RE.sub("", out)
+    out = _THINK_QWEN_OUVERT_RE.sub("", out)
+    out = _THINK_QWEN_ORPHELIN_RE.sub("", out)
     return out.strip() if strip_spaces else out
 
 
@@ -54,13 +68,35 @@ def _safe_split(buf: str) -> tuple[str, str]:
 
     Renvoie (texte_sûre, reste_à_analyser). Le texte sûr peut être yield.
     """
-    # Patterns partiels pouvant être le début de `<|channel>thought`
-    markers = ("<|channel>tho", "<|channel>th", "<|channel>", "<|chan", "<|ch", "<|c", "<|")
+    # Patterns partiels pouvant être le début de `<|channel>thought` ou `<think>`
+    markers = (
+        "<|channel>tho", "<|channel>th", "<|channel>", "<|chan", "<|ch", "<|c", "<|",
+        "<think>", "<think", "<thin", "<thi", "<th", "<t",
+        "</think>", "</think", "</thin", "</thi", "</th",
+    )
     for m in markers:
         if buf.endswith(m):
             safe = buf[: -len(m)]
             return safe, buf[-len(m):]
     return buf, ""
+
+
+# Tags d'OUVERTURE / de FERMETURE des canaux thinking (Gemma et Qwen), pour
+# la machine à états du streaming.
+_THINK_START_TAGS = ("<|channel>thought", "<think>")
+_THINK_END_TAGS = ("<channel|>", "</think>")
+
+
+def _debut_thinking(buf: str) -> int:
+    """Index du premier tag d'OUVERTURE thinking dans `buf`, -1 si absent."""
+    idxs = [buf.find(t) for t in _THINK_START_TAGS if t in buf]
+    return min(idxs) if idxs else -1
+
+
+def _fin_thinking(buf: str) -> int:
+    """Index (après tag) de la première FERMETURE thinking dans `buf`, -1 sinon."""
+    idxs = [buf.find(t) + len(t) for t in _THINK_END_TAGS if t in buf]
+    return min(idxs) if idxs else -1
 
 
 def _normaliser_messages(messages: list[Message]) -> list[Message]:
@@ -132,6 +168,15 @@ def _normaliser_messages(messages: list[Message]) -> list[Message]:
     # — typiquement les correctifs système requalifiés en `user` injectés en
     # fin de conversation. On fusionne les doublons consécutifs (contenus
     # concaténés) et on jette les messages vides.
+    #
+    # ⚠️ NON-MUTATION : la fusion crée un NOUVEAU Message au lieu d'écrire
+    # dans `precedent.content`. `messages` partage ses objets avec
+    # `session.history` (main.py : `[system] + hist[debut:]`) : muter
+    # `precedent` CORROMPAIT l'historique de session puis le fichier
+    # chat_<id>.json — bug réel (partie dc4dd5aa) : les correctifs
+    # « ⚠️ Consigne du Maître du Jeu » injectés en fin de tour se sont
+    # retrouvés fusionnés DANS le message joueur, affichés à la table au
+    # rechargement.
     fusion: list[Message] = []
     for m in out:
         if not (m.content or "").strip() and not m.tool_calls:
@@ -145,7 +190,13 @@ def _normaliser_messages(messages: list[Message]) -> list[Message]:
             and not m.tool_calls
         ):
             sep = "\n\n" if precedent.content and m.content else ""
-            precedent.content = (precedent.content or "") + sep + (m.content or "")
+            fusion[-1] = Message(
+                role=precedent.role,
+                content=(precedent.content or "") + sep + (m.content or ""),
+                tool_calls=precedent.tool_calls,
+                tool_call_id=precedent.tool_call_id,
+                name=precedent.name,
+            )
             continue
         fusion.append(m)
     return fusion
@@ -271,6 +322,16 @@ class OllamaClient:
         raw_content = msg.get("content", "") or ""
         if raw_content != content:
             _log.info("thinking stripped: %d → %d chars", len(raw_content), len(content))
+        # Qwen + llama.cpp --jinja : le raisonnement peut arriver séparément
+        # dans `reasoning_content`. Si TOUTE la réponse y est passée (content
+        # vide), on le trace — l'orchestrateur relancera (narration vide).
+        reasoning = str(msg.get("reasoning_content") or "")
+        if not content and reasoning:
+            _log.info(
+                "réponse thinking-only : %d chars dans reasoning_content, "
+                "content vide — relance corrective à prévoir",
+                len(reasoning),
+            )
         return ChatResult(
             content=content,
             tool_calls=msg.get("tool_calls", []) or [],
@@ -379,22 +440,24 @@ class OllamaClient:
                     if not content:
                         continue
                     dernier_token = time.monotonic()
-                    # Machine à états : détecter `<|channel>thought` et `<channel|>`
+                    # Machine à états : détecter les blocs thinking (Gemma
+                    # `<|channel>thought...<channel|>` ET Qwen `<think>...
+                    # </think>`) et ne yielder que le texte visible.
                     think_buf += content
                     if in_think:
                         # Chercher la fin du bloc thinking
-                        idx = think_buf.find("<channel|>")
-                        if idx >= 0:
+                        fin = _fin_thinking(think_buf)
+                        if fin >= 0:
                             in_think = False
-                            think_buf = think_buf[idx + len("<channel|>"):]
+                            think_buf = think_buf[fin:]
                         continue
                     # Chercher le début du bloc thinking
-                    think_idx = think_buf.find("<|channel>thought")
-                    if think_idx >= 0:
+                    deb = _debut_thinking(think_buf)
+                    if deb >= 0:
                         in_think = True
                         # Yield le contenu avant le thinking
-                        before = think_buf[:think_idx]
-                        think_buf = think_buf[think_idx:]
+                        before = think_buf[:deb]
+                        think_buf = think_buf[deb:]
                         if before:
                             yield before
                         continue

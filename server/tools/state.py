@@ -9,10 +9,13 @@ directement dans l'état.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Optional
 
 from ..game.state import PartyState
 from .base import ToolContext, ToolResult, tool
+
+_log = logging.getLogger("dnd35.state")
 
 
 def _party(ctx: ToolContext) -> PartyState:
@@ -41,6 +44,12 @@ def _combattant_mort(etat: dict, nom: str) -> bool:
         if _nom_normalise(mo.get("nom")) == nn:
             return "Détruit" in (mo.get("conditions") or [])
     return True
+
+
+# Plafond de créatures par `engager_combat` : un appel listant 10+ monstres
+# produit des rencontres sans équilibre (zoo de 11 créatures contre 4 PJ
+# niv. 1 observé en e2e). Au-delà du plafond, on exige des vagues cohérentes.
+_MAX_MONSTRES_ENGAGEMENT = 6
 
 
 def _prochain_vivant(etat: dict, ordre: list[dict], idx: int) -> int:
@@ -190,26 +199,45 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     """
     import random
 
-    from .monstres import _find_monstre, _load_bestiaire, _suggestions
+    from .monstres import (
+        _find_monstre_strict, _load_bestiaire, _suggestions,
+    )
 
     noms = [n.strip() for n in monstres.split(",") if n.strip()]
     if not noms:
         return ToolResult(text="❌ Donne au moins un nom de monstre.")
 
+    # ── PLAFOND DE RENCONTRE ────────────────────────────────────────────
+    # Au-delà du plafond, exigence de vagues cohérentes avec la scène : un
+    # unique appel doit décrire une rencontre JOUABLE, pas un Zoo du bestiaire.
+    if len(noms) > _MAX_MONSTRES_ENGAGEMENT:
+        return ToolResult(text=(
+            f"🚫 **Trop de monstres d'un coup** ({len(noms)} > "
+            f"{_MAX_MONSTRES_ENGAGEMENT}) : c'est injouable et hors "
+            "équilibre. Engage UNIQUEMENT les créatures réellement "
+            f"présentes dans la scène (≤ {_MAX_MONSTRES_ENGAGEMENT}) — "
+            "en plusieurs vagues si la rencontre est censée grandir."
+        ))
+
     # ── VALIDITÉ STRICTE DES MONSTRES ───────────────────────────────────
     # Le MJ ne doit JAMAIS inventer de monstre. On n'accepte que des créatures
-    # du bestiaire officiel (avec description physique ET statistiques).
+    # du bestiaire officiel (avec description physique ET statistiques) dont
+    # TOUS les mots du nom demandé sont couverts par l'entrée (strict : pas de
+    # repli « mot partagé seul » — « Archer gobelin » hors bestiaire est
+    # refusé, pas déguisé en « Gobelin »).
     # Tout nom qui ne résout à AUCUN monstre du bestiaire bloque le combat et
     # affiche les suggestions officielles les plus proches — il est interdit
     # d'engager un combat avec une créature inventée.
     def _bdc(nom: str) -> list[str]:
         best = _load_bestiaire(ctx)
-        return _suggestions(best.get("monstres", {}) or {}, [str(nom or "")])
+        best_monstres = best.get("monstres", {}) or {}
+        return [str(best_monstres[s].get("nom") or s)
+                for s in _suggestions(best_monstres, [str(nom or "")])]
 
     monstres_ok: list[dict[str, Any]] = []
     refus: list[str] = []
     for nom in noms:
-        m = _find_monstre(ctx, nom)
+        m = _find_monstre_strict(ctx, nom)
         if m is None:
             refus.append(nom)
             continue
@@ -233,6 +261,37 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
 
     state = _party(ctx)
     etat = state.load()
+
+    # ── GARDE DE RE-ENGAGEMENT ──────────────────────────────────────────
+    # `engager_combat` OUVRE un combat : il réécrit initiative/monstres_combat/
+    # tours. Si un combat est DÉJÀ en cours avec des combattants vivants, un
+    # second appel écraserait l'état et le combat ne se clôturerait JAMAIS
+    # (observé avec Qwen : le MJ « re-engage » des gobelins frais au lieu de
+    # finir — la clôture automatique ne déclenche jamais). Renforts d'une
+    # scène en cours → `combat_ajouter_combattant`. On n'autorise un nouvel
+    # engagement en phase combat que si TOUS les monstres déjà engagés sont à
+    # terre (nouvelle vague légitime après résolution).
+    if etat.get("phase") == "combat":
+        vivants = [
+            mo for mo in (etat.get("monstres_combat") or [])
+            if int(mo.get("pv", 0) or 0) > 0
+            and not any(
+                c in (mo.get("conditions") or [])
+                for c in ("Détruit", "Detruit")
+            )
+        ]
+        if vivants:
+            noms_vivants = ", ".join(
+                str(v.get("nom", "?")) for v in vivants[:5]
+            )
+            return ToolResult(text=(
+                "⛔ **Combat déjà en cours** : des ennemis sont encore "
+                f"debout ({noms_vivants}). `engager_combat` OUVRE un nouveau "
+                "combat — il réécrirait l'initiative au lieu de clôturer. "
+                "Terminez d'abord la rencontre actuelle (tuez les ennemis ou "
+                "appelez `finir_combat`) ; pour un renfort PENDANT le combat, "
+                "utilisez `combat_ajouter_combattant`."
+            ))
 
     # ── GARDE DE DIFFICULTÉ (conformité DMG 3.5) ────────────────────────
     # Une créature dont le FP dépasse largement le niveau du groupe produit
@@ -290,6 +349,63 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
                 + ", ".join(n for _, n, _ in candidats[:10]) + "._"
             )
         return ToolResult(text="\n".join(lignes_fp))
+
+    # ── GOUVERNEUR DE TAILLE (même logique que les renforts) ──────────
+    # Le plafond FP n'exclut pas les créatures à gros HP (Plasme FP 7 =
+    # 97 PV contre un groupe niv.1 ~27 PV) : le combat devient intouchable
+    # et la partie est décimée (observé en e2e : Lamie+Oxydeur+Plasme). On
+    # refuse toute nouvelle vague dont les PV cumulés dépassent la capacité
+    # du groupe (2,5× PV totaux, min 30).
+    pv_groupe = sum(
+        int(str(p.get("pv_max") or 0))
+        for p in (etat.get("pj") or []) if int(str(p.get("pv_max") or 0)) > 0
+    ) or (len(etat.get("pj") or []) * 10)
+    plafond_pv = max(int(2.5 * max(pv_groupe, 1)), 30)
+    somme_pv = 0
+    for m in monstres_ok:
+        try:
+            somme_pv += max(0, int(str(m.get("pv", "0")).strip().split("(")[0]))
+        except (ValueError, TypeError):
+            continue
+    if somme_pv > plafond_pv:
+        from .monstres import _load_bestiaire
+        best = _load_bestiaire(ctx)
+        candidats: list[tuple[float, str, str]] = []
+        for cle2, m2 in (best.get("monstres") or {}).items():
+            if not isinstance(m2, dict):
+                continue
+            cr2 = _cr_numerique(m2.get("fp"))
+            if cr2 is None or cr2 <= 0:
+                continue
+            try:
+                pv2 = max(0, int(str(m2.get("pv", "0")).strip().split("(")[0]))
+            except (ValueError, TypeError):
+                continue
+            if pv2 <= 0 or pv2 > plafond_pv:
+                continue
+            candidats.append(
+                (abs(cr2 - float(niveau_ref)), str(m2.get("nom") or cle2),
+                 str(m2.get("fp") or "?"))
+            )
+        candidats.sort()
+        lignes_taille = [
+            f"🚫 **Rencontre écrasante refusée** : {somme_pv} PV cumulés "
+            f"contre {pv_groupe} PV pour le groupe (plafond : {plafond_pv}, "
+            "2,5×). Le combat serait invictable et long à mort.",
+            "Réduis à des créatures adaptées (PV cumulés ≤ "
+            f"{max(8, plafond_pv - 10)}) ou scrute le scénario pour des vagues "
+            "cohérentes :",
+        ]
+        if candidats:
+            lignes_taille.append(
+                "_Créatures jouables : "
+                + ", ".join(f"{n} (FP {fp})" for _, n, fp in candidats[:8]) + "._"
+            )
+        lignes_taille.append(
+            "_Rappel : `engager_combat` ne doit PAS créer volontairement une "
+            "rencontre sans espoir pour les PJ._"
+        )
+        return ToolResult(text="\n".join(lignes_taille))
 
     participants: list[dict] = []
     monstres_combat: list[dict] = []
@@ -689,7 +805,9 @@ async def combat_ajouter_combattant(
     """
     import random
 
-    from .monstres import _find_monstre_with_fallback
+    from .monstres import (
+        _find_monstre_strict, _load_bestiaire, _suggestions,
+    )
 
     state = _party(ctx)
     etat = state.load()
@@ -702,23 +820,48 @@ async def combat_ajouter_combattant(
             )
         )
 
-    # Stats du bestiaire (PV/CA/INIT) si le monstre y figure — les créatures
-    # INVOQUÉES par magie (Invocation de monstre I-IX, squelette animé, …)
-    # sont suivies avec leurs propres PV et n'ont pas besoin de figurer dans
-    # le bestiaire ni de description physique.
-    m = _find_monstre_with_fallback(ctx, nom)
+    # Stats du bestiaire (PV/CA/INIT) si le monstre y figure. Résolution
+    # STRICTE : pas de repli « mot partagé seul » ni de monstre générique —
+    # un renfort/invoquation doit être une créature officielle du bestiaire.
+    m = _find_monstre_strict(ctx, nom)
+    if m is None:
+        best = _load_bestiaire(ctx)
+        best_monstres = best.get("monstres", {}) or {}
+        sugg = [str(best_monstres[s].get("nom") or s)
+                for s in _suggestions(best_monstres, [str(nom or "")])]
+        lignes = [f"⛔ **« {nom} » hors bestiaire officiel 3.5 :** refusé."]
+        if sugg:
+            lignes.append(
+                "_Monstres officiels les plus proches : "
+                + ", ".join(sugg) + "._"
+            )
+        lignes.append(
+            "Il est INTERDIT d'invoquer une créature inventée (sans stats "
+            "officielles) — rejoue avec un nom du bestiaire."
+        )
+        return ToolResult(text="\n".join(lignes))
     label_base = str((m or {}).get("nom") or nom).strip() or nom
 
     # Désambiguïsation vs les combattants DÉJÀ sur le plateau (homonymes).
-    existants = [str(e.get("nom", "")) for e in etat["initiative"]]
-    vus: dict[str, int] = {}
-    for n in existants:
-        cle = n.strip().lower()
-        vus[cle] = vus.get(cle, 0) + 1
-    cle_base = label_base.lower()
-    label = label_base if vus.get(cle_base, 0) == 0 else (
-        f"{label_base} ({vus[cle_base] + 1})"
-    )
+    # ⚠️ La base n'est PAS le label nu : il faut indexer les noms déjà
+    # suffixés. L'ancien code comptait `vus[base]` — toujours 1 dès qu'un
+    # homonyme existe → chaque nouvel ajout retombait sur le MÊME
+    # « (2) » (doublons exacts observés en e2e, cibles injouables).
+    existants = [str(e.get("nom", "")).strip() for e in etat["initiative"]]
+    import re as _re
+    base_cle = label_base.strip().lower()
+    dernier = 0
+    for ex in existants:
+        exl = ex.strip().lower()
+        if exl == base_cle:
+            dernier = max(dernier, 1)
+        else:
+            m_sfx = _re.fullmatch(
+                _re.escape(base_cle) + r"\s*\(\s*(\d+)\s*\)", exl
+            )
+            if m_sfx:
+                dernier = max(dernier, int(m_sfx.group(1)))
+    label = label_base if dernier == 0 else f"{label_base} ({dernier + 1})"
 
     # Initiative : valeur fournie, sinon 1d20 + mod bestiaire.
     mod = 0
@@ -761,6 +904,35 @@ async def combat_ajouter_combattant(
         }
     if allie:
         monstre_entry["allie"] = True
+    # ⚖️ Gouverneur de difficulté sur les renforts ENNEMIS : le LLM-DM
+    # invoquait en pleine mêlée des créatures écrasantes (Lamie 58 PV puis
+    # Plasme 97 PV contre un groupe niv.1 = ~31 PV) — combat devenu
+    # infini/invictable et partie décimée. On refuse tant que l'opposition
+    # cumulée engagée reste déraisonnable face au groupe.
+    if not allie and pv_m > 0:
+        pv_groupe = sum(
+            int(str(p.get("pv_max") or 0)) for p in etat.get("pj") or []
+        ) or (len(etat.get("pj") or []) * 10)
+        deja = sum(
+            int(str(mc.get("pv_max") or 0))
+            for mc in etat.get("monstres_combat") or []
+            if not mc.get("allie") and int(str(mc.get("pv_max") or 0)) > 0
+        )
+        plafond = max(int(2.5 * pv_groupe), 30)
+        if deja + max(0, pv_m) > plafond:
+            _log.info(
+                "renfort refusé (%s, %d PV) : opposition cumulée %d/%d "
+                "dépasse la capacité du groupe (%d PV)",
+                label, pv_m, deja + max(0, pv_m), plafond, pv_groupe,
+            )
+            return ToolResult(text=(
+                f"🚫 **RENFORT REFUSÉ** : `{label}` (≈{pv_m} PV) ferait "
+                f"passer l'opposition engagée à {deja + pv_m} PV contre "
+                f"{pv_groupe} PV pour le groupe — écrasant et non jouable "
+                "(plafond : {plafond}). N'invoque PAS ce renfort : raconte "
+                "qu'il reste en embuscade ou que son appel échoue, puis "
+                "continue le combat avec les forces déjà engagées."
+            ))
     etat.setdefault("monstres_combat", []).append(monstre_entry)
 
     err = state.save(etat)

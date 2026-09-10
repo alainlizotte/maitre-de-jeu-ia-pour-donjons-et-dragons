@@ -422,8 +422,20 @@ async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     if err:
         return err
     poids, cat, max_kg = _recalculer_charge(fiche)
+    texte = _format_inventaire(fiche, poids, cat, max_kg)
+    # 🛠️ Nudge : les modèles n'utilisent JAMAIS spontanément les outils
+    # d'écriture (observé en e2e : « je ramasse la clé » → 4× consulter,
+    # inventaire jamais rempli). On rappelle leur existence et la syntaxe.
+    texte += (
+        "\n\n🛠️ POUR MODIFIER cet inventaire, appelle l'un de ces outils "
+        "(une consultation ne suffit pas) : `inventaire_ramasser(nom, "
+        "objet, quantite?, poids?, source?)` pour ramasser · "
+        "`inventaire_ajouter(nom, objet, quantite?, poids?)` · "
+        "`inventaire_retirer(nom, objet, quantite?)` · "
+        "`inventaire_consommer_munition(nom, munition, quantite?)`."
+    )
     return ToolResult(
-        text=_format_inventaire(fiche, poids, cat, max_kg),
+        text=texte,
         state_patch={"pj_updated": nom},
     )
 

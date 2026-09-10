@@ -458,6 +458,9 @@ async def fiche_perso_creer(
     :param histoire (str): court historique/background du perso. Optionnel.
     """
     joueur = _joueur_valide(joueur, ctx)
+    refus_inc = _verrou_incarnation(ctx, nom, joueur)
+    if refus_inc:
+        return refus_inc
     try:
         carac = _parse_json(carac_json, "carac_json")
         sauv = _parse_json(sauvegardes_json, "sauvegardes_json")
@@ -499,7 +502,16 @@ async def fiche_perso_creer(
         "alignement": alignement,
         "histoire": histoire or "",
         "conditions": [],
+        # Champs d'encombrement initialisés (cf. fiche_perso_creer_rapide).
+        "inventaire": [],
+        "poids_transporte": 0,
+        "etat_encumbrance": "Legere",
     }
+    try:
+        from .inventaire import _charge_max as _charge_max_inv
+        fiche["charge_max"] = _charge_max_inv(fiche)
+    except Exception:                                        # noqa: BLE001
+        pass
     try:
         path = _save_fiche(ctx, nom, fiche)
     except ValueError as e:
@@ -562,6 +574,9 @@ async def fiche_perso_creer_rapide(
     import random as _rnd
 
     joueur = _joueur_valide(joueur, ctx)
+    refus = _verrou_incarnation(ctx, nom, joueur)
+    if refus:
+        return refus
 
     # ---- Auto-génération des caractéristiques si non fournies ----
     def _mod(c: int) -> int:
@@ -718,6 +733,12 @@ async def fiche_perso_creer_rapide(
         "alignement": alignement,
         "histoire": "",
         "conditions": [],
+        # Champs d'encombrement initialisés dès la création : les outils
+        # d'inventaire les mettront à jour (sinon ils n'existaient qu'après
+        # la première écriture et l'état restait illisible pour le front).
+        "inventaire": [],
+        "poids_transporte": 0,
+        "etat_encumbrance": "Legere",
         "apparence": {
             "description": apparence or "",
             "sexe": sexe or "",
@@ -726,6 +747,11 @@ async def fiche_perso_creer_rapide(
             "traits_distinctifs": traitsdistinctifs or "",
         },
     }
+    try:
+        from .inventaire import _charge_max as _charge_max_inv
+        fiche["charge_max"] = _charge_max_inv(fiche)
+    except Exception:                                        # noqa: BLE001
+        pass
     try:
         path = _save_fiche(ctx, nom, fiche)
     except ValueError as e:
@@ -820,7 +846,12 @@ async def fiche_perso_recuperer(ctx: ToolContext, nom: str) -> ToolResult:
     """
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
-        return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+        return ToolResult(text=(
+            f"❌ Aucune fiche trouvée pour '{nom}' — ce personnage n'existe "
+            "PAS encore. Crée-le maintenant avec `fiche_perso_creer_rapide` "
+            "(nom, race, classe, joueur) puis tu pourras le consulter ou le "
+            "faire évoluer."
+        ))
     from ..game.xp import ligne_xp_fiche
     return ToolResult(
         text=(
@@ -863,7 +894,12 @@ async def fiche_perso_mettre_a_jour(
     """
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
-        return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+        return ToolResult(text=(
+            f"❌ Aucune fiche trouvée pour '{nom}' — ce personnage n'existe "
+            "PAS encore. Crée-le d'abord avec `fiche_perso_creer_rapide` "
+            "(nom, race, classe, joueur, carac_texte), puis mets à jour ses "
+            "champs."
+        ))
     ancien_nom = str(fiche.get("nom") or "").strip()
 
     try:
@@ -1013,21 +1049,77 @@ def _norm_nom_simple(s: Any) -> str:
 
 _PLACEHOLDER_JOUEUR = re.compile(
     r"^[<{\[(]?\s*(pseudo[_ -]?joueur|nom[_ -]?du[_ -]?joueur|joueur"
-    r"|player|username|your[_ -]?name|<[^>]*>|\{[^}]*\})\s*[>}\])]?$",
+    r"|player|username|utilisateur|user|your[_ -]?name|<[^>]*>|\{[^}]*\})"
+    r"\s*[>}\])]?$",
     re.IGNORECASE,
 )
 
 
 def _joueur_valide(joueur: Any, ctx: ToolContext) -> str:
     """Sanitise le champ `joueur` : un petit LLM recopie parfois le
-    placeholder de la docstring (« <pseudo_joueur> », « {pseudo} »…).
-    Une telle valeur rendrait le verrouillage de tour impossible (plus
-    aucun joueur ne peut agir pour ce PJ). On retombe sur l'émetteur du
-    message (ctx.joueur), sinon chaîne vide (= tour libre)."""
+    placeholder de la docstring (« <pseudo_joueur> », « {pseudo} »…) ou
+    invente une valeur générique (« Utilisateur »).
+
+    Règle d'AUTORITÉ : quand l'appel provient d'une session joueur connue
+    (`ctx.joueur` non vide — tour WebSocket), c'est LUI le propriétaire du
+    personnage créé. Toute valeur distincte fournie par le LLM est écrasée :
+    sinon le verrou de tour de combat attribue le PJ à un joueur fantôme et
+    EXCLUT le vrai joueur (« c'est le tour de X (joué par Utilisateur) »,
+    blocage définitif de partie observé en e2e).
+
+    Sans session connue (REST, tests, scripts), on retombe sur le
+    comportement historique : placeholder → chaîne vide (= tour libre),
+    sinon la valeur fournie."""
+    ctx_j = str(getattr(ctx, "joueur", "") or "").strip()
+    if ctx_j:
+        return ctx_j
     j = str(joueur or "").strip()
     if not j or _PLACEHOLDER_JOUEUR.match(j):
-        return str(getattr(ctx, "joueur", "") or "").strip()
+        return ""
     return j
+
+
+def _verrou_incarnation(ctx: ToolContext, nom: str, joueur: str) -> Optional[ToolResult]:
+    """Verrou « 1 joueur = 1 personnage », actif pendant les VRAIS tours
+    WebSocket (`tour_id` + `joueur` posés par main.py ; inactif en REST/tests
+    pour ne pas casser les scénarios multi-PJ).
+
+    Motif : un LLM zélé crée les fiches des AUTRES pendant le tour d'un
+    joueur (observé en e2e : « Aelin » créée au tour du Clerc → la verrou
+    de tour de combat excluait ensuite la vraie joueuse d'Aelin). Renvoie
+    un ToolResult de refus, ou None si la création peut proceeder."""
+    tour = str(getattr(ctx, "tour_id", "") or "").strip()
+    if not tour or not joueur:
+        return None
+    try:
+        from ..game.state import PartyState            # lazy : évite cycles
+        etat = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id,
+        ).load()
+    except Exception:                                      # noqa: BLE001
+        return None
+    jj = _norm_nom_simple(joueur)
+    nn = _norm_nom_simple(nom)
+    for p in (etat.get("pj") or []):
+        p_nom = str(p.get("nom") or "")
+        p_joueur = str(p.get("joueur") or "")
+        if _norm_nom_simple(p_nom) == nn:
+            if _norm_nom_simple(p_joueur) != jj:
+                return ToolResult(text=(
+                    f"⛔ **{p_nom}** est déjà incarné par « {p_joueur or '?'} » "
+                    "— interdit de recréer le personnage d'un autre joueur. "
+                    "Crée TON personnage (ton propre nom) ou fais évoluer "
+                    "ta fiche via `fiche_perso_mettre_a_jour`."
+                ))
+            # Même joueur + même nom : recréation idempotente (mise à jour).
+            return None
+        if jj and _norm_nom_simple(p_joueur) == jj:
+            return ToolResult(text=(
+                f"⛔ Tu incarnes DÉJÀ **{p_nom}** (1 personnage par joueur). "
+                "Fais évoluer cette fiche via `fiche_perso_mettre_a_jour` "
+                "au lieu d'en créer une autre."
+            ))
+    return None
 
 
 def _infliger_degats_monstre(
@@ -1044,24 +1136,38 @@ def _infliger_degats_monstre(
         return None
     mons = etat.get("monstres_combat") or []
     cn = _norm_nom_simple(nom)
+
+    def _vivant(m: dict) -> bool:
+        if int(m.get("pv", 0) or 0) <= 0:
+            return False
+        conds = (m.get("conditions") or [])
+        return "Détruit" not in conds and "Detruit" not in conds
+
     cible = None
     # Passe 1 : correspondance EXACTE — indispensable pour les homonymes
     # désambiguïsés (« Gobelin (2) ») : sans elle, le prefix-match de la
     # passe 2 redirigerait les dégâts sur le premier « Gobelin ».
-    for m in mons:
-        if _norm_nom_simple(m.get("nom")) == cn:
-            cible = m
-            break
+    # En cas de doublons de labels (labels débuggés/recrées ensemble), on
+    # vise PRIORITAIREMENT une entrée VIVANTE : autrement les dégâts
+    # retombent sur la première occurrence (souvent déjà Détruit) et la
+    # créature vivante ne meurt plus (observé en e2e).
+    matches = [m for m in mons if _norm_nom_simple(m.get("nom")) == cn]
+    cible = next((m for m in matches if _vivant(m)), None)
+    if cible is None and matches:
+        cible = matches[0]
     # Passe 2 : correspondance par préfixe (tolérance aux libellés du LLM).
     if cible is None:
+        matches = []
         for m in mons:
             mn = _norm_nom_simple(m.get("nom"))
             if (
                 (len(cn) >= 4 and mn.startswith(cn))
                 or (len(mn) >= 4 and cn.startswith(mn))
             ):
-                cible = m
-                break
+                matches.append(m)
+        cible = next((m for m in matches if _vivant(m)), None)
+        if cible is None and matches:
+            cible = matches[0]
     if cible is None:
         return None
     if cible.get("inconnu"):

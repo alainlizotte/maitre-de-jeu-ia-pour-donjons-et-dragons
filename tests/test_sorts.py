@@ -75,6 +75,15 @@ GOBELIN = {
     "sauvegardes": {"Vigueur": 3, "Reflexes": 1, "Volonte": 0},
 }
 
+# Fiche « rapide » (creer_rapide) : AUCUN champ sorts — le modèle n'a pas
+# rempli le formulaire de magie. L'incantation verse auto-adopte le sort.
+SORCIER = {
+    "nom": "Zarkon", "race": "Humain", "classe": "Sorcier", "niveau": 1,
+    "carac": {"FOR": 12, "DEX": 13, "CON": 13, "INT": 15, "SAG": 10, "CHA": 8},
+    "pv": 8, "pv_max": 8, "ca": 12, "bab": 0,
+    "sauvegardes": {"Vigueur": 1, "Reflexes": 1, "Volonte": 0},
+}
+
 
 # --------------------------------------------------------------------------- #
 #  Tables d'emplacements
@@ -192,6 +201,39 @@ def test_incanter_emplacements_epuises() -> None:
         _ecrire_fiche(tmp, fiche)
         tr = asyncio.run(incanter_sort(ctx, "Aurora", "Soins légers", "Aurora"))
         assert tr.text.startswith("⛔") and "Plus aucun emplacement" in tr.text
+
+
+def test_incanter_adopte_sort_si_sorts_jamais_configures() -> None:
+    # Fiche rapide (creer_rapide) d'un Sorcier : pas de champ `sorts` du tout →
+    # le sort castable est AUTO-ADOPTÉ à la première incantation (repro e2e :
+    # Zarkon ne pouvait jamais lancer « Mains brûlantes », combat figé).
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = _ctx(tmp)
+        fiche = json.loads(json.dumps(SORCIER))
+        assert "sorts" not in fiche
+        _ecrire_fiche(tmp, fiche)
+        tr = asyncio.run(incanter_sort(ctx, "Zarkon", "Mains brûlantes", "Gobelin"))
+        assert "✨" in tr.text and "Mains brûlantes" in tr.text
+        # Le sort est enregistré comme « connu » (+ le slot niv.1 dépensé).
+        d = json.loads((Path(tmp) / "fiches" / "fiche_zarkon.json").read_text(encoding="utf-8"))
+        connus = d["sorts"]["connus"]
+        assert "Mains brûlantes" in connus
+        assert d["sorts"]["depenses"].get("1") == 1
+        # 2e incantation : toujours autorisé (connu désormais).
+        tr2 = asyncio.run(incanter_sort(ctx, "Zarkon", "Mains brûlantes", "Gobelin"))
+        assert tr2.text.startswith("✨") or "Emplacements" in tr2.text
+
+
+def test_incanter_refuse_sort_hors_liste_configuree() -> None:
+    # Listes CONFIGURÉES (formulaire) → validation stricte, même vide.
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = _ctx(tmp)
+        fiche = json.loads(json.dumps(SORCIER))
+        fiche["sorts"] = {"connus": ["Projectiles magiques"], "prepares": {}, "depenses": {}}
+        # Sorts du sorcier disponibles : garde le niveau (1) castable.
+        _ecrire_fiche(tmp, fiche)
+        tr = asyncio.run(incanter_sort(ctx, "Zarkon", "Mains brûlantes", "Gobelin"))
+        assert tr.text.startswith("⛔") and "sorts connus" in tr.text
 
 
 def test_repos_long_restaure() -> None:

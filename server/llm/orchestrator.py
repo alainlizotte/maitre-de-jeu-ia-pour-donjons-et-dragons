@@ -221,6 +221,27 @@ _SIMULATION_PATTERNS = [
     ),
 ]
 
+# « ✅ Fiche créée pour **X** (...) — Carac : ... » / « ✅ Fiche de X mise à
+# jour : ... » / « ✅ Fiche renommée : ... » : le modèle RÉCITE la sortie d'un
+# outil de fiche (fiche_perso_creer/creer_rapide/mettre_a_jour/renommer) sans
+# l'avoir réellement appelé (observé avec Qwen : « fiche de Zarkon créée »
+# narrée, la fiche n'existe jamais). La reformulation d'un résultat LÉGITIME
+# est exemptée dans run() si l'outil a réellement tourné dans le tour.
+_FICHE_CREATION_PATTERNS = [
+    re.compile(r"✅\s*Fiche\s+(?:créée|creee)\s+pour\b", re.IGNORECASE),
+    re.compile(r"✅\s*Fiche\s+de\s+[^:：]{1,40}\s+mise\s+à\s+jour\s*[:：]", re.IGNORECASE),
+    re.compile(r"✅\s*Fiche\s+renommée\s*:", re.IGNORECASE),
+]
+
+# Outils qui ÉCRIVENT réellement une fiche : leur présence dans la trace
+# légitime la reformulation de leur résultat (exemption de _FICHE_CREATION_PATTERNS).
+_FICHE_ECRITURE_TOOLS = {
+    "fiche_perso_creer",
+    "fiche_perso_creer_rapide",
+    "fiche_perso_mettre_a_jour",
+    "fiche_perso_renommer",
+}
+
 # Dégâts narrés en prose ("inflige 12 points de dégâts", "subit 5 dégâts") sans
 # appel de lancer_degats. Séparé de _SIMULATION_PATTERNS car la reformulation
 # d'un résultat de tool LÉGITIME utilise la même tournure : on ne l'active que
@@ -295,6 +316,7 @@ def looks_like_simulation(
     text: str,
     include_damage: bool = True,
     include_checks: bool = True,
+    include_creation: bool = True,
 ) -> Optional[str]:
     """Renvoie le fragment de simulation trouvé, ou None.
 
@@ -303,6 +325,8 @@ def looks_like_simulation(
     résultat ("La créature subit 7 dégâts") est alors légitime.
     `include_checks=False` désactive pareillement les patterns de jets de
     caractéristique/compétence en prose (« jet de Force pour… »).
+    `include_creation=False` désactive la détection des « ✅ Fiche créée… »
+    narrés — utilisé quand un outil d'écriture de fiche a réellement tourné.
     """
     if not text:
         return None
@@ -311,6 +335,8 @@ def looks_like_simulation(
         pats += _DAMAGE_PROSE_PATTERNS
     if include_checks:
         pats += _CHECK_PROSE_PATTERNS
+    if include_creation:
+        pats += _FICHE_CREATION_PATTERNS
     for pat in pats:
         m = pat.search(text)
         if m:
@@ -390,6 +416,42 @@ def trouve_repetition(
             if overlap >= _REPET_SEUIL_CHEVAUCHEMENT:
                 return ref[:120]
     return None
+
+
+# --------------------------------------------------------------------------- #
+#  Dégénérescence INTRA-réponse : le modèle boucle sur ses propres phrases
+#  (observé en e2e : « la grande hache de groth s'abat… » recopiée N fois,
+#  réponses de plusieurs milliers de tokens qui épuisent le budget du tour).
+#  On tronque dès la 3e occurrence d'une même phrase — les relances voient
+#  alors un contexte propre au lieu d'un monstre de texte dégénéré.
+# --------------------------------------------------------------------------- #
+_DEGEN_MIN_MOTS = 6          # phrase significative (pas « Et puis. »)
+_DEGEN_OCCURRENCES = 3       # seuil de boucle
+
+
+def tronquer_degeneration(texte: str) -> tuple[str, str]:
+    """Renvoie (texte_tronqué, phrase_en_boucle). Si aucune phrase d'au moins
+    `_DEGEN_MIN_MOTS` mots (normalisée) ne revient `_DEGEN_OCCURRENCES` fois,
+    renvoie (texte, "") — texte intact."""
+    if not texte:
+        return texte, ""
+    phrases = [p for p in re.split(r"(?<=[.!?…])\s+|\n+", texte) if p.strip()]
+    compteur: dict[str, int] = {}
+    for i, p in enumerate(phrases):
+        cle = _normalise_pour_compare(p)
+        if len(cle.split()) < _DEGEN_MIN_MOTS:
+            continue
+        compteur[cle] = compteur.get(cle, 0) + 1
+        if compteur[cle] >= _DEGEN_OCCURRENCES:
+            # Garde le texte jusqu'AVANT la 3e occurrence de la phrase.
+            coupe = " ".join(x.strip() for x in phrases[:i]).strip()
+            _log.warning(
+                "dégénérescence intra-réponse détectée (« %s… » ×%d) — "
+                "troncature %d → %d chars",
+                cle[:60], compteur[cle], len(texte), len(coupe),
+            )
+            return coupe, cle[:80]
+    return texte, ""
 
 
 # --------------------------------------------------------------------------- #
@@ -1070,6 +1132,60 @@ EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
 """Hook async pour émettre des events aux clients (image, status, deltas...)."""
 
 
+# --------------------------------------------------------------------------- #
+#  Confusion escalier — « descendre l'escalier » interprété comme un
+#  déplacement cardinal. Régression observée avec un modèle RP finetuné qui
+#  ignore le rappel prompt : le groupe RESSORTAIT de la salle d'escaliers
+#  (`explorer(sud)`) au lieu de changer d'étage. Détection d'intention sur le
+#  dernier message joueur + réécriture `explorer` → `carte_donjon_etage`.
+# --------------------------------------------------------------------------- #
+_INTENT_DESCENDRE_RE = re.compile(
+    r"(descend\w*|sous-?sol\b|[eé]tage\s+(?:inf[ée]rieur|en\s+dessous|du\s+dessous)|"
+    r"niveau\s+(?:inf[ée]rieur|en\s+dessous)|vers\s+le\s+bas\b|plus\s+bas\b)",
+    re.IGNORECASE,
+)
+_INTENT_MONTER_RE = re.compile(
+    r"(\b(?:monte|montes|montons|montez|monter|montant|mont[ée]e|mont[ée]es)\b|"
+    r"\bremont\w*|[eé]tage\s+(?:sup[ée]rieur|au-?dessus|du\s+dessus)|"
+    r"niveau\s+(?:sup[ée]rieur|au-?dessus)|rez-?de-?chauss[eé]e|"
+    r"vers\s+le\s+haut\b|plus\s+haut\b|\bsurface\b)",
+    re.IGNORECASE,
+)
+
+# 💰 Budget d'appels par OUTIL et par TOUR de joueur : au-delà, `_run_one_tool`
+# refuse l'exécution (le modèle bouclait 17-32× sur `fiche_perso_mettre_a_jour`
+# ou `inventaire_consulter`, brûlant des minutes et saturant num_ctx).
+# Calibré large pour ne gêner aucun tour légitime (multi-attaques, jets groupés).
+_BUDGET_OUTILS_TOUR: dict[str, int] = {
+    "fiche_perso_creer_rapide": 1,   # un seul personnage par tour
+    "fiche_perso_creer": 1,
+    "fiche_perso_mettre_a_jour": 4,
+    "fiche_perso_recuperer": 3,
+    "inventaire_consulter": 2,
+    "inventaire_ajouter": 3,
+    "carte_donjon_get": 1,
+    "carte_joueurs_get": 2,
+    "monstre_consulter": 3,
+    "lancer_attaque": 6,
+    "lancer_degats": 6,
+    "lancer_sauvegarde": 6,
+    "lancer_d20": 8,
+    "etat_partie_get": 3,
+}
+_BUDGET_DEFAUT = 6
+
+# Outils qui exigent que la fiche du personnage EXISTE déjà — quand le LLM
+# boucle dessus pour un perso jamais créé, on débloque par création auto.
+_TOOLS_FICHE_EXIGEANTE = ("fiche_perso_mettre_a_jour", "fiche_perso_recuperer")
+_RATTRAPAGE_FICHE_ABSENTE_MIN = 2  # échecs « fiche absente » pour le MÊME nom
+
+
+def _nom_fiche_absente(texte: str) -> Optional[str]:
+    """Extrait le nom de la fiche visée par un message « Aucune fiche ... »."""
+    m = re.search(r"Aucune fiche trouvée pour '([^']+)'", texte)
+    return m.group(1) if m else None
+
+
 @dataclass
 class OrchestratedResult:
     narration: str = ""
@@ -1081,6 +1197,12 @@ class OrchestratedResult:
     # Trace lisible des appels d'outils effectifs — diagnostic & logs.
     # Liste de dicts {name, args, ok, text} alimentée par _run_one_tool.
     tool_calls_trace: list[dict[str, Any]] = field(default_factory=list)
+    # Compteur de refus par budget (% tour) : au-delà d'un seuil on coupe
+    # la boucle d'outils (Q4 re-tente sans cesse un outil refusé, brûlant
+    # des minutes : 23 inventaire_consulter dont 21 refusés en un tour).
+    refus_budget: int = 0
+    # True dès que les outils sont retirés du tour (narration forcée).
+    narration_forcee: bool = False
 
 
 class Orchestrator:
@@ -1187,17 +1309,69 @@ class Orchestrator:
 
         # OpenAI impose : si tools non vides, tool_choice = "auto" sauf si
         # l'on veut forcer un appel. On laisse "auto".
+        corrections_vues = -1
         for _ in range(self.max_iterations):
             result.iterations += 1
             use_native = self.tool_mode in ("native", "auto")
             tools_arg = schemas if use_native else None
-            chat = await self.client.chat(work, tools=tools_arg, tool_choice="auto" if use_native else None)
+            # ⚡ Blocage anti-boucle budget : le modèle (Q4 en particulier) a
+            # re-tenté ≥3 fois des outils refusés par le quota. On retire les
+            # outils pour ce tour et on force une narration unique — sinon il
+            # brûle des minutes à ré-émettre le même appel (tour observé : 23
+            # inventaire_consulter dont 21 refusés = 5+ appels LLM inutiles).
+            consequences_budget = (
+                result.refus_budget >= 3 or result.narration_forcee
+            )
+            if consequences_budget:
+                use_native = False
+                tools_arg = None
+                if not result.narration_forcee:
+                    result.narration_forcee = True
+                    # Plus de correction de simulation : tout doit finir en
+                    # narration dans cet appel unique.
+                    result.corrections = max(result.corrections, 2)
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "⚠️ CORRECTION BUDGET : 3 appels d'outils ont été "
+                            "REFUSÉS ce tour par la limite anti-boucle du "
+                            "serveur. Arrête IMMÉDIATEMENT de rappeler des "
+                            "outils — ils sont désactivés pour ce tour. "
+                            "Rédige MAINTENANT la narration finale de "
+                            "l'action, en exploitant les résultats d'outils "
+                            "déjà obtenus ci-dessus (sans inventer de "
+                            "nouveaux jets)."
+                        ),
+                    ))
+            # Après une correction injectée, la relance part à basse
+            # température : à 0.75 le sampling réinvente la même boucle
+            # (répétitions observées en e2e avec Qwen standard).
+            temp_relance = 0.35 if result.corrections > corrections_vues else None
+            corrections_vues = result.corrections
+            chat = await self.client.chat(
+                work, tools=tools_arg,
+                tool_choice="auto" if use_native else None,
+                temperature=temp_relance,
+            )
+
+            # --- Bter2. Troncature de dégénérescence intra-réponse -------
+            # Le modèle boucle sur ses propres phrases : on coupe AVANT tout
+            # traitement (parsing, narration, réinjection au contexte).
+            if chat.content:
+                coupe, _motif = tronquer_degeneration(chat.content)
+                if _motif:
+                    chat = ChatResult(
+                        content=coupe,
+                        tool_calls=chat.tool_calls,
+                        finish_reason=chat.finish_reason,
+                        raw=chat.raw,
+                    )
 
             # --- Bbis. Blocs <tool_call> textuels (llama.cpp sans jinja) ----
             # Le backend laisse parfois l'appel dans `content` au lieu de
             # `tool_calls` : on les normalise vers le pipeline natif.
             block_calls, content_clean = extract_toolcall_blocks(chat.content or "")
-            if block_calls:
+            if block_calls and not result.narration_forcee:
                 _log.info(
                     "%d bloc(s) <tool_call> textuel(s) récupéré(s) dans content",
                     len(block_calls),
@@ -1210,7 +1384,7 @@ class Orchestrator:
                 )
 
             # --- B. Mode natif : tool_calls présents -----------------------
-            if chat.tool_calls and use_native:
+            if chat.tool_calls and use_native and not result.narration_forcee:
                 # Contenu nettoyé de toute syntaxe d'appel résiduelle pour ne
                 # pas encourager le modèle à répéter le format en prose.
                 clean_native = strip_narration_artifacts(chat.content or "", self.tools)
@@ -1228,7 +1402,7 @@ class Orchestrator:
             # on l'exécute réellement quel que soit le mode, puis on boucle
             # pour que le modèle narrate le VRAI résultat du tool.
             attr_calls, attr_clean = extract_toolcall_attr_calls(chat.content or "")
-            if attr_calls:
+            if attr_calls and not result.narration_forcee:
                 _log.info(
                     "%d balise(s) <tool_call .../> (attributs XML) récupérée(s) : %s",
                     len(attr_calls),
@@ -1253,7 +1427,7 @@ class Orchestrator:
 
             # --- C. Mode prompt : extraire balises <tool> -------------------
             prompt_calls = parse_prompt_tool_calls(chat.content)
-            if prompt_calls:
+            if prompt_calls and not result.narration_forcee:
                 # On enregistre la réponse nettoyée des balises comme
                 # assistant — le modèle voit sa propre prose SANS la balise,
                 # ce qui évite de le pousser à réécrire du pseudo-code.
@@ -1277,7 +1451,7 @@ class Orchestrator:
             # réellement puis on boucle pour qu'il narrate le VRAI résultat.
             brace_calls, brace_clean = parse_prose_brace_calls(
                 chat.content or "", self.tools)
-            if brace_calls:
+            if brace_calls and not result.narration_forcee:
                 _log.info(
                     "%d appel(s) en bloc accolade récupéré(s) : %s",
                     len(brace_calls),
@@ -1301,7 +1475,7 @@ class Orchestrator:
                 continue
 
             prose_calls, prose_clean = parse_prose_tool_calls(chat.content or "", self.tools)
-            if prose_calls:
+            if prose_calls and not result.narration_forcee:
                 _log.info(
                     "%d appel(s) d'outil récupéré(s) de la prose : %s",
                     len(prose_calls),
@@ -1331,7 +1505,7 @@ class Orchestrator:
             # --- A. Détection de simulation textuelle ----------------------
             # (après B/C/C2 : si un appel réel a été récupéré, ce n'est plus
             # une simulation à corriger — le tour continue avec les résultats.)
-            if self.detect_simulation:
+            if self.detect_simulation and not result.narration_forcee:
                 # Seul un JET DE DÉGÂTS réel (lancer_degats) légitime la
                 # reformulation en prose (« il subit 7 dégâts »). Une attaque
                 # résolue (lancer_attaque) ne prouve PAS que les dégâts aient
@@ -1345,10 +1519,15 @@ class Orchestrator:
                     tc.get("name") in _DICE_TOOL_NAMES
                     for tc in result.tool_calls_trace
                 )
+                fiche_ecrite = any(
+                    tc.get("name") in _FICHE_ECRITURE_TOOLS
+                    for tc in result.tool_calls_trace
+                )
                 sim = looks_like_simulation(
                     chat.content,
                     include_damage=not (damage_rolled or trust_damage_prose),
                     include_checks=not dice_rolled,
+                    include_creation=not fiche_ecrite,
                 )
                 if sim:
                     result.simulation_attempted = True
@@ -1370,6 +1549,21 @@ class Orchestrator:
                                 "; sauvegarde → `lancer_sauvegarde`. Attends "
                                 "le résultat du tool, puis narre l'issue "
                                 "(réussite/échec et conséquences concrètes)."
+                            )
+                        elif any(
+                            p.search(sim) for p in _FICHE_CREATION_PATTERNS
+                        ):
+                            consigne_sim = (
+                                "⚠️ CORRECTION : tu as écrit "
+                                f"« {sim} » — un résultat de création de fiche "
+                                "sans avoir appelé l'outil. C'est interdit : "
+                                "la fiche n'existe PAS réellement. Crée-la "
+                                "MAINTENANT en appelant `fiche_perso_creer_rapide` "
+                                "(nom, race, classe, niveau, carac_texte, "
+                                "pv, ca…) — pour un personnage de joueur, "
+                                "passe aussi `joueur`. Attends le résultat "
+                                "officiel du tool, puis narre l'issue de sa "
+                                "création."
                             )
                         else:
                             consigne_sim = (
@@ -1462,10 +1656,15 @@ class Orchestrator:
                     tc.get("name") in _DICE_TOOL_NAMES
                     for tc in result.tool_calls_trace
                 )
+                fiche_ecrite_final = any(
+                    tc.get("name") in _FICHE_ECRITURE_TOOLS
+                    for tc in result.tool_calls_trace
+                )
                 sim_final = looks_like_simulation(
                     narration,
                     include_damage=not (damage_rolled or trust_damage_prose),
                     include_checks=not dice_rolled_final,
+                    include_creation=not fiche_ecrite_final,
                 )
                 if sim_final:
                     result.simulation_attempted = True
@@ -1482,6 +1681,27 @@ class Orchestrator:
                         "simulation dans narration streamée (« %s », correction %d) — relance",
                         sim_final, result.corrections,
                     )
+                    if any(
+                        p.search(sim_final) for p in _FICHE_CREATION_PATTERNS
+                    ):
+                        work.append(Message(
+                            role="system",
+                            content=(
+                                "⚠️ CORRECTION : ta narration contient "
+                                f"« {sim_final} » — un résultat de fiche narré "
+                                "à la main. C'est interdit : la fiche n'existe "
+                                "PAS tant que l'outil n'a pas été réellement "
+                                "appelé. Recommence ce tour : appelle "
+                                "`fiche_perso_creer_rapide` (ou "
+                                "`fiche_perso_creer` pour la fiche complète) "
+                                "avec nom, race, classe, niveau, carac_texte, "
+                                "pv, ca — et `joueur` pour un personnage de "
+                                "joueur — attends le résultat officiel du "
+                                "tool, puis raconte la scène à partir de ce "
+                                "résultat."
+                            ),
+                        ))
+                        continue
                     work.append(Message(
                         role="system",
                         content=(
@@ -1686,6 +1906,76 @@ class Orchestrator:
             return ""
 
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _intention_escalier(work: list[Message]) -> Optional[str]:
+        """Détecte dans le DERNIER message joueur une intention « monter »
+        ou « descendre » un escalier. Renvoie "monter" | "descendre" | None
+        (None si absent ou ambigu — les deux directions détectées)."""
+        dernier_user = ""
+        for m in reversed(work):
+            if m.role == "user":
+                dernier_user = m.content or ""
+                break
+        if not dernier_user:
+            return None
+        descendre = bool(_INTENT_DESCENDRE_RE.search(dernier_user))
+        monter = bool(_INTENT_MONTER_RE.search(dernier_user))
+        if descendre and not monter:
+            return "descendre"
+        if monter and not descendre:
+            return "monter"
+        return None
+
+    async def _rediriger_escalier(
+        self,
+        resolved: str,
+        args: dict[str, Any],
+        ctx: ToolContext,
+        work: list[Message],
+    ) -> tuple[str, dict[str, Any], Optional[str]]:
+        """Garde-fou « escalier » (indépendant du modèle) : si le groupe est
+        dans une salle escaliers, que le joueur demande monter/descendre et
+        que le modèle appelle `carte_donjon_explorer` (confusion « descendre
+        l'escalier » ↔ « aller au sud »), l'appel est réécrit en
+        `carte_donjon_etage(direction=…)` AVANT exécution. Renvoie
+        (nom_résolu, args, note_système éventuelle)."""
+        if resolved != "carte_donjon_explorer":
+            return resolved, args, None
+        intention = self._intention_escalier(work)
+        if not intention:
+            return resolved, args, None
+        try:
+            from ..tools.cartes import _TYPES_ESCALIER, _grille_vers_dict
+            etat = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+            ).load()
+            donjon = etat.get("donjon") or {}
+            if not donjon.get("id"):
+                return resolved, args, None
+            courant = list(donjon.get("courant", [0, 0]))
+            cx, cy = int(courant[0]), int(courant[1])
+            salles = _grille_vers_dict(donjon.get("grille", []))
+            cour = salles.get((cx, cy)) or {}
+            if (cour.get("type") or "").strip().lower() not in _TYPES_ESCALIER:
+                return resolved, args, None
+        except Exception:                                    # noqa: BLE001
+            return resolved, args, None
+        _log.warning(
+            "confusion escalier : carte_donjon_explorer(%s) appelé depuis "
+            "une salle escaliers avec intention joueur « %s » → réécrit "
+            "en carte_donjon_etage(direction=%s)",
+            args.get("direction"), intention, intention,
+        )
+        note = (
+            "ℹ️ SYSTÈME : ton appel `carte_donjon_explorer` a été RÉÉCRIT "
+            f"en `carte_donjon_etage(direction=\"{intention}\")` — le "
+            f"joueur voulait {intention} l'escalier, PAS se déplacer dans "
+            "une direction cardinale. Narre le CHANGEMENT D'ÉTAGE d'après "
+            "le résultat officiel ci-dessous."
+        )
+        return "carte_donjon_etage", {"direction": intention}, note
+
+    # ------------------------------------------------------------------ #
     async def _exec_tool_calls(
         self,
         tool_calls: list[dict[str, Any]],
@@ -1719,10 +2009,15 @@ class Orchestrator:
                     + ", ".join(sorted(self.tools.keys())),
                 )
                 continue
+            resolved, args, note_esc = await self._rediriger_escalier(
+                resolved, args, ctx, work,
+            )
             spec = self.tools[resolved]
             args, notes = sanitize_tool_args(spec, args)
             tr = await self._run_one_tool(spec, ctx, args, on_event, result)
             extra = f"\nℹ️ {'; '.join(notes)}" if notes else ""
+            if note_esc:
+                extra = f"\n{note_esc}" + extra
             work.append(Message(
                 role="tool",
                 name=resolved,
@@ -1754,10 +2049,15 @@ class Orchestrator:
                     ),
                 ))
                 continue
+            resolved, args, note_esc = await self._rediriger_escalier(
+                resolved, args, ctx, work,
+            )
             spec = self.tools[resolved]
             args, notes = sanitize_tool_args(spec, args)
             tr = await self._run_one_tool(spec, ctx, args, on_event, result)
             extra = f"\nℹ️ {'; '.join(notes)}" if notes else ""
+            if note_esc:
+                extra = f"\n{note_esc}" + extra
             work.append(Message(
                 role="tool",
                 name=resolved,
@@ -1794,15 +2094,90 @@ class Orchestrator:
         args: dict[str, Any],
         on_event: Optional[EventCallback],
         result: OrchestratedResult,
+        hors_budget: bool = False,
     ) -> ToolResult:
         """Exécute un tool, relaye ses events, agrège le patch d'état."""
+        # 💰 Budget par tour : borne le spam d'outils observé en e2e
+        # (17-32 appels `fiche_perso_mettre_a_jour` dans un même tour = des
+        # minutes perdues et un contexte saturé). Au-delà du quota, l'outil
+        # n'est PAS exécuté : le modèle reçoit un refus et doit narrer.
+        # Les rattrapages SERVEUR (`execute_tool_direct`) passent hors budget.
+        if not hors_budget:
+            quota = _BUDGET_OUTILS_TOUR.get(spec.name, _BUDGET_DEFAUT)
+            # Seuls les SUCCÈS consomment le quota : après un appel en
+            # erreur le modèle doit pouvoir REESSAYER (observé en e2e :
+            # 1er creer_rapide en erreur → retry bloqué → fiche jamais créée).
+            deja = sum(
+                1 for tc in result.tool_calls_trace
+                if tc.get("name") == spec.name and tc.get("ok")
+            )
+            if deja >= quota:
+                result.tool_calls_trace.append({
+                    "name": spec.name,
+                    "args": args,
+                    "ok": False,
+                    "text": "🚫 budget tour atteint",
+                })
+                result.refus_budget += 1
+                _log.warning(
+                    "budget tour atteint pour %s (%d/%d) — refus",
+                    spec.name, deja, quota,
+                )
+                return ToolResult(text=(
+                    f"🚫 **LIMITE ATTEINTE** : `{spec.name}` a déjà été "
+                    f"appelé {deja}× ce tour (quota : {quota}). N'appelle "
+                    "PLUS cet outil — exploite les résultats déjà obtenus "
+                    "ci-dessus et produis ta narration finale pour le "
+                    "joueur."
+                ))
         # On attache le callback temps-réel au ctx pour que les tools puissent
         # émettre des events en live (ex : « ⏳ Génération image en cours »).
         ctx.on_event = on_event
         args_log = json.dumps(args, ensure_ascii=False, default=str)[:200]
         _log.info("tool_call name=%s args=%s", spec.name, args_log)
         tr = await invoke_tool(spec, ctx, args)
-        ok = not tr.text.startswith("❌")
+        # ok = succès : ni message d'erreur ❌, ni REFUS de verrou ⛔ (les refus
+        # ⛔ du verrou d'incarnation déclenchent une RETENTATIVE du LLM — on ne
+        # doit PAS les compter comme succès : le budget `creer_rapide` est 1 et
+        # un refus bloquerait la création du perso du joueur courant, observé
+        # en e2e : Zarkon ne pouvait jamais se créer car le tour gaspillait son
+        # seul appel à recréer Groth (⛔), consommé comme un succès).
+        ok = not (tr.text.startswith("❌") or tr.text.startswith("⛔"))
+
+        # --- Rattrapage « fiche absente » -------------------------------
+        # Le LLM boucle sur `fiche_perso_mettre_a_jour` / `fiche_perso_recuperer`
+        # pour un personnage qui n'a JAMAIS été créé : chaque erreur le relance
+        # sur le même outil (observé avec Qwen3.5-9B-Q5 : 8-12 appels identiques,
+        # tour figé, fiche jamais créée). Après N échecs pour le MÊME nom, on
+        # CRÉE automatiquement la fiche (caractéristiques tirées) pour débloquer
+        # le tour), puis on rejoue l'appel d'origine (la mise à jour réussit).
+        if (not hors_budget and not ok and spec.name in _TOOLS_FICHE_EXIGEANTE
+                and "Aucune fiche trouvée pour '" in tr.text):
+            nom_m = _nom_fiche_absente(tr.text)
+            # `_compte_fiches_absentes` lit les échecs DÉJÀ tracés (l'appel
+            # courant n'est ajouté qu'après) : on déclenche dès `MIN - 1`
+            # échecs antérieurs pour le même nom (= MIN échecs au total).
+            if nom_m and self._compte_fiches_absentes(
+                    result, nom_m) >= _RATTRAPAGE_FICHE_ABSENTE_MIN - 1:
+                _log.warning(
+                    "rattrapage fiche absente : création auto de '%s' "
+                    "(%d échecs)", nom_m,
+                    self._compte_fiches_absentes(result, nom_m))
+                if await self._rattraper_fiche_absente(ctx, nom_m, on_event):
+                    tr2 = await self._run_one_tool(
+                        spec, ctx, args, on_event, result, hors_budget=True)
+                    tr = ToolResult(
+                        text=(
+                            f"ℹ️ **Rattrapage serveur** : « {nom_m} » n'avait "
+                            "aucune fiche — le serveur vient d'en créer une "
+                            "(caractéristiques tirées au hasard). Complète-le "
+                            "si besoin, puis poursuis.\n" + tr2.text
+                        ),
+                        events=tr2.events + tr.events,
+                        state_patch=tr2.state_patch or tr.state_patch,
+                    )
+                    ok = not tr2.text.startswith("❌")
+
         result.tool_calls_trace.append({
             "name": spec.name,
             "args": args,
@@ -1835,6 +2210,32 @@ class Orchestrator:
         return tr
 
     # ------------------------------------------------------------------ #
+    def _compte_fiches_absentes(self, result: OrchestratedResult, nom: str) -> int:
+        """Échecs « Aucune fiche trouvée » déjà tracés pour `nom` dans le tour."""
+        return sum(
+            1 for tc in result.tool_calls_trace
+            if not tc.get("ok")
+            and f"Aucune fiche trouvée pour '{nom}'" in (tc.get("text") or "")
+        )
+
+    async def _rattraper_fiche_absente(
+        self, ctx: ToolContext, nom: str, on_event: Optional[EventCallback],
+    ) -> bool:
+        """Crée la fiche manquante (caractéristiques tirées) via
+        `fiche_perso_creer_rapide`, hors budget et sans trace polluante."""
+        try:
+            spec_creer = self.tools.get("fiche_perso_creer_rapide")
+            if spec_creer is None:
+                return False
+            tr = await self._run_one_tool(
+                spec_creer, ctx,
+                {"nom": nom, "carac_texte": "", "joueur": ""},
+                on_event, OrchestratedResult(), hors_budget=True,
+            )
+            return tr.text.startswith("✅")
+        except Exception:                                        # noqa: BLE001
+            return False
+
     async def execute_tool_direct(
         self,
         name: str,
@@ -1852,4 +2253,7 @@ class Orchestrator:
             return None
         spec = self.tools[resolved]
         result = result or OrchestratedResult()
-        return await self._run_one_tool(spec, ctx, args, on_event, result)
+        # Rattrapage SERVEUR : hors budget (déterministe, jamais du spam LLM).
+        return await self._run_one_tool(
+            spec, ctx, args, on_event, result, hors_budget=True,
+        )

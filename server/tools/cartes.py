@@ -1513,8 +1513,16 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
         "descendre" (vers le sous-sol).
     """
     d = (direction or "").strip().lower()
-    descendre = d in ("descendre", "desc", "descends")
-    monter = d in ("monter", "monte", "m")
+    # Tolérant aux variantes du LLM : « vers le bas », « sous-sol »,
+    # « étage inférieur », « down »… (monter/descendre restent canoniques).
+    descendre = any(
+        k in d for k in
+        ("desc", "bas", "dessous", "inférieur", "inferieur", "sous-sol", "down")
+    )
+    monter = any(
+        k in d for k in
+        ("mont", "haut", "dessus", "supérieur", "superieur", "up")
+    ) or d == "m"
     if not descendre and not monter:
         return ToolResult(
             text=f"❌ Direction invalide '{direction}'. Attendu : « monter » ou « descendre »."

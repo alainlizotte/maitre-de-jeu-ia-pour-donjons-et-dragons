@@ -20,11 +20,19 @@ class LLMConfig:
     model: str = "gemma-4-E4B-it-Q4_0"
     temperature: float = 0.75
     top_p: float = 0.9
+    # top_k : échantillonnage (0 = ne pas envoyer → défaut llama.cpp). Doc
+    # Unsloth Qwen3.5 : top_k 20 en mode non-thinking.
+    top_k: int = 0
+    # min_p (sampling) : 0.0 recommandé Unsloth ; llama.cpp par défaut = 0.05.
+    # Field transparent pour le backend ollama (qui le gère via `options`).
+    min_p: float = 0.0
     # Pénalités de sampling transmises à llama.cpp dans le payload
     # OpenAI-compatible (champs `presence_penalty` / `repetition_penalty`).
     # presence_penalty : pénalise les tokens déjà sortis (>0 = plus de variété).
-    # ⚠️ RESTER BAS (≤ 0.5) : à 1.0+ un petit modèle dégénère en boucles sans
+    # ⚠️ RESTER BAS (≤ 0.7) : à 1.0+ un petit modèle dégénère en boucles sans
     # fin (générations de plusieurs minutes, tour MJ figé « en réflexion »).
+    # Unsloth conseille 1.5 en mode non-thinking — valeur calibrée ICI (Q4
+    # boucle à ≥1.0) : on ne suit la doc qu'en partie (0.6 actuellement).
     # repetition_penalty : pénalité de répétition (1.0 = neutre).
     presence_penalty: float = 0.0
     repetition_penalty: float = 1.0

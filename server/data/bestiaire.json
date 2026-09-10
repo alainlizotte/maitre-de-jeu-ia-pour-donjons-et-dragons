@@ -3,7 +3,7 @@
     "edition": "D&D 3.5",
     "source": "Manuel des Monstres 3.5 (VF, édition Anthologie)",
     "description": "Bestiaire de référence — monstres les plus courants (FP 1/4 à 7). Le MJ peut enrichir le bestiaire via le tool Outil_ImageMonstre qui crée/sauvegarde des fiches pour les monstres non listés (générés via generate_image d'OpenWebUI).",
-    "nb_monstres": 340,
+    "nb_monstres": 342,
     "champs": [
       "nom",
       "type",
@@ -8174,5 +8174,30 @@
     "source_page": "Manuel des Monstres 3.5, p. 155",
     "prompt_image": "hobgoblin warrior, burly orange-skinned goblinoid with dark blue-grey hair, disciplined military stance, chain shirt and shield, longsword drawn, dark cavern garrison",
     "cle": "hobgobelin"
+  },
+  "monstre": {
+    "nom": "",
+    "type": "inconnu",
+    "taille": "M",
+    "dv": "1d8",
+    "pv": 10,
+    "pv_max": 10,
+    "ca": 10,
+    "vitesse": "9m",
+    "bab": "+0",
+    "init": "+0",
+    "attaques": "1 attaque corpo",
+    "degs": "1d6",
+    "sauvegardes": "Vig +0, Réf +0, Vol +0",
+    "carac": "For 10, Dex 10, Con 10, Int 2, Sag 10, Cha 10",
+    "comp": "",
+    "dons": "",
+    "capacites": "",
+    "faiblesses": "",
+    "fp": "1/4",
+    "alignement": "Neutre",
+    "cle": "monstre",
+    "prompt_image": "fantasy creature creature, D&D style illustration, ink style, dramatic lighting",
+    "generique": true
   }
 }

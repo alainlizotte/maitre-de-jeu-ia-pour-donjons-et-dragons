@@ -28,6 +28,42 @@ from ..config import LLMConfig
 _log = logging.getLogger("dnd35.llm.client")
 
 
+def _payload_base(cfg: LLMConfig, messages: list[Message], stream: bool) -> dict[str, Any]:
+    """Payload commun chat()/stream_chat() (sampling + budget + thinking)."""
+    payload: dict[str, Any] = {
+        "model": cfg.model,
+        "messages": [m.to_openai() for m in messages],
+        "temperature": cfg.temperature,
+        "top_p": cfg.top_p,
+        "presence_penalty": cfg.presence_penalty,
+        "repetition_penalty": cfg.repetition_penalty,
+        "stream": stream,
+    }
+    # Sampling llama.cpp (doc Unsloth Qwen3.5) : min_p toujours, top_k si
+    # > 0. Ces champs sont ignorés/neutralisés par d'éventuels backends
+    # ne les reconnaissant pas (ollama gère les siens via `options`).
+    if cfg.backend == "llamacpp":
+        payload["min_p"] = cfg.min_p
+        if cfg.top_k and cfg.top_k > 0:
+            payload["top_k"] = cfg.top_k
+    # Budget de génération (llama.cpp : -1 par défaut ; on borne pour
+    # éviter les réponses interminables et libérer le tour plus vite).
+    if getattr(cfg, "max_tokens", 0) and cfg.max_tokens > 0:
+        payload["max_tokens"] = cfg.max_tokens
+    # Options natives Ollama (num_ctx, top_k, …) — calibrées dans config.yaml.
+    if cfg.options:
+        payload["options"] = dict(cfg.options)
+    # Désactivation RÉELLE du thinking : `think: false` (config.yaml) doit
+    # se traduire dans la requête, sinon le modèle raisonne par défaut
+    # (Qwen3/3.5 : <think>…) — centaines de tokens invisibles par appel,
+    # voire réponse 100 % thinking (content vide, tour perdu). llama.cpp
+    # applique ces kwargs au template Jinja du modèle ; les backends qui ne
+    # les connaissent pas les ignorent (aucun risque).
+    if not getattr(cfg, "think", False):
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
+    return payload
+
+
 # --------------------------------------------------------------------------- #
 # Thinking stripping — deux formats :
 # - Gemma 4 : <|channel>thought...<channel|>
@@ -264,29 +300,9 @@ class OllamaClient:
         """Appel non-streaming. `tools` est le schéma JSON des fonctions."""
         await self.ensure_model_loaded()
         messages = _normaliser_messages(messages)
-        payload: dict[str, Any] = {
-            "model": self.cfg.model,
-            "messages": [m.to_openai() for m in messages],
-            "temperature": temperature if temperature is not None else self.cfg.temperature,
-            "top_p": self.cfg.top_p,
-            "presence_penalty": self.cfg.presence_penalty,
-            "repetition_penalty": self.cfg.repetition_penalty,
-            "stream": False,
-        }
-        # Sampling llama.cpp (doc Unsloth Qwen3.5) : min_p toujours, top_k si
-        # > 0. Ces champs sont ignorés/neutralisés par d'éventuels backends
-        # ne les reconnaissant pas (ollama gère les siens via `options`).
-        if self.cfg.backend == "llamacpp":
-            payload["min_p"] = self.cfg.min_p
-            if self.cfg.top_k and self.cfg.top_k > 0:
-                payload["top_k"] = self.cfg.top_k
-        # Budget de génération (llama.cpp : -1 par défaut ; on borne pour
-        # éviter les réponses interminables et libérer le tour plus vite).
-        if getattr(self.cfg, "max_tokens", 0) and self.cfg.max_tokens > 0:
-            payload["max_tokens"] = self.cfg.max_tokens
-        # Options natives Ollama (num_ctx, top_k, …) — calibrées dans config.yaml.
-        if self.cfg.options:
-            payload["options"] = dict(self.cfg.options)
+        payload = _payload_base(self.cfg, messages, stream=False)
+        if temperature is not None:
+            payload["temperature"] = temperature
         if tools:
             payload["tools"] = tools
             if tool_choice:
@@ -353,24 +369,9 @@ class OllamaClient:
         """
         await self.ensure_model_loaded()
         messages = _normaliser_messages(messages)
-        payload: dict[str, Any] = {
-            "model": self.cfg.model,
-            "messages": [m.to_openai() for m in messages],
-            "temperature": temperature if temperature is not None else self.cfg.temperature,
-            "top_p": self.cfg.top_p,
-            "presence_penalty": self.cfg.presence_penalty,
-            "repetition_penalty": self.cfg.repetition_penalty,
-            "stream": True,
-        }
-        if self.cfg.backend == "llamacpp":
-            payload["min_p"] = self.cfg.min_p
-            if self.cfg.top_k and self.cfg.top_k > 0:
-                payload["top_k"] = self.cfg.top_k
-        if getattr(self.cfg, "max_tokens", 0) and self.cfg.max_tokens > 0:
-            payload["max_tokens"] = self.cfg.max_tokens
-        # Options natives Ollama (num_ctx, top_k, …) — calibrées dans config.yaml.
-        if self.cfg.options:
-            payload["options"] = dict(self.cfg.options)
+        payload = _payload_base(self.cfg, messages, stream=True)
+        if temperature is not None:
+            payload["temperature"] = temperature
         if tools:
             payload["tools"] = tools
 

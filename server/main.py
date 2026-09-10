@@ -2481,10 +2481,20 @@ async def _handle_say(
                 else:
                     await session.broadcast({"type": "tool_event", "event": ev})
 
-            async def on_delta(token: str) -> None:
-                # Stream des tokens de narration vers tous les clients connectés.
-                if cfg.game.stream_to_clients:
+            # ⚡ Streaming coupé (stream_to_clients: false) → on_delta=None :
+            # l'orchestrateur réutilise alors le contenu de l'appel non-streamé
+            # (chat.content) au lieu de RÉ-GÉNÉRER la narration finale en
+            # streaming — économie d'un appel LLM complet par tour (~la
+            # moitié de la latence de l'étape finale). Passer un callback qui
+            # jette les tokens (comme avant) obligeait l'orchestrateur à
+            # payer cette seconde génération pour rien.
+            if cfg.game.stream_to_clients:
+
+                async def on_delta(token: str) -> None:
+                    # Stream des tokens de narration vers les clients.
                     await session.broadcast({"type": "delta", "text": token})
+            else:
+                on_delta = None
 
             async def reset_stream() -> None:
                 """(c) Efface l'aperçu streamé chez les clients : à réserver
@@ -3109,10 +3119,26 @@ async def _handle_say(
                             None,
                         )
                         if pj_suivant is not None and actif_suivant:
+                            # Liste DÉTERMINISTE des ennemis vivants : sans
+                            # elle, le MJ inventait des adversaires (« squelette
+                            # géant ») ou attaquait des cadavres au tour suivant.
+                            vivants = [
+                                f"{m.get('nom')} ({m.get('pv')}/"
+                                f"{m.get('pv_max')} PV)"
+                                for m in (apres.get("monstres_combat") or [])
+                                if "Détruit" not in (m.get("conditions") or [])
+                                and int(m.get("pv", 1) or 0) > 0
+                            ]
                             result.narration += (
                                 f"\n\n⚔️ **Au tour de {actif_suivant}** "
                                 f"(joueur {pj_suivant.get('joueur')}) de "
                                 "décider une action."
+                                + (
+                                    f"\n🎯 Ennemis vivants : "
+                                    + ", ".join(vivants) + "."
+                                    if vivants
+                                    else "\n🎯 Aucun ennemi vivant restant."
+                                )
                             )
             except Exception as e:                                   # noqa: BLE001
                 print(f"[dnd35] Moteur de combat post-tour échoué (ignoré) : {e}")

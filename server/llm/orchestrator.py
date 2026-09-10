@@ -1375,6 +1375,14 @@ class Orchestrator:
         # OpenAI impose : si tools non vides, tool_choice = "auto" sauf si
         # l'on veut forcer un appel. On laisse "auto".
         corrections_vues = -1
+        # Narrations INVALIDES ajoutées à `work` au fil des corrections
+        # (simulation en prose…) : elles servent de contexte au modèle mais
+        # ne doivent PAS compter comme références anti-répétition — sinon la
+        # relance, qui légitimement RE-NARRE la même scène avec les vrais
+        # chiffres des tools, se fait écho d'elle-même et déclenche une
+        # spirale correction 2 → 3 → boucle épuisée (observé en combat,
+        # partie fa4e7366).
+        ids_corriges: list[int] = []
         for _ in range(self.max_iterations):
             result.iterations += 1
             use_native = self.tool_mode in ("native", "auto")
@@ -1653,11 +1661,13 @@ class Orchestrator:
                                 "Recommence ce tour en appelant réellement l'outil."
                                 + _CORRECTIF_INTERNE
                             )
-                        work.append(Message(
+                        _msg_invalide = Message(
                             role="assistant",
                             content=chat.content,
                             tool_calls=chat.tool_calls or None,
-                        ))
+                        )
+                        work.append(_msg_invalide)
+                        ids_corriges.append(id(_msg_invalide))
                         work.append(Message(
                             role="system",
                             content=consigne_sim,
@@ -1822,9 +1832,18 @@ class Orchestrator:
                         or "Description enregistrée" in dernier_tool.content
                     )
                 )
+                # Le référentiel exclut les narrations INVALIDES ajoutées par
+                # les corrections (cf. ids_corriges) : la re-narration de la
+                # même scène — avec les VRAIS chiffres des tools cette fois —
+                # est le comportement attendu d'une relance, pas une
+                # répétition à corriger.
+                reference = [
+                    m for m in work
+                    if m.role == "assistant" and id(m) not in ids_corriges
+                ]
                 echo = (
                     None if revisite_froide
-                    else trouve_repetition(narration, work)
+                    else trouve_repetition(narration, reference)
                 )
                 if echo:
                     result.corrections += 1

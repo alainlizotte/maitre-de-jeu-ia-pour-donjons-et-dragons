@@ -1202,6 +1202,30 @@ def _infliger_degats_monstre(
                 f"dégâts suivis."
             )
         )
+    # Garde : une créature déjà DÉTRUITE ne subit plus rien. Sans ce refus,
+    # les relances correctives du tour (anti-simulation, anti-répétition)
+    # ré-appliquaient les dégâts sur le même cadavre — observé en partie
+    # réelle (fa4e7366) : un Squelette 3 PV porté à -57. On renvoie la
+    # liste des ennemis vivants pour orienter la prochaine cible.
+    if not _vivant(cible):
+        vivants = [
+            f"**{m['nom']}** {m['pv']}/{m.get('pv_max', '?')}"
+            for m in mons
+            if _vivant(m)
+        ]
+        return ToolResult(
+            text=(
+                f"⛔ **{cible['nom']}** est déjà DÉTRUIT — inutile de le "
+                "frapper à nouveau, et toute relance ré-appliquerait des "
+                "dégâts fictifs. "
+                + (
+                    "Cibles vivantes : " + ", ".join(vivants) + "."
+                    if vivants
+                    else "TOUS les ennemis sont détruits — narre la fin du "
+                         "combat, le serveur clôturera (XP)."
+                )
+            )
+        )
     nv = int(cible.get("pv", 0)) - d
     cible["pv"] = nv
     conds: list[str] = cible.setdefault("conditions", [])

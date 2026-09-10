@@ -48,7 +48,9 @@
       "description": "Objets transportes.",
       "items": {
         "type": "object",
-        "properties": {"nom": {"type": "string"}, "qte": {"type": "integer"}}
+        "properties": {"nom": {"type": "string"}, "qte": {"type": "integer"}},
+        "required": ["nom"],
+        "description": "Chaque objet DOIT avoir un champ 'nom' (texte) — pas de nom-porte-clé du type {'clé_de_fer': 1}."
       }
     },
     "inventaire": {
@@ -60,7 +62,9 @@
           "nom": {"type": "string"},
           "qte": {"type": "integer"},
           "poids": {"type": "number", "description": "Poids en kg d'une unite (depuis le catalogue PHB ou fourni)."}
-        }
+        },
+        "required": ["nom"],
+        "description": "Chaque objet DOIT avoir un champ 'nom' (texte)."
       }
     },
     "poids_transporte": {"type": "number", "description": "Poids total transporte en kg (recalcule a chaque inventaire)."},

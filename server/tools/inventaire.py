@@ -233,17 +233,65 @@ def _taille_monnaie(quantite_pc: int) -> float:
 # --------------------------------------------------------------------------- #
 #  Lecture / calcul d'encombrement
 # --------------------------------------------------------------------------- #
+def _reparer_entree(e: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Répare une entrée d'inventaire malformée écrite par le LLM.
+
+    Forme observée en partie réelle (fiche Barouk, partie dc4dd5aa) :
+    `{"clé_de_fer_rouillee": 1, "description": "..."}` — le nom de l'objet
+    est utilisé comme CLÉ au lieu du champ `nom`. Sans réparation, l'entrée
+    est silencieusement perdue à la lecture. Renvoie toujours une entrée
+    canonique `{nom, qte, …}` ou None si rien de récupérable.
+    """
+    if not isinstance(e, dict):
+        return None
+    nom = str(e.get("nom") or "").strip()
+    if not nom:
+        # Nom-porte-clé : la première clé ni méta ni qte/poids porte l'objet.
+        _META = {"nom", "qte", "quantite", "quantité", "poids", "description"}
+        for k, v in e.items():
+            if k in _META or not isinstance(v, (int, float, str)):
+                continue
+            if isinstance(v, str) and not re.fullmatch(r"\d+", v.strip()):
+                continue
+            nom = str(k).replace("_", " ").strip()
+            if isinstance(v, str):
+                v = int(v.strip())
+            e = {"nom": nom, "qte": max(1, int(v)),
+                 **{kk: vv for kk, vv in e.items() if kk in ("description", "poids")}}
+            break
+        if not nom:
+            return None
+    try:
+        qte = max(1, int(e.get("qte", 1) or 1))
+    except (TypeError, ValueError):
+        qte = 1
+    sortie: dict[str, Any] = {"nom": nom, "qte": qte}
+    if e.get("poids") is not None:
+        try:
+            sortie["poids"] = float(e["poids"])
+        except (TypeError, ValueError):
+            pass
+    if e.get("description"):
+        sortie["description"] = str(e["description"])
+    return sortie
+
+
 def _inventaire(fiche: dict[str, Any]) -> list[dict[str, Any]]:
     """Inventaire structuré : le champ `inventaire` si présent, sinon on le
-    dérive de `equipement` (même forme `{nom, qte}`). Chaîne → liste d'objets."""
+    dérive de `equipement` (même forme `{nom, qte}`). Chaîne → liste d'objets.
+    Les entrées malformées (nom-porte-clé LLM) sont réparées, pas jetées."""
     inv = fiche.get("inventaire")
-    if isinstance(inv, list):
-        return [i for i in inv if isinstance(i, dict)]
-    equip = fiche.get("equipement") or []
-    if isinstance(equip, str):
-        equip = _parse_lignes_equip(equip)
-    return [{"nom": e.get("nom", ""), "qte": int(e.get("qte", 1) or 1)}
-            for e in equip if isinstance(e, dict) and e.get("nom")]
+    if not isinstance(inv, list):
+        equip = fiche.get("equipement") or []
+        if isinstance(equip, str):
+            equip = _parse_lignes_equip(equip)
+        inv = list(equip)
+    sortie: list[dict[str, Any]] = []
+    for e in inv:
+        repare = _reparer_entree(e) if isinstance(e, dict) else None
+        if repare:
+            sortie.append(repare)
+    return sortie
 
 
 def _parse_lignes_equip(texte: str) -> list[dict[str, Any]]:

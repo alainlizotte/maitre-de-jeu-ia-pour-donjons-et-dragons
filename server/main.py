@@ -2396,7 +2396,13 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
             result.tool_calls_trace.extend(result2.tool_calls_trace)
             result.tool_events.extend(result2.tool_events)
             result.state_patches.extend(result2.state_patches)
-            result.narration = result2.narration
+            # Les narrations intermédiaires du 1er passage (diffusées en
+            # direct, p. ex. une intro de scène) restent dans le dm final :
+            # sans cela, le texte aperçu disparaîtrait à l'écran au moment
+            # du remplacement par la narration du rejeu.
+            result.narration = "\n\n".join(
+                [*result.narrations_intermediaires, result2.narration]
+            ).strip()
             result.iterations += result2.iterations
             # (c) La narration finale remplace celle déjà streamée : on
             # demande aux clients d'effacer l'aperçu périmé avant le dm final.
@@ -2781,7 +2787,12 @@ async def _handle_say(
                                     result.state_patches.extend(
                                         result2.state_patches
                                     )
-                                    result.narration = result2.narration
+                                    # Préserve les narrations intermédiaires
+                                    # déjà diffusées (cf. _rejoue_correctif).
+                                    result.narration = "\n\n".join(
+                                        [*result.narrations_intermediaires,
+                                         result2.narration]
+                                    ).strip()
                                     result.iterations += result2.iterations
                                     await reset_stream()
                                     print(
@@ -2897,7 +2908,12 @@ async def _handle_say(
                         )
                         result.tool_events.extend(result2.tool_events)
                         result.state_patches.extend(result2.state_patches)
-                        result.narration = result2.narration
+                        # Préserve les narrations intermédiaires déjà
+                        # diffusées (cf. _rejoue_correctif).
+                        result.narration = "\n\n".join(
+                            [*result.narrations_intermediaires,
+                             result2.narration]
+                        ).strip()
                         result.iterations += result2.iterations
                         await reset_stream()
                         print("[dnd35] Rejeu invoquation réussi")

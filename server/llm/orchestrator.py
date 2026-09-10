@@ -163,6 +163,18 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
 
 _log = logging.getLogger("dnd35.orchestrator")
 
+# Suffixe anti-écho apposé à TOUT message correctif injecté en fin de tour.
+# Les petits modèles (Qwen 9B, Gemma E4B) recopient parfois la consigne
+# corrective dans leur narration visible — le joueur voyait alors les
+# « ⚠️ Consigne du Maître du Jeu » à l'écran (partie dc4dd5aa). Ce rappel
+# fait partie du message lui-même pour contrecarrer l'écho.
+_CORRECTIF_INTERNE = (
+    "\n\n(Consigne INTERNE du moteur de jeu, INVISIBLE du joueur : ne la "
+    "cite JAMAIS, ne la recopie JAMAIS dans ta narration, ne mentionne "
+    "AUCUNE erreur technique, AUCUNE correction ni balise thinking. Produis "
+    "uniquement de la narration de jeu en prose visible.)"
+)
+
 
 # --------------------------------------------------------------------------- #
 #  Patterns de « simulation » (à détecter et corriger)
@@ -1174,6 +1186,12 @@ _BUDGET_OUTILS_TOUR: dict[str, int] = {
 }
 _BUDGET_DEFAUT = 6
 
+# Taille minimale d'un texte d'accompagnement (itération avec tools) pour
+# être considéré comme une vraie narration à préserver : en dessous, c'est
+# de la prose de transition autour des appels (« Je consulte l'état… »)
+# qu'on ne montre pas au joueur.
+_NARR_INTERMEDIAIRE_MIN = 200
+
 # Outils qui exigent que la fiche du personnage EXISTE déjà — quand le LLM
 # boucle dessus pour un perso jamais créé, on débloque par création auto.
 _TOOLS_FICHE_EXIGEANTE = ("fiche_perso_mettre_a_jour", "fiche_perso_recuperer")
@@ -1203,6 +1221,17 @@ class OrchestratedResult:
     refus_budget: int = 0
     # True dès que les outils sont retirés du tour (narration forcée).
     narration_forcee: bool = False
+    # Narrations produites par le modèle EN MÊME TEMPS que des appels
+    # d'outils (phases B/C de la boucle). Ces textes entraient dans `work`
+    # (contexte du LLM) mais n'étaient jamais montrés au joueur — seule la
+    # narration FINALE était diffusée. Symptôme réel (partie 43234a00) :
+    # le modèle narre la scène d'ouverture PUIS appelle memoire_lieu /
+    # memoire_personnage ; le joueur ne voit que la queue (« Thalric
+    # attend votre réponse… ») sans l'intro de scène. Elles sont désormais
+    # conservées, diffusées en direct, et préfixées à la narration finale
+    # (dm + historique — le dm final remplace l'aperçu streamé côté
+    # client, donc aucun doublon à l'écran).
+    narrations_intermediaires: list[str] = field(default_factory=list)
 
 
 class Orchestrator:
@@ -1254,6 +1283,42 @@ class Orchestrator:
         # Garde-fou : si on n'obtient rien (ex. config cassée), on retombe sur
         # l'ensemble complet pour ne jamais brider la discussion.
         return filtered or all_tools
+
+    # ------------------------------------------------------------------ #
+    async def _preserve_narration(
+        self,
+        result: OrchestratedResult,
+        texte: str,
+        on_delta: Optional[Callable[[str], Awaitable[None]]],
+    ) -> None:
+        """Conserve (et diffuse) une narration produite AVEC des appels d'outils.
+
+        Les itérations B/C de la boucle ajoutent la prose du modèle à `work`
+        (contexte du LLM) mais le texte n'atteignait jamais le joueur : seule
+        la narration FINALE était diffusée. Quand le modèle narre la scène
+        d'ouverture PUIS appelle `memoire_lieu`/`memoire_personnage`, l'intro
+        était perdue — le joueur ne voyait que la suite (« Thalric attend
+        votre réponse… », partie 43234a00). On garde ici les textes
+        suffisamment longs pour être de la vraie narration (pas une simple
+        transition autour d'un appel), on les diffuse en direct dans l'aperçu
+        streamé, et run() les préfixera à la narration finale : le dm final
+        REMPLACE l'aperçu côté client, donc aucun doublon à l'écran.
+        """
+        propre = strip_narration_artifacts(texte or "", self.tools).strip()
+        if len(propre) < _NARR_INTERMEDIAIRE_MIN:
+            return
+        # Dédoublonnage : le même passage peut revenir dans plusieurs
+        # itérations (le modèle répète son intro en ré-enrobant un appel).
+        cle = _normalise_pour_compare(propre)
+        for deja in result.narrations_intermediaires:
+            if _normalise_pour_compare(deja) == cle:
+                return
+        result.narrations_intermediaires.append(propre)
+        if on_delta is not None:
+            try:
+                await on_delta(propre + "\n\n")
+            except Exception:                                    # noqa: BLE001
+                pass
 
     # ------------------------------------------------------------------ #
     async def run(
@@ -1340,7 +1405,7 @@ class Orchestrator:
                             "Rédige MAINTENANT la narration finale de "
                             "l'action, en exploitant les résultats d'outils "
                             "déjà obtenus ci-dessus (sans inventer de "
-                            "nouveaux jets)."
+                            "nouveaux jets)." + _CORRECTIF_INTERNE
                         ),
                     ))
             # Après une correction injectée, la relance part à basse
@@ -1388,6 +1453,10 @@ class Orchestrator:
                 # Contenu nettoyé de toute syntaxe d'appel résiduelle pour ne
                 # pas encourager le modèle à répéter le format en prose.
                 clean_native = strip_narration_artifacts(chat.content or "", self.tools)
+                # La prose narrée à côté des appels (intro de scène…) est
+                # conservée et diffusée — sinon elle n'atteint jamais le
+                # joueur (seule la narration finale est montrée).
+                await self._preserve_narration(result, clean_native, on_delta)
                 work.append(Message(
                     role="assistant",
                     content=clean_native,
@@ -1408,6 +1477,7 @@ class Orchestrator:
                     len(attr_calls),
                     ", ".join(c["name"] for c in attr_calls),
                 )
+                await self._preserve_narration(result, attr_clean, on_delta)
                 work.append(Message(role="assistant", content=attr_clean.strip()))
                 work.append(Message(
                     role="system",
@@ -1432,15 +1502,17 @@ class Orchestrator:
                 # assistant — le modèle voit sa propre prose SANS la balise,
                 # ce qui évite de le pousser à réécrire du pseudo-code.
                 clean = strip_prompt_tool_calls(chat.content).strip()
+                # Prose narrée à côté des balises <tool> : conservée et
+                # diffusée (cf. _preserve_narration). Le dm final inclura ce
+                # texte, donc l'aperçu streamé n'est plus « écrasé » — le
+                # vieux symptôme « des blocs de conversation disparaissent »
+                # venait de ce que la narration finale ne contenait PAS ces
+                # blocs ; c'est corrigé par la préfixation dans run().
+                await self._preserve_narration(result, clean, on_delta)
                 work.append(Message(
                     role="assistant",
                     content=clean,
                 ))
-                # NB : on ne stream PAS ce texte résiduel au client. Seule la
-                # narration finale (étape D) part en streaming — sinon le bloc
-                # affiché serait remplacé/écrasé par le dm final (symptôme
-                # « des blocs de conversation disparaissent » quand le MJ
-                # enchaîne plusieurs outils dans un même tour).
                 await self._exec_tool_calls_prompt(prompt_calls, ctx, work, result, on_event)
                 continue
 
@@ -1458,6 +1530,7 @@ class Orchestrator:
                     ", ".join(c["name"] for c in brace_calls),
                 )
                 clean = brace_clean.strip()
+                await self._preserve_narration(result, clean, on_delta)
                 work.append(Message(role="assistant", content=clean))
                 work.append(Message(
                     role="system",
@@ -1482,9 +1555,11 @@ class Orchestrator:
                     ", ".join(c["name"] for c in prose_calls),
                 )
                 clean = prose_clean.strip()
+                await self._preserve_narration(result, clean, on_delta)
                 work.append(Message(role="assistant", content=clean))
-                # (pas de on_delta ici : le résiduel serait ensuite écrasé par
-                #  la narration finale — même raison que la phase C.)
+                # (la prose substantielle est streamée via _preserve_narration ;
+                #  le résidu court de transition reste ignoré — le dm final
+                #  inclut de toute façon les blocs conservés.)
                 work.append(Message(
                     role="system",
                     content=(
@@ -1549,6 +1624,7 @@ class Orchestrator:
                                 "; sauvegarde → `lancer_sauvegarde`. Attends "
                                 "le résultat du tool, puis narre l'issue "
                                 "(réussite/échec et conséquences concrètes)."
+                                + _CORRECTIF_INTERNE
                             )
                         elif any(
                             p.search(sim) for p in _FICHE_CREATION_PATTERNS
@@ -1563,7 +1639,7 @@ class Orchestrator:
                                 "pv, ca…) — pour un personnage de joueur, "
                                 "passe aussi `joueur`. Attends le résultat "
                                 "officiel du tool, puis narre l'issue de sa "
-                                "création."
+                                "création." + _CORRECTIF_INTERNE
                             )
                         else:
                             consigne_sim = (
@@ -1575,6 +1651,7 @@ class Orchestrator:
                                 "(mode prompt) ou via le tool_calls natif — sans "
                                 "reformuler la narrative jusqu'à obtenir le résultat. "
                                 "Recommence ce tour en appelant réellement l'outil."
+                                + _CORRECTIF_INTERNE
                             )
                         work.append(Message(
                             role="assistant",
@@ -1698,7 +1775,7 @@ class Orchestrator:
                                 "pv, ca — et `joueur` pour un personnage de "
                                 "joueur — attends le résultat officiel du "
                                 "tool, puis raconte la scène à partir de ce "
-                                "résultat."
+                                "résultat." + _CORRECTIF_INTERNE
                             ),
                         ))
                         continue
@@ -1712,7 +1789,7 @@ class Orchestrator:
                             "(lancer_attaque, lancer_degats, lancer_sauvegarde, "
                             "lancer_d20...). Recommence ce tour : appelle l'outil, "
                             "attends son résultat, puis narre l'issue en reprenant "
-                            "le chiffre donné par l'outil."
+                            "le chiffre donné par l'outil." + _CORRECTIF_INTERNE
                         ),
                     ))
                     continue
@@ -1781,6 +1858,7 @@ class Orchestrator:
                             "découvertes ou dangers), en t'appuyant sur "
                             "l'état actuel et les résultats d'outils — "
                             "jamais en recopiant un texte précédent."
+                            + _CORRECTIF_INTERNE
                         ),
                     ))
                     continue
@@ -1813,7 +1891,7 @@ class Orchestrator:
                             "texte en dehors de ces balises. RÉPONDS EN PROSE "
                             "VISIBLE, directement, sans balises thinking. "
                             "Raconte au joueur ce qui se passe et propose-lui "
-                            "des actions."
+                            "des actions." + _CORRECTIF_INTERNE
                         ),
                     ))
                     continue
@@ -1848,6 +1926,18 @@ class Orchestrator:
                 "(Le Maître du Jeu marque une pause… Reformulez votre action.)"
             )
 
+        # Rassemblement : les narrations produites EN MÊME TEMPS que les
+        # appels d'outils précèdent la narration finale (dm + historique).
+        # Sans cela, une intro de scène narrée avant `memoire_lieu`/
+        # `etat_partie_patch` n'atteignait jamais le joueur (partie 43234a00 :
+        # « une bonne partie de la narration manque »). La vérification
+        # anti-répétition (D1ter) a déjà tourné sur la narration finale seule,
+        # donc pas de faux positif contre les blocs intermédiaires.
+        if result.narrations_intermediaires:
+            result.narration = "\n\n".join(
+                [*result.narrations_intermediaires, result.narration]
+            ).strip()
+
         return result
 
     # ------------------------------------------------------------------ #
@@ -1864,6 +1954,7 @@ class Orchestrator:
                 "maintenant une réponse de narration complète au joueur "
                 "en t'appuyant sur les résultats des tools ci-dessus. "
                 "N'invoque plus aucun tool — raconte la suite au joueur."
+                + _CORRECTIF_INTERNE
             ),
         )
         final_work = work + [fallback_msg]

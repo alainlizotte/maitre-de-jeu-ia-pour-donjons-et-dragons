@@ -93,13 +93,20 @@ export function PartyPage() {
         }
       }
     }
+    // ⚔️ Combattants VIVANTS : (ré)ajoute leur portrait MÊME si l'URL est
+    // déjà au journal. Cas réel (fa4e7366) : des homonymes (« Squelette »,
+    // « Squelette (2) »…) partagent le même PNG ; l'entrée galerie peut
+    // porter le nom d'un homonyme détruit — le retrait ci-dessous l'éjecte
+    // sinon, et le survivant reste sans portrait.
     for (const m of etat.monstres_combat ?? []) {
-      if (!m.image_url || urls.has(m.image_url)) continue;
+      if (!m.image_url) continue;
       if ((m.conditions ?? []).includes("Détruit")) continue;
-      urls.add(m.image_url);
       addMonster({ nom: m.nom, url: m.image_url });
+      urls.add(m.image_url);
     }
     // Monstres morts : leur portrait ne réapparaît pas après rechargement.
+    // Retrait APRÈS les ajouts vivants (sinon l'homonyme détruit éjecte le
+    // portrait partagé du survivant — même bug que le chemin live).
     for (const m of etat.monstres_combat ?? []) {
       if ((m.conditions ?? []).includes("Détruit") && m.nom) {
         removeMonsterByNom(m.nom);

@@ -122,13 +122,30 @@ export function useChatSocket(partie_id: string | null) {
       }
       // Mort d'un monstre : son portrait quitte la galerie
       // (« les images restent affichées jusqu'à sa mort »).
+      // ⚠️ Si des HOMONYMES partagent le même PNG (« Squelette » ×3 → une
+      // seule entrée galerie, dédupliquée par URL), la mort de l'un ne doit
+      // PAS éjecter le portrait tant qu'un survivant utilise la même image.
       for (const p of patches) {
         if (!p) continue;
         const mc = p["monstres_combat"];
         if (!Array.isArray(mc)) continue;
-        for (const m of mc as { nom?: string; conditions?: string[] }[]) {
+        const urlsVivants = new Set(
+          (mc as { image_url?: string; conditions?: string[] }[])
+            .filter(
+              (m) =>
+                !(m.conditions ?? []).includes("Détruit") && m.image_url,
+            )
+            .map((m) => m.image_url as string),
+        );
+        for (const m of mc as {
+          nom?: string;
+          image_url?: string;
+          conditions?: string[];
+        }[]) {
           if (m?.nom && (m.conditions ?? []).includes("Détruit")) {
-            removeMonsterByNom(m.nom);
+            if (!m.image_url || !urlsVivants.has(m.image_url)) {
+              removeMonsterByNom(m.nom);
+            }
           }
         }
       }

@@ -547,6 +547,41 @@ class PromptBuilder:
                     "sont gérées automatiquement par le serveur — n'appelle "
                     "ni tour_suivant_combat ni finir_combat."
                 )
+            # ⚔️ Ennemis engagés : SANS ce bloc, le MJ ne connaissait pas les
+            # combattants réels (PV/conditions) et en INVENTAIT (« squelette
+            # géant » inexistant, partie fa4e7366) ou attaquait des cadavres —
+            # le combat ne pouvait plus se conclure.
+            monstres_c = etat.get("monstres_combat") or []
+            if monstres_c:
+                lignes.append("\nEnnemis engagés (SOURCE DE VÉRITÉ — n'invente "
+                              "AUCUN autre adversaire) :")
+                for m in monstres_c:
+                    detruit = (
+                        "Détruit" in (m.get("conditions") or [])
+                        or int(m.get("pv", 1) or 0) <= 0
+                    )
+                    lignes.append(
+                        f"  - {m.get('nom', '?')} : "
+                        f"{m.get('pv', '?')}/{m.get('pv_max', '?')} PV — "
+                        f"CA {m.get('ca', '?')}"
+                        + (" — ☠️ DÉTRUIT (cible INVALIDE)" if detruit else "")
+                    )
+                vivants = [
+                    str(m.get("nom") or "")
+                    for m in monstres_c
+                    if "Détruit" not in (m.get("conditions") or [])
+                    and int(m.get("pv", 1) or 0) > 0
+                ]
+                if vivants:
+                    lignes.append(
+                        "  → Cibles VALIDES : " + ", ".join(vivants)
+                        + ". Utilise ces noms EXACTS."
+                    )
+                else:
+                    lignes.append(
+                        "  → Tous les ennemis sont détruits : narre la fin du "
+                        "combat, le serveur clôture (XP)."
+                    )
         # Mémoire de campagne (missions, lieux, PNJ, combats, position) :
         # injectée automatiquement — le MJ la CONNAÎT sans tool de lecture.
         try:

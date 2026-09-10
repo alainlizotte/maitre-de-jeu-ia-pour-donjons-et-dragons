@@ -99,6 +99,11 @@ def test_nouveau_tour_deverrouille_le_deplacement():
 
 def test_hors_tour_les_tools_restent_libres():
     """`tour_id` vide (REST, tests, scripts) : aucun changement de comportement."""
+    import random as _rnd
+    # Le donjon est généré avec des portes aléatoires (70%/direction) : sans
+    # seed, « est » n'existe parfois pas depuis la salle nord — test flaky.
+    # Seed fixe → tracé (0,0)→(0,1) avec porte au nord PUIS à l'est.
+    _rnd.seed(0)
     d = _fresh_dir()
     try:
         ctx = ToolContext(partie_id=PID, joueur="alain", data_dir=d)

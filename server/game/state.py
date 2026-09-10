@@ -154,6 +154,12 @@ class PartyState:
         # Dernier segment : on écrit la valeur.
         self._set_child(cur, keys[-1], v)
 
+        # Garde : empêcher d'écraser des champs-liste critiques (pj) avec un
+        # scalaire — comportement observé du LLM qui envoie "pj" = "2".
+        _LISTES_REQUISES = {"pj"}
+        if len(keys) == 1 and keys[0] in _LISTES_REQUISES and not isinstance(v, list):
+            return False, f"❌ Refusé : la clé '{keys[0]}' doit rester une liste (reçu {type(v).__name__})."
+
         err = self.save(etat)
         if err:
             return False, err

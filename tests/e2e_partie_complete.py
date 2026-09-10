@@ -202,10 +202,11 @@ async def _engager(pid, bilan, intro, ennemis, joueur):
         snap = snapshot(pid)
         if snap["phase"] == "combat" and snap["monstres"]:
             return True
+        p_player = CHAR_TO_PLAYER.get(joueur, joueur)
         socks = await _ouvrir(pid)
-        await tour_dm(socks[joueur],
-                      [w for n, w in socks.items() if n != joueur],
-                      joueur, msg, bilan)
+        await tour_dm(socks[p_player],
+                      [w for n, w in socks.items() if n != p_player],
+                      p_player, msg, bilan)
         for w in socks.values():
             await w.close()
     return snapshot(pid)["phase"] == "combat" and bool(snapshot(pid)["monstres"])

@@ -74,7 +74,7 @@ services:
   #
   # VRAM estimée (Q4_0 + Q8 KV 32768 ctx, -ngl 99) : ~5-6 Go / 8 Go disponible.
   llamacpp:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda  # pour Spark-X2.5 : image locale « llamacpp-spark:server-cuda » (fork XHToken, déjà construite)
     container_name: llamacpp
     ports:
       - "8080:8080"

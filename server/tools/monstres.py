@@ -460,6 +460,46 @@ def _find_monstre(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
     return meilleur4[2] if meilleur4 else None
 
 
+def _find_monstre_strict(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
+    """Résolution STRICTE : le nom demandé doit être couvert par l'entrée
+    (tous ses mots significatifs présents dans la clé). Refuse le repli « mot
+    partagé seul » de `_find_monstre` : « Archer gobelin » ne résout PAS car
+    aucune entrée ne contient « archer » ET « gobelin ». « dragon rouge » →
+    « dragon_rouge_jeune » reste accepté (l'entrée est un sur-ensemble)."""
+    best = _load_bestiaire(ctx)
+    monstres: dict[str, Any] = best.get("monstres", {})
+
+    def _sing(w: str) -> str:
+        return w[:-1] if w.endswith("s") and len(w) > 3 else w
+
+    for cand in _candidats_noms(nom):
+        n = _normalise_nom(cand)
+        for k, m in monstres.items():
+            if _normalise_nom(k) == n or _normalise_nom(m.get("nom", "")) == n:
+                return m
+        if len(n) >= 4:
+            for k, m in monstres.items():
+                if n in _normalise_nom(k) or n in _normalise_nom(
+                        m.get("nom", "")):
+                    return m
+    mots: list[str] = []
+    for cand in _candidats_noms(nom):
+        for w in _normalise_nom(cand).split("_"):
+            if len(w) >= 3 and w != "monstre":
+                wok = _sing(w)
+                if wok not in mots:
+                    mots.append(wok)
+    if not mots:
+        return None
+    meilleur: Optional[tuple[int, dict[str, Any]]] = None
+    for k, m in monstres.items():
+        nk = _normalise_nom(k)
+        if all(w in nk for w in mots):
+            if meilleur is None or len(nk) > meilleur[0]:
+                meilleur = (len(nk), m)
+    return meilleur[1] if meilleur else None
+
+
 def _find_monstre_with_fallback(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
     """Cherche un monstre dans le bestiaire. Si aucun match exact, tente un
     monstre générique basé sur le type et la taille demandés."""

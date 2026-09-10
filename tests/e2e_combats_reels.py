@@ -634,6 +634,17 @@ def nettoyer(pid: str):
 async def phase_setup():
     os.makedirs(TMP, exist_ok=True)
     bilan = Bilan.neuf()
+    # Nettoyage total : supprimer TOUTES les anciennes fiches PJ pour que
+    # le LLM ne trouve PAS de fiche existante et soit obligé de créer avec
+    # fiche_perso_creer_rapide (les anciennes fiches de runs précédents
+    # faisaient que le LLM appelait mettre_a_jour au lieu de creer_rapide,
+    # causant des créations manquantes dans la liste pj).
+    import glob
+    for fp in glob.glob(os.path.join(DATA, "fiches", "fiche_*.json")):
+        try:
+            os.unlink(fp)
+        except OSError:
+            pass
     # Reprise : réutilise la partie du run précédent si elle répond encore
     # (setup idempotent comme les autres phases — un LLM qui omet le tool
     # de création ne force plus à tout recommencer à zéro).

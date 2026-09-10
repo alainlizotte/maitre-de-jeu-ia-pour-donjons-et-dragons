@@ -124,7 +124,31 @@ def _normaliser_messages(messages: list[Message]) -> list[Message]:
         else:  # "user" — l'assistant (rare) reste tel quel
             precedente_avait_tool_calls = False
             out.append(m)
-    return out
+
+    # Passe finale : ALTERNANCE STRICTE user/assistant. Les templates Jinja
+    # strictes (Ministral : « conversation roles must alternate user and
+    # assistant roles except for tool calls and results ») lèvent une
+    # exception (500) dès que deux messages consécutifs portent le même rôle
+    # — typiquement les correctifs système requalifiés en `user` injectés en
+    # fin de conversation. On fusionne les doublons consécutifs (contenus
+    # concaténés) et on jette les messages vides.
+    fusion: list[Message] = []
+    for m in out:
+        if not (m.content or "").strip() and not m.tool_calls:
+            continue  # message vide : du bruit de plus pour la template
+        precedent = fusion[-1] if fusion else None
+        if (
+            precedent is not None
+            and precedent.role == m.role
+            and precedent.role in ("user", "assistant")
+            and not precedent.tool_calls
+            and not m.tool_calls
+        ):
+            sep = "\n\n" if precedent.content and m.content else ""
+            precedent.content = (precedent.content or "") + sep + (m.content or "")
+            continue
+        fusion.append(m)
+    return fusion
 
 
 # --------------------------------------------------------------------------- #
@@ -198,6 +222,13 @@ class OllamaClient:
             "repetition_penalty": self.cfg.repetition_penalty,
             "stream": False,
         }
+        # Sampling llama.cpp (doc Unsloth Qwen3.5) : min_p toujours, top_k si
+        # > 0. Ces champs sont ignorés/neutralisés par d'éventuels backends
+        # ne les reconnaissant pas (ollama gère les siens via `options`).
+        if self.cfg.backend == "llamacpp":
+            payload["min_p"] = self.cfg.min_p
+            if self.cfg.top_k and self.cfg.top_k > 0:
+                payload["top_k"] = self.cfg.top_k
         # Budget de génération (llama.cpp : -1 par défaut ; on borne pour
         # éviter les réponses interminables et libérer le tour plus vite).
         if getattr(self.cfg, "max_tokens", 0) and self.cfg.max_tokens > 0:
@@ -270,6 +301,10 @@ class OllamaClient:
             "repetition_penalty": self.cfg.repetition_penalty,
             "stream": True,
         }
+        if self.cfg.backend == "llamacpp":
+            payload["min_p"] = self.cfg.min_p
+            if self.cfg.top_k and self.cfg.top_k > 0:
+                payload["top_k"] = self.cfg.top_k
         if getattr(self.cfg, "max_tokens", 0) and self.cfg.max_tokens > 0:
             payload["max_tokens"] = self.cfg.max_tokens
         # Options natives Ollama (num_ctx, top_k, …) — calibrées dans config.yaml.
@@ -463,6 +498,14 @@ class OllamaClient:
                 # "model is already loaded" (charging terminé) n'est pas une erreur
                 if r.status_code == 400 and "already loaded" in r.text.lower():
                     _log.debug("llamacpp model already loaded: %s", self.cfg.model)
+                    return True
+                # "model is already running" = le SLOT est occupé (génération en
+                # cours, seule une requête à la fois sur le GGUF) : le modèle est
+                # BIEN chargé — pas une erreur. Sans cette clause, chaque appel
+                # concurrent (open-webui partageant localhost:8080, retry d'une
+                # retransmission) spammait « load failed (400) » à chaque tour.
+                if r.status_code == 400 and "already running" in r.text.lower():
+                    _log.debug("llamacpp model busy (déjà chargé): %s", self.cfg.model)
                     return True
                 # "model is already loading" → chargement en cours (course multi-tours
                 # ou contention VRAM avec ComfyUI). On ne peut pas encore servir de

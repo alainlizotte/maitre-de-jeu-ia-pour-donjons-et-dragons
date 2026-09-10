@@ -106,20 +106,31 @@ async def incanter_sort(
 
     # 3) Préparé / connu ------------------------------------------------------
     etat_sorts = cat.sorts_de_fiche(fiche)
+    # Une fiche avec un champ `sorts` présent (même vide) a été configurée
+    # via le formulaire : validation STRICTE. Une fiche SANS champ `sorts`
+    # (créée vite / importée) n'a jamais eu de liste choisie : l'incantation
+    # d'un sort castable est alors AUTO-ADOPTÉE à la première utilisation —
+    # sinon un Sorcier/Magicien sans formulaire ne pourrait JAMAIS lancer
+    # (observé en e2e : incanter_sort refusé en boucle, combat figé).
+    sorts_configures = isinstance(fiche.get("sorts"), dict)
     spontane = cat.type_lancement(classe) == "spontané"
     if spontane:
         if not any(_norm(s) == _norm(sort["nom"]) for s in etat_sorts["connus"]):
-            return ToolResult(
-                text=(f"⛔ **{sort['nom']}** n'est pas dans les sorts connus de "
-                      f"{nom_personnage} (spontané : liste fixe choisie à la création).")
-            )
+            if sorts_configures:
+                return ToolResult(
+                    text=(f"⛔ **{sort['nom']}** n'est pas dans les sorts connus de "
+                          f"{nom_personnage} (spontané : liste fixe choisie à la création).")
+                )
+            etat_sorts["connus"].append(sort["nom"])
     else:
         restants_prep = int(etat_sorts["prepares"].get(sort["nom"], 0))
         if restants_prep <= 0:
-            return ToolResult(
-                text=(f"⛔ **{sort['nom']}** n'a pas été préparé aujourd'hui par "
-                      f"{nom_personnage} — utilise preparer_sorts (repos/méditation).")
-            )
+            if sorts_configures:
+                return ToolResult(
+                    text=(f"⛔ **{sort['nom']}** n'a pas été préparé aujourd'hui par "
+                          f"{nom_personnage} — utilise preparer_sorts (repos/méditation).")
+                )
+            etat_sorts["prepares"][sort["nom"]] = 1
 
     # 4) Emplacement disponible ----------------------------------------------
     lvl = sort["niveau"]

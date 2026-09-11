@@ -115,6 +115,160 @@ _GENERIC_PROMPT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Animaux, compagnons, montures ET créatures importées sans type ni
+# `prompt_image` (« — » dans le bestiaire) : apparence anglaise curée pour
+# le générateur. Sans elle, le repli RAG renvoyait des blocs de stats (ou
+# rien) et Qwen-Image inventait une créature aléatoire (« Ane » → démon
+# cuirassé, « Belette » → chat, observé en pré-génération 54de40ed).
+# Les variantes « sanguinaire » = gabarit Félon (MM 3.5) : cornes + yeux
+# rouges braise.
+_APPARENCES_CUREES_EN: dict[str, str] = {
+    "aigle": "majestic golden eagle, hooked beak, powerful talons",
+    "ane": "gray donkey with long ears and sturdy hooves",
+    "babouin": "baboon ape, dog-like muzzle, shaggy gray fur, long limbs",
+    "belette": "slim brown weasel, elongated sinuous body, short legs",
+    "bison": "massive bison, shaggy brown coat, curved horns",
+    "blaireau": "european badger, black and white striped face, heavy claws",
+    "calmar": "giant squid, pale flesh, long tentacles, large watchful eye",
+    "chameau": "desert camel, tan fur, humped back, long lashes",
+    "chat": "sleek tabby house cat, alert slit eyes",
+    "chauve_souris": "small brown bat, leathery membranous wings, fanged muzzle",
+    "chouette": "horned owl, large round golden eyes, mottled feathers",
+    "corbeau": "black raven, glossy feathers, sharp beak",
+    "crapaud": "warty toad, wide mouth, bulging eyes",
+    "faucon": "peregrine falcon, pointed wings, fierce yellow eyes",
+    "glouton": "wolverine, stocky muscular build, dark fur, sharp fangs",
+    "leopard": "leopard, spotted golden coat, muscular feline body",
+    "lezard": "small green lizard, long tail, quick feet",
+    # NB : « (varan) » laisse un underscore final via _normalise_nom.
+    "lezard_carnivore_varan_": "monitor lizard, venomous drooling jaws, long claws",
+    "marsouin": "porpoise, sleek gray body, blunt snout",
+    "mulet": "mule, long ears, sturdy pack frame",
+    "pieuvre": "octopus, eight suckered arms, bulbous mantle",
+    "poney": "small shaggy pony, gentle eyes",
+    "poney_de_guerre": "barded war pony, muscular, trained for battle",
+    "raie_manta": "giant manta ray, wide winged, gliding under water",
+    "sanglier": "wild boar, bristly dark hide, curved tusks",
+    "belette_sanguinaire": "ferocious dire weasel, elongated savage body, small horns, burning red eyes",
+    "blaireau_sanguinaire": "ferocious dire badger, black and white fur, small horns, burning red eyes",
+    "chauve_souris_sanguinaire": "dire bat, broad leathery wings, small horns, burning red eyes",
+    "glouton_sanguinaire": "dire wolverine, massive shoulders, small horns, burning red eyes",
+    "gorille_sanguinaire": "ferocious dire gorilla, massive arms, small horns, burning red eyes",
+    "lion_sanguinaire": "fiendish lion, great mane, small horns, burning red eyes",
+    "loup_sanguinaire": "fiendish wolf, bristling hackles, small horns, burning red eyes",
+    "rat_sanguinaire": "fiendish giant rat, diseased fur, small horns, burning red eyes",
+    "sanglier_sanguinaire": "fiendish boar, bristly hide, curved tusks, small horns, burning red eyes",
+    "tigre_sanguinaire": "fiendish tiger, orange striped coat, small horns, burning red eyes",
+    "deinonychus": "deinonychus raptor, feathered sickle-clawed dinosaur",
+    "elasmosaure": "elasmosaurus, long-necked plesiosaur, flippers",
+    "megaraptor": "megaraptor, huge sickle-clawed raptor dinosaur",
+    "ours_hibou": "owl bear, massive bear body, owl-like beaked face, feathered shoulders",
+    "pegase": "pegasus, white winged horse, feathered wings",
+    "feu_follet": "floating sphere of ghostly glowing light, sinister aura",
+    "homoncule": "small winged homunculus, gargoyle-like familiar, bat wings",
+    "pseudo_dragon": "tiny red pseudo-dragon, impish dragon with wings",
+    # Créatures DRS importées sans type — noms français canoniques.
+    "horreur_chasseresse": "insectoid hunter horror, chitinous stalker, grasping claws, multiple eyes",
+    "destrakhan": "rolling skeletal construct, wheel-shaped undead spinning on bladed rim",
+    "dragonne": "drake-lion hybrid, dragon head, winged lion body, scaled hindquarters",
+    "etrangleur": "strangler fiend, translucent rubbery gray body, long strangling arms",
+    "ettercap": "ettercap, hunched spider-humanoid, pale multi-eyed face, clumsy clawed hands",
+    "felin_marin": "sea cat, feline head and forequarters, fish tail, finned flanks",
+    "foreur": "burrowing subterranean horror, armored drill-like head, tunnel maw",
+    "fumigon": "smoke dragon, semi-solid vapor body, smoldering ember eyes",
+    "garde_anime": "animated guard construct, hollow suit of armor floating, glowing eyes within helm",
+    "geant_du_feu": "fire giant, obsidian-skinned towering humanoid, forge-blackened armor",
+    "geant_des_nuages": "cloud giant, towering elegant humanoid, sky-blue skin, floating citadel garb",
+    "geant_des_pierres": "stone giant, gray granite-skinned humanoid, angular features, stone tablet",
+    "geant_des_tempetes": "storm giant, towering humanoid, pearl-hued skin, crackling lightning aura",
+    "girallon": "girallon, four-armed white-furred ape, fanged muzzle",
+    "jann": "jann genie, noble human form, ornate desert vestments, shimmering air",
+    "annis": "annis hag, blue-skinned giantess, black eyes and hair, iron claws",
+    "hurleur": "howler fiend, porcupine-like beast bristling with quills, howling maw",
+    "nymphe": "nymph, breathtakingly beautiful woman, flowing verdant hair, radiant grace",
+    "plasme": "amorphous plasma ooze, flowing translucent body, crackling energy veins",
+    "ravageur_gris": "hulking gray-skinned ravager, corded muscle, savage claws",
+    "rhast": "grotesque undead rhast, ragged flesh, hunched predator build",
+    "secreteur": "dripping fungal horror, oozing secretions, bloated sacs",
+    "androsphynx": "androsphinx, lion body with bearded human head, great wings",
+    "criocephale": "ram-headed criosphinx, lion body, curled ram horns",
+    "hieracosphynx": "hieracosphinx, falcon-headed sphinx, lion body, dark plumage",
+    "sphinge": "gynosphinx, lion body with serene woman head, ornate headdress",
+    "tenebreux_aile": "winged dark creeper, shrouded in tattered shadow, bat-like wings",
+    "tenebreux_bipede": "dark creeper humanoid, wrapped head to toe in shadow bandages",
+    "tenebreux_rampant": "crawling dark creeper, low slinking shadow-wrapped body",
+    "tertre_errant": "walking mound, shambling earthen hill with hidden maw and limbs",
+    "criard": "shrieking pale creature, distended gaping mouth, spindly limbs",
+    "thallophyte_violet": "violet fungal plant creature, spongy stalk body, grasping tendrils",
+    "thallophyte_spectrale": "ghostly fungal plant creature, pale spore-laden fronds",
+    "thoqqua": "thoqqua, elemental fire worm, molten serpentine body, superheated horn",
+    "tormante": "tormenting fiend, flaying barbed tendrils, writhing form",
+    "torve": "hunched twisted brute, warped frame, sidelong glaring eyes",
+    "traqueur_invisible": "invisible stalker, humanoid outline shimmering in the air, barely visible",
+    "triton": "triton, aquatic humanoid, green-scaled skin, ornate trident",
+    "troglodyte": "troglodyte, reptilian humanoid, dull gray scaled skin, fetid musk",
+    # Autres animaux courants présents dans le bestiaire (type « — »).
+    "crocodile": "crocodile, armored scaly body, long tooth-filled jaws",
+    "elephant": "elephant, gray trunked giant, ivory tusks",
+    "guepard": "cheetah, spotted lithe hunter, tear-marked face",
+    "hyene": "hyena, sloped hunched body, mangy spotted coat",
+    "lion": "lion, golden-maned great cat",
+    "ours_brun": "brown bear, massive grizzly, curved claws",
+    "ours_polaire": "polar bear, white-furred arctic bear",
+    "rat": "scurrilous brown rat, naked tail, beady eyes",
+    "rhinoceros": "rhinoceros, thick gray hide, great horn",
+    "serpent_constricteur": "giant constrictor snake, coiling muscular body",
+    "singe": "monkey, agile tree primate, long tail",
+    "tigre": "tiger, orange striped great cat",
+    "kraken": "kraken, colossal deep-sea squid monster, ship-crushing tentacles",
+    "calmar_geant": "giant squid, enormous pale mantle, grasping tentacles",
+    "crocodile_geant": "giant crocodile, massive armored jaws",
+    "gorille": "silverback gorilla, knuckle-walking giant ape",
+    "pieuvre_geante": "giant octopus, eight huge suckered arms",
+    "hibou_geant": "giant owl, huge silent raptor, luminous eyes",
+    "gobelours": "bugbear, hulking furry goblinoid, long arms, fanged muzzle",
+    "gorgone": "gorgon, iron-scaled bull with petrifying breath, metallic plates",
+    "grick": "grick, worm-like serpent with beaked maw and tentacles",
+    "guenaude_marine": "sea hag, bloated green-skinned crone, fishbelly pale eyes",
+    "guenaude_verte": "green hag, warty green-skinned crone, clawed fingers",
+    "naga_aquatique": "aquatic naga, serpent coil with human head, blue-green scales",
+    "naga_corrupteur": "spirit naga, sinister serpent coil with human head, dark scales",
+    "naga_gardien": "guardian naga, majestic serpent coil with human head, golden scales",
+    "naga_tenebreux": "dark naga, serpent coil with human head, black-purple scales",
+    "necrophage": "ghoul-like necrophage, corpse-pale scavenger, ragged claws",
+    "derro": "derro, pale blue-white-skinned mad dwarf, wild white hair, jagged teeth",
+    "nuee_d_araignees": "swarming mass of spiders, countless skittering bodies",
+    "nuee_de_criquets": "swarming locust cloud, devouring chitin haze",
+    "nuee_de_guepes_infernales": "swarming hell wasp cloud, red-eyed stinging bodies",
+    "nuee_de_mille_pattes": "swarming centipede mass, countless chitinous legs",
+    "nuee_de_rats": "swarming rat flood, countless gnawing bodies",
+    "ombre": "living shadow undead, bodiless dark silhouette, smoky edges",
+    "otyugh": "otyugh, bloated mound body, three legs, two tentacle arms, eye-stalk maw",
+    "oxydeur": "rust-eating ooze construct, corroded metal veins",
+    "rakshasa": "rakshasa, tiger-headed humanoid in fine robes, backwards hands",
+    "ravid": "ravid undead, skeletal spark-bearer, glowing positive energy",
+    "remorhaz": "remorhaz, gigantic arctic centipede worm, glowing hot segments",
+    "rukh": "rukh, colossal iron raptor bird of war",
+    "strige": "strige, winged vampire-ish stingbird, bloated blood-fed body",
+    "sylvanien": "sylvan guardian, woodland fey warrior, leaf-woven garb",
+    "tarasque": "tarasque, colossal armored beast, spined shell, gaping devouring maw",
+    "tendriculaire": "tendriculos, enormous plant-bramble horror, grasping vines",
+    "titan": "titan, towering godlike giant, regal and immense",
+    "vampirien": "vampiric winged creature, leathery wings, blood-draining maw",
+    "vargouille": "vargouille, flying severed-head vampire, trailing hair, dangling entrails",
+    "pouding_noir": "black pudding ooze, glossy acidic black mass",
+    "vase_grise": "gray ooze, stone-like slimy sludge mass",
+    "ver_des_glaces": "ice worm, frost-rimed burrowing serpentine worm",
+    "abeille_geante": "giant bee, furry striped bumble body, translucent wings",
+    "charancon_geant": "giant weevil beetle, long snout, iridescent carapace",
+    "guepe_geante": "giant wasp, yellow-black striped body, buzzing wings",
+    "punaise_de_feu_geante": "giant fire beetle, glowing amber glands, armored shell",
+    "scarabe_geant": "giant scarab beetle, armored iridescent shell",
+    "wiverne": "wyvern, sinuous winged dragon, barbed stinging tail",
+    "xill": "xill, four-armed reptilian planar humanoid, blue scaled skin",
+    "yrthak": "yrthak, flightless blind dragon, sonic lance crest",
+}
+
 # Traduction FR→EN des types du bestiaire — le générateur d'images (Qwen-Image)
 # réagit bien mieux aux mots-clés anglais (« undead », « giant »…).
 _TYPES_EN: list[tuple[str, str]] = [
@@ -158,7 +312,11 @@ def _desc_locale(m: Optional[dict[str, Any]]) -> str:
     """Description visuelle d'un monstre depuis le bestiaire local.
 
     - `prompt_image` riche (ex. goule : « ghoul undead creature, gaunt
-      human, elongated claws... ») → utilisé tel quel ;
+      human, elongated claws... ») — utilisé tel quel ;
+    - sinon ANIMAL connu (type « — » : compagnons animaux, montures) →
+      apparence anglaise curée `_ANIMAUX_EN` (le repli RAG renvoie des
+      blocs de stats ou RIEN pour ces entrées — images aléatoires
+      observées : « Ane » → démon cuirassé, « Belette » → chat) ;
     - sinon on retombe sur le type traduit en anglais (donne déjà
       « undead creature » à Qwen-Image au lieu de rien du tout).
     Renvoie "" si le monstre est absent ou sans information exploitable.
@@ -168,6 +326,11 @@ def _desc_locale(m: Optional[dict[str, Any]]) -> str:
     pi = str(m.get("prompt_image") or "").strip()
     if pi and not _GENERIC_PROMPT_RE.match(pi):
         return pi
+    # Animaux et montures (type « — ») : apparence curée — le repli RAG
+    # renvoie des blocs de stats ou rien pour ces entrées.
+    animal = _APPARENCES_CUREES_EN.get(_normalise_nom(str(m.get("nom") or "")))
+    if animal:
+        return animal
     return _type_en(str(m.get("type", "")))
 
 
@@ -198,6 +361,14 @@ async def _desc_via_rag(nom: str) -> str:
         # On ne garde que les extraits qui parlent bien DE ce monstre.
         hay = _normalise_nom(h.title + " " + h.text[:300])
         if n not in hay and not any(p in hay for p in n.split("_") if len(p) >= 4):
+            continue
+        # Rejet des BLOCS DE STATS (imports DRS : « # Nom / Dés de vie / … »)
+        # — nourrir Qwen-Image avec ça donne une créature aléatoire. On ne
+        # garde que les vrais PORTRAITS (le MM VF commence par
+        # « Ce ... ressemble à ... »).
+        debut = _normalise_nom(h.text[:250])
+        if "ressemble" not in debut and (
+                "des_de_vie" in debut or "source" in debut):
             continue
         extrait = h.text.strip()
         if total + len(extrait) > 900:

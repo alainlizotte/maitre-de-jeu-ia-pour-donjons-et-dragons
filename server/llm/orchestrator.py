@@ -635,6 +635,64 @@ def extract_toolcall_attr_calls(text: str) -> tuple[list[dict[str, Any]], str]:
 
 
 # --------------------------------------------------------------------------- #
+#  Blocs <tool_call><function=nom><parameter=clé>…</parameter></function>
+# --------------------------------------------------------------------------- #
+# Variante observée en partie réelle (54de40ed) : le modèle écrit l'appel
+# façon ChatML — wrapper `<tool_call>` optionnel, `<function=nom>`, puis les
+# arguments en enfants `<parameter=clé>valeur</parameter>`. Pire : après le
+# premier paramètre il OUBLIE le préfixe `parameter=` et invente des balises
+# nues (`<item>…</item>`, `<quantity>1</quantity>`). Aucun parseur existant
+# ne couvrait ce format → il fuyait tel quel dans la narration montrée au
+# joueur et l'action n'était JAMAIS exécutée.
+_FUNCTION_BLOCK_RE = re.compile(
+    r"[ \t]*(?:<tool_call>\s*)?"
+    r"<function=(?P<name>[^<>=\s]+)\s*>"
+    r"(?P<body>.*?)"
+    r"</function\s*>"
+    r"(?:\s*</tool_call\s*>)?[ \t]*",
+    re.IGNORECASE | re.DOTALL,
+)
+_FUNCTION_PARAM_RE = re.compile(
+    r"<parameter=(?P<pkey>[^<>=\s]+)\s*>(?P<pval>.*?)</parameter\s*>"
+    r"|<(?P<bkey>[a-zA-Z_][\w\-]*)>(?P<bval>.*?)</(?P=bkey)\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def extract_function_blocks(text: str) -> tuple[list[dict[str, Any]], str]:
+    """Extrait les blocs `<function=nom>…</function>` (wrapper `<tool_call>`
+    optionnel) avec arguments `<parameter=clé>` ou balises nues.
+
+    Renvoie `(calls, texte_nettoyé)` au format des tool_calls natifs ; les
+    blocs et leurs wrappers résiduels sont retirés du texte.
+    """
+    calls: list[dict[str, Any]] = []
+    spans: list[tuple[int, int]] = []
+    for m in _FUNCTION_BLOCK_RE.finditer(text or ""):
+        name = (m.group("name") or "").strip().strip("\"'")
+        if not name:
+            continue
+        args: dict[str, Any] = {}
+        for pm in _FUNCTION_PARAM_RE.finditer(m.group("body")):
+            key = (pm.group("pkey") or pm.group("bkey") or "").strip()
+            val = (pm.group("pval") if pm.group("pkey") is not None
+                   else pm.group("bval")) or ""
+            if not key:
+                continue
+            args[key] = val.strip()
+        calls.append({"name": name, "arguments": args})
+        spans.append((m.start(), m.end()))
+    if not calls:
+        return [], text or ""
+    cleaned = text or ""
+    for s, e in reversed(spans):
+        cleaned = cleaned[:s] + cleaned[e:]
+    # Wrappers orphelins résiduels (le modèle ferme rarement `<tool_call>`).
+    cleaned = re.sub(r"</?tool_call\s*>", "", cleaned, flags=re.IGNORECASE)
+    return calls, cleaned
+
+
+# --------------------------------------------------------------------------- #
 #  Résolution floue de noms d'outils (Lancer_d20 → lancer_d20, etc.)
 # --------------------------------------------------------------------------- #
 def _norm_tool_name(name: str) -> str:
@@ -684,6 +742,27 @@ def _norm_arg_name(name: str) -> str:
     return _norm_tool_name(name)
 
 
+# Synonymes d'arguments fréquemment inventés par les LLM (anglicismes,
+# variantes) → nom CANONIQUE du paramètre. Consultés quand la résolution
+# exacte/normalisée/contenue échoue, et VÉRIFIÉS contre les params réels du
+# tool (un alias qui ne correspond à aucun paramètre est simplement ignoré).
+# Observé en 54de40ed : `inventaire_ajouter(item=…, quantity=…)` au lieu de
+# `objet`/`quantite` → l'objet n'était jamais ajouté.
+_ALIASES_ARGS_NORM: dict[str, str] = {
+    "item": "objet",
+    "object": "objet",
+    "itemname": "objet",
+    "quantity": "quantite",
+    "qty": "quantite",
+    "count": "quantite",
+    "amount": "quantite",
+    "weight": "poids",
+    "character": "nom",
+    "charactername": "nom",
+    "charname": "nom",
+}
+
+
 def sanitize_tool_args(
     spec: Any, args: dict[str, Any]
 ) -> tuple[dict[str, Any], list[str]]:
@@ -728,6 +807,15 @@ def sanitize_tool_args(
                             if _norm_arg_name(p).startswith("nom") and nk in _norm_arg_name(p)]
                 if len(nom_hits) == 1:
                     target = nom_hits[0]
+        if target is None:
+            alias = _ALIASES_ARGS_NORM.get(_norm_arg_name(key))
+            if alias:
+                cand = alias if alias in expected else norm_map.get(alias)
+                if cand:
+                    target = cand
+                    notes.append(
+                        f"argument « {key} » interprété comme « {cand} »"
+                    )
         if target is None:
             continue  # argument inconnu → ignoré (invoke_tool filtre aussi)
         # 2. Placeholders numériques (« N », « X », « Calculé sur la fiche »).
@@ -1137,6 +1225,11 @@ def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None)
     out = _TOOLCALL_ATTR_SELFCLOSE_RE.sub("", out)
     out = _TOOLCALL_ATTR_PAIR_RE.sub("", out)
     out = _TOOLCALL_ORPHAN_CLOSE_RE.sub("", out)
+    # Blocs `<function=..><parameter=..>` (ChatML/Qwen) + wrappers orphelins :
+    # si un tel bloc atteint la narration FINALE (outils désactivés, budget
+    # épuisé…), il ne doit JAMAIS être montré au joueur.
+    out = _FUNCTION_BLOCK_RE.sub("", out)
+    out = re.sub(r"</?tool_call\s*>", "", out)
     for pat in _PROSE_PLACEHOLDER_RES:
         out = pat.sub("", out)
     out = _tidy_empty_lines(out)
@@ -1478,6 +1571,46 @@ class Orchestrator:
                     finish_reason=chat.finish_reason,
                     raw=chat.raw,
                 )
+
+            # --- Bter. Blocs <function=..><parameter=..> (ChatML/Qwen) ------
+            # Variante `<tool_call><function=nom><parameter=clé>…` — avec
+            # sometimes des balises d'args nues (`<item>…</item>`). Normalisé
+            # vers le pipeline natif, sinon il fuit dans la narration.
+            func_calls, func_clean = extract_function_blocks(chat.content or "")
+            if func_calls and not result.narration_forcee:
+                _log.info(
+                    "%d bloc(s) <function=..> récupéré(s) dans content : %s",
+                    len(func_calls),
+                    ", ".join(c["name"] for c in func_calls),
+                )
+                if use_native:
+                    chat = ChatResult(
+                        content=func_clean,
+                        tool_calls=(chat.tool_calls or []) + func_calls,
+                        finish_reason=chat.finish_reason,
+                        raw=chat.raw,
+                    )
+                else:
+                    # Mode prompt : pas de pipeline natif → exécution directe
+                    # (comme les balises <tool> en section C), puis boucle
+                    # pour narrer le résultat officiel.
+                    await self._preserve_narration(
+                        result, func_clean.strip(), on_delta)
+                    work.append(Message(
+                        role="assistant", content=func_clean.strip()))
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "ℹ️ SYSTÈME : ton bloc `<function=…>` a été "
+                            "INTERCEPTÉ et exécuté réellement. Les résultats "
+                            "officiels suivent dans les messages tool — "
+                            "n'écris JAMAIS la syntaxe d'appel dans la "
+                            "narration."
+                        ),
+                    ))
+                    await self._exec_tool_calls_prompt(
+                        func_calls, ctx, work, result, on_event)
+                    continue
 
             # --- B. Mode natif : tool_calls présents -----------------------
             if chat.tool_calls and use_native and not result.narration_forcee:

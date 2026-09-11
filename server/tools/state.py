@@ -201,6 +201,8 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
 
     from .monstres import (
         _find_monstre_strict, _load_bestiaire, _suggestions,
+        _est_monstre_generique, _refus_generique_texte,
+        _generique_autorise_scenario,
     )
 
     noms = [n.strip() for n in monstres.split(",") if n.strip()]
@@ -241,6 +243,15 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
         if m is None:
             refus.append(nom)
             continue
+        # PLACEHOLDER (« Mort-vivant de taille M »…) : fiche type+taille sans
+        # identité — ni illustration correcte ni stats assumées. On refuse et
+        # on oriente vers le scénario / les créatures réelles du même type.
+        # EXCEPTION : le scénario actif RÉFÉRENCE ce gabarit (Crypts Kelemvor,
+        # Army of the Damned…) → rencontre légitime, on laisse passer.
+        if _est_monstre_generique(m) and not _generique_autorise_scenario(
+            ctx, nom
+        ):
+            return ToolResult(text=_refus_generique_texte(ctx, nom, m))
         monstres_ok.append(m)
     if refus:
         lignes_refus = ["⛔ **Monstres refusés (hors bestiaire officiel 3.5) :**"]
@@ -807,6 +818,8 @@ async def combat_ajouter_combattant(
 
     from .monstres import (
         _find_monstre_strict, _load_bestiaire, _suggestions,
+        _est_monstre_generique, _refus_generique_texte,
+        _generique_autorise_scenario,
     )
 
     state = _party(ctx)
@@ -840,6 +853,11 @@ async def combat_ajouter_combattant(
             "officielles) — rejoue avec un nom du bestiaire."
         )
         return ToolResult(text="\n".join(lignes))
+    # PLACEHOLDER (« Mort-vivant de taille M »…) : fiche type+taille sans
+    # identité — refusée, avec orientation scénario/bestiaire réel. Sauf si
+    # le scénario actif référence ce gabarit (rencontre légitime).
+    if _est_monstre_generique(m) and not _generique_autorise_scenario(ctx, nom):
+        return ToolResult(text=_refus_generique_texte(ctx, nom, m))
     label_base = str((m or {}).get("nom") or nom).strip() or nom
 
     # Désambiguïsation vs les combattants DÉJÀ sur le plateau (homonymes).

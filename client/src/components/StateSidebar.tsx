@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/rest";
 import { useParty } from "../store";
 import type { Personnage } from "../api/types";
+import { busteImage } from "../utils/imageBust";
 import { XpBar, ChargeBar } from "./Bars";
 import { sortsEtat } from "../lib/sorts";
 
@@ -59,7 +60,7 @@ function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
       return (
         <img
           key={`${slug}-${retries}`}
-          src={`${url}?t=${Date.now()}`}
+          src={`${url}?t=${busteImage(url)}`}
           alt={nom}
           className={`${size} w-full object-contain rounded border border-stone-700 opacity-50`}
           onError={() => setRetries((r) => r + 1)}

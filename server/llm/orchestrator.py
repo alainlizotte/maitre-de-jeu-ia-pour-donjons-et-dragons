@@ -394,7 +394,9 @@ def _bigrammes_fenetres(mots: list[str], fenetre: int = 4) -> set[tuple[str, str
 
 
 def trouve_repetition(
-    narration: str, historique: list["Message"]
+    narration: str,
+    historique: list["Message"],
+    seuil: float = _REPET_SEUIL_CHEVAUCHEMENT,
 ) -> Optional[str]:
     """Renvoie un extrait de la narration précédente que `narration` répète,
     ou None si la narration est nouvelle.
@@ -402,10 +404,14 @@ def trouve_repetition(
     Deux critères (le premier atteint suffit) :
     - le préfixe normalisé de la narration apparaît tel quel dans un message
       assistant récent (copie quasi verbatim) ;
-    - chevauchement des bigrammes fenêtrés de mots ≥ seuil (paraphrase qui
+    - chevauchement des bigrammes fenêtrés de mots ≥ `seuil` (paraphrase qui
       reprend la scène, même en comprimant/réordonnant ; les narrations
       inédites restent ≪ seuil).
     Les messages système/tool/user et les narrations très courtes sont ignorés.
+
+    `seuil` : en COMBAT, les rounds rejouent la même action (« j'attaque à la
+    hache ») — des narrations voisines sont NORMALES ; on ne relance que les
+    vraies copies (l'orchestrateur passe un seuil plus haut, cf. D1ter).
     """
     cand = _normalise_pour_compare(narration)
     if len(cand) < _REPET_MIN_CANDIDAT:
@@ -425,7 +431,7 @@ def trouve_repetition(
         bigrams_ref = _bigrammes_fenetres(ref.split())
         if bigrams_cand and bigrams_ref:
             overlap = len(bigrams_cand & bigrams_ref) / len(bigrams_cand)
-            if overlap >= _REPET_SEUIL_CHEVAUCHEMENT:
+            if overlap >= seuil:
                 return ref[:120]
     return None
 
@@ -1383,6 +1389,23 @@ class Orchestrator:
         # spirale correction 2 → 3 → boucle épuisée (observé en combat,
         # partie fa4e7366).
         ids_corriges: list[int] = []
+        # Phase combat : les rounds rejouent la MÊME action (« j'attaque à la
+        # hache ») → des narrations voisines sont normales. On ne relance que
+        # les vraies copies (préfixe verbatim) ou les recouvrements massifs
+        # (partie 44b02cfc : 3 corrections + fallback PERDUS à chaque round
+        # sur du texte pourtant adapté à l'action répétée du joueur — les
+        # relances n'ont jamais produit de variation utile).
+        phase_combat = False
+        try:
+            _etat_tour = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+            ).load()
+            phase_combat = (
+                str(_etat_tour.get("phase") or "").strip().lower() == "combat"
+            )
+        except Exception:                                    # noqa: BLE001
+            phase_combat = False
+        seuil_repet = 0.75 if phase_combat else _REPET_SEUIL_CHEVAUCHEMENT
         for _ in range(self.max_iterations):
             result.iterations += 1
             use_native = self.tool_mode in ("native", "auto")
@@ -1584,6 +1607,55 @@ class Orchestrator:
                 ))
                 await self._exec_tool_calls_prompt(prose_calls, ctx, work, result, on_event)
                 continue
+
+            # --- A0. Garde-fou « escalier sans aucun appel d'outil » -------
+            # Le modèle répond en pur récit (« vous êtes dans la salle des
+            # escaliers… ») sans appeler AUCUN outil, alors que le joueur a
+            # demandé monter/descendre depuis une salle d'escaliers — le
+            # garde-fou `_rediriger_escalier` ne couvre que les appels
+            # `carte_donjon_explorer`. Observé en partie 54de40ed : le tour
+            # se terminait en description de la salle, le groupe ne changeait
+            # jamais d'étage. On force ici l'appel manquant
+            # `carte_donjon_etage` (une seule fois par tour, cf. trace
+            # ci-dessous), puis on boucle pour la narration du résultat.
+            if (
+                not result.narration_forcee
+                and not chat.tool_calls
+                and not any(
+                    tc.get("name") == "carte_donjon_etage"
+                    for tc in result.tool_calls_trace
+                )
+            ):
+                intention = self._intention_escalier(work)
+                if intention and await self._groupe_dans_escalier(ctx):
+                    _log.warning(
+                        "escalier sans appel d'outil : intention joueur "
+                        "« %s » mais aucune tool call → appel forcé de "
+                        "carte_donjon_etage(direction=%s)",
+                        intention, intention,
+                    )
+                    work.append(Message(
+                        role="assistant", content=(chat.content or "").strip(),
+                    ))
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "ℹ️ SYSTÈME : le joueur a demandé de "
+                            f"{intention} l'escalier et le groupe est dans "
+                            "une salle d'escaliers, mais tu n'as appelé "
+                            "AUCUN outil. L'appel `carte_donjon_etage` "
+                            "vient d'être exécuté pour toi — narre le "
+                            "CHANGEMENT D'ÉTAGE d'après le résultat "
+                            "officiel ci-dessous (JAMAIS `carte_donjon_"
+                            "explorer` pour un escalier)."
+                        ),
+                    ))
+                    await self._exec_tool_calls_prompt(
+                        [{"name": "carte_donjon_etage",
+                          "arguments": {"direction": intention}}],
+                        ctx, work, result, on_event,
+                    )
+                    continue
 
             # --- A. Détection de simulation textuelle ----------------------
             # (après B/C/C2 : si un appel réel a été récupéré, ce n'est plus
@@ -1843,7 +1915,7 @@ class Orchestrator:
                 ]
                 echo = (
                     None if revisite_froide
-                    else trouve_repetition(narration, reference)
+                    else trouve_repetition(narration, reference, seuil=seuil_repet)
                 )
                 if echo:
                     result.corrections += 1
@@ -2036,6 +2108,26 @@ class Orchestrator:
             return "monter"
         return None
 
+    # ------------------------------------------------------------------ #
+    async def _groupe_dans_escalier(self, ctx: ToolContext) -> bool:
+        """True si le groupe se trouve actuellement (donjon.etage actif,
+        position `donjon.courant`) dans une salle de type « escaliers »."""
+        try:
+            from ..tools.cartes import _TYPES_ESCALIER, _grille_vers_dict
+            etat = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+            ).load()
+            donjon = etat.get("donjon") or {}
+            if not donjon.get("id"):
+                return False
+            courant = list(donjon.get("courant", [0, 0]))
+            cx, cy = int(courant[0]), int(courant[1])
+            salles = _grille_vers_dict(donjon.get("grille", []))
+            cour = salles.get((cx, cy)) or {}
+            return (cour.get("type") or "").strip().lower() in _TYPES_ESCALIER
+        except Exception:                                    # noqa: BLE001
+            return False
+
     async def _rediriger_escalier(
         self,
         resolved: str,
@@ -2054,21 +2146,7 @@ class Orchestrator:
         intention = self._intention_escalier(work)
         if not intention:
             return resolved, args, None
-        try:
-            from ..tools.cartes import _TYPES_ESCALIER, _grille_vers_dict
-            etat = PartyState(
-                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
-            ).load()
-            donjon = etat.get("donjon") or {}
-            if not donjon.get("id"):
-                return resolved, args, None
-            courant = list(donjon.get("courant", [0, 0]))
-            cx, cy = int(courant[0]), int(courant[1])
-            salles = _grille_vers_dict(donjon.get("grille", []))
-            cour = salles.get((cx, cy)) or {}
-            if (cour.get("type") or "").strip().lower() not in _TYPES_ESCALIER:
-                return resolved, args, None
-        except Exception:                                    # noqa: BLE001
+        if not await self._groupe_dans_escalier(ctx):
             return resolved, args, None
         _log.warning(
             "confusion escalier : carte_donjon_explorer(%s) appelé depuis "
@@ -2176,12 +2254,13 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ #
     @staticmethod
-    def _cap_tool_text(text: str, limit: int = 6000) -> str:
+    def _cap_tool_text(text: str, limit: int = 4000) -> str:
         """Tronque un résultat de tool volumineux avant réinjection dans le
         contexte LLM. Un texte intégral de PDF (24k chars ≈ 10k tokens) sature
         num_ctx et fait échouer chat/completions (400 llama.cpp). Le LLM n'a
         besoin que de l'essentiel pour agir ; la trace complète reste visible
-        dans les logs."""
+        dans les logs. 4000 chars ≈ 1200 tokens : plusieurs résultats tiennent
+        dans le tour même au plafond (contexte 20224, mesuré 44b02cfc)."""
         if len(text) <= limit:
             return text
         return text[:limit] + "\n…[résultat tronqué pour préserver le contexte]"

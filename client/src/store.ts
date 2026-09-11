@@ -2,6 +2,7 @@
 // Sert d'accumulateur des événements WS (delta streaming, tool_event, dm final).
 
 import { create } from "zustand";
+import { invaliderImage } from "./utils/imageBust";
 import type { ChatMessage, EncounterMonster, PartyState, ToolEvent } from "./api/types";
 
 const LAST_PLAYER_KEY = "dnd35.lastPlayer";
@@ -235,12 +236,17 @@ export const useParty = create<PartyStore>((set) => ({
   participants: [],
 
   monsters: [],
-  addMonster: (m) =>
+  addMonster: (m) => {
+    // Événement réel (image poussée par le serveur) : le cache-buster de
+    // CETTE URL est invalidé une fois — les re-renders suivants rechargent
+    // l'image sans la faire clignoter (cf. utils/imageBust.ts).
+    invaliderImage(m.url);
     set((st) =>
       st.monsters.some((x) => x.url === m.url)
         ? { monsters: [m, ...st.monsters.filter((x) => x.url !== m.url)] }
         : { monsters: [m, ...st.monsters].slice(0, 12) },
-    ),
+    );
+  },
   removeMonsterByNom: (nom) =>
     set((st) => {
       const key = normMonsterKey(nom);
@@ -251,20 +257,24 @@ export const useParty = create<PartyStore>((set) => ({
     }),
 
   scenes: [],
-  addScene: (sc) =>
+  addScene: (sc) => {
+    invaliderImage(sc.url);
     set((st) =>
       st.scenes.some((x) => x.url === sc.url)
         ? { scenes: [sc, ...st.scenes.filter((x) => x.url !== sc.url)] }
         : { scenes: [sc, ...st.scenes].slice(0, 20) },
-    ),
+    );
+  },
 
   salles: [],
-  addSalle: (sl) =>
+  addSalle: (sl) => {
+    invaliderImage(sl.url);
     set((st) =>
       st.salles.some((x) => x.url === sl.url)
         ? { salles: [sl, ...st.salles.filter((x) => x.url !== sl.url)] }
         : { salles: [sl, ...st.salles].slice(0, 20) },
-    ),
+    );
+  },
 
   addMessage: (m) => set((st) => ({ messages: [...st.messages, m] })),
 

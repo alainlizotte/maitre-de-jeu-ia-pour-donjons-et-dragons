@@ -27,6 +27,90 @@ from .tools.fiches import _CLASSES_35, _slug
 
 
 # --------------------------------------------------------------------------- #
+#  Équipement de création → prompt portrait (1 arme, 1 armure, 1 bouclier)
+# --------------------------------------------------------------------------- #
+# Le formulaire de création fait choisir arme(s), armure(s) et bouclier(s)
+# (catalogue PHB 3.5 de `server/catalogue.py`) ; ces choix sont persistés dans
+# `fiche["equipement"]` / `fiche["inventaire"]` comme noms libres. Les inclure
+# dans le prompt de portrait montre le personnage ÉQUIPÉ — rendu nettement
+# meilleur qu'un buste générique (demande utilisateur).
+_ARME_EN: dict[str, str] = {
+    "baton": "quarterstaff", "matraque": "club", "dague": "dagger",
+    "masse d'armes legere": "light mace", "faucille": "sickle",
+    "lance courte": "shortspear", "javeline": "javelin", "fronde": "sling",
+    "arbalete legere": "light crossbow",
+    "arbalete lourde": "heavy crossbow", "lance": "spear",
+    "epee longue": "longsword", "epee courte": "shortsword",
+    "rapiere": "rapier", "hache d'arme": "battleaxe",
+    "hache a deux mains": "greataxe", "espadon": "greatsword",
+    "masse d'armes lourde": "heavy mace", "fleau d'armes": "flail",
+    "marteau de guerre": "warhammer", "glaive": "glaive",
+    "hallebarde": "halberd", "arc court": "shortbow",
+    "arc long": "longbow",
+}
+_ARMURE_EN: dict[str, str] = {
+    "armure rembourree": "padded armor", "armure de cuir": "leather armor",
+    "cuir cloute": "studded leather armor",
+    "chemise de mailles": "chain shirt", "cuir epais": "hide armor",
+    "armure d'ecailles": "scale mail", "cotte de mailles": "chainmail",
+    "plastron": "breastplate", "harnois complet": "full plate armor",
+}
+_BOUCLIER_EN: dict[str, str] = {
+    "targe": "buckler", "bouclier bois leger": "light wooden shield",
+    "bouclier bois lourd": "heavy wooden shield",
+}
+# Mots-clés de classification (noms libres / hors catalogue).
+_MOTS_BOUCLIER = ("bouclier", "targe", "pavois")
+_MOTS_ARMURE = (
+    "armure", "cuir", "maille", "ecaille", "plastron", "harnois",
+    "plates", "cloute",
+)
+_MOTS_ARME = (
+    "hache", "epee", "dague", "masse", "marteau", "lance", "arc",
+    "arbalete", "glaive", "hallebarde", "espadon", "fleau", "rapiere",
+    "baton", "matraque", "faucille", "javeline", "fronde", "trident",
+)
+
+
+def _norm_equip(nom: str) -> str:
+    """Minuscules sans accents, espaces collapés (clé de traduction)."""
+    nf = unicodedata.normalize("NFKD", (nom or "").lower())
+    t = "".join(c for c in nf if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _extraire_equipement_portrait(
+    fiche: dict[str, Any],
+) -> tuple[str, str, str]:
+    """Sélectionne (1 arme, 1 armure, 1 bouclier) depuis les choix de
+    création (`equipement` + `inventaire` de la fiche, entrées dict ou str).
+
+    Classification : nom exact du catalogue (traduit EN), sinon mots-clés.
+    Renvoie des noms ANGLAIS prêts pour le prompt ("" si absent)."""
+    entrees: list[tuple[str, str]] = []   # (nom brut, nom normalisé)
+    for cle in ("equipement", "inventaire"):
+        for e in fiche.get(cle) or []:
+            if isinstance(e, dict):
+                nom = str(e.get("nom") or "").strip()
+            else:
+                nom = str(e or "").strip()
+            if nom:
+                entrees.append((nom, _norm_equip(nom)))
+
+    arme = armure = bouclier = ""
+    for nom, n in entrees:
+        if not n:
+            continue
+        if not bouclier and any(m in n for m in _MOTS_BOUCLIER):
+            bouclier = _BOUCLIER_EN.get(n, nom)
+        elif not armure and any(m in n for m in _MOTS_ARMURE):
+            armure = _ARMURE_EN.get(n, nom)
+        elif not arme and any(m in n for m in _MOTS_ARME):
+            arme = _ARME_EN.get(n, nom)
+    return arme, armure, bouclier
+
+
+# --------------------------------------------------------------------------- #
 #  Catalogue des races (PHB 3.5)
 # --------------------------------------------------------------------------- #
 # `traits_visuels` : fragments anglais injectés dans le prompt ComfyUI pour que
@@ -863,12 +947,28 @@ def construire_prompt_portrait(fiche: dict[str, Any]) -> str:
         if texte:
             details.append(texte.replace("\n", ", "))
 
+    # Équipement choisi à la création : 1 arme, 1 armure, 1 bouclier —
+    # le personnage est montré ÉQUIPÉ (rendu de portrait bien meilleur).
+    arme, armure, bouclier = _extraire_equipement_portrait(fiche)
+    if arme:
+        details.append(f"wielding a {arme}")
+    if armure:
+        details.append(f"wearing {armure}")
+    if bouclier:
+        details.append(f"{bouclier} strapped on the arm")
+    # De l'équipement est montré → on élargit le cadre (un simple
+    # « head and shoulders » cacherait l'arme et le bouclier).
+    cadre = (
+        "upper body portrait, " if (arme or armure or bouclier) else ""
+    )
+
     sujet = " ".join(sujets)
     corps = (
         f"heroic portrait of {sujet}, "
         + (", ".join(details) + ", " if details else "")
-        + "D&D fantasy character art, head and shoulders, "
-        "dramatic lighting, detailed digital painting, warm colors, "
+        + "D&D fantasy character art, "
+        + (cadre if cadre else "head and shoulders, ")
+        + "dramatic lighting, detailed digital painting, warm colors, "
         "high resolution, no text"
     )
     return corps

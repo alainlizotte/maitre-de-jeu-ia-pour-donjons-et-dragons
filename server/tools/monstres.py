@@ -460,6 +460,137 @@ def _find_monstre(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
     return meilleur4[2] if meilleur4 else None
 
 
+def _est_monstre_generique(m: Optional[dict[str, Any]]) -> bool:
+    """Vrai pour les entrées PLACEHOLDER du bestiaire (« Mort-vivant de
+    taille M », « Aberration de taille G »…) : nom = type + taille, champ
+    `type` = « — ». Importées d'un corpus DRS, ces 72 fiches n'ont NI
+    identité NI illustration correcte — ce ne sont pas des monstres
+    jouables. Le MJ doit choisir une créature réelle (zombie, goule…) ou un
+    ennemi officiel du scénario (partie fa4e7366/44b02cfc : un combat entier
+    tourné autour d'un « Mort-vivant de taille M » jamais prévu par le
+    module, avec image générique inadaptée)."""
+    if not isinstance(m, dict):
+        return False
+    if str(m.get("type") or "").strip() not in ("—", "-", ""):
+        return False
+    return "_de_taille_" in _normalise_nom(str(m.get("nom") or ""))
+
+
+def _generique_autorise_scenario(ctx: ToolContext, nom: str) -> bool:
+    """Vrai si ce gabarit générique est RÉFÉRENCÉ par la partie active.
+
+    Les scénarios utilisent ces fiches DRS comme GABARITS officiels de
+    créatures absentes du bestiaire 3.5 : « Crypts Kelemvor » (flameskull →
+    « Mort-vivant de taille M », FP 3) et « Army of the Damned » (3 gabarits
+    extérieurs/artificiels). Le refus des placeholders ne doit PAS casser ces
+    rencontres légitimes : on cherche le nom dans les ennemis déclarés
+    (bible de quête, salles/étages du donjon chargé, monstres déjà engagés).
+    Comparaison sur la chaîne normalisée du JSON : tolère les variantes
+    (« Mort-vivant_de_taille_M ×1 », « Mort-vivant de taille M »…).
+    """
+    n = _normalise_nom(nom)
+    if not n:
+        return False
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        etat = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id
+        ).load()
+    except Exception:                                        # noqa: BLE001
+        return False
+    # ⚠️ Seules les DONNÉES DE SCÉNARIO autorisent le gabarit (donjon chargé,
+    # bible de quête) — PAS `monstres_combat` : un placeholder déjà engagé
+    # dans une vieille partie doit rester refusé (forcer la correction) au
+    # lieu d'être accommodé indéfiniment.
+    donjon_txt = _normalise_nom(
+        json.dumps(etat.get("donjon") or {}, ensure_ascii=False)
+    )
+    quete_txt = _normalise_nom(
+        json.dumps((etat.get("quete") or {}).get("bible") or {},
+                   ensure_ascii=False)
+    )
+    return n in donjon_txt or n in quete_txt
+
+
+def _ennemis_scenario(ctx: ToolContext) -> list[str]:
+    """Ennemis officiels du scénario en cours (quete.bible.ennemis)."""
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        etat = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id
+        ).load()
+        return [
+            str(x) for x in (
+                ((etat.get("quete") or {}).get("bible") or {})
+                .get("ennemis") or []
+            ) if str(x).strip()
+        ]
+    except Exception:                                        # noqa: BLE001
+        return []
+
+
+def _suggestions_meme_type(
+    ctx: ToolContext, m: dict[str, Any], limite: int = 6
+) -> list[str]:
+    """Vrais monstres du bestiaire du MÊME TYPE que l'entrée générique
+    (« Mort-vivant de taille M » → zombie, squelette, goule, spectre…),
+    triés par écart de FP quand c'est évaluable."""
+    best = _load_bestiaire(ctx)
+    monstres: dict[str, Any] = best.get("monstres", {}) or {}
+    type_cible = str(m.get("nom") or "").split(" de taille ")[0].strip().lower()
+
+    def _fp_num(fp: str) -> Optional[float]:
+        try:
+            fp = str(fp).strip()
+            if "/" in fp:
+                a, b = fp.split("/")
+                return float(a) / float(b)
+            return float(fp)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+    cibles_fp = _fp_num(m.get("fp") or m.get("dv") or "")
+    votes: list[tuple[float, float, str]] = []
+    for k, cand in monstres.items():
+        if _est_monstre_generique(cand) or k == m.get("nom"):
+            continue
+        if str(cand.get("type") or "").strip().lower() != type_cible:
+            continue
+        fp = _fp_num(cand.get("fp") or "")
+        ecart = abs(fp - cibles_fp) if (fp is not None and cibles_fp is not None) else 99.0
+        votes.append((ecart, len(k), str(cand.get("nom") or k)))
+    votes.sort()
+    return [nom for _, _, nom in votes[:limite]]
+
+
+def _refus_generique_texte(ctx: ToolContext, nom: str, m: dict[str, Any]) -> str:
+    """Message de refus pour une entrée placeholder : oriente vers les
+    ennemis officiels du scénario PUIS les monstres réels du même type."""
+    scen = _ennemis_scenario(ctx)
+    sugg = _suggestions_meme_type(ctx, m)
+    lignes = [
+        f"⛔ **« {m.get('nom') or nom} » est une fiche PLACEHOLDER** (type+"
+        "taille sans identité, sans illustration correcte) : ce n'est pas un "
+        "monstre jouable.",
+    ]
+    if scen:
+        lignes.append(
+            "🎯 Ennemis officiels DU SCÉNARIO : " + ", ".join(scen) + " — "
+            "utilise ces créatures en priorité (ou leurs proches parents du "
+            "bestiaire, ex. les morts-vivants classiques du module)."
+        )
+    if sugg:
+        lignes.append(
+            "📚 Monstres réels du même type dans le bestiaire : "
+            + ", ".join(sugg) + "."
+        )
+    lignes.append(
+        "_Rejoue `combat_ajouter_combattant` / `engager_combat` avec un nom "
+        "de créature RÉELLE du bestiaire._"
+    )
+    return "\n".join(lignes)
+
+
 def _find_monstre_strict(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
     """Résolution STRICTE : le nom demandé doit être couvert par l'entrée
     (tous ses mots significatifs présents dans la clé). Refuse le repli « mot
@@ -995,7 +1126,19 @@ async def monstre_consulter(ctx: ToolContext, nom: str) -> ToolResult:
         "Goule"/"Ghoul", "Dragon rouge jeune").
     """
     m = _find_monstre(ctx, nom)
-    # Nom canonique du bestiaire : la clé de cache en dérive — sinon « Golem »
+    # PLACEHOLDER (« Mort-vivant de taille M »…) : refus SANS EXCEPTION, avec
+    # orientation scénario/bestiaire réel — ni stats affichées, ni image
+    # générique inadaptée. Avec le refus à l'engagement, plus aucun
+    # placeholder ne doit arriver sur le plateau ; s'il y en a un (vieux
+    # état), la consultation reste bloquée pour forcer la correction.
+    # SAUF si le scénario actif référence ce gabarit (rencontre légitime).
+    if (
+        m is not None
+        and _est_monstre_generique(m)
+        and not _generique_autorise_scenario(ctx, nom)
+    ):
+        return ToolResult(text=_refus_generique_texte(ctx, nom, m))
+    # Nom canonique du bestiaire : la clé de cache en dérive - sinon « Golem »
     # et « Golem de chair » (même créature) généreraient des PNG distincts.
     nom_canonique = str((m or {}).get("nom") or nom) if m is not None else nom
     if m is None:

@@ -25,6 +25,7 @@ import asyncio
 import json
 import os
 import random
+import re
 from typing import Any, Optional
 
 from .base import ToolContext, ToolResult, tool
@@ -1108,6 +1109,154 @@ def _bloc_contenu_salle(salle: dict[str, Any]) -> str:
     return "\n\n📜 **Contenu canonique de la salle (scénario)** :\n" + "\n".join(lignes)
 
 
+# --------------------------------------------------------------------------- #
+#  Pièges mécaniques des salles (manifestes de scénario)
+# --------------------------------------------------------------------------- #
+# Le champ `piege` d'une salle est d'abord NARRATIF (injecté au MJ via
+# `_bloc_contenu_salle`). Certains pièges portent un TEST DE SAUVEGARDE
+# reconnaissable (« Dextérité DD 10 par personnage sous peine de chute
+# (1d6 dégâts) ») : sans application serveur, le MJ narrerait
+# l'avertissement sans JAMAIS résoudre les jets (observé en partie
+# 54de40ed — escaliers branlants de Dues for the Dead). On les applique
+# ici, indépendamment du modèle, aux points de déclenchement logiques :
+# - `carte_donjon_explorer` : piège de la salle dans laquelle on ENTRE
+#   (sauf salle escaliers → déclenché par l'usage, cf. `carte_donjon_etage`) ;
+# - `carte_donjon_etage` : piège de la salle de départ ET de la salle
+#   d'arrivée (le même escalier peut n'être piégé que d'un côté).
+# Les pièges à COMPÉTENCE (« crochetage DD 15 », « détection DD 15 ») ne
+# sont PAS interceptés : ils se résolvent à l'initiative du MJ.
+
+_SAVE_PIEGE_RE = re.compile(
+    r"\b(reflexes|dexterite|vigueur|constitution|volonte|sagesse)\b"
+    r"[^.;]{0,60}?\bdd\s*(\d{1,2})",
+    re.IGNORECASE,
+)
+_DEGATS_PIEGE_RE = re.compile(r"\b(\d{1,2})\s*d\s*(\d{1,3})\b")
+_VACARME_PIEGE_RE = re.compile(
+    r"vacarme|bruit|bruyamment|alarme|r[ée]veille|chute", re.IGNORECASE
+)
+# Capacité citée dans le texte → clé de sauvegarde D&D 3.5 (les fiches
+# stockent « Vigueur/Reflexes/Volonte »). Force/Charisme/Intelligence sont
+# des CARACTÉRISTIQUES de jet (forcage, détection…), PAS des sauvegardes :
+# volontairement absents de la table pour ne pas intercepter les pièges
+# d'interaction.
+_PIEGE_VERS_SAUV = {
+    "reflexes": "Reflexes",
+    "dexterite": "Reflexes",
+    "vigueur": "Vigueur",
+    "constitution": "Vigueur",
+    "volonte": "Volonte",
+    "sagesse": "Volonte",
+}
+
+
+def _parser_piege_mecanique(piege: str) -> Optional[dict[str, Any]]:
+    """Détecte un piège À SAUVEGARDE dans le texte `piege` d'une salle.
+
+    Renvoie `{cle_sauv, dd, degats, vacarme}` ou None si le texte ne décrit
+    pas un test de sauvegarde (ex. « crochetage DD 15 » = compétence
+    d'interaction, « Aucun », description purement narrative)."""
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", piege or "")
+    t = "".join(c for c in nf if not _ud.combining(c)).lower()
+    if not t.strip() or t.strip().startswith("aucun"):
+        return None
+    m = _SAVE_PIEGE_RE.search(t)
+    if not m:
+        return None
+    cle = _PIEGE_VERS_SAUV.get(m.group(1))
+    try:
+        dd = int(m.group(2))
+    except (TypeError, ValueError):
+        return None
+    if not cle or dd <= 0 or dd > 40:
+        return None
+    md = _DEGATS_PIEGE_RE.search(t)
+    degats = (int(md.group(1)), int(md.group(2))) if md else None
+    vacarme = bool(_VACARME_PIEGE_RE.search(t))
+    return {"cle_sauv": cle, "dd": dd, "degats": degats, "vacarme": vacarme}
+
+
+async def _resoudre_piege_salle(
+    ctx: ToolContext, salle: dict[str, Any], action: str
+) -> tuple[str, dict[str, Any]]:
+    """Applique mécaniquement le piège à sauvegarde porté par `salle`.
+
+    Pour chaque PJ vivant : jet de sauvegarde officiel (fiche recoupée via
+    `lancer_sauvegarde`, dons inclus) contre le DD du piège ; sur échec,
+    dégâts `XdY` infligés via `fiche_perso_infliger_degats` (PV persistés,
+    barres du front synchronisées) ou conséquence narrative si le texte ne
+    porte pas de formule de dégâts. Renvoie (bloc_texte, patches_fiche) —
+    ("", {}) si la salle n'a pas de piège à sauvegarde."""
+    piege = _parser_piege_mecanique(str(salle.get("piege") or ""))
+    if piege is None:
+        return "", {}
+    etat = _charger_etat(ctx)
+    pjs = [
+        p for p in (etat.get("pj") or [])
+        if isinstance(p, dict) and str(p.get("nom") or "").strip()
+    ]
+    if not pjs:
+        return "", {}
+    src = str(salle.get("piege")).strip()
+    from .dice import lancer_sauvegarde            # fonction tool appelable direct
+    from .fiches import fiche_perso_infliger_degats
+    lignes = [
+        f"🪤 **PIÈGE RÉSOLU PAR LE SERVEUR** ({action}) : {src}",
+        f"🛡️ Sauvegarde ({piege['cle_sauv']}) DD {piege['dd']} par personnage :",
+    ]
+    patches: dict[str, Any] = {}
+    echecs = 0
+    for p in pjs:
+        nom = str(p.get("nom")).strip()
+        conds = [str(c).lower() for c in (p.get("conditions") or [])]
+        if "mort" in conds:
+            lignes.append(f"- ⚰️ {nom} : mort — ne sauvegarde pas.")
+            continue
+        tr = await lancer_sauvegarde(
+            ctx,
+            type_sauvegarde=piege["cle_sauv"], modificateur=0,
+            difficulte=piege["dd"], nom_personnage=nom,
+            source=f"piège ({src[:60]})",
+        )
+        texte = tr.text
+        # Verdict : le ✅ n'apparaît que sur la branche « DD atteint » — un
+        # 20 naturel affiche « ⭐ … réussite automatique » sans ✅, un 1
+        # naturel « ❌ … échec automatique ». On couvre les trois cas.
+        ok = ("✅" in texte) or ("réussite automatique" in texte)
+        m_tot = re.search(r"Total\s*:\s*\*{0,2}(\d+)", texte)
+        total = m_tot.group(1) if m_tot else "?"
+        if ok:
+            lignes.append(f"- ✅ {nom} : total {total} vs DD {piege['dd']} → réussite.")
+            continue
+        echecs += 1
+        lignes.append(f"- ❌ {nom} : total {total} vs DD {piege['dd']} → ÉCHEC.")
+        if piege["degats"]:
+            nb, faces = piege["degats"]
+            total_d = sum(
+                random.randint(1, faces) for _ in range(max(1, nb))
+            )
+            tr_d = await fiche_perso_infliger_degats(ctx, nom=nom, degats=total_d)
+            if tr_d.state_patch:
+                patches.update(tr_d.state_patch)
+            lignes.append(f"    → ({nb}d{faces}) " + tr_d.text.strip().splitlines()[0])
+        else:
+            lignes.append(
+                f"    (aucune formule de dégâts dans le piège : conséquence "
+                f"narrative — chute/enlisement, à narrer d'après le texte)."
+            )
+    if echecs and piege["vacarme"]:
+        lignes.append(
+            "🔊 **VACARME** : ce bruit risque d'attirer l'attention — intègre-le "
+            "à ta narration (surveillance, rencontre éventuelle, PNJ alertés)."
+        )
+    lignes.append(
+        "ℹ️ Jets RÉSOLUS par le serveur (vrais résultats ci-dessus) : narre-les "
+        "fidèlement, n'invente AUCUN autre jet ni d'autre conséquence chiffrée."
+    )
+    return "\n".join(lignes), patches
+
+
 def _sync_etage(donjon: dict[str, Any]) -> None:
     """Archive l'étage courant (grille/courant…) dans `donjon["etages"]`.
     Préserve le `nom` d'étage porté par un manifeste de scénario."""
@@ -1428,6 +1577,14 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     url = _url_for(path, ctx.data_dir)
     salle = salles[(nx, ny)]
     bloc_p = _bloc_portes(donjon, salle, arrivee_par=opp)
+    # 🪤 Piège mécanique de la salle d'arrivée — SAUT si salle escaliers :
+    # le piège d'escalier se déclenche via `carte_donjon_etage` (à l'USAGE
+    # de l'escalier), pas à chaque entrée dans la pièce qui le contient.
+    bloc_piege, patches_piege = "", {}
+    if (str(salle.get("type") or "").strip().lower() not in _TYPES_ESCALIER):
+        bloc_piege, patches_piege = await _resoudre_piege_salle(
+            ctx, salle, f"entrée dans la salle ({nx},{ny})"
+        )
     if deja_visitee:
         # ── Salle déjà visitée : restituer la description et l'état figés ──
         # (description MJ, ou secours déterministe si jamais figée).
@@ -1496,8 +1653,13 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
             img_line = f"\n\n🖼️ Illustration salle ({img_src}) : {salle_img}"
     bloc_esc = _bloc_escalier(salle)
     return ToolResult(
-        text=texte + img_line + (("\n\n" + bloc_esc) if bloc_esc else ""),
-        state_patch={"donjon": donjon, "carte_donjon": url},
+        text=(
+            (bloc_piege + "\n\n") if bloc_piege else ""
+        )
+        + texte + img_line + (("\n\n" + bloc_esc) if bloc_esc else ""),
+        state_patch={
+            "donjon": donjon, "carte_donjon": url, **patches_piege,
+        },
     )
 
 
@@ -1577,9 +1739,21 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
     ) if pos else None
     portes_arr = _portes_ouvertes(salle_arrivee)
     bloc_p = _bloc_portes(donjon, salle_arrivee or {})
+    # 🪤 Pièges mécaniques : l'USAGE de l'escalier déclenche le piège porté
+    # par la salle de départ ET par la salle d'arrivée (le même escalier
+    # peut n'être piégé que d'un côté dans le manifeste).
+    blocs_trappee: list[str] = []
+    patches_piege: dict[str, Any] = {}
+    for s_trappee in (cour, salle_arrivee or {}):
+        bloc_i, patches_i = await _resoudre_piege_salle(
+            ctx, s_trappee or {}, "emprunt de l'escalier")
+        if bloc_i:
+            blocs_trappee.append(bloc_i)
+            patches_piege.update(patches_i)
     return ToolResult(
         text=(
-            f"🪜 Vous empruntez l'escalier "
+            (("\n\n".join(blocs_trappee) + "\n\n") if blocs_trappee else "")
+            + f"🪜 Vous empruntez l'escalier "
             f"({'descendez vers le sous-sol' if descendre else 'remontez'} → "
             f"**{_nom_etage(nouvel_etage, donjon)}**). Salle actuelle "
             f"({pos[0]},{pos[1]}). "
@@ -1592,7 +1766,7 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
         + (_bloc_contenu_salle(salle_arrivee) if salle_arrivee else "")
         + (("\n\n" + _bloc_escalier(salle_arrivee or {}))
            if _bloc_escalier(salle_arrivee or {}) else ""),
-        state_patch={"donjon": donjon, "carte_donjon": url},
+        state_patch={"donjon": donjon, "carte_donjon": url, **patches_piege},
     )
 
 

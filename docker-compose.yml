@@ -86,7 +86,7 @@ services:
       --models-dir /models
       --models-max 1
       -ngl 99
-      -c 32768
+      -c 20000
       -n 2048
       -ctk q8_0
       -ctv q8_0

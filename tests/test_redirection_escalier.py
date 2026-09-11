@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from server.game.state import PartyState  # noqa: E402
 from server.llm.client import Message  # noqa: E402
-from server.llm.orchestrator import Orchestrator  # noqa: E402
+from server.llm.orchestrator import Orchestrator, OrchestratedResult  # noqa: E402
 from server.tools.base import ToolContext, _TOOL_REGISTRY, invoke_tool  # noqa: E402
 from server.tools.cartes import _MOUVEMENTS_TOUR  # noqa: E402
 
@@ -203,5 +203,61 @@ def test_etage_directions_variantes():
                 {"direction": variante},
             ))
             assert not tr.text.startswith(("❌", "🚫")), (variante, tr.text)
+    finally:
+        _MOUVEMENTS_TOUR.pop(PID, None)
+
+
+# --------------------------------------------------------------------------- #
+#  Deuxième garde-fou : le modèle n'appelle AUCUN outil (pur récit « vous
+#  êtes dans la salle des escaliers… »). Observé en partie 54de40ed : le tour
+#  se terminait en description, le groupe ne changeait jamais d'étage.
+# --------------------------------------------------------------------------- #
+
+def test_groupe_dans_escalier_helper():
+    """Le helper détecte la salle escaliers courante (et son absence)."""
+    d = _fresh_dir()
+    try:
+        _partie(d)
+        orch = _orch()
+        ctx = ToolContext(partie_id=PID, joueur="alain", data_dir=d)
+        assert asyncio.run(orch._groupe_dans_escalier(ctx)) is True
+        etat = PartyState(data_dir=d, partie_id=PID).load()
+        etat["donjon"]["courant"] = [0, -1]   # crypte, pas escalier
+        PartyState(data_dir=d, partie_id=PID).save(etat)
+        assert asyncio.run(orch._groupe_dans_escalier(ctx)) is False
+    finally:
+        _MOUVEMENTS_TOUR.pop(PID, None)
+
+
+def test_appel_force_etage_sans_tool_call():
+    """Réplication 54de40ed : intention « descendre » + groupe dans la salle
+    escaliers + AUCUNE tool call du modèle → l'appel forcé de
+    `carte_donjon_etage(descendre)` fait bien changer d'étage."""
+    d = _fresh_dir()
+    try:
+        _partie(d)
+        ctx = ToolContext(partie_id=PID, joueur="alain", data_dir=d)
+        orch = Orchestrator(client=None, tools=dict(_TOOL_REGISTRY))
+        work = _work("Nous descendons l'escalier vers l'étage inférieur")
+        assert Orchestrator._intention_escalier(work) == "descendre"
+        assert asyncio.run(orch._groupe_dans_escalier(ctx)) is True
+        result = OrchestratedResult()
+        assert not any(
+            tc.get("name") == "carte_donjon_etage"
+            for tc in result.tool_calls_trace
+        )
+        asyncio.run(orch._exec_tool_calls_prompt(
+            [{"name": "carte_donjon_etage",
+              "arguments": {"direction": "descendre"}}],
+            ctx, work, result, None,
+        ))
+        donjon = PartyState(data_dir=d, partie_id=PID).load()["donjon"]
+        assert donjon["etage"] == 1, donjon["etage"]
+        assert donjon["courant"] == [0, 0], donjon["courant"]
+        # La trace contient l'appel forcé → le garde-fou ne reforcera pas.
+        assert any(
+            tc.get("name") == "carte_donjon_etage"
+            for tc in result.tool_calls_trace
+        )
     finally:
         _MOUVEMENTS_TOUR.pop(PID, None)

@@ -6,6 +6,7 @@ import { WorldMap } from "./WorldMap";
 import { Bestiary, MonsterSheetModal } from "./Bestiary";
 import { TeamChat } from "./TeamChat";
 import { Journal } from "./Journal";
+import { busteImage } from "../utils/imageBust";
 import { useParty } from "../store";
 import { api } from "../api/rest";
 import type { EncounterMonster } from "../api/types";
@@ -64,7 +65,7 @@ function MonsterGalleryImg({
     const svg = base.replace(/\.(png|jpg|jpeg|webp)$/i, ".svg");
     return (
       <img
-        src={`${svg}?t=${Date.now()}`}
+        src={`${svg}?t=${busteImage(svg)}`}
         alt={nom}
         onClick={onClick}
         className="max-w-full max-h-full object-contain"
@@ -76,7 +77,7 @@ function MonsterGalleryImg({
     return (
       <img
         key={`${base}-${failed}`}
-        src={`${base}?t=${Date.now()}`}
+        src={`${base}?t=${busteImage(base)}`}
         alt={nom}
         title={nom}
         onClick={onClick}

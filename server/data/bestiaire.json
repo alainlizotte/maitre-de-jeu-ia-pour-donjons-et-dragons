@@ -3,7 +3,7 @@
     "edition": "D&D 3.5",
     "source": "Manuel des Monstres 3.5 (VF, édition Anthologie)",
     "description": "Bestiaire de référence — monstres les plus courants (FP 1/4 à 7). Le MJ peut enrichir le bestiaire via le tool Outil_ImageMonstre qui crée/sauvegarde des fiches pour les monstres non listés (générés via generate_image d'OpenWebUI).",
-    "nb_monstres": 342,
+    "nb_monstres": 341,
     "champs": [
       "nom",
       "type",
@@ -1572,7 +1572,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "small wild animal, fox-like creature with russet fur and one bushy tail, four legs, forest undergrowth"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, small monster, menacing stance, dark fantasy"
   },
   "animal_de_taille_m": {
     "nom": "Animal de taille M",
@@ -1596,7 +1596,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "medium wild animal, grey timber wolf standing alert, four legs, one bushy tail, birch woodland"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, medium monster, menacing stance, dark fantasy"
   },
   "animal_de_taille_tp": {
     "nom": "Animal de taille TP",
@@ -1620,7 +1620,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_tp",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "very small animal, bright songbird perched on a mossy branch, feathers, woodland"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, tiny monster, menacing stance, dark fantasy"
   },
   "animal_de_taille_g": {
     "nom": "Animal de taille G",
@@ -1644,7 +1644,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "large wild animal, big brown bear standing on all fours, thick shaggy fur, four legs, one short tail, pine forest"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, large monster, menacing stance, dark fantasy"
   },
   "animal_aquatique_de_taille_m": {
     "nom": "Animal (aquatique) de taille M",
@@ -1668,7 +1668,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "medium aquatic animal, sleek seal with whiskers and flippers, coastal rocks"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, medium monster, aquatic form, sleek wet skin, fins and gills, menacing stance, dark fantasy"
   },
   "animal_aquatique_de_taille_tg": {
     "nom": "Animal (aquatique) de taille TG",
@@ -1692,7 +1692,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "huge aquatic animal, enormous whale breaching the surface, vast open ocean"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, huge monster, aquatic form, sleek wet skin, fins and gills, menacing stance, dark fantasy"
   },
   "vision_aveugle_ext": {
     "nom": "Vision aveugle (Ext)",
@@ -1740,7 +1740,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_min",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "tiny field mouse, very small brown rodent with round ears and one long thin tail, sitting among clover and grass"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, diminutive monster, menacing stance, dark fantasy"
   },
   "animal_de_taille_tg": {
     "nom": "Animal de taille TG",
@@ -1764,7 +1764,7 @@
     "alignement": "—",
     "cle": "animal_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "huge wild animal, massive bison bull with shaggy dark fur, four legs, open plain"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, huge monster, menacing stance, dark fantasy"
   },
   "animal_aquatique_de_taille_p": {
     "nom": "Animal (aquatique) de taille P",
@@ -1788,7 +1788,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "small aquatic animal, bright tropical fish with delicate fins, coral reef"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, small monster, aquatic form, sleek wet skin, fins and gills, menacing stance, dark fantasy"
   },
   "animal_aquatique_de_taille_g": {
     "nom": "Animal (aquatique) de taille G",
@@ -1812,7 +1812,7 @@
     "alignement": "—",
     "cle": "animal_aquatique_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "large predatory fish, sleek torpedo-shaped body with one dorsal fin and one powerful tail fin, rows of sharp teeth, open deep blue water"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, large monster, aquatic form, sleek wet skin, fins and gills, menacing stance, dark fantasy"
   },
   "serpent_constricteur_geant": {
     "nom": "Serpent constricteur géant",
@@ -1908,7 +1908,7 @@
     "alignement": "généralement chaotique bon",
     "cle": "fee_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fey noble, graceful elf-like woman with one pair of moth wings, pointed ears, gown woven of leaves and petals, glowing motes of magic, moonlit woodland glade"
+    "prompt_image": "fey creature, delicate otherworldly beauty, gossamer wings, shimmering aura, woodland features, medium monster, menacing stance, dark fantasy"
   },
   "creature_magique_de_taille_g": {
     "nom": "Créature magique de taille G",
@@ -1932,7 +1932,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "creature_magique_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "large magical beast, armored predator with iridescent scales, four clawed legs and a single horn, mystical glade"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, large monster, menacing stance, dark fantasy"
   },
   "grig": {
     "nom": "Grig",
@@ -2028,7 +2028,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "aberration_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "small aberration, slimy tentacled horror the size of a dog with too many unblinking eyes, dank cave"
+    "prompt_image": "bizarre aberration, asymmetrical body, too many limbs and mismatched eyes, eldritch fleshy horror, small monster, menacing stance, dark fantasy"
   },
   "aberration_de_taille_m": {
     "nom": "Aberration de taille M",
@@ -2076,7 +2076,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "geant_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "hill giant, brutish huge humanoid, thick tanned skin, wild black hair and beard, patchy animal-hide clothes, massive wooden club, rocky highlands"
+    "prompt_image": "giant humanoid, massive crude-featured body, rough furs and hides, wielding a boulder or a club, large monster, menacing stance, dark fantasy"
   },
   "aberration_air_de_taille_p": {
     "nom": "Aberration (Air) de taille P",
@@ -2100,7 +2100,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "aberration_air_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "a small floating aberration, bloated translucent balloon body with thin trailing tentacles and a toothy maw, drifting through a stormy sky"
+    "prompt_image": "bizarre aberration, asymmetrical body, too many limbs and mismatched eyes, eldritch fleshy horror, small monster, surrounded by swirling wind currents, floating slightly, menacing stance, dark fantasy"
   },
   "aberration_de_taille_tg": {
     "nom": "Aberration de taille TG",
@@ -2124,7 +2124,7 @@
     "alignement": "généralement neutre",
     "cle": "aberration_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "a levitating spherical horror with a single great central eye and a crown of flexible eyestalks, a wide toothy maw below the central eye, dark cavern"
+    "prompt_image": "bizarre aberration, asymmetrical body, too many limbs and mismatched eyes, eldritch fleshy horror, huge monster, menacing stance, dark fantasy"
   },
   "ouvrier_formien": {
     "nom": "Ouvrier formien",
@@ -2268,7 +2268,7 @@
     "alignement": "généralement neutre mauvais",
     "cle": "elementaire_air_extraplanaire_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "large air elemental, towering funnel of swirling wind and cloud, faint humanoid silhouette of vapor and dust with two arm-like vortices, lightning glints inside the vortex, stormy sky"
+    "prompt_image": "elemental being, humanoid silhouette made of swirling raw element, large monster, surrounded by swirling wind currents, floating slightly, otherworldly planar entity, menacing stance, dark fantasy"
   },
   "creature_artificielle_de_taille_g": {
     "nom": "Créature artificielle de taille G",
@@ -2292,7 +2292,7 @@
     "alignement": "toujours neutre",
     "cle": "creature_artificielle_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature artificielle de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical construct, animated assembly of carved stone, riveted metal and dark wood, faint arcane glow in hollow eyes, large monster, menacing stance, dark fantasy"
   },
   "humanoide_monstrueux_terre_de_taille_m": {
     "nom": "Humanoïde monstrueux (Terre) de taille M",
@@ -2316,7 +2316,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "humanoide_monstrueux_terre_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy humanoïde monstrueux (terre) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "monstrous humanoid, predatory face, powerful muscular build, cruel features, medium monster, earthen hide of packed rock and soil, menacing stance, dark fantasy"
   },
   "geant_feu_de_taille_g": {
     "nom": "Géant (Feu) de taille G",
@@ -2340,7 +2340,7 @@
     "alignement": "souvent loyal mauvais",
     "cle": "geant_feu_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy géant (feu) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant humanoid, massive crude-featured body, rough furs and hides, wielding a boulder or a club, large monster, wreathed in licking flames and drifting embers, menacing stance, dark fantasy"
   },
   "geant_froid_de_taille_g": {
     "nom": "Géant (froid) de taille G",
@@ -2364,7 +2364,7 @@
     "alignement": "souvent chaotique mauvais",
     "cle": "geant_froid_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy géant (froid) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant humanoid, massive crude-featured body, rough furs and hides, wielding a boulder or a club, large monster, frost and rime coating its body, breath of icy mist, menacing stance, dark fantasy"
   },
   "geant_air_de_taille_tg": {
     "nom": "Géant (Air) de taille TG",
@@ -2388,7 +2388,7 @@
     "alignement": "généralement neutre bon ou neutre mauvais",
     "cle": "geant_air_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy géant (air) de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant humanoid, massive crude-featured body, rough furs and hides, wielding a boulder or a club, huge monster, surrounded by swirling wind currents, floating slightly, menacing stance, dark fantasy"
   },
   "geant_terre_de_taille_g": {
     "nom": "Géant (Terre) de taille G",
@@ -2412,7 +2412,7 @@
     "alignement": "généralement neutre",
     "cle": "geant_terre_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy géant (terre) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant humanoid, massive crude-featured body, rough furs and hides, wielding a boulder or a club, large monster, earthen hide of packed rock and soil, menacing stance, dark fantasy"
   },
   "geant_de_taille_tg": {
     "nom": "Géant de taille TG",
@@ -2436,7 +2436,7 @@
     "alignement": "souvent chaotique bon",
     "cle": "geant_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy géant de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant humanoid, massive crude-featured body, rough furs and hides, wielding a boulder or a club, huge monster, menacing stance, dark fantasy"
   },
   "exterieur_air_extraplanaire_de_taille_g": {
     "nom": "Extérieur (Air, extraplanaire) de taille G",
@@ -2460,7 +2460,7 @@
     "alignement": "toujours chaotique bon",
     "cle": "exterieur_air_extraplanaire_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (air, extraplanaire) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, large monster, surrounded by swirling wind currents, floating slightly, otherworldly planar entity, menacing stance, dark fantasy"
   },
   "exterieur_extraplanaire_feu_de_taille_g": {
     "nom": "Extérieur (extraplanaire, Feu) de taille G",
@@ -2484,7 +2484,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "exterieur_extraplanaire_feu_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (extraplanaire, feu) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, large monster, otherworldly planar entity, wreathed in licking flames and drifting embers, menacing stance, dark fantasy"
   },
   "exterieur_natif_de_taille_m": {
     "nom": "Extérieur (natif) de taille M",
@@ -2508,7 +2508,7 @@
     "alignement": "généralement neutre",
     "cle": "exterieur_natif_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (natif) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, medium monster, menacing stance, dark fantasy"
   },
   "exterieur_bien_chaos_extraplanaire_de_taille_m": {
     "nom": "Extérieur (Bien, Chaos, extraplanaire) de taille M",
@@ -2532,7 +2532,7 @@
     "alignement": "toujours chaotique bon",
     "cle": "exterieur_bien_chaos_extraplanaire_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (bien, chaos, extraplanaire) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, medium monster, subtle celestial radiance, chaotic asymmetrical mutating form, otherworldly planar entity, menacing stance, dark fantasy"
   },
   "humanoide_gnoll_de_taille_m": {
     "nom": "Humanoïde (gnoll) de taille M",
@@ -2556,7 +2556,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "humanoide_gnoll_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy humanoïde (gnoll) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "dark fantasy monster, medium monster, menacing stance, dark fantasy"
   },
   "gobelin_homme_d_armes_de_niveau_1": {
     "nom": "Gobelin, homme d'armes de niveau 1",
@@ -2604,7 +2604,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "humanoide_gobelinoide_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy humanoïde (gobelinoïde) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "dark fantasy monster, medium monster, menacing stance, dark fantasy"
   },
   "humanoide_monstrueux_de_taille_g": {
     "nom": "Humanoïde monstrueux de taille G",
@@ -2628,7 +2628,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "humanoide_monstrueux_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy humanoïde monstrueux de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "monstrous humanoid, predatory face, powerful muscular build, cruel features, large monster, menacing stance, dark fantasy"
   },
   "humanoide_monstrueux_aquatique_de_taille_m": {
     "nom": "Humanoïde monstrueux (aquatique) de taille M",
@@ -2652,7 +2652,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "humanoide_monstrueux_aquatique_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy humanoïde monstrueux (aquatique) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "monstrous humanoid, predatory face, powerful muscular build, cruel features, medium monster, aquatic form, sleek wet skin, fins and gills, menacing stance, dark fantasy"
   },
   "humanoide_monstrueux_de_taille_m": {
     "nom": "Humanoïde monstrueux de taille M",
@@ -2676,7 +2676,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "humanoide_monstrueux_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy humanoïde monstrueux de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "monstrous humanoid, predatory face, powerful muscular build, cruel features, medium monster, menacing stance, dark fantasy"
   },
   "leonin": {
     "nom": "Léonin",
@@ -2772,7 +2772,7 @@
     "alignement": "généralement neutre",
     "cle": "humanoide_reptilien_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy humanoïde (reptilien) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "dark fantasy monster, medium monster, menacing stance, dark fantasy"
   },
   "homme-poisson_hommes_d_armes_de_niveau_1": {
     "nom": "Homme-poisson, hommes d'armes de niveau 1",
@@ -2820,7 +2820,7 @@
     "alignement": "quelconque (identique à celui de son créateur)",
     "cle": "creature_artificielle_de_taille_tp",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature artificielle de taille tp creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical construct, animated assembly of carved stone, riveted metal and dark wood, faint arcane glow in hollow eyes, tiny monster, menacing stance, dark fantasy"
   },
   "exterieur_chaos_extraplanaire_mal_de_taille_g": {
     "nom": "Extérieur (Chaos, extraplanaire, Mal) de taille G",
@@ -2844,7 +2844,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "exterieur_chaos_extraplanaire_mal_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (chaos, extraplanaire, mal) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, large monster, chaotic asymmetrical mutating form, otherworldly planar entity, malevolent fiendish visage, horns and cruel claws, menacing stance, dark fantasy"
   },
   "kolyarut": {
     "nom": "Kolyarut",
@@ -3612,7 +3612,7 @@
     "alignement": "généralement neutre",
     "cle": "aberration_aquatique_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aberration (aquatique) de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "bizarre aberration, asymmetrical body, too many limbs and mismatched eyes, eldritch fleshy horror, large monster, aquatic form, sleek wet skin, fins and gills, menacing stance, dark fantasy"
   },
   "aberration_de_taille_g": {
     "nom": "Aberration de taille G",
@@ -3636,31 +3636,7 @@
     "alignement": "généralement chaotique mauvais",
     "cle": "aberration_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aberration de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
-  },
-  "mort-vivant_de_taille_m": {
-    "nom": "Mort-vivant de taille M",
-    "type": "—",
-    "taille": "",
-    "dv": "4d12 (26 pv)",
-    "pv": 26,
-    "ca": 15,
-    "vitesse": "9 m (6 cases)",
-    "bab": "+2",
-    "init": "+1",
-    "attaques": "coup (+3 corps à corps, 1d4+1 plus absorption d'énergie)",
-    "degs": "coup (+3 corps à corps, 1d4+1 plus absorption d'énergie)",
-    "sauvegardes": "Réf +2, Vig +1, Vol +5",
-    "carac": "For 12, Dex 12, Con —, Int 11, Sag 13, Cha 15",
-    "comp": "Déplacement silencieux +16, Détection +7, Discrétion +8, Perception auditive +7",
-    "dons": "Combat en aveugle, Vigilance",
-    "capacites": "Attaques spéciales : absorption d'énergie, création de rejetons; Particularités : mort-vivant, vision dans le noir (18 m)",
-    "faiblesses": "—",
-    "fp": "3",
-    "alignement": "toujours loyal mauvais",
-    "cle": "mort-vivant_de_taille_m",
-    "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy mort-vivant de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "bizarre aberration, asymmetrical body, too many limbs and mismatched eyes, eldritch fleshy horror, large monster, menacing stance, dark fantasy"
   },
   "vermine_nuee_de_taille_min": {
     "nom": "Vermine (nuée) de taille Min",
@@ -3684,7 +3660,7 @@
     "alignement": "toujours neutre",
     "cle": "vermine_nuee_de_taille_min",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vermine (nuée) de taille min creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant vermin, chitinous insectoid carapace, multiple jointed legs, compound eyes, dripping mandibles, diminutive monster, dense swirling swarm of countless small bodies, menacing stance, dark fantasy"
   },
   "creature_magique_extraplanaire_mal_nuee_de_taille_min": {
     "nom": "Créature magique (extraplanaire, Mal, nuée) de taille Min",
@@ -3708,7 +3684,7 @@
     "alignement": "toujours loyal mauvais",
     "cle": "creature_magique_extraplanaire_mal_nuee_de_taille_min",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique (extraplanaire, mal, nuée) de taille min creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, diminutive monster, otherworldly planar entity, malevolent fiendish visage, horns and cruel claws, dense swirling swarm of countless small bodies, menacing stance, dark fantasy"
   },
   "animal_nuee_de_taille_tp": {
     "nom": "Animal (nuée) de taille TP",
@@ -3732,7 +3708,7 @@
     "alignement": "toujours neutre",
     "cle": "animal_nuee_de_taille_tp",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal (nuée) de taille tp creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, tiny monster, dense swirling swarm of countless small bodies, menacing stance, dark fantasy"
   },
   "mort-vivant_intangible_de_taille_m": {
     "nom": "Mort-vivant (intangible) de taille M",
@@ -3756,7 +3732,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "mort-vivant_intangible_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy mort-vivant (intangible) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "undead horror, rotting gray flesh, cold glowing eyes, tattered burial clothes, exposed bones, medium monster, translucent incorporeal form, wispy smoky edges, menacing stance, dark fantasy"
   },
   "orque_homme_d_armes_de_niveau_1": {
     "nom": "Orque, homme d'armes de niveau 1",
@@ -3852,7 +3828,7 @@
     "alignement": "généralement chaotique neutre",
     "cle": "aberration_metamorphe_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy aberration (métamorphe) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "bizarre aberration, asymmetrical body, too many limbs and mismatched eyes, eldritch fleshy horror, medium monster, shapeshifting flesh caught mid-transformation, menacing stance, dark fantasy"
   },
   "dragon_de_taille_tp": {
     "nom": "Dragon de taille TP",
@@ -3876,7 +3852,7 @@
     "alignement": "toujours neutre bon",
     "cle": "dragon_de_taille_tp",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy dragon de taille tp creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "true dragon, massive scaled body, bat-like wings, reptilian predator head, glowing eyes, tiny monster, menacing stance, dark fantasy"
   },
   "exterieur_extraplanaire_de_taille_m": {
     "nom": "Extérieur (extraplanaire) de taille M",
@@ -3900,7 +3876,7 @@
     "alignement": "toujours neutre",
     "cle": "exterieur_extraplanaire_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (extraplanaire) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, medium monster, otherworldly planar entity, menacing stance, dark fantasy"
   },
   "creature_magique_de_taille_tg": {
     "nom": "Créature magique de taille TG",
@@ -3924,7 +3900,7 @@
     "alignement": "généralement neutre",
     "cle": "creature_magique_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, huge monster, menacing stance, dark fantasy"
   },
   "exterieur_extraplanaire_feu_de_taille_m": {
     "nom": "Extérieur (extraplanaire, Feu) de taille M",
@@ -3948,7 +3924,7 @@
     "alignement": "généralement neutre",
     "cle": "exterieur_extraplanaire_feu_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (extraplanaire, feu) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, medium monster, otherworldly planar entity, wreathed in licking flames and drifting embers, menacing stance, dark fantasy"
   },
   "animal_de_taille_gig": {
     "nom": "Animal de taille Gig",
@@ -3972,7 +3948,7 @@
     "alignement": "toujours neutre",
     "cle": "animal_de_taille_gig",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy animal de taille gig creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "realistic wild animal, natural anatomy, sleek fur, alert predatory stance, gargantuan monster, menacing stance, dark fantasy"
   },
   "creature_magique_de_taille_m": {
     "nom": "Créature magique de taille M",
@@ -3996,7 +3972,7 @@
     "alignement": "toujours neutre",
     "cle": "creature_magique_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, medium monster, menacing stance, dark fantasy"
   },
   "creature_magique_de_taille_tp": {
     "nom": "Créature magique de taille TP",
@@ -4020,7 +3996,7 @@
     "alignement": "toujours neutre",
     "cle": "creature_magique_de_taille_tp",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique de taille tp creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, tiny monster, menacing stance, dark fantasy"
   },
   "plante_de_taille_tg": {
     "nom": "Plante de taille TG",
@@ -4044,7 +4020,7 @@
     "alignement": "généralement neutre bon",
     "cle": "plante_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy plante de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "plant creature, mobile twisted vegetation, grasping vines, bark-like hide, thorns, huge monster, menacing stance, dark fantasy"
   },
   "creature_magique_de_taille_c": {
     "nom": "Créature magique de taille C",
@@ -4068,7 +4044,7 @@
     "alignement": "toujours neutre",
     "cle": "creature_magique_de_taille_c",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique de taille c creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, colossal monster, menacing stance, dark fantasy"
   },
   "mort-vivant_extraplanaire_de_taille_tg": {
     "nom": "Mort-vivant (extraplanaire) de taille TG",
@@ -4092,7 +4068,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "mort-vivant_extraplanaire_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy mort-vivant (extraplanaire) de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "undead horror, rotting gray flesh, cold glowing eyes, tattered burial clothes, exposed bones, huge monster, otherworldly planar entity, menacing stance, dark fantasy"
   },
   "mort-vivant_extraplanaire_de_taille_gig": {
     "nom": "Mort-vivant (extraplanaire) de taille Gig",
@@ -4116,7 +4092,7 @@
     "alignement": "toujours chaotique mauvais",
     "cle": "mort-vivant_extraplanaire_de_taille_gig",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy mort-vivant (extraplanaire) de taille gig creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "undead horror, rotting gray flesh, cold glowing eyes, tattered burial clothes, exposed bones, gargantuan monster, otherworldly planar entity, menacing stance, dark fantasy"
   },
   "plante_de_taille_g": {
     "nom": "Plante de taille G",
@@ -4140,7 +4116,7 @@
     "alignement": "généralement neutre",
     "cle": "plante_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy plante de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "plant creature, mobile twisted vegetation, grasping vines, bark-like hide, thorns, large monster, menacing stance, dark fantasy"
   },
   "plante_de_taille_m": {
     "nom": "Plante de taille M",
@@ -4164,7 +4140,7 @@
     "alignement": "toujours neutre",
     "cle": "plante_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy plante de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "plant creature, mobile twisted vegetation, grasping vines, bark-like hide, thorns, medium monster, menacing stance, dark fantasy"
   },
   "elementaire_extraplanaire_feu_terre_de_taille_m": {
     "nom": "Élémentaire (extraplanaire, Feu, Terre) de taille M",
@@ -4188,7 +4164,7 @@
     "alignement": "généralement neutre",
     "cle": "elementaire_extraplanaire_feu_terre_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy élémentaire (extraplanaire, feu, terre) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "elemental being, humanoid silhouette made of swirling raw element, medium monster, otherworldly planar entity, wreathed in licking flames and drifting embers, earthen hide of packed rock and soil, menacing stance, dark fantasy"
   },
   "exterieur_chaos_extraplanaire_de_taille_tg": {
     "nom": "Extérieur (Chaos, extraplanaire) de taille TG",
@@ -4212,7 +4188,7 @@
     "alignement": "toujours chaotique",
     "cle": "exterieur_chaos_extraplanaire_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (chaos, extraplanaire) de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, huge monster, chaotic asymmetrical mutating form, otherworldly planar entity, menacing stance, dark fantasy"
   },
   "exterieur_extraplanaire_mal_de_taille_m": {
     "nom": "Extérieur (extraplanaire, Mal) de taille M",
@@ -4236,7 +4212,7 @@
     "alignement": "toujours neutre mauvais",
     "cle": "exterieur_extraplanaire_mal_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (extraplanaire, mal) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, medium monster, otherworldly planar entity, malevolent fiendish visage, horns and cruel claws, menacing stance, dark fantasy"
   },
   "exterieur_eau_natif_de_taille_m": {
     "nom": "Extérieur (Eau, natif) de taille M",
@@ -4260,7 +4236,7 @@
     "alignement": "généralement neutre bon",
     "cle": "exterieur_eau_natif_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (eau, natif) de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, medium monster, aquatic form, sleek wet skin, fins and gills, menacing stance, dark fantasy"
   },
   "exterieur_extraplanaire_mal_de_taille_p": {
     "nom": "Extérieur (extraplanaire, Mal) de taille P",
@@ -4284,7 +4260,7 @@
     "alignement": "toujours neutre mauvais",
     "cle": "exterieur_extraplanaire_mal_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy extérieur (extraplanaire, mal) de taille p creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "otherworldly outsider, unearthly anatomy, alien divine presence, inhuman silhouette, small monster, otherworldly planar entity, malevolent fiendish visage, horns and cruel claws, menacing stance, dark fantasy"
   },
   "vase_de_taille_tg": {
     "nom": "Vase de taille TG",
@@ -4308,7 +4284,7 @@
     "alignement": "toujours neutre",
     "cle": "vase_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vase de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "ooze, amorphous translucent slime blob, half-dissolved bones drifting inside its body, huge monster, menacing stance, dark fantasy"
   },
   "vase_de_taille_g": {
     "nom": "Vase de taille G",
@@ -4332,7 +4308,7 @@
     "alignement": "toujours neutre",
     "cle": "vase_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vase de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "ooze, amorphous translucent slime blob, half-dissolved bones drifting inside its body, large monster, menacing stance, dark fantasy"
   },
   "vase_de_taille_m": {
     "nom": "Vase de taille M",
@@ -4356,7 +4332,7 @@
     "alignement": "toujours neutre",
     "cle": "vase_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vase de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "ooze, amorphous translucent slime blob, half-dissolved bones drifting inside its body, medium monster, menacing stance, dark fantasy"
   },
   "creature_magique_froid_de_taille_tg": {
     "nom": "Créature magique (froid) de taille TG",
@@ -4380,7 +4356,7 @@
     "alignement": "généralement neutre",
     "cle": "creature_magique_froid_de_taille_tg",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique (froid) de taille tg creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, huge monster, frost and rime coating its body, breath of icy mist, menacing stance, dark fantasy"
   },
   "creature_magique_de_taille_gig": {
     "nom": "Créature magique de taille Gig",
@@ -4404,7 +4380,7 @@
     "alignement": "toujours neutre",
     "cle": "creature_magique_de_taille_gig",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy créature magique de taille gig creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "magical beast, sleek powerful body, faint arcane glow, unusual animal features, gargantuan monster, menacing stance, dark fantasy"
   },
   "vermine_de_taille_m": {
     "nom": "Vermine de taille M",
@@ -4428,7 +4404,7 @@
     "alignement": "—",
     "cle": "vermine_de_taille_m",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vermine de taille m creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant vermin, chitinous insectoid carapace, multiple jointed legs, compound eyes, dripping mandibles, medium monster, menacing stance, dark fantasy"
   },
   "vermine_de_taille_g": {
     "nom": "Vermine de taille G",
@@ -4452,7 +4428,7 @@
     "alignement": "—",
     "cle": "vermine_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vermine de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant vermin, chitinous insectoid carapace, multiple jointed legs, compound eyes, dripping mandibles, large monster, menacing stance, dark fantasy"
   },
   "vermine_de_taille_p": {
     "nom": "Vermine de taille P",
@@ -4476,7 +4452,7 @@
     "alignement": "—",
     "cle": "vermine_de_taille_p",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy vermine de taille p creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "giant vermin, chitinous insectoid carapace, multiple jointed legs, compound eyes, dripping mandibles, small monster, menacing stance, dark fantasy"
   },
   "dragon_de_taille_g": {
     "nom": "Dragon de taille G",
@@ -4500,7 +4476,7 @@
     "alignement": "généralement neutre",
     "cle": "dragon_de_taille_g",
     "source": "DRS 3.5 (regles-donjons-dragons.com)",
-    "prompt_image": "fantasy dragon de taille g creature, D&D 3.5 illustration, ink style, dramatic lighting"
+    "prompt_image": "true dragon, massive scaled body, bat-like wings, reptilian predator head, glowing eyes, large monster, menacing stance, dark fantasy"
   },
   "aigle": {
     "nom": "Aigle",
@@ -8199,5 +8175,29 @@
     "cle": "monstre",
     "prompt_image": "fantasy creature creature, D&D style illustration, ink style, dramatic lighting",
     "generique": true
+  },
+  "mort-vivant_de_taille_m": {
+    "nom": "Mort-vivant de taille M",
+    "type": "—",
+    "taille": "",
+    "dv": "4d12 (26 pv)",
+    "pv": 26,
+    "ca": 15,
+    "vitesse": "9 m (6 cases)",
+    "bab": "+2",
+    "init": "+1",
+    "attaques": "coup (+3 corps à corps, 1d4+1 plus absorption d'énergie)",
+    "degs": "coup (+3 corps à corps, 1d4+1 plus absorption d'énergie)",
+    "sauvegardes": "Réf +2, Vig +1, Vol +5",
+    "carac": "For 12, Dex 12, Con —, Int 11, Sag 13, Cha 15",
+    "comp": "Déplacement silencieux +16, Détection +7, Discrétion +8, Perception auditive +7",
+    "dons": "Combat en aveugle, Vigilance",
+    "capacites": "Attaques spéciales : absorption d'énergie, création de rejetons; Particularités : mort-vivant, vision dans le noir (18 m)",
+    "faiblesses": "—",
+    "fp": "3",
+    "alignement": "toujours loyal mauvais",
+    "cle": "mort-vivant_de_taille_m",
+    "source": "DRS 3.5 (regles-donjons-dragons.com)",
+    "prompt_image": "undead horror, rotting gray flesh, cold glowing eyes, tattered burial clothes, exposed bones, medium monster, menacing stance, dark fantasy"
   }
 }

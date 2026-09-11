@@ -436,6 +436,56 @@ def trouve_repetition(
     return None
 
 
+def _assemble_narrations(intermediaires: list[str], finale: str) -> list[str]:
+    """Fusionne les narrations intermédiaires et la narration finale en
+    gardant une seule version par scène.
+
+    Contexte : les narrations produites EN MÊME TEMPS que les appels
+    d'outils précèdent la narration finale (dm + historique). Sans cela,
+    une intro de scène narrée avant `memoire_lieu`/`etat_partie_patch`
+    n'atteignait jamais le joueur (partie 43234a00 : « une bonne partie de
+    la narration manque »).
+
+    Dédoublonnage « brouillon supplanté » : quand le modèle narre toute la
+    scène PUIS appelle un outil qui invalide sa première version (refus
+    `engager_combat` « trois Ghouls » → re-narration « deux Ghouls »,
+    partie 54de40ed), le joueur lisait TOUTES les versions à la suite. Un
+    bloc intermédiaire qui recouvre fortement un bloc ULTÉRIEUR
+    (intermédiaire ou final) est un brouillon supplanté : il est abandonné
+    au profit du plus récent, qui est la version corrigée. Les blocs
+    distincts (intro de scène, puis continuation) restent conservés.
+    """
+    blocs = [*intermediaires, finale]
+    gardes: list[str] = []
+    for i in range(len(blocs) - 1, -1, -1):
+        cand = _normalise_pour_compare(blocs[i])
+        if len(cand) >= _REPET_MIN_CANDIDAT:
+            supplante = False
+            for garde in gardes:
+                ref = _normalise_pour_compare(garde)
+                if not ref:
+                    continue
+                pref = cand[:_REPET_PREFIXE]
+                if pref and pref in ref:
+                    supplante = True
+                    break
+                b_c = _bigrammes_fenetres(cand.split())
+                b_r = _bigrammes_fenetres(ref.split())
+                if b_c and b_r and (
+                    len(b_c & b_r) / len(b_c) >= _REPET_SEUIL_CHEVAUCHEMENT
+                ):
+                    supplante = True
+                    break
+            if supplante:
+                _log.info(
+                    "narration intermédiaire supplantée par une "
+                    "version ultérieure : %s…", blocs[i][:80],
+                )
+                continue
+        gardes.insert(0, blocs[i])
+    return gardes
+
+
 # --------------------------------------------------------------------------- #
 #  Dégénérescence INTRA-réponse : le modèle boucle sur ses propres phrases
 #  (observé en e2e : « la grande hache de groth s'abat… » recopiée N fois,
@@ -1491,17 +1541,49 @@ class Orchestrator:
         phase_combat = False
         try:
             _etat_tour = PartyState(
-                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
-            ).load()
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,            ).load()
             phase_combat = (
                 str(_etat_tour.get("phase") or "").strip().lower() == "combat"
             )
         except Exception:                                    # noqa: BLE001
             phase_combat = False
         seuil_repet = 0.75 if phase_combat else _REPET_SEUIL_CHEVAUCHEMENT
+        cles_filtre_prec: Optional[set] = None
         for _ in range(self.max_iterations):
             result.iterations += 1
             use_native = self.tool_mode in ("native", "auto")
+            # ⟳ Re-filtrage par phase À CHAQUE itération : un changement de
+            # phase EN COURS de tour (ex. `engager_combat` appelé depuis
+            # l'exploration, partie 54de40ed) doit rendre les outils de la
+            # nouvelle phase disponibles pour les itérations suivantes. Sans
+            # cela, les schémas restaient figés sur l'ensemble initial (sans
+            # lancer_attaque/lancer_degats) et le modèle ne pouvait
+            # physiquement pas résoudre ses attaques — il les simulait en
+            # prose, 3 corrections puis abandon, dégâts jamais appliqués.
+            filtered = self._filter_tools_by_phase(self.tools, ctx)
+            if cles_filtre_prec is not None and set(filtered) != cles_filtre_prec:
+                outils_noms = ", ".join(sorted(filtered))
+                _log.info(
+                    "phase changée en cours de tour : outils réinjectés (%s)",
+                    outils_noms,
+                )
+                section_maj = (
+                    tools_prompt_section(filtered)
+                    if self.tool_mode == "prompt"
+                    else tools_prompt_compact(filtered)
+                )
+                work.append(Message(
+                    role="system",
+                    content=(
+                        "ℹ️ SYSTÈME : la phase de jeu a changé EN COURS DE "
+                        "TOUR — les outils disponibles changent aussi. Leur "
+                        "documentation à jour suit. Résolvez TOUTE mécanique "
+                        "annoncée (attaque, dégâts, sauvegarde) avec CES "
+                        "outils : " + outils_noms + "\n\n" + section_maj
+                    ),
+                ))
+            cles_filtre_prec = set(filtered)
+            schemas = tools_schemas_all(filtered)
             tools_arg = schemas if use_native else None
             # ⚡ Blocage anti-boucle budget : le modèle (Q4 en particulier) a
             # re-tenté ≥3 fois des outils refusés par le quota. On retire les
@@ -2158,9 +2240,17 @@ class Orchestrator:
         # anti-répétition (D1ter) a déjà tourné sur la narration finale seule,
         # donc pas de faux positif contre les blocs intermédiaires.
         if result.narrations_intermediaires:
-            result.narration = "\n\n".join(
-                [*result.narrations_intermediaires, result.narration]
-            ).strip()
+            gardes = _assemble_narrations(
+                result.narrations_intermediaires, result.narration)
+            supprimes = (
+                len(result.narrations_intermediaires) + 1 - len(gardes))
+            if supprimes > 0:
+                _log.info(
+                    "%d narration(s) intermédiaire(s) supplantée(s) "
+                    "(brouillons recouverts par une version ultérieure)",
+                    supprimes,
+                )
+            result.narration = "\n\n".join(gardes).strip()
 
         return result
 
@@ -2261,6 +2351,63 @@ class Orchestrator:
         except Exception:                                    # noqa: BLE001
             return False
 
+    # ------------------------------------------------------------------ #
+    async def _garder_monstres_serveur(
+        self,
+        resolved: str,
+        args: dict[str, Any],
+        ctx: ToolContext,
+        result: OrchestratedResult,
+    ) -> Optional[str]:
+        """Garde-fou « le serveur joue les monstres » (indépendant du modèle).
+
+        Après `terminer_mon_tour`, `combat.boucle_auto` joue SYNCHRONIQUEMENT
+        tous les tours de monstres avec les attaques officielles du
+        bestiaire. Si le modèle rejoue ces attaques lui-même
+        (`lancer_attaque` d'un monstre, dégâts à un PJ), elles sont
+        appliquées DEUX FOIS — partie 54de40ed : BBB 9→6→4 PV par le
+        serveur, puis -3 par le modèle sur la même frappe → 1 PV, lu par le
+        joueur comme « les dégâts me soignent ». On refuse ces appels : le
+        modèle doit narreR la transition SANS mécanique et attendre les
+        résultats officiels déjà injectés.
+        """
+        if not any(
+            tc.get("name") == "terminer_mon_tour" and tc.get("ok")
+            for tc in result.tool_calls_trace
+        ):
+            return None
+        try:
+            etat = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+            ).load()
+            pjs = {
+                str(p.get("nom") or "").strip().lower()
+                for p in (etat.get("pj") or []) if isinstance(p, dict)
+            }
+        except Exception:                                    # noqa: BLE001
+            return None
+        refus = (
+            "⛔ Le serveur joue DÉJÀ les tours de monstres automatiquement "
+            "(résultats officiels injectés ci-dessus). N'émettez AUCUNE "
+            "attaque de monstre ni dégât à un personnage : ils seraient "
+            "appliqués une deuxième fois. Narrez la transition SANS aucun "
+            "appel de mécanique, en vous appuyant sur les résultats "
+            "officiels."
+        )
+        if resolved == "lancer_attaque":
+            attaquant = str(args.get("nom_attaquant") or "").strip().lower()
+            if attaquant and attaquant not in pjs:
+                return refus
+        elif resolved == "lancer_degats":
+            cible = str(args.get("cible") or "").strip().lower()
+            if cible and cible in pjs:
+                return refus
+        elif resolved == "fiche_perso_infliger_degats":
+            nom = str(args.get("nom") or "").strip().lower()
+            if nom and nom in pjs:
+                return refus
+        return None
+
     async def _rediriger_escalier(
         self,
         resolved: str,
@@ -2333,6 +2480,14 @@ class Orchestrator:
             resolved, args, note_esc = await self._rediriger_escalier(
                 resolved, args, ctx, work,
             )
+            refus_monstres = await self._garder_monstres_serveur(
+                resolved, args, ctx, result,
+            )
+            if refus_monstres:
+                self._reply_tool_error(
+                    work, name, call.get("id"), refus_monstres,
+                )
+                continue
             spec = self.tools[resolved]
             args, notes = sanitize_tool_args(spec, args)
             tr = await self._run_one_tool(spec, ctx, args, on_event, result)
@@ -2373,6 +2528,16 @@ class Orchestrator:
             resolved, args, note_esc = await self._rediriger_escalier(
                 resolved, args, ctx, work,
             )
+            refus_monstres = await self._garder_monstres_serveur(
+                resolved, args, ctx, result,
+            )
+            if refus_monstres:
+                work.append(Message(
+                    role="tool",
+                    name=resolved,
+                    content=refus_monstres,
+                ))
+                continue
             spec = self.tools[resolved]
             args, notes = sanitize_tool_args(spec, args)
             tr = await self._run_one_tool(spec, ctx, args, on_event, result)

@@ -524,9 +524,22 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     premier = participants[0]
     pj_map = {p["nom"]: p.get("joueur", "?") for p in etat.get("pj", [])}
     qui = f"{premier['nom']} (joueur : {pj_map.get(premier['nom'], 'PNJ/monstre')})"
+    # Alignement narration ↔ mécanique : si le MJ avait narré PLUS de
+    # créatures que le plafond d'équilibre n'en autorise (« trois
+    # silhouettes » narrées, une seule engagée — partie 63f0838a), le
+    # joueur voyait des ennemis fantômes. On impose la cohérence.
+    nb_engages = sum(
+        int(m.get("quantite", 1) or 1) for m in monstres_combat
+    ) or len(monstres_combat)
     lignes += [
         "",
         f"⚔️ **Combat engagé ! Tour 1 — c'est au tour de {qui}.**",
+        (
+            f"🎭 TA NARRATION doit porter sur EXACTEMENT {nb_engages} "
+            f"créature(s) engagée(s) ci-dessus — PAS une de plus : si ton "
+            "récit en annonçait davantage (renforts, horde), corrige-la "
+            "sans anachronisme (elles n'existent pas sur le plateau)."
+        ),
         "Ordre : " + " → ".join(p["nom"] for p in participants),
         "_⚙️ Rotation gérée par le SERVEUR : les monstres attaquent, les "
         "mourants sont passés et l'XP distribuée automatiquement. Le joueur "

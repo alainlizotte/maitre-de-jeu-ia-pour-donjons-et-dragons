@@ -1295,6 +1295,12 @@ async def fiche_perso_infliger_degats(
     for c in ("Invalide", "Mourant", "Mort"):
         if c in conds:
             conds.remove(c)
+    # « Stabilisé » n'a de sens que pour un mourant : un personnage remis
+    # en positives ou DÉCÉDÉ ne doit pas conserver la condition (observé :
+    # ['Stabilisé', 'Mort'] simultanées, partie 63f0838a).
+    for c in ("Stabilisé", "Stabilise"):
+        if c in conds:
+            conds.remove(c)
     etat_msg = ""
     if nv <= -10:
         conds.append("Mort")
@@ -1364,9 +1370,11 @@ async def fiche_perso_soigner(
         )
     fiche["pv"] = nv
     # PV positifs → on lève les états liés aux blessures (règles 3.5).
+    # « Stabilisé » aussi : un personnage soigné n'est plus un mourant
+    # stabilisé (cohérence avec la levée de Mourant/Invalide).
     conds: list[str] = fiche.setdefault("conditions", [])
     nettoye = False
-    for c in ("Mourant", "Invalide"):
+    for c in ("Mourant", "Invalide", "Stabilisé", "Stabilise"):
         if c in conds and nv > 0:
             conds.remove(c)
             nettoye = True

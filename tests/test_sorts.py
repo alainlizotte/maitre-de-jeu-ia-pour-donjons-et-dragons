@@ -111,7 +111,11 @@ def test_non_lanceur() -> None:
 
 
 def test_niveau_sort_max_et_liste() -> None:
-    assert cat.niveau_sort_max("Sorcier", 5) == 3  # (6,6,4,1) : 3e niveau de sort
+    # Tables PHB 3.5 : 2e cycle au niv.4, 3e au niv.6.
+    assert cat.niveau_sort_max("Sorcier", 3) == 1  # (6,5)
+    assert cat.niveau_sort_max("Sorcier", 4) == 2  # (6,6,2)
+    assert cat.niveau_sort_max("Sorcier", 5) == 2  # (6,6,3)
+    assert cat.niveau_sort_max("Sorcier", 6) == 3  # (6,6,6,1)
     noms = [s["nom"] for s in cat.sorts_pour("Magicien", 1)]
     assert "Boule de feu" not in noms and "Projectiles magiques" in noms
     assert "Soins légers" not in noms  # pas dans la liste magicien

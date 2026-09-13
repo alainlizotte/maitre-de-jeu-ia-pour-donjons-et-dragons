@@ -150,3 +150,35 @@ def test_trace_avec_echec_terminer_ne_refuse_pas():
         )) is None
     finally:
         pass
+
+
+def test_engager_declenche_aussi_le_garde():
+    """Réplication ce0c9dd1 : « débute la partie » → engager_combat joue le
+    round 1 de la Goule (init. 19, 7→1 PV) — le modèle ne doit PAS rejouer
+    cette attaque (sinon 1→-5, mourant au tour 1)."""
+    d = tempfile.mkdtemp(prefix="dnd35_garde_")
+    try:
+        _partie(d)
+        orch = Orchestrator(client=None, tools={})
+        res = OrchestratedResult()
+        res.tool_calls_trace.append({"name": "engager_combat", "ok": True})
+        # Le modèle rejoue l'attaque de la Goule → refus.
+        assert asyncio.run(orch._garder_monstres_serveur(
+            "lancer_attaque",
+            {"nom_attaquant": "Goule", "nom_cible": "BBB",
+             "ca_cible": "16", "bonus_attaque": "+3", "arme": "Griffes"},
+            _ctx(d), res,
+        )).startswith(_REFUS)
+        assert asyncio.run(orch._garder_monstres_serveur(
+            "fiche_perso_infliger_degats", {"nom": "BBB", "degats": 6},
+            _ctx(d), res,
+        )).startswith(_REFUS)
+        # L'attaque du PJ sur le monstre reste légitime.
+        assert asyncio.run(orch._garder_monstres_serveur(
+            "lancer_attaque",
+            {"nom_attaquant": "BBB", "nom_cible": "Goule",
+             "ca_cible": "14", "bonus_attaque": "+5", "arme": "Hache"},
+            _ctx(d), res,
+        )) is None
+    finally:
+        pass

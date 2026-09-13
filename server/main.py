@@ -3065,28 +3065,38 @@ async def _handle_say(
                         timeout_secondes=cfg.game.combat_turn_timeout_seconds,
                     )
                     if res_post.events:
-                        # ⏱️ Borne dur : sur un llama.cpp local partagé avec
-                        # d'autres applis (open-webui…), cet appel narratif
-                        # peut attendre le slot pendant des minutes — sans
-                        # cette limite le tour restait figé « en réflexion »
-                        # après un combat. Au-delà de 90 s : repli bloc brut.
-                        try:
-                            nar_post = await asyncio.wait_for(
-                                _narrer_mecaniques_serveur(
-                                    app,
-                                    res_post.events,
-                                    contexte=str(
-                                        (apres.get("lieu") or {}).get("nom") or ""
-                                    ),
-                                ),
-                                timeout=90.0,
-                            )
-                        except (asyncio.TimeoutError, Exception) as e_nar:  # noqa: BLE001
-                            print(
-                                "[dnd35] Narration mécaniques échouée/timeout "
-                                f"(repli bloc brut) : {e_nar}"
-                            )
+                        if res_post.combat_termine:
+                            # 🧾 Clôture de combat (victoire/défaite/mort) :
+                            # bloc brut FACTUEL obligatoire. La narration LLM
+                            # de ces moments inventait des issues
+                            # contradictoires — « victoire écrasante » sur
+                            # une DÉFAITE, PV max lus comme PV courants,
+                            # PJ qualifié de « monstre géant » (partie
+                            # 63f0838a : mort de Balrog mal racontée).
                             nar_post = ""
+                        else:
+                            # ⏱️ Borne dur : sur un llama.cpp local partagé avec
+                            # d'autres applis (open-webui…), cet appel narratif
+                            # peut attendre le slot pendant des minutes — sans
+                            # cette limite le tour restait figé « en réflexion »
+                            # après un combat. Au-delà de 90 s : repli bloc brut.
+                            try:
+                                nar_post = await asyncio.wait_for(
+                                    _narrer_mecaniques_serveur(
+                                        app,
+                                        res_post.events,
+                                        contexte=str(
+                                            (apres.get("lieu") or {}).get("nom") or ""
+                                        ),
+                                    ),
+                                    timeout=90.0,
+                                )
+                            except (asyncio.TimeoutError, Exception) as e_nar:  # noqa: BLE001
+                                print(
+                                    "[dnd35] Narration mécaniques échouée/timeout "
+                                    f"(repli bloc brut) : {e_nar}"
+                                )
+                                nar_post = ""
                         if nar_post:
                             result.narration += "\n\n" + nar_post
                         else:

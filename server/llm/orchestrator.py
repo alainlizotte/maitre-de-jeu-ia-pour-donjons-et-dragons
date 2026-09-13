@@ -1313,6 +1313,15 @@ _INTENT_MONTER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Intention « repos » : le joueur demande une récupération (« je me
+# repose », « on dort »…). Si le modèle narre sans appeler `repos_long`,
+# les PV ne sont JAMAIS restaurés (2× ignoré en partie abf74a77).
+_INTENT_REPOS_RE = re.compile(
+    r"\b(repos\w*|dormir|dormons|dormez|sommeil)\b"
+    r"|\bme\s+reposer\b",
+    re.IGNORECASE,
+)
+
 # 💰 Budget d'appels par OUTIL et par TOUR de joueur : au-delà, `_run_one_tool`
 # refuse l'exécution (le modèle bouclait 17-32× sur `fiche_perso_mettre_a_jour`
 # ou `inventaire_consulter`, brûlant des minutes et saturant num_ctx).
@@ -1872,6 +1881,62 @@ class Orchestrator:
                     )
                     continue
 
+                # --- Garde-fou « repos demandé » ---------------------------
+                # Le joueur demande un repos (« je me repose ») et le modèle
+                # l'IGNORE en narrant autre chose — observé deux fois de
+                # suite en partie abf74a77 : jamais de `repos_long`, PV
+                # jamais restaurés. On force l'appel (toute l'équipe) une
+                # seule fois, puis la boucle narre le résultat officiel.
+                dernier_user = ""
+                for m in reversed(work):
+                    if m.role == "user":
+                        dernier_user = m.content or ""
+                        break
+                repos_deja_appele = any(
+                    tc.get("name") == "repos_long"
+                    for tc in result.tool_calls_trace
+                )
+                if (
+                    dernier_user
+                    and _INTENT_REPOS_RE.search(dernier_user)
+                    and not repos_deja_appele
+                ):
+                    try:
+                        _etat_repos = PartyState(
+                            data_dir=str(ctx.data_dir),
+                            partie_id=ctx.partie_id,
+                        ).load()
+                        en_combat = (
+                            str(_etat_repos.get("phase") or "") == "combat"
+                        )
+                    except Exception:                          # noqa: BLE001
+                        en_combat = False
+                    if not en_combat:
+                        _log.warning(
+                            "repos demandé sans appel d'outil → appel "
+                            "forcé de repos_long (toute l'équipe)"
+                        )
+                        work.append(Message(
+                            role="assistant",
+                            content=(chat.content or "").strip(),
+                        ))
+                        work.append(Message(
+                            role="system",
+                            content=(
+                                "ℹ️ SYSTÈME : le joueur a demandé à se "
+                                "REPOSER, mais tu n'as appelé AUCUN outil. "
+                                "L'appel `repos_long` vient d'être exécuté "
+                                "pour toi (toute l'équipe) — narre le repos "
+                                "et ses effets d'après le résultat officiel "
+                                "ci-dessous (PV récupérés = 1/niveau)."
+                            ),
+                        ))
+                        await self._exec_tool_calls_prompt(
+                            [{"name": "repos_long", "arguments": {}}],
+                            ctx, work, result, on_event,
+                        )
+                        continue
+
             # --- A. Détection de simulation textuelle ----------------------
             # (après B/C/C2 : si un appel réel a été récupéré, ce n'est plus
             # une simulation à corriger — le tour continue avec les résultats.)
@@ -2361,18 +2426,24 @@ class Orchestrator:
     ) -> Optional[str]:
         """Garde-fou « le serveur joue les monstres » (indépendant du modèle).
 
-        Après `terminer_mon_tour`, `combat.boucle_auto` joue SYNCHRONIQUEMENT
-        tous les tours de monstres avec les attaques officielles du
-        bestiaire. Si le modèle rejoue ces attaques lui-même
+        Dès qu'un combat est engagé (`engager_combat`) ou qu'un tour PJ est
+        terminé (`terminer_mon_tour`), `combat.boucle_auto` joue
+        SYNCHRONIQUEMENT les tours de monstres avec les attaques officielles
+        du bestiaire. Si le modèle rejoue ces attaques lui-même
         (`lancer_attaque` d'un monstre, dégâts à un PJ), elles sont
-        appliquées DEUX FOIS — partie 54de40ed : BBB 9→6→4 PV par le
-        serveur, puis -3 par le modèle sur la même frappe → 1 PV, lu par le
-        joueur comme « les dégâts me soignent ». On refuse ces appels : le
-        modèle doit narreR la transition SANS mécanique et attendre les
-        résultats officiels déjà injectés.
+        appliquées DEUX FOIS :
+        - partie 54de40ed : BBB 9→6→4 PV par le serveur, puis -3 par le
+          modèle sur la même frappe → 1 PV, lu comme « les dégâts me
+          soignent » ;
+        - partie ce0c9dd1 : le tour 1 commence par la Goule (init. 19) —
+          7→1 PV par le serveur, puis -6 rejoués par le modèle → -5, mourant
+          au tour 1.
+        On refuse ces appels : le modèle doit narreR la transition SANS
+        mécanique et attendre les résultats officiels déjà injectés.
         """
         if not any(
-            tc.get("name") == "terminer_mon_tour" and tc.get("ok")
+            tc.get("name") in ("terminer_mon_tour", "engager_combat")
+            and tc.get("ok")
             for tc in result.tool_calls_trace
         ):
             return None

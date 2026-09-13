@@ -436,6 +436,72 @@ def trouve_repetition(
     return None
 
 
+# Signaux d'ATTAQUE ENNEMIE dans une narration : créatures qui passent à
+# l'offensive contre le groupe (embuscade, surgissement, encerclement).
+_NARRATION_ATTAQUE_RE = re.compile(
+    r"(combat\s+imminent|surgissent|s'élancent|se précipitent|se ruent|"
+    r"encercl\w+|fondent\s+sur|vous\s+attaqu\w+|prêts\s+à\s+attaquer|"
+    r"passent\s+à\s+l'attaque)",
+    re.IGNORECASE,
+)
+# Marqueurs de combat DÉJÀ RÉSOLU (récit) : inhibent le garde.
+_NARRATION_PASSE_RE = re.compile(
+    r"(vaincu\w*|achèv\w*|à\s+terre\s*,?\s*(?:inerte|sans vie)|coffre\s+vid)",
+    re.IGNORECASE,
+)
+_NOMBRES_FR: dict[str, int] = {
+    "un": 1, "une": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5,
+    "six": 6, "sept": 7, "huit": 8, "neuf": 9, "dix": 10, "douze": 12,
+}
+
+
+def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
+    """Extrait les ennemis du bestiaire qui ATTAQUENT le groupe dans une
+    narration (noms + quantités) — pour forcer `engager_combat` quand le
+    modèle narre une embuscade en pur prose sans l'appeler (partie
+    77e2862b : « cinq squelettes ... vous attaquent » narré sans aucun
+    tool call, la calibration d'équilibre n'a jamais tourné). Renvoie la
+    chaîne `monstres` pour `engager_combat`, ou None si rien détecté."""
+    if not texte or not _NARRATION_ATTAQUE_RE.search(texte):
+        return None
+    t = _normalise_pour_compare(texte)
+    if _NARRATION_PASSE_RE.search(t):
+        return None
+    try:
+        from ..tools.monstres import _load_bestiaire
+        mons = _load_bestiaire(ctx)
+    except Exception:                                        # noqa: BLE001
+        return None
+    if not isinstance(mons, dict):
+        return None
+    vus: list[str] = []
+    for k, v in mons.items():
+        if k == "_meta" or not isinstance(v, dict):
+            continue
+        nom = str(v.get("nom") or "").strip()
+        n = _normalise_pour_compare(nom)
+        # Noms trop courts : faux positifs garantis (« orc » ⊂ « torche »).
+        if len(n) < 5 or n in ("monstre", "monstres"):
+            continue
+        if n not in t and n + "s" not in t:
+            continue
+        # Quantité : nombre (chiffre ou mot) juste avant la mention.
+        compte = 1
+        for m in re.finditer(re.escape(n) + r"s?", t):
+            avant = t[max(0, m.start() - 20):m.start()]
+            mn = re.search(
+                r"(\d+|" + "|".join(_NOMBRES_FR) + r")\s*$", avant
+            )
+            if mn:
+                j = mn.group(1)
+                compte = int(j) if j.isdigit() else _NOMBRES_FR.get(j, 1)
+                break
+        vus.extend([nom] * max(1, min(compte, 6)))
+    if not vus:
+        return None
+    return ", ".join(vus[:6])
+
+
 def _assemble_narrations(intermediaires: list[str], finale: str) -> list[str]:
     """Fusionne les narrations intermédiaires et la narration finale en
     gardant une seule version par scène.
@@ -1850,6 +1916,17 @@ class Orchestrator:
                     for tc in result.tool_calls_trace
                 )
             ):
+                en_combat = False
+                try:
+                    _etat_a0 = PartyState(
+                        data_dir=str(ctx.data_dir),
+                        partie_id=ctx.partie_id,
+                    ).load()
+                    en_combat = (
+                        str(_etat_a0.get("phase") or "") == "combat"
+                    )
+                except Exception:                          # noqa: BLE001
+                    pass
                 intention = self._intention_escalier(work)
                 if intention and await self._groupe_dans_escalier(ctx):
                     _log.warning(
@@ -1901,16 +1978,6 @@ class Orchestrator:
                     and _INTENT_REPOS_RE.search(dernier_user)
                     and not repos_deja_appele
                 ):
-                    try:
-                        _etat_repos = PartyState(
-                            data_dir=str(ctx.data_dir),
-                            partie_id=ctx.partie_id,
-                        ).load()
-                        en_combat = (
-                            str(_etat_repos.get("phase") or "") == "combat"
-                        )
-                    except Exception:                          # noqa: BLE001
-                        en_combat = False
                     if not en_combat:
                         _log.warning(
                             "repos demandé sans appel d'outil → appel "
@@ -1933,6 +2000,46 @@ class Orchestrator:
                         ))
                         await self._exec_tool_calls_prompt(
                             [{"name": "repos_long", "arguments": {}}],
+                            ctx, work, result, on_event,
+                        )
+                        continue
+
+                # --- Garde-fou « combat narré sans engager » ----------------
+                # Le modèle narre une ATTAQUE de créatures contre le groupe
+                # en pur prose SANS appeler `engager_combat` : ni initiative,
+                # ni PV officiels, ni calibration d'équilibre — partie
+                # 77e2862b : « cinq squelettes ... vous attaquent » narré
+                # sans aucun tool call. On extrait les ennemis du bestiaire
+                # depuis la narration et on force l'engagement (le plafond
+                # d'équilibre interne arbitre ensuite la quantité).
+                if not en_combat:
+                    monstres_str = _ennemis_annonces(chat.content or "", ctx)
+                    if monstres_str:
+                        _log.warning(
+                            "combat narré sans engager_combat → appel forcé "
+                            "avec : %s", monstres_str,
+                        )
+                        work.append(Message(
+                            role="assistant",
+                            content=(chat.content or "").strip(),
+                        ))
+                        work.append(Message(
+                            role="system",
+                            content=(
+                                "ℹ️ SYSTÈME : tu as narré des créatures qui "
+                                "attaquent le groupe, mais tu n'as appelé "
+                                "AUCUN outil. `engager_combat` vient d'être "
+                                "exécuté pour toi avec les créatures "
+                                "détectées — initiative officielle, PV et "
+                                "calibration d'équilibre inclus. Narre le "
+                                "début du combat d'après le résultat "
+                                "officiel ci-dessous (n'invente AUCUN "
+                                "nombre)."
+                            ),
+                        ))
+                        await self._exec_tool_calls_prompt(
+                            [{"name": "engager_combat",
+                              "arguments": {"monstres": monstres_str}}],
                             ctx, work, result, on_event,
                         )
                         continue

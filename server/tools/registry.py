@@ -202,26 +202,39 @@ def _arg_label(ann) -> str:
 
 
 def tools_prompt_compact(registry: dict[str, ToolSpec]) -> str:
-    """Bloc COURT documentant les tools pour le mode « auto » (natif + texte).
+    """Bloc COURT documentant les tools pour le mode « auto ».
 
-    Le tool-calling natif de llama.cpp avec Gemma est fragile : le modèle
-    écrit souvent l'appel en prose (`outil(key="value")`) au lieu d'émettre
-    un tool_calls JSON. Ce bloc compact (quelques dizaines de tokens) lui
-    rappelle les DEUX canaux valides — le tool_calls natif OU la balise
-    `<tool ...>` textuelle — tous deux parsés de façon déterministe par le
-    backend. Version allégée de `tools_prompt_section` pour ne pas diluer
-    le signal des schémas JSON du payload.
+    Qwen3.5-9B (mesures 09/2026, contexte long) : le canal NATIF est fiable
+    (100 % d'arguments valides quand l'appel existe). Enseigner PLUSIEURS
+    formats (héritage Gemma : balise `<tool ...>` textuelle) crée des
+    MÉLANGES de syntaxe — résidus `<parameter=…>` dans les valeurs JSON,
+    appels sans arguments. On n'enseigne donc PLUS qu'UN canal ; les
+    extracteurs de secours (`parse_prompt_tool_calls`,
+    `extract_function_blocks`…) restent actifs côté serveur si le modèle
+    dévie malgré tout.
     """
     noms = ", ".join(sorted(registry.keys()))
     return (
         "## Appels d'outils (OBLIGATOIRES pour tout jet de dés, dégât, "
         "sauvegarde, fiche, monstre, donjon ou changement d'état)\n"
-        "Deux formats valides, au choix :\n"
-        '1. tool_calls natif (JSON du payload) — recommandé ;\n'
-        '2. balise texte seule sur sa ligne : <tool name="nom" key="value">\n'
+        "UN SEUL format : l'appel d'outil NATIF (tool_calls du payload). "
+        "N'écris JAMAIS l'appel dans le texte de la narration.\n"
         "INTERDIT : écrire l'appel en prose `nom(key=\"value\")`, simuler le "
         "résultat, inventer un chiffre ou écrire « *(Attente du résultat…)* » "
-        "— tout appel en syntaxe fonctionnelle est intercepté et exécuté, et "
-        "tout résultat non issu d'un tool est INVALIDE.\n"
+        "— tout résultat non issu d'un tool est INVALIDE.\n"
+        "### Routage (intention → outil CANONIQUE, aucun substitut admis) :\n"
+        "- attaquer un monstre → `lancer_attaque` (pas lancer_d20/lancer_des)\n"
+        "- dégâts à une créature → `lancer_degats` puis dégâts au PJ ou "
+        "monstre via `fiche_perso_infliger_degats`\n"
+        "- dégâts SUBIS par un PJ → `fiche_perso_infliger_degats`\n"
+        "- soin ponctuel (potion, sort) → `fiche_perso_soigner` "
+        "(pas repos_long)\n"
+        "- jet de sauvegarde → `lancer_sauvegarde`\n"
+        "- gain d'XP → `fiche_perso_gagner_xp`\n"
+        "- ramasser/ajouter un objet → `inventaire_ramasser` ou "
+        "`inventaire_ajouter`\n"
+        "- infos sur un monstre → `monstre_consulter`\n"
+        "- `repos_long` UNIQUEMENT si le joueur annonce un repos de nuit "
+        "(8 h) — jamais pour une potion ou des dégâts.\n"
         f"Tools disponibles : {noms}"
     )

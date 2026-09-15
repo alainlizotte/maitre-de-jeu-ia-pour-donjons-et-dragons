@@ -123,6 +123,15 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "memoire_position",
         "memoire_intrigue",
         "memoire_evenement",
+        # Mutations d'état HORS combat : pièges, ripostes isolées, potions,
+        # XP d'histoire, butin (E2E 09/2026 : ces tools ABSENTS de la phase
+        # expliquaient des tours « dégâts/soin/XP/inventaire » 100 %
+        # narratifs — le modèle ne peut pas appeler un outil masqué).
+        "fiche_perso_infliger_degats",
+        "fiche_perso_soigner",
+        "fiche_perso_gagner_xp",
+        "inventaire_ramasser",
+        "inventaire_ajouter",
         "inventaire_consulter",
         # Scénario : relire le livret et suivre les étapes de la trame.
         "scenarios_laelith_lister",
@@ -219,14 +228,25 @@ _SIMULATION_PATTERNS = [
     #   "Jet d'attaque : 1d20+4 = 17"
     #   "Jet de dégâts : 2d6+2 = 9"
     #   "1d20+5 = 18, touché !"
-    # On capture le pattern `NdM+mod = résultat` et `Jet d'X : ... = N`.
+    #   "Jet d'attaque : 1d20 + 5 (BBA) + 3 (FOR) = 18"   ← partie dfccc120 :
+    #     modificateurs MULTIPLES avec labels entre parenthèses — l'ancienne
+    #     regex (un seul modificateur, pas de parenthèses) laissait passer
+    #     ces jets 100 % simulés, dégâts jamais appliqués.
+    # Les formules sont dans _DICE_FORMULA_PATTERNS (désactivées quand un
+    # tool de dés a déjà tourné : la reformulation du résultat est légitime).
+]
+
+# Formules de dés RÉCITÉES : détectées seulement quand AUCUN tool de dés n'a
+# encore tourné dans le tour (`include_checks=True`, cf.
+# looks_like_simulation) — quand les dés ONT été jetés, reciter la formule
+# (« 1d8+3 = 7 ») est une reformulation légitime du résultat officiel.
+_DICE_FORMULA_PATTERNS = [
+    # "1d20+5 = 18" / "2d6+2 = 9" / "1d20 + 5 (BBA) + 3 (FOR) = 18".
     re.compile(
-        r"\b(?:jet\s+(?:d['']attaque|de\s+d[ée]g[âa]ts|de\s+sauvegarde)\s*[:\-]\s*)?"
-        r"\d+d\d+(?:\s*[+\-]\s*\d+)?\s*[:=]\s*\d{1,3}\b",
+        r"\b\d+d\d+(?:\s*[+\-]\s*\d+|\s*\([^)]{1,25}\))*\s*[:=]\s*\d{1,3}\b",
         re.IGNORECASE,
     ),
-    # "Jet d'attaque : 17" (sans formule NdM, juste le résultat numérique après
-    # un label explicite — Survient quand le DM néglige d'appeler lancer_attaque).
+    # "Jet d'attaque : 17" (résultat numérique nu après un label explicite).
     re.compile(
         r"\bjet\s+(?:d['']attaque|de\s+d[ée]g[âa]ts|de\s+sauvegarde)\s*[:\-]\s*\d{1,3}\b",
         re.IGNORECASE,
@@ -252,6 +272,17 @@ _FICHE_ECRITURE_TOOLS = {
     "fiche_perso_creer_rapide",
     "fiche_perso_mettre_a_jour",
     "fiche_perso_renommer",
+}
+
+# Outils CANONIQUES des gains d'état (soins, XP, inventaire) : quand l'un
+# d'eux a tourné dans le tour, la reformulation en prose du gain est
+# légitime — la détection _GAIN_PROSE_PATTERNS est alors désactivée.
+_GAIN_TOOLS = {
+    "fiche_perso_soigner",
+    "fiche_perso_gagner_xp",
+    "inventaire_ramasser",
+    "inventaire_ajouter",
+    "inventaire_retirer",
 }
 
 # Dégâts narrés en prose ("inflige 12 points de dégâts", "subit 5 dégâts") sans
@@ -311,6 +342,9 @@ _DAMAGE_PROSE_PATTERNS = [
 # « Je lance un jet de Force pour forcer la porte de pierre. » — le tour
 # s'arrêtait là, sans aucun dé (observé en partie réelle). Désactivés quand
 # un tool de dés a déjà tourné (la reformulation du résultat est légitime).
+# Partie dfccc120 : « réussit son jet d'intimidation (18/15) » et « jet de
+# Discours (16/15) » — les COMPÉTENCES n'étaient pas couvertes : le modèle
+# inventait réussite/échec sans jamais appeler lancer_d20.
 _CHECK_PROSE_PATTERNS = [
     re.compile(
         r"\bje\s+(?:vais\s+)?(?:tenter\s+de\s+)?lancer\s+un\s+jet\b",
@@ -321,6 +355,61 @@ _CHECK_PROSE_PATTERNS = [
         r"|intelligence|sagesse|charisme)\b\s*(?:pour|…|\?|$|\.)",
         re.IGNORECASE,
     ),
+    # « jet d'intimidation (18/15) », « jet de Discours : 16 / DD 15 » —
+    # résultat de compétence récité avec son score et sa difficulté.
+    re.compile(
+        r"\bjet\s+d(?:e\s+|')[a-zà-öø-ÿ]{3,20}\b[^.!?;\n]{0,50}?"
+        r"(?:\(\s*\d{1,2}\s*/\s*\d{1,3}\s*\)"
+        r"|:\s*\d{1,2}\s*/\s*(?:DD\s*)?\d{1,3})",
+        re.IGNORECASE,
+    ),
+    # « réussit son jet de Discours / son jet d'intimidation » — issue
+    # affirmée sans dé : toujours une simulation quand aucun outil n'a tourné.
+    re.compile(
+        r"\br[ée]ussit\s+(?:son|un|le)\s+jet\b|\b[ée]choue\s+(?:son|un|le)\s+jet\b",
+        re.IGNORECASE,
+    ),
+]
+
+
+# Gains d'état AFFIRMÉS EN PROSE sans tool (soins, XP, inventaire) :
+# « Throkmar récupère 5 PV », « il gagne 50 points d'expérience »,
+# « j'ajoute l'épée à ton inventaire ». Comme pour les dégâts, ce sont des
+# mutations d'état qui DOIVENT passer par fiche_perso_soigner /
+# fiche_perso_gagner_xp / inventaire_ramasser — sinon la fiche ne bouge pas
+# (observé en E2E réel : tours « soin »/« xp »/« inventaire » 100 % narratifs,
+# partie 09b56d5b / f51b1be0). Désactivés quand l'outil canonique a déjà
+# tourné (reformulation légitime) — cf. looks_like_simulation.
+_GAIN_PROSE_PATTERNS = [
+    # « récupère/récupérer/restaure/regagne/fait récupérer N PV / points de vie »
+    re.compile(
+        r"\b(?:r[ée]cup[eèé]re?|restaure?|regagne?|regagnera?"
+        r"|fait\s+r[ée]cup[eèé]rer|lui\s+fait\s+r[ée]cup[eèé]rer)\s+(?:\*\*)?"
+        r"\d{1,3}(?:\*\*)?\s*(?:points?\s+de\s+vie\b|PV\b)",
+        re.IGNORECASE,
+    ),
+    # « soigne N (points de) dégâts / N PV »
+    re.compile(
+        r"\bsoigne?\s+(?:\*\*)?\d{1,3}(?:\*\*)?\s*"
+        r"(?:points?\s+(?:de\s+)?(?:vie|dégâts)|PV\b)",
+        re.IGNORECASE,
+    ),
+    # « gagne N points d'expérience » / « gagne N XP »
+    re.compile(
+        r"\bgagne?(?:z)?\s+(?:\*\*)?\d{1,5}(?:\*\*)?\s*"
+        r"(?:points?\s+d['']exp[ée]rience\b|XP\b)",
+        re.IGNORECASE,
+    ),
+    # « +50 XP » (montant récité)
+    re.compile(r"\+\s*\d{1,5}\s*(?:points?\s+d['']exp[ée]rience|XP)\b",
+               re.IGNORECASE),
+    # « ajoute/ajouté … à son/votre inventaire », « range … dans son sac »
+    re.compile(
+        r"\b(?:ajout\w*|range\w*|glisse\w*)\b[^.!?;\n]{0,80}?"
+        r"\b(?:[àa]\s+(?:son|sa|votre)|dans\s+(?:son|votre))\s+"
+        r"(?:inventaire|sac|sacoche)",
+        re.IGNORECASE,
+    ),
 ]
 
 
@@ -329,6 +418,7 @@ def looks_like_simulation(
     include_damage: bool = True,
     include_checks: bool = True,
     include_creation: bool = True,
+    include_gains: bool = True,
 ) -> Optional[str]:
     """Renvoie le fragment de simulation trouvé, ou None.
 
@@ -339,6 +429,8 @@ def looks_like_simulation(
     caractéristique/compétence en prose (« jet de Force pour… »).
     `include_creation=False` désactive la détection des « ✅ Fiche créée… »
     narrés — utilisé quand un outil d'écriture de fiche a réellement tourné.
+    `include_gains=False` désactive les gains d'état en prose (soins, XP,
+    inventaire) — légitimes quand l'outil canonique a déjà tourné.
     """
     if not text:
         return None
@@ -347,8 +439,14 @@ def looks_like_simulation(
         pats += _DAMAGE_PROSE_PATTERNS
     if include_checks:
         pats += _CHECK_PROSE_PATTERNS
+        # Formules de dés récitées (« 1d20 + 5 (BBA) + 3 = 18 ») : jet
+        # improvisé si AUCUN tool de dés n'a tourné ; reformulation
+        # légitime sinon → désactivées avec les autres patterns de jets.
+        pats += _DICE_FORMULA_PATTERNS
     if include_creation:
         pats += _FICHE_CREATION_PATTERNS
+    if include_gains:
+        pats += _GAIN_PROSE_PATTERNS
     for pat in pats:
         m = pat.search(text)
         if m:
@@ -454,6 +552,38 @@ _NOMBRES_FR: dict[str, int] = {
     "six": 6, "sept": 7, "huit": 8, "neuf": 9, "dix": 10, "douze": 12,
 }
 
+# Quantificateurs acceptés devant une mention de créature (mots ou chiffres).
+_RE_QUANTIFIANT_FR = re.compile(
+    r"(\d+|" + "|".join(_NOMBRES_FR)
+    + r"|plusieurs|dizaine|douzaine|horde|groupe|couple|paire|triplet)\s*$",
+    re.IGNORECASE,
+)
+
+# Noms du bestiaire qui sont AUSSI des mots courants de la narration :
+# « les ombres de l'auberge », « une silhouette dans la nuit »… désignent
+# le DÉCOR, pas une rencontre. Sur ces mots, l'engagement forcé ne doit
+# JAMAIS se déclencher (partie dfccc120 : le joueur négociait avec des
+# voleurs, le garde a engagé le monstre « Ombre » sur le mot « ombres ») —
+# le MJ peut toujours appeler `engager_combat` explicitement. Volontairement
+# réduit à deux mots quasi exclusivement décoratifs : les autres noms
+# plausibles (squelette, zombie…) restent éligibles à l'engagement forcé
+# dès qu'ils sont quantifiés (régression 77e2862b : « cinq squelettes »).
+_ENNEMIS_MOTS_GENERIQUES = {
+    "ombre", "silhouette",
+}
+
+
+def _mention_monstre_quantifiee(t: str, n: str) -> bool:
+    """True si au moins une occurrence du nom normalisé `n` dans le texte
+    normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
+    « horde »…). Les mentions non quantifiées (« les ombres du couloir »)
+    sont traitées comme du décor, jamais comme une rencontre forcée."""
+    for m in re.finditer(re.escape(n) + r"s?", t):
+        avant = t[max(0, m.start() - 20):m.start()]
+        if _RE_QUANTIFIANT_FR.search(avant):
+            return True
+    return False
+
 
 def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
     """Extrait les ennemis du bestiaire qui ATTAQUENT le groupe dans une
@@ -461,7 +591,14 @@ def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
     modèle narre une embuscade en pur prose sans l'appeler (partie
     77e2862b : « cinq squelettes ... vous attaquent » narré sans aucun
     tool call, la calibration d'équilibre n'a jamais tourné). Renvoie la
-    chaîne `monstres` pour `engager_combat`, ou None si rien détecté."""
+    chaîne `monstres` pour `engager_combat`, ou None si rien détecté.
+
+    Deux garde-fous anti-faux-positifs (partie dfccc120) :
+    - les noms génériques du français (ombre, silhouette…) ne déclenchent
+      JAMAIS l'engagement forcé ;
+    - une mention non quantifiée (« les ombres de l'auberge ») est du
+      décor : il faut « deux ombres », « cinq squelettes »…
+    """
     if not texte or not _NARRATION_ATTAQUE_RE.search(texte):
         return None
     t = _normalise_pour_compare(texte)
@@ -483,15 +620,19 @@ def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
         # Noms trop courts : faux positifs garantis (« orc » ⊂ « torche »).
         if len(n) < 5 or n in ("monstre", "monstres"):
             continue
+        if n in _ENNEMIS_MOTS_GENERIQUES:
+            continue
         if n not in t and n + "s" not in t:
             continue
-        # Quantité : nombre (chiffre ou mot) juste avant la mention.
+        # Quantité OBLIGATOIRE : nombre (chiffre ou mot) juste avant la
+        # mention — sans elle, la mention est du décor et on passe.
+        if not _mention_monstre_quantifiee(t, n):
+            continue
+        # Compte de la première occurrence quantifiée.
         compte = 1
         for m in re.finditer(re.escape(n) + r"s?", t):
             avant = t[max(0, m.start() - 20):m.start()]
-            mn = re.search(
-                r"(\d+|" + "|".join(_NOMBRES_FR) + r")\s*$", avant
-            )
+            mn = _RE_QUANTIFIANT_FR.search(avant)
             if mn:
                 j = mn.group(1)
                 compte = int(j) if j.isdigit() else _NOMBRES_FR.get(j, 1)
@@ -586,6 +727,52 @@ def tronquer_degeneration(texte: str) -> tuple[str, str]:
             )
             return coupe, cle[:80]
     return texte, ""
+
+
+def _segments_thinking(texte: str) -> list[str]:
+    """Contenus des blocs <think>…</think> (ou non fermés) d'une réponse
+    brute — pour récupérer les appels d'outils émis DANS le raisonnement
+    (Qwen3.5, issue llama.cpp #20837)."""
+    if not texte:
+        return []
+    return [
+        m.group(1)
+        for m in re.finditer(r"<think\s*>(.*?)(?:</think\s*>|\Z)", texte,
+                             re.DOTALL)
+        if m.group(1).strip()
+    ]
+
+
+_RESIDUE_XML_ARGS_RE = re.compile(
+    r"</?(?:parameter|function|tool_call|tool|item)\b[^>]*>", re.IGNORECASE)
+
+
+def _nettoyer_args_outils(args: dict[str, Any]) -> dict[str, Any]:
+    """Nettoie la contamination XML→JSON du modèle (Qwen3.5-9B Q4, format
+    Hermes demandé) : l'ancien format `<parameter=clé>valeur</parameter>`
+    fuit PARFOIS DANS LES VALEURS de chaînes des arguments JSON — le JSON
+    reste valide mais les valeurs sont corrompues (ex. vérifié :
+    nom="Throk'mar</parameter>\\n<parameter=degats>\\n5</parameter>"). On
+    retire les résidus de balises + quotes/backslashes parasites en bord
+    de valeur (« 1d20" » → « 1d20 ») ; une valeur qui devient vide est
+    retirée. Idempotent, sans effet sur des valeurs saines."""
+    propres: dict[str, Any] = {}
+    for cle, val in (args or {}).items():
+        if isinstance(val, str) and _RESIDUE_XML_ARGS_RE.search(val):
+            # Garde le préfixe sain AVANT la première balise : dans
+            # « Throk'mar</parameter>\n<parameter=degats>\n5</parameter> »,
+            # le « 5 » appartient au champ fantôme `degats` (déjà présent
+            # en tant que vrai champ JSON), pas au nom.
+            v = _RESIDUE_XML_ARGS_RE.split(val)[0]
+            v = re.sub(r"\s+", " ", v).strip(" \t\"'\\")
+            if v:
+                propres[cle] = v
+        elif isinstance(val, str):
+            v = val.strip().strip("\"'").strip("\\").strip()
+            propres[cle] = v if v else val
+        else:
+            propres[cle] = val
+    return propres
 
 
 # --------------------------------------------------------------------------- #
@@ -978,6 +1165,11 @@ _PROSE_PLACEHOLDER_RES = [
     re.compile(r"\*?\(\s*Appel\s+au\s+tool\b[^)]*\)\*?", re.IGNORECASE),
     re.compile(r"\*?\(\s*Appel\s+au\s+sort\s*\)\*?", re.IGNORECASE),
     re.compile(r"\*?\(\s*Appels?\s+d['']outils?[^)]*\)\*?", re.IGNORECASE),
+    # « *(Appel de l'outil lancer_attaque pour résoudre le combat)* » —
+    # variante détectée par _SIMULATION_PATTERNS mais PAS nettoyée avant
+    # (partie dfccc120 : le placeholder est parti jusqu'au joueur).
+    re.compile(r"\*?\(\s*Appel\s+de\s+l['']outil[^)]*\)\*?", re.IGNORECASE),
+    re.compile(r"\*?\(\s*Appel\s+des\s+outils[^)]*\)\*?", re.IGNORECASE),
     re.compile(r"\*?\(\s*Attente\s+du\s+r[ée]sultat\b[^)]*\)\*?", re.IGNORECASE),
     re.compile(r"\*?\(\s*Le\s+r[ée]sultat\s+du\s+jet\s+est\s+appliqu[ée][^)]*\)\*?", re.IGNORECASE),
     re.compile(r"\*?\(\s*Les\s+d[ée]g[âa]ts\s+sont\s+calcul[ée]s?[^)]*\)\*?", re.IGNORECASE),
@@ -1346,6 +1538,11 @@ def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None)
     # épuisé…), il ne doit JAMAIS être montré au joueur.
     out = _FUNCTION_BLOCK_RE.sub("", out)
     out = re.sub(r"</?tool_call\s*>", "", out)
+    # Balises <tool>/<\/tool> orphelines ou tronquées (partie dfccc120 :
+    # « Throk'mar</tool> » est parti jusqu'au joueur). Le parseur
+    # strip_prompt_tool_calls n'attrape que les balises bien formées avec
+    # name="…" ; ce balayage final retire tout résidu de balise tool.
+    out = re.sub(r"</?tool(?=[\s/>])[^>]*>", "", out)
     for pat in _PROSE_PLACEHOLDER_RES:
         out = pat.sub("", out)
     out = _tidy_empty_lines(out)
@@ -1456,6 +1653,13 @@ class OrchestratedResult:
     # (dm + historique — le dm final remplace l'aperçu streamé côté
     # client, donc aucun doublon à l'écran).
     narrations_intermediaires: list[str] = field(default_factory=list)
+    # Lignes mécaniques des dégâts appliqués DIRECTEMENT par le serveur au
+    # moment du lancer_degats (auto-application, cf. _run_one_tool) : le
+    # modèle voit la narration du joueur mais n'inclut pas ces résultats
+    # dans son contexte — on les ajoute à la dm finale pour que la table
+    # voie les PV officiels (partie dfccc120 : 6 dégâts jetés, jamais
+    # appliqués, PV monstre restés à 19/19).
+    notes_mecaniques: list[str] = field(default_factory=list)
 
 
 class Orchestrator:
@@ -1711,7 +1915,50 @@ class Orchestrator:
                         tool_calls=chat.tool_calls,
                         finish_reason=chat.finish_reason,
                         raw=chat.raw,
+                        raw_content=chat.raw_content,
                     )
+
+            # --- Bbis0. Appels d'outils cachés DANS le bloc thinking ------
+            # Qwen3.5 émet parfois l'appel `<tool_call><function=…>
+            # <parameter=…>` À L'INTÉRIEUR du bloc <think> — llama.cpp ne le
+            # parse pas (issue #20837) et le strip-thinking du client le
+            # DÉTRUIT (le contenu nettoyé ne contient plus rien). On récupère
+            # l'appel depuis le contenu BRUT (raw_content), segments thinking
+            # uniquement, sans doublon avec les appels natifs déjà présents.
+            _brut = getattr(chat, "raw_content", "") or ""
+            if _brut and "<think" in _brut and not result.narration_forcee:
+                _caches: list[dict[str, Any]] = []
+                for _seg in _segments_thinking(_brut):
+                    _c1, _ = extract_function_blocks(_seg)
+                    _caches.extend(_c1)
+                    _c2, _ = extract_toolcall_blocks(_seg)
+                    _caches.extend(_c2)
+                    _caches.extend(parse_prompt_tool_calls(_seg))
+                if _caches:
+                    def _cle_appel(c: dict[str, Any]) -> tuple[str, str]:
+                        f = c.get("function", c)
+                        return (
+                            _norm_tool_name(str(f.get("name", ""))),
+                            json.dumps(f.get("arguments", "{}"),
+                                       sort_keys=True, default=str),
+                        )
+                    _existantes = {_cle_appel(tc)
+                                   for tc in (chat.tool_calls or [])}
+                    _nouveaux = [c for c in _caches
+                                 if _cle_appel(c) not in _existantes]
+                    if _nouveaux:
+                        _log.info(
+                            "%d appel(s) d'outil récupéré(s) DANS le bloc "
+                            "thinking : %s", len(_nouveaux),
+                            ", ".join(str(c.get("name")) for c in _nouveaux),
+                        )
+                        chat = ChatResult(
+                            content=chat.content,
+                            tool_calls=(chat.tool_calls or []) + _nouveaux,
+                            finish_reason=chat.finish_reason,
+                            raw=chat.raw,
+                            raw_content=_brut,
+                        )
 
             # --- Bbis. Blocs <tool_call> textuels (llama.cpp sans jinja) ----
             # Le backend laisse parfois l'appel dans `content` au lieu de
@@ -1727,6 +1974,7 @@ class Orchestrator:
                     tool_calls=(chat.tool_calls or []) + block_calls,
                     finish_reason=chat.finish_reason,
                     raw=chat.raw,
+                    raw_content=chat.raw_content,
                 )
 
             # --- Bter. Blocs <function=..><parameter=..> (ChatML/Qwen) ------
@@ -2065,11 +2313,18 @@ class Orchestrator:
                     tc.get("name") in _FICHE_ECRITURE_TOOLS
                     for tc in result.tool_calls_trace
                 )
+                # Gains d'état (soins, XP, inventaire) : la reformulation en
+                # prose n'est légitime que si l'outil canonique a tourné.
+                gain_rolled = any(
+                    tc.get("name") in _GAIN_TOOLS
+                    for tc in result.tool_calls_trace
+                )
                 sim = looks_like_simulation(
                     chat.content,
                     include_damage=not (damage_rolled or trust_damage_prose),
                     include_checks=not dice_rolled,
                     include_creation=not fiche_ecrite,
+                    include_gains=not gain_rolled,
                 )
                 if sim:
                     result.simulation_attempted = True
@@ -2206,11 +2461,16 @@ class Orchestrator:
                     tc.get("name") in _FICHE_ECRITURE_TOOLS
                     for tc in result.tool_calls_trace
                 )
+                gain_rolled_final = any(
+                    tc.get("name") in _GAIN_TOOLS
+                    for tc in result.tool_calls_trace
+                )
                 sim_final = looks_like_simulation(
                     narration,
                     include_damage=not (damage_rolled or trust_damage_prose),
                     include_checks=not dice_rolled_final,
                     include_creation=not fiche_ecrite_final,
+                    include_gains=not gain_rolled_final,
                 )
                 if sim_final:
                     result.simulation_attempted = True
@@ -2245,6 +2505,28 @@ class Orchestrator:
                                 "joueur — attends le résultat officiel du "
                                 "tool, puis raconte la scène à partir de ce "
                                 "résultat." + _CORRECTIF_INTERNE
+                            ),
+                        ))
+                        continue
+                    # Gains d'état en prose (soins / XP / inventaire) :
+                    # correctif CIBLÉ (AVANT le correctif générique « jet »,
+                    # sinon un gain narré reçoit un message hors-sujet).
+                    if any(
+                        p.search(sim_final) for p in _GAIN_PROSE_PATTERNS
+                    ):
+                        work.append(Message(
+                            role="system",
+                            content=(
+                                "⚠️ CORRECTION : ta narration contient "
+                                f"« {sim_final} » — un gain d'état affirmé à la "
+                                "main. C'est interdit : la fiche n'a PAS changé. "
+                                "Recommence ce tour en appelant l'outil canonique "
+                                "AVANT de narrer : soins → `fiche_perso_soigner` ; "
+                                "expérience → `fiche_perso_gagner_xp` ; objet "
+                                "ramassé → `inventaire_ramasser` (ou "
+                                "`inventaire_ajouter`). Attends le résultat "
+                                "officiel du tool, puis narre la scène à partir "
+                                "de ce résultat." + _CORRECTIF_INTERNE
                             ),
                         ))
                         continue
@@ -2423,6 +2705,10 @@ class Orchestrator:
                     supprimes,
                 )
             result.narration = "\n\n".join(gardes).strip()
+
+        # NB : `notes_mecaniques` (dégâts auto-appliqués) n'est PAS concaténé
+        # ici — main.py l'ajoute à la dm finale APRÈS les rejeux correctifs
+        # (qui remplacent la narration), pour ne rien perdre.
 
         return result
 
@@ -2762,6 +3048,8 @@ class Orchestrator:
         hors_budget: bool = False,
     ) -> ToolResult:
         """Exécute un tool, relaye ses events, agrège le patch d'état."""
+        # Nettoyage de la contamination XML→JSON des arguments (Qwen3.5-9B).
+        args = _nettoyer_args_outils(args or {})
         # 💰 Budget par tour : borne le spam d'outils observé en e2e
         # (17-32 appels `fiche_perso_mettre_a_jour` dans un même tour = des
         # minutes perdues et un contexte saturé). Au-delà du quota, l'outil
@@ -2872,7 +3160,78 @@ class Orchestrator:
                     })
                 except Exception:                             # noqa: BLE001
                     pass
+        # (d) ⚔️ Auto-application des dégâts sur un ennemi suivi : un
+        # `lancer_degats` réussi dont la cible figure dans `monstres_combat`
+        # est appliqué IMMÉDIATEMENT par le serveur. Avant (partie dfccc120),
+        # l'application dépendait que le modèle pense à rappeler
+        # `fiche_perso_infliger_degats` — il l'oubliait, les 6 dégâts jetés
+        # restaient sans effet (Ombre 19/19 PV malgré un touché 23 vs CA 13).
+        # La trace enregistre ensuite l'appel `fiche_perso_infliger_degats`
+        # effectué ici : la file anti-double-application de
+        # `_appliquer_degats_oublies` et le dédoublonnage
+        # `_exces_degats_monstres` restent EXACTS (appliqué == jeté).
+        if spec.name == "lancer_degats" and ok:
+            await self._auto_appliquer_degats(args, tr, ctx, result, on_event)
         return tr
+
+    async def _auto_appliquer_degats(
+        self,
+        args: dict[str, Any],
+        tr: ToolResult,
+        ctx: ToolContext,
+        result: OrchestratedResult,
+        on_event: Optional[EventCallback],
+    ) -> None:
+        """Applique immédiatement les dégâts d'un `lancer_degats` réussi
+        quand la cible est un monstre SUIVI (etat.monstres_combat). Idempotent
+        avec les garde-fous existants : l'appel `fiche_perso_infliger_degats`
+        généré consomme l'orphelin dans la file du rattrapage et équilibre
+        appliqué/jeté pour le dédoublonnage."""
+        cible = str((args or {}).get("cible") or "").strip()
+        if not cible:
+            return
+        m_total = re.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr.text or "")
+        if not m_total:
+            return
+        total = int(m_total.group(1))
+        if total <= 0:
+            return
+        # Uniquement les monstres SUIVIS et vivants : une cible hors combat
+        # (PJ narratif, monstre absent de l'état) reste un jet sans effet.
+        import unicodedata as _uni
+
+        def _nn(s: Any) -> str:
+            n = _uni.normalize("NFKD", str(s or "").strip().lower())
+            return "".join(c for c in n if not _uni.combining(c))
+
+        try:
+            etat = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+            ).load()
+        except Exception:                                    # noqa: BLE001
+            return
+        cn = _nn(cible)
+        suivi = any(
+            _nn(mo.get("nom")) == cn
+            and int(mo.get("pv", 0) or 0) > 0
+            and "Détruit" not in (mo.get("conditions") or [])
+            and "Detruit" not in (mo.get("conditions") or [])
+            for mo in (etat.get("monstres_combat") or [])
+        )
+        if not suivi:
+            return
+        tr_inf = await self.execute_tool_direct(
+            "fiche_perso_infliger_degats",
+            {"nom": cible, "degats": total},
+            ctx, on_event, result,
+        )
+        if tr_inf is None:
+            return
+        result.notes_mecaniques.append(tr_inf.text)
+        _log.info(
+            "auto-application des dégâts : %d → %s (lancer_degats réussi)",
+            total, cible,
+        )
 
     # ------------------------------------------------------------------ #
     def _compte_fiches_absentes(self, result: OrchestratedResult, nom: str) -> int:

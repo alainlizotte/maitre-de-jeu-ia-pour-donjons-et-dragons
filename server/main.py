@@ -43,6 +43,7 @@ from .game.state import PartyState, SCHEMA_PARTIE
 from .llm.client import Message
 from .llm.client import OllamaClient
 from .llm.orchestrator import EventCallback, Orchestrator
+from .llm.orchestrator import _ENNEMIS_MOTS_GENERIQUES
 from .llm.prompt_builder import PromptBuilder
 from .rag.store import RagStore
 from .tools.base import ToolContext
@@ -70,14 +71,44 @@ _ACTION_COMBAT_RE = _re_mod.compile(
 # Détection d'une INTENTION de déplacement de donjon (« Je vais au nord »,
 # bouton de la carte, « direction ouest »…) → si le MJ narre l'arrivée sans
 # appeler `carte_donjon_explorer`, l'état et la carte ne bougent PAS (bug
-# réel : le modèle narrait le déplacement en prose, carte figée). Un rejeu
-# correctif force l'outil, qui arbitre (refus si pas de porte).
+# réel : le modèle narrait « tu traverses le passage est » sans tool). Un rejeu
+# correctif force l'outil, qui arbitre (refus si pas de porte dans ce mur).
 _MOVE_INTENT_RE = _re_mod.compile(
     r"^\s*(?:je\s+(?:vais|souhaite\s+aller|passe|avance)\s+(?:au|à l'|a l'|vers\s+le\s+|vers\s+la\s+)?"
     r"|on\s+va\s+(?:au|à l'|a l')?|allons\s+(?:au|à l'|a l')?|direction\s+)?"
     r"\s*(nord|sud|est|ouest)\s*[.!?]*\s*$",
     _re_mod.IGNORECASE,
 )
+
+# Détection d'ENTRÉE dans un lieu à cartographier (partie 8a7c1f92 : le MJ
+# narre « Vous vous dirigez vers l'entrée des catacombes… Vous entrez dans
+# l'obscurité » SANS jamais appeler `carte_donjon_entrer` — donjon.id reste
+# null, la carte /carte-donjon.svg répond 404 « Aucun donjon actif »).
+# Deux signaux requis : un MOT DE LIEU clos/souterrain ET un signal de
+# franchissement de seuil (une simple mention du lieu ne suffit pas).
+_DONJON_LIEU_RE = _re_mod.compile(
+    r"\b(catacombes?|donjons?|cryptes?|souterrains?|tunnels?|grottes?|"
+    r"cavernes?|[ée]gouts?|tombeaux?|labyrinthes?|repaire|antre)\b",
+    _re_mod.IGNORECASE,
+)
+_DONJON_ENTREE_RE = _re_mod.compile(
+    r"vous\s+(?:entrez\b|p[ée]n[ée]trez\b|descendez\b|franchissez\b"
+    r"|vous\s+enfoncez\b|dirigez\s+vers\s+l['']entr[ée]e)"
+    r"|l['']entr[ée]e\s+(?:des?\b|du\b|de\s+la\b)"
+    r"|\bfranchis\w+\s+le\s+seuil\b|\bau\s+seuil\b",
+    _re_mod.IGNORECASE,
+)
+
+
+def _entree_donjon_narree(narration: str) -> bool:
+    """True si la narration relate l'ENTRÉE du groupe dans un lieu clos
+    à cartographier (donjon, catacombes, crypte…)."""
+    if not narration:
+        return False
+    return bool(
+        _DONJON_LIEU_RE.search(narration)
+        and _DONJON_ENTREE_RE.search(narration)
+    )
 
 # Détection d'un combat narré EN PROSE par le LLM (le petit modèle écrit
 # parfois « Le combat commence ! Le zombie charge… » et enchaîne jets/dégâts
@@ -121,7 +152,8 @@ _EXPLO_PROSE_MARKERS = (
     "vous empruntez", "vous ouvrez la porte", "poussez la porte",
     "pénètrent", "explorent", "descendez le couloir", "remontez le couloir",
     "nouvelle salle", "la pièce suivante", "au détour du couloir",
-    "vous suivez le passage", "vous franchissez",
+    "vous suivez le passage", "vous suivez le couloir", "vous franchissez",
+    "vous suivez le tunnel", "vous progressez dans le couloir",
 )
 # Marqueurs d'une exploration CLÔSE (retour, sortie, arrêt) : pas de rattrapage.
 _EXPLO_PROSE_END_MARKERS = (
@@ -2277,6 +2309,15 @@ def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any])
         if not nom or len(nom) < 3:
             continue
         nl = _sans_accents(nom.lower())
+        # Garde anti-faux-positifs (partie dfccc120) : les mots génériques
+        # (« ombre », « silhouette »…) désignent le décor, jamais une
+        # rencontre — jamais de rattrapage sur ces mots. La prose de dégâts
+        # / marqueur de combat exigée plus haut suffit comme signal ici ;
+        # pas d'exigence de quantificateur (contrairement au garde
+        # `_ennemis_annonces` de l'orchestrateur, qui s'arme sur la seule
+        # narration d'attaque).
+        if nl in _ENNEMIS_MOTS_GENERIQUES:
+            continue
         if nl in _sans_accents(bas):
             trouves.append(nom)
             continue
@@ -2396,6 +2437,9 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
             result.tool_calls_trace.extend(result2.tool_calls_trace)
             result.tool_events.extend(result2.tool_events)
             result.state_patches.extend(result2.state_patches)
+            # Dégâts auto-appliqués par le rejeu : ajoutés aux notes du tour
+            # (concaténées à la dm finale en une seule passe, plus bas).
+            result.notes_mecaniques.extend(result2.notes_mecaniques)
             # Les narrations intermédiaires du 1er passage (diffusées en
             # direct, p. ex. une intro de scène) restent dans le dm final :
             # sans cela, le texte aperçu disparaîtrait à l'écran au moment
@@ -2797,6 +2841,10 @@ async def _handle_say(
                                     result.state_patches.extend(
                                         result2.state_patches
                                     )
+                                    # Dégâts auto-appliqués par le rejeu.
+                                    result.notes_mecaniques.extend(
+                                        result2.notes_mecaniques
+                                    )
                                     # Préserve les narrations intermédiaires
                                     # déjà diffusées (cf. _rejoue_correctif).
                                     result.narration = "\n\n".join(
@@ -2868,6 +2916,63 @@ async def _handle_say(
             except Exception as e:                               # noqa: BLE001
                 print(f"[dnd35] 5bis-e rejeu déplacement failed: {e}")
 
+            # 5bis-f. 🗺️ Entrée de donjon narrée SANS `carte_donjon_entrer`.
+            # Le MJ raconte le seuil (« Vous vous dirigez vers l'entrée des
+            # catacombes… Vous entrez dans l'obscurité ») mais n'initialise
+            # AUCUN donjon : `donjon.id` reste null et la carte
+            # `/carte-donjon.svg` répond 404 « Aucun donjon actif »
+            # (partie 8a7c1f92 — Dues For The Dead). Contrairement au rejeu
+            # 5bis-e (qui re-questionne le LLM), l'entrée est résolue
+            # DÉTERMINISTEMENT ici : appel serveur de `carte_donjon_entrer`
+            # avec l'id canonique du manifeste du scénario (lien
+            # quête.source → <scenario>.donjon.json). Sans manifeste, on ne
+            # force rien (risque de faux positif en ville/auberge).
+            try:
+                _etat_ent = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _deja_entree = any(
+                    tc.get("name") == "carte_donjon_entrer"
+                    for tc in result.tool_calls_trace
+                )
+                if (
+                    _etat_ent.get("phase") != "combat"
+                    and not (_etat_ent.get("donjon") or {}).get("id")
+                    and not _deja_entree
+                    and _entree_donjon_narree(
+                        (text or "") + " " + (result.narration or ""))
+                ):
+                    from .tools.cartes import _manifest_pour
+                    _man = _manifest_pour(ctx, "")
+                    _did = str((_man or {}).get("donjon_id") or "").strip()
+                    if _did:
+                        tr_ent = await orch.execute_tool_direct(
+                            "carte_donjon_entrer", {"donjon_id": _did},
+                            ctx, on_event, result,
+                        )
+                        if tr_ent is not None and not tr_ent.text.startswith(
+                                ("❌", "⛔", "🚫")):
+                            result.narration += (
+                                "\n\n⚙️ _Le serveur a fait entrer le groupe "
+                                "dans **" + _did + "** — carte du donjon "
+                                "initialisée._\n\n" + tr_ent.text
+                            )
+                            print(
+                                "[dnd35] Entrée donjon narrée sans tool → "
+                                f"carte_donjon_entrer({_did!r}) exécutée "
+                                "(serveur)."
+                            )
+                        else:
+                            print(
+                                "[dnd35] Entrée donjon forcée refusée par "
+                                "l'outil : "
+                                + (tr_ent.text[:120]
+                                   if tr_ent is not None else "None")
+                            )
+            except Exception as e:                               # noqa: BLE001
+                print(f"[dnd35] 5bis-f entrée donjon failed: {e}")
+
             # 5bis-b. ⚔️ Rattrapage des invoquations non enregistrées.
             # Le joueur annonce une invoquation/renfort en combat mais le MJ
             # l'a narrée en prose sans appeler combat_ajouter_combattant (le
@@ -2918,6 +3023,10 @@ async def _handle_say(
                         )
                         result.tool_events.extend(result2.tool_events)
                         result.state_patches.extend(result2.state_patches)
+                        # Dégâts auto-appliqués par le rejeu.
+                        result.notes_mecaniques.extend(
+                            result2.notes_mecaniques
+                        )
                         # Préserve les narrations intermédiaires déjà
                         # diffusées (cf. _rejoue_correctif).
                         result.narration = "\n\n".join(
@@ -2938,6 +3047,10 @@ async def _handle_say(
             # sur la cible (fiche PJ ou monstre suivi). Si le modèle a oublié
             # fiche_perso_infliger_degats, le serveur applique les dégâts
             # manquants exactement une fois (appariement anti double-application).
+            # NB : depuis l'auto-application dans `_run_one_tool`, un
+            # `lancer_degats` sur un ennemi suivi est déjà appliqué à chaud —
+            # ce rattrapage ne couvre plus que les cas résiduels (cible hors
+            # état au moment du jet, rejeus partiels…).
             try:
                 txt_rattrapage = await _appliquer_degats_oublies(
                     orch, result, ctx, on_event)
@@ -2947,6 +3060,16 @@ async def _handle_say(
                           "automatiquement (tools serveur).")
             except Exception as e:
                 print(f"[dnd35] Rattrapage dégâts échoué (ignoré) : {e}")
+
+            # 5bis-c-bis. ⚔️ Lignes mécaniques des dégâts auto-appliqués
+            # (cf. orchestrator._auto_appliquer_degats) : ajoutées à la dm
+            # finale ICI (et non dans run()) pour survivre aux rejeux
+            # correctifs qui remplacent `result.narration`.
+            if getattr(result, "notes_mecaniques", None):
+                result.narration = (
+                    result.narration + "\n\n⚙️ _Application serveur des "
+                    "dégâts :_\n\n" + "\n".join(result.notes_mecaniques)
+                ).strip()
 
             # 5bis-c2. 💥 Dé-duplication des dégâts de monstres : tout excès
             # appliqué par le LLM au-delà de ce qu'il a réellement jeté est

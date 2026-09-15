@@ -59,8 +59,16 @@ def _payload_base(cfg: LLMConfig, messages: list[Message], stream: bool) -> dict
     # voire réponse 100 % thinking (content vide, tour perdu). llama.cpp
     # applique ces kwargs au template Jinja du modèle ; les backends qui ne
     # les connaissent pas les ignorent (aucun risque).
+    kwargs: dict[str, Any] = {}
     if not getattr(cfg, "think", False):
-        payload["chat_template_kwargs"] = {"enable_thinking": False}
+        kwargs["enable_thinking"] = False
+    # Format d'appel d'outils (template Qwen corrigé : "json" = Hermes,
+    # parse nativement par llama.cpp — cf. LLMConfig.tool_call_format).
+    _tcf = (getattr(cfg, "tool_call_format", "") or "").strip()
+    if _tcf:
+        kwargs["tool_call_format"] = _tcf
+    if kwargs:
+        payload["chat_template_kwargs"] = kwargs
     return payload
 
 
@@ -267,6 +275,11 @@ class ChatResult:
     tool_calls: list[dict[str, Any]]
     finish_reason: str
     raw: dict[str, Any]
+    # Contenu BRUT (AVANT strip du thinking) : l'orchestrateur y récupère
+    # les appels d'outils émis À L'INTÉRIEUR du bloc <think> — Qwen3.5 le
+    # fait parfois et llama.cpp ne les parse pas (issue #20837) ; sans ce
+    # champ, le strip détruirait l'appel.
+    raw_content: str = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -333,9 +346,12 @@ class OllamaClient:
         data = resp.json()
         choice = data["choices"][0]
         msg = choice.get("message", {})
-        content = _strip_thinking(msg.get("content", "") or "")
+        # Contenu BRUT conservé pour l'extraction des appels cachés dans le
+        # thinking (cf. ChatResult.raw_content).
+        raw_msg_content = msg.get("content", "") or ""
+        content = _strip_thinking(raw_msg_content)
         # Debug: log thinking leaks
-        raw_content = msg.get("content", "") or ""
+        raw_content = raw_msg_content
         if raw_content != content:
             _log.info("thinking stripped: %d → %d chars", len(raw_content), len(content))
         # Qwen + llama.cpp --jinja : le raisonnement peut arriver séparément
@@ -353,6 +369,7 @@ class OllamaClient:
             tool_calls=msg.get("tool_calls", []) or [],
             finish_reason=choice.get("finish_reason", "stop"),
             raw=data,
+            raw_content=raw_msg_content,
         )
 
     # ------------------------------------------------------------------ #

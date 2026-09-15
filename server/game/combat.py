@@ -172,24 +172,89 @@ def _avancer_curseur(etat: dict) -> Optional[str]:
 # --------------------------------------------------------------------------- #
 #  Attaque automatique (monstres ennemis ET alliés invoqués)
 # --------------------------------------------------------------------------- #
+# « Arme +N » / « Arme +N/+M » — bonus hors parenthèses, suivi de « ( »,
+# d'une virgule (attaques juxtaposées : « Griffe +4, mordre +4 »), d'un
+# « ; » ou de la fin. Le premier bonus d'une séquence +N/+M est retenu.
+# Les tirets Unicode « – »/« — » du bestiaire DRS valent le signe moins.
+# NB : le tiret ASCII est ÉCHAPPÉ et jamais placé entre deux caractères
+# (sinon « +-– » forme une plage de code points qui avale chiffres et « / »).
+_SIGNES = r"[+\-–—]"
+_RE_ARME_A = re.compile(
+    r"(.+?)\s*(" + _SIGNES + r"\d+(?:/" + _SIGNES + r"\d+)*)\s*(?:\(|,|;|$)")
+# DRS : « Arme (+N … » — bonus ENTRE parenthèses.
+_RE_ARME_DRS = re.compile(r"([^+(()]*?)\(\s*(" + _SIGNES + r"?\d+)")
+_RE_DES = re.compile(r"(\d+)[dD](\d+)(" + _SIGNES + r"\s?\d+)?")
+
+
+def _int_signe(txt: str) -> int:
+    """int() tolérant aux tirets Unicode « –3 »/« —3 » et astérisques."""
+    t = txt.replace("–", "-").replace("—", "-").replace("*", "").strip()
+    return int(t)
+
+
 def _arme_du_bestiaire(m: dict) -> Optional[tuple[str, int, int, int, int]]:
-    """(arme, bonus_atk, nb_des, faces, bonus_dmg) depuis la fiche bestiaire."""
+    """(arme, bonus_atk, nb_des, faces, bonus_dmg) depuis la fiche bestiaire.
+
+    Gère les formats du bestiaire local :
+    - « Cimeterre +2 (corps à corps) » / « Griffe +4, mordre +4 » /
+      « Grande épée +12/+7 » (bonus hors parenthèses) ;
+    - DRS : « contact intangible (+3 contact au corps à corps, 1d6 ...) »
+      (bonus ENTRE parenthèses) — format majoritaire qui faisait renvoyer
+      None à l'ancien parseur (305/342 entrées) : les monstres ne jouaient
+      JAMAIS leur tour (Ombre muette en partie dfccc120).
+    Multi-attaques : segments séparés par « ; » — le premier segment
+    exploitable gagne. Les dés de dégâts sont relus dans `degs` après le
+    nom d'arme, à défaut dans le segment `attaques`, puis (dernier recours)
+    le premier dé du champ `degs` (cas « Griffe +4 » avec degs « 1d4+4 »).
+    """
     attaques = str(m.get("attaques") or "").strip()
-    mm = _RE_ARME_BONUS.match(attaques)
-    if not mm:
+    if not attaques:
         return None
-    arme = mm.group(1).strip()
-    if not arme:
-        return None
-    bonus_atk = int(mm.group(2))
     degs = str(m.get("degs") or "")
-    pos = degs.lower().find(arme.lower())
-    bloc = degs[pos + len(arme):] if pos >= 0 else degs
-    md = re.search(r"(\d+)[dD](\d+)([+-]\s?\d+)?", bloc)
-    if not md:
-        return None
-    bonus_dmg = int((md.group(3) or "0").replace(" ", ""))
-    return (arme, bonus_atk, int(md.group(1)), int(md.group(2)), bonus_dmg)
+    for segment in re.split(r"\s*;\s*", attaques):
+        segment = segment.strip()
+        if not segment:
+            continue
+        # Retire les suffixes de type d'attaque DRS entre l'arme et son
+        # bonus (« Dague +2 au corps à corps (1d4+1…) » → « Dague +2 (…) »)
+        # pour que le format « Arme +N ( » s'applique.
+        segment = re.sub(
+            r"\s+(?:au\s+corps\s+à\s+corps|à\s+distance|corps\s+à\s+corps"
+            r"|distance)(?=\s*\()",
+            " ", segment, flags=re.IGNORECASE).strip()
+        arme: Optional[str] = None
+        bonus_atk = 0
+        # Format « Arme +N » (suivi de « ( », « , », « ; » ou fin).
+        mm = _RE_ARME_A.match(segment)
+        if mm and mm.group(1).strip():
+            arme = mm.group(1).strip()
+            bonus_atk = _int_signe(mm.group(2).split("/")[0])
+        else:
+            # Format DRS « Arme (+N ...) » : bonus entre parenthèses.
+            md0 = _RE_ARME_DRS.match(segment)
+            if md0:
+                arme = md0.group(1).strip().strip(",;")
+                bonus_atk = _int_signe(md0.group(2))
+        if not arme:
+            continue
+        # Retire un éventuel compte initial (« 2 tentacules » → « tentacules »).
+        arme = re.sub(r"^\d+\s+", "", arme).strip() or arme
+        # Dés de dégâts : d'abord dans `degs` après le nom d'arme...
+        pos = degs.lower().find(arme.lower())
+        bloc = degs[pos + len(arme):] if pos >= 0 else ""
+        md = _RE_DES.search(bloc)
+        if not md:
+            # ... à défaut dans le segment `attaques` lui-même (DRS).
+            md = _RE_DES.search(segment)
+        if not md:
+            # Dernier recours : le premier dé du champ `degs` (attaques
+            # sans dés, « Griffe +4 » avec degs « 1d4+4 »).
+            md = _RE_DES.search(degs)
+        if not md:
+            continue
+        bonus_dmg = _int_signe((md.group(3) or "0").replace(" ", ""))
+        return (arme, bonus_atk, int(md.group(1)), int(md.group(2)), bonus_dmg)
+    return None
 
 
 def _premiere_cible_pj(etat: dict) -> Optional[tuple[str, int]]:

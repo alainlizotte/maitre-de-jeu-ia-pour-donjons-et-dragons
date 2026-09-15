@@ -960,7 +960,7 @@ async def combat_ajouter_combattant(
                 f"🚫 **RENFORT REFUSÉ** : `{label}` (≈{pv_m} PV) ferait "
                 f"passer l'opposition engagée à {deja + pv_m} PV contre "
                 f"{pv_groupe} PV pour le groupe — écrasant et non jouable "
-                "(plafond : {plafond}). N'invoque PAS ce renfort : raconte "
+                f"(plafond : {plafond}). N'invoque PAS ce renfort : raconte "
                 "qu'il reste en embuscade ou que son appel échoue, puis "
                 "continue le combat avec les forces déjà engagées."
             ))

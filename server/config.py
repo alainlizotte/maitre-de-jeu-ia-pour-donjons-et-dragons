@@ -52,6 +52,16 @@ class LLMConfig:
     detect_simulation: bool = True
     max_tool_iterations: int = 10
     think: bool = False              # désactive le thinking/réflexion (Gemma 4, Qwen3…)
+    # Format d'appel d'outils demandé au modèle via `chat_template_kwargs`
+    # (template Qwen corrigé froggeric v22.5, monté dans llamacpp) :
+    # - ""    : format NATIF Qwen3.5 (recommandé, mesuré : arguments
+    #           valides 100 % quand l'appel existe — les résidus XML sont
+    #           nettoyés par _nettoyer_args_outils) ;
+    # - "json": Hermes JSON `{"name": …, "arguments": …}` — bonne
+    #           sélection d'outil MAIS en contexte long le 9B y contamine
+    #           ses valeurs avec le XML natif (args vides/corrompus
+    #           ~30 %) : ne pas utiliser sur Qwen3.5-9B-Q4.
+    tool_call_format: str = ""
     # Déchargement du modèle après le tour du MJ :
     # - True  : comportement historique — la VRAM est libérée dès la fin du
     #           dernier tour actif (partage du GPU avec ComfyUI).

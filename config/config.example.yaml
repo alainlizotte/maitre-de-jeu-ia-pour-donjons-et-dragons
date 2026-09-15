@@ -10,6 +10,13 @@ llm:
   api_key: "none"              # llama.cpp n'exige pas de clé
   model: "gemma-4-E4B-it-Q4_0" # GGUF dans ./models/ (voir scripts/download_model.ps1)
   think: false                 # désactive le thinking (Gemma 4, Qwen3…)
+  # Format d'appel d'outils passé au template Jinja via `chat_template_kwargs`
+  # (mesures détaillées : docs/OUTILS_FIABLES.md) :
+  #   ""    = format NATIF du modèle — RECOMMANDÉ (Qwen3.5-9B : 100 % des
+  #           arguments valides quand l'appel existe) ;
+  #   "json"= Hermes JSON — à éviter sur Qwen3.5-9B-Q4 : ~30 % d'arguments
+  #           vides/corrompus en contexte long (contamination XML).
+  tool_call_format: ""
   options: {}                  # llama.cpp gère ctx-size, KV cache, etc. via flags
                                # Docker (docker-compose.yml, service llamacpp) :
                                #   -ngl 99   : toutes les couches sur GPU

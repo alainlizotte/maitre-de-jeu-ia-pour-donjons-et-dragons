@@ -286,6 +286,25 @@ async def lancer_attaque(
     bonus_attaque = _as_int(bonus_attaque)
     ca_cible = _as_int(ca_cible, 10)
 
+    # --- Refus des appels sans attaquant/cible -------------------------------
+    # Partie dfccc120 : `lancer_attaque{}` (arguments vides) résolvait
+    # « Attaque : [] vs [] (CA 10) → Touché », enregistrée comme SUCCÈS dans
+    # la trace — le tour semblait résolu alors qu'aucun coup n'avait été
+    # joué. Un jet d'attaque sans attaquant ou sans cible est invalide : on
+    # renvoie une erreur explicite pour que le modèle ré-appelle avec les
+    # vrais noms (le recoupement CA/bonus n'est possible qu'avec eux).
+    if not str(nom_attaquant or "").strip() or not str(nom_cible or "").strip():
+        return ToolResult(
+            text=(
+                "❌ Jet d'attaque invalide : nom_attaquant et nom_cible sont "
+                "OBLIGATOIRES (reçus : "
+                f"attaquant={nom_attaquant!r}, cible={nom_cible!r}). "
+                "Rappelle lancer_attaque avec le nom du personnage, la cible, "
+                "l'arme, bonus_attaque (BBA + mod. FOR/DEX de la fiche) et "
+                "ca_cible."
+            )
+        )
+
     # --- CA officielle de la cible ------------------------------------------
     # Un petit LLM « arrange » parfois la CA pour faire toucher. On impose la
     # valeur des données officielles quand la cible est connue.

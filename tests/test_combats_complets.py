@@ -588,8 +588,10 @@ async def test_rattrapage_ne_double_pas_si_deja_applique():
 
 
 async def test_rattrapage_somme_detouches_en_un_appel():
-    """Le LLM applique t1+t2 en un seul infliger → pas de double application."""
-    from server.main import _appliquer_degats_oublies
+    """Le LLM applique t1+t2 en un seul infliger -> l'auto-application
+    (chaque lancer_degats sur un ennemi suivi est applique a chaud) puis la
+    de-duplication restituent l'exces : total final = t1+t2 exactement."""
+    from server.main import _appliquer_degats_oublies, _exces_degats_monstres
 
     d = _fresh_dir()
     try:
@@ -607,20 +609,29 @@ async def test_rattrapage_somme_detouches_en_un_appel():
         await orch.execute_tool_direct(
             "fiche_perso_infliger_degats",
             {"nom": "Ogre", "degats": sum(totaux)}, _ctx(d), None, result)
-        pv_apres_tour = _etat(d)["monstres_combat"][0]["pv"]
 
+        # Rien n'est orphelin : l'auto-application a tout consomme.
         txt = await _appliquer_degats_oublies(orch, result, _ctx(d), None)
         assert txt == ""
-        assert _etat(d)["monstres_combat"][0]["pv"] == pv_apres_tour == (
-            22 - sum(totaux))
+        # L'exces du LLM (somme rejouee) est restitue par la de-duplication.
+        exces = _exces_degats_monstres(
+            result.tool_calls_trace, _etat(d)["monstres_combat"])
+        assert exces == {"Ogre": sum(totaux)}, exces
+        _st = PartyState(data_dir=d, partie_id=PID)
+        _et = _st.load()
+        _mo = _et["monstres_combat"][0]
+        _mo["pv"] = min(_mo["pv"] + exces["Ogre"], _mo["pv_max"])
+        _st.save(_et)
+        assert _etat(d)["monstres_combat"][0]["pv"] == 22 - sum(totaux)
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
 
 async def test_rattrapage_deux_touches_un_seul_infliger():
-    """Full attack : 2 touches, un seul infliger → la 2e est rattrapée par le
-    serveur (total appliqué = t1+t2, exactement une fois chacun)."""
-    from server.main import _appliquer_degats_oublies
+    """Full attack : 2 touches, un seul infliger -> l'auto-application couvre
+    la 2e touche a chaud (le rattrapage legacy n'a plus rien a faire) et la
+    de-duplication annule l'exces du LLM (total = t1+t2, une fois chacun)."""
+    from server.main import _appliquer_degats_oublies, _exces_degats_monstres
 
     d = _fresh_dir()
     try:
@@ -639,10 +650,18 @@ async def test_rattrapage_deux_touches_un_seul_infliger():
             "fiche_perso_infliger_degats",
             {"nom": "Ogre", "degats": totaux[0]}, _ctx(d), None, result)
 
+        # La 2e touche a DEJA ete appliquee a chaud -> rattrapage muet.
         txt = await _appliquer_degats_oublies(orch, result, _ctx(d), None)
-        assert f"subit {totaux[1]} dégâts" in txt, (
-            f"la 2e touche ({totaux[1]}) doit être rattrapée : {txt!r}"
-        )
+        assert txt == "", f"aucun orphelin attendu : {txt!r}"
+        # L'infliger du LLM (t1 rejoue) est un exces -> restitue.
+        exces = _exces_degats_monstres(
+            result.tool_calls_trace, _etat(d)["monstres_combat"])
+        assert exces == {"Ogre": totaux[0]}, exces
+        _st = PartyState(data_dir=d, partie_id=PID)
+        _et = _st.load()
+        _mo = _et["monstres_combat"][0]
+        _mo["pv"] = min(_mo["pv"] + exces["Ogre"], _mo["pv_max"])
+        _st.save(_et)
         assert _etat(d)["monstres_combat"][0]["pv"] == 22 - sum(totaux)
     finally:
         shutil.rmtree(d, ignore_errors=True)

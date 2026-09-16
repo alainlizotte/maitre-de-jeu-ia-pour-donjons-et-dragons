@@ -337,5 +337,20 @@
         }
       ]
     }
+  ],
+  "etapes": [
+    {
+      "titre": "Récupérer la Couronne de Mystra chez Zendar Nulentok",
+      "salle": "4,0",
+      "detail": "PRÉREQUIS ABSOLU : vaincre Nulentok dans son groove (le puits (3,0) y mène) et reprendre la Couronne. La baguette de téléportation de Thukmuul Teleshann ne s'active QU'AU CONTACT de la Couronne — aucun voyage vers les gemmes n'est possible avant."
+    },
+    {
+      "titre": "Réunir les huit gemmes dispersées sur Faerûn",
+      "detail": "Beljuril — Ruines de Sarr (4,1) ; Diamant — échoppe d'Aluarim (3,1) ; Jacinthe — QG zhentarim d'Olomaa (0,1) ; Rogue Stone — Calimport (0,2) ; trésor de Rineen (1,2) ; Émeraude de Shou Lung — temple de Farouk (4,2) ; Saphir étoilé — crevasse de Shakkak (4,3) ; Étoile de rubis — château de Meredoth (0,3)."
+    },
+    {
+      "titre": "Restaurer la Couronne et la rendre à Mystra",
+      "detail": "Réactiver la Couronne avec les huit gemmes et la rapporter au haut lieu de Mystra (Tour de l'Équilibre, Silverymoon — (0,0))."
+    }
   ]
 }

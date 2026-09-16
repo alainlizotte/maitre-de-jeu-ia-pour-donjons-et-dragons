@@ -37,9 +37,10 @@ def _fiche_pj(ctx: ToolContext, nom: str) -> Optional[dict]:
 
 
 def _ca_officielle(ctx: ToolContext, nom_cible: str) -> tuple[Optional[int], str]:
-    """CA canonique d'une cible : fiche du PJ si joueur, sinon bestiaire local.
+    """CA canonique d'une cible : fiche du PJ si joueur, sinon entrée de
+    combat en cours (éventuellement ajustée temporairement), sinon bestiaire.
 
-    Renvoie `(ca, source)` — ca=None si la cible est inconnue des deux sources.
+    Renvoie `(ca, source)` — ca=None si la cible est inconnue des sources.
     Évite que le LLM invente une CA trop basse pour toucher facilement.
     """
     fiche = _fiche_pj(ctx, nom_cible)
@@ -48,6 +49,31 @@ def _ca_officielle(ctx: ToolContext, nom_cible: str) -> tuple[Optional[int], str
             return int(fiche["ca"]), f"fiche de {nom_cible}"
         except (TypeError, ValueError):
             pass
+    # Combat en cours : l'entrée suivie prime sur le bestiaire (elle porte
+    # l'ajustement temporaire d'équilibrage — cf. engager_combat).
+    try:
+        import unicodedata as _ud
+        nn = "".join(
+            c for c in _ud.normalize("NFKD", str(nom_cible or "").lower())
+            if not _ud.combining(c)
+        )
+        from ..game.state import PartyState  # lazy : évite les cycles
+        etat_c = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id
+        ).load()
+        for mo in etat_c.get("monstres_combat") or []:
+            nm = "".join(
+                c for c in _ud.normalize(
+                    "NFKD", str(mo.get("nom") or "").lower()
+                ) if not _ud.combining(c)
+            )
+            if nm == nn and mo.get("ca") is not None:
+                tag = "ajusté, " if mo.get("_ajuste") else ""
+                return int(mo["ca"]), (
+                    f"combat en cours ({tag}{mo.get('nom', nom_cible)})"
+                )
+    except Exception:                                        # noqa: BLE001
+        pass
     try:
         from .monstres import _find_monstre   # lazy : évite les imports circulaires
         m = _find_monstre(ctx, nom_cible)

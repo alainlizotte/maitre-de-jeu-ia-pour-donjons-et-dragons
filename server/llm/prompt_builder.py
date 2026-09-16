@@ -59,6 +59,71 @@ def _portes_salle(salle: dict[str, Any]) -> list[str]:
     return [d for d in ("nord", "est", "sud", "ouest") if p.get(d)]
 
 
+def _salle_visitee(donjon: dict[str, Any], salle: str) -> bool:
+    """La salle « x,y » (ou « etage:x,y ») est-elle visitée ? Cherche dans la
+    grille courante puis dans tous les étages connus."""
+    try:
+        txt = str(salle or "").strip().lower().replace("étage:", "")
+        parts = [int(p) for p in txt.split(",") if p.strip()]
+        if len(parts) < 2:
+            return False
+        xy = (parts[-2], parts[-1])
+    except (TypeError, ValueError):
+        return False
+    grilles = [donjon.get("grille") or []]
+    for fl in (donjon.get("etages") or {}).values():
+        if isinstance(fl, dict):
+            grilles.append(fl.get("grille") or [])
+    for grille in grilles:
+        for s in grille:
+            if not isinstance(s, dict):
+                continue
+            try:
+                if (int(s.get("x")), int(s.get("y"))) == xy:
+                    return bool(s.get("visitee"))
+            except (TypeError, ValueError):
+                continue
+    return False
+
+
+def _tous_pj_morts(etat: dict[str, Any]) -> bool:
+    """Tous les PJ sont-ils morts (≤ -10 PV ou condition « Mort ») ?"""
+    pjs = etat.get("pj") or []
+    if not pjs:
+        return False
+    for p in pjs:
+        if "Mort" in (p.get("conditions") or []):
+            continue
+        try:
+            if int(p.get("pv", 0) or 0) <= -10:
+                continue
+        except (TypeError, ValueError):
+            pass
+        return False
+    return True
+
+
+_BLOC_GAME_OVER = (
+    "\n💀 === GAME OVER — TOUS LES HÉROS SONT TOMBÉS ===\n"
+    "La partie est TERMINÉE : ne continue PAS la narration « normalement »\n"
+    "(pas de donjon, de voyage, de rencontre). Adresse la table et propose\n"
+    "UN de ces choix, puis ATTENDS la décision des joueurs :\n"
+    "1. 🆕 Nouvelle partie (nouveau groupe et/ou nouveau scénario) ;\n"
+    "2. ✨ Résurrection/deus ex machina (un PNJ puissant intervient —\n"
+    "   négocie un prix narratif clair) puis reprise de la partie ;\n"
+    "3. ⏪ Reprise narrative plus tôt (« en fait, nous avions fui… »).\n"
+    "================================================"
+)
+
+
+def _est_game_over(etat: dict[str, Any]) -> bool:
+    """Partie terminée ? Flag posé par la clôture de combat (défaite) OU
+    constat direct : tous les PJ morts (mort hors combat, piège…)."""
+    if etat.get("game_over"):
+        return True
+    return _tous_pj_morts(etat)
+
+
 def _donjon_bloc(etat: dict[str, Any]) -> str:
     """Bloc « CARTE DU DONJON » injecté au MJ à chaque tour : salle courante
     (type, description figée, état des lieux), portes réellement ouvertes,
@@ -155,6 +220,33 @@ def _donjon_bloc(etat: dict[str, Any]) -> str:
         "refuse les directions sans porte. Une salle revisitée se narre "
         "d'après sa description figée — jamais réinventée."
     )
+    # 📜 Trame du scénario (manifeste) : l'ordre attendu des étapes. Sans ce
+    # rappel, le MJ sautait des prérequis (partie 87b8f286 : voyage vers la
+    # gemme de Sarr ALORS QUE la Couronne n'avait pas été récupérée (4,0)).
+    etapes_trame = donjon.get("etapes") or []
+    if etapes_trame:
+        lignes.append("📜 TRAME DU SCÉNARIO (ordre à respecter) :")
+        for i, e in enumerate(etapes_trame, 1):
+            if not isinstance(e, dict):
+                continue
+            statut = ""
+            salle = str(e.get("salle") or "").strip()
+            if salle:
+                statut = (
+                    " — ✅ ACCOMPLIE" if _salle_visitee(donjon, salle)
+                    else " — ⬜ À FAIRE (salle " + salle + ")"
+                )
+            detail = str(e.get("detail") or "").strip()
+            lignes.append(
+                f"  {i}. {e.get('titre', '?')}{statut}"
+                + (f" — {detail}" if detail else "")
+            )
+        lignes.append(
+            "⚠️ SUIVIS CET ORDRE : ne commence pas une étape ultérieure (ni "
+            "un voyage vers une locale future) tant que la première étape "
+            "⬜ n'est pas ACCOMPLIE. Consigne la progression au fil du jeu "
+            "via `scenario_etape(etape=…, terminée=true)`."
+        )
     try:
         from ..tools.cartes import _TYPES_ESCALIER
         if (cur.get("type") or "").strip().lower() in _TYPES_ESCALIER:
@@ -219,6 +311,16 @@ def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
         lignes.append(
             "Étapes accomplies : "
             + ", ".join(etapes_faites[-6:])
+        )
+    if not objectif and not etapes_faites:
+        # 📌 Aucun suivi : la partie dérivait hors trame sans garde-fou
+        # (partie 87b8f286 — zéro étape consignée, séquence du module rompue).
+        lignes.append(
+            "📌 SUIVI DE SCÉNARIO VIDE : appelle MAINTENANT "
+            "`scenario_etape(etape=\"…\")` pour consigner l'étape en cours "
+            "de la trame, et `scenario_etape(etape=\"…\", terminée=true)` à "
+            "chaque étape accomplie. Ce journal est réinjecté à chaque tour : "
+            "c'est lui qui empêche de dévier."
         )
     lignes.append(
         "→ FIDÉLITÉ AU SCÉNARIO : les PNJ, lieux et organisations du résumé "
@@ -448,6 +550,10 @@ class PromptBuilder:
 
         data_dir = str(self.cfg.abs(self.cfg.paths.data_dir))
 
+        # 💀 Game over (flag posé par la clôture de combat OU tous les PJ
+        # morts) : le bloc prime sur tout le reste du récap.
+        go = _est_game_over(etat)
+
         # État neuf en phase d'opening : récap minimal (allègement Gemma).
         phase = (etat.get("phase") or "").strip().lower()
         pj = etat.get("pj") or []
@@ -478,6 +584,8 @@ class PromptBuilder:
                 f"Partie : {titre or '(sans-titre)'} — phase : {phase or 'opening'} — {pjs_sum}",
                 f"Distribution manuels : {'FAITE (ne PAS redistribuer)' if distrib else 'PAS ENCORE FAITE'}.",
             ]
+            if go:
+                lignes.append(_BLOC_GAME_OVER)
             # Quête choisie via l'interface — le MJ doit la connaître même en
             # récap minimal, avec la directive de scène d'ouverture au besoin.
             quete_min = etat.get("quete", {}) or {}
@@ -518,6 +626,8 @@ class PromptBuilder:
 
         phase = etat.get("phase", "inconnue")
         lignes.append(f"Phase actuelle : {phase}")
+        if go:
+            lignes.append(_BLOC_GAME_OVER)
 
         pjs = etat.get("pj", []) or []
 

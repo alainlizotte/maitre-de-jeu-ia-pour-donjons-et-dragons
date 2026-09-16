@@ -977,7 +977,7 @@ def _donjon_depuis_manifeste(man: dict[str, Any]) -> Optional[dict[str, Any]]:
     if not etages:
         return None
     fl0 = etages["0"]
-    return {
+    donjon: dict[str, Any] = {
         "id": str(man.get("donjon_id") or man.get("id") or "Donjon"),
         "manifeste": str(man.get("scenario") or man.get("id") or ""),
         "grille": fl0["grille"],
@@ -987,6 +987,12 @@ def _donjon_depuis_manifeste(man: dict[str, Any]) -> Optional[dict[str, Any]]:
         "etage": 0,
         "etages": etages,
     }
+    # 📜 Trame du scénario (ordre attendu des étapes) : portée par le
+    # donjon, injectée au MJ (bloc CARTE DU DONJON) et utilisée par la
+    # garde de séquence du voyage (`voyage_demarrer`).
+    if man.get("etapes"):
+        donjon["etapes"] = man["etapes"]
+    return donjon
 
 
 def _portes_ouvertes(salle: dict[str, Any] | None) -> list[str]:
@@ -1077,6 +1083,13 @@ def _bloc_contenu_salle(salle: dict[str, Any]) -> str:
     """Bloc « contenu canonique » (manifeste de scénario) pour le résultat
     de `carte_donjon_explorer` : le MJ DOIT le respecter (ennemis du module,
     trésor, piège, PNJ) — jamais d'improvisation hors scénario."""
+    # Notes demandant un ajustement de difficulté : certains manifestes
+    # suggèrent encore de « remplacer » la créature par une autre — le MJ
+    # suivait cette suggestion au pied de la lettre et le scénario se
+    # rompait (partie 87b8f286 : dracoliche troqué contre des ombres).
+    _RE_AJUSTEMENT = re.compile(
+        r"AJUSTEMENT\s*REQUIS|rempla[cç]|substitu|à la place", re.IGNORECASE
+    )
     ennemis = salle.get("ennemis") or []
     pnj = salle.get("pnj") or []
     tresor = str(salle.get("tresor") or "").strip()
@@ -1106,6 +1119,19 @@ def _bloc_contenu_salle(salle: dict[str, Any]) -> str:
         lignes.append(f"💰 Trésor : {tresor}")
     if note:
         lignes.append(f"📝 Note du module : {note}")
+        if _RE_AJUSTEMENT.search(note):
+            lignes.append(
+                "⚖️ POLITIQUE D'AJUSTEMENT (prioritaire sur toute suggestion "
+                "de remplacement ci-dessus) : conserve la créature du "
+                "scénario — même identité, même nom, même rôle dans "
+                "l'histoire — et équilibre la rencontre en l'adaptant "
+                "TEMPORAIREMENT via `engager_combat(monstres=…, "
+                "ajustement=\"pv 30%, attaque -4, dégâts -4, ca -3, "
+                "fp 2\")` et/ou en ajustant LE NOMBRE d'exemplaires au "
+                "niveau du groupe. Le bestiaire n'est JAMAIS modifié et la "
+                "créature n'est JAMAIS remplacée par une autre espèce : "
+                "cela rompt le scénario."
+            )
     return "\n\n📜 **Contenu canonique de la salle (scénario)** :\n" + "\n".join(lignes)
 
 

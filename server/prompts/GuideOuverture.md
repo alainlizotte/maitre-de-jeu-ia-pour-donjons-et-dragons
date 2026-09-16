@@ -18,9 +18,10 @@ Le MJ ouvre la partie :
 
 > Bienvenue à toutes et à tous dans une nouvelle partie de **Donjons & Dragons
 > 3.5**. Je suis votre Maître du Jeu. Notre cadre : la **Côte des Épées**, sur le
-> continent de **Faerûn**. Vous jouerez plusieurs personnages dans un même 
-> groupe d'aventuriers. Le jeu se déroule en français, en respect strict des
-> règles de l'édition 3.5.
+> continent de **Faerûn**. Chaque joueur incarne SON propre personnage au sein
+> du groupe d'aventuriers — un personnage par joueur, jamais un « compagnon »
+> dirigé par quelqu'un d'autre. Le jeu se déroule en français, en respect
+> strict des règles de l'édition 3.5.
 
 ### Étape 1 — Distribution des manuels et de la carte
 

@@ -240,10 +240,13 @@ def _construire_bible(
     if det == "5e" and partie_ok:
         bible["avertissement"] = (
             "⚠️ Ce scénario est un module Adventurers League 5e : ses "
-            "monstres, DD et niveaux d'XP sont calibrés 5e. Réinterprète "
-            "les créatures avec les stats D&D 3.5 du bestiaire et ajuste "
-            "la difficulté au niveau réel du groupe (ne copie pas les CR "
-            "5e tels quels)."
+            "monstres, DD et niveaux d'XP sont calibrés 5e. CONSERVE les "
+            "créatures du scénario (identité, nom, rôle — ne les remplace "
+            "JAMAIS par d'autres espèces) et adapte-les TEMPORAIREMENT au "
+            "niveau réel du groupe via `engager_combat(monstres=…, "
+            "ajustement=\"pv 30%, attaque -4, dégâts -4, ca -3, fp 2\")` "
+            "et/ou leur nombre (le bestiaire reste inchangé ; ne copie pas "
+            "les CR 5e tels quels)."
         )
     else:
         bible["avertissement"] = ""

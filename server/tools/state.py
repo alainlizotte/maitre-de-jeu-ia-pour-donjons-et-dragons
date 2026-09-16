@@ -52,6 +52,115 @@ def _combattant_mort(etat: dict, nom: str) -> bool:
 _MAX_MONSTRES_ENGAGEMENT = 6
 
 
+# --------------------------------------------------------------------------- #
+#  Ajustement TEMPORAIRE de difficulté (équilibre d'une rencontre inégale)
+# --------------------------------------------------------------------------- #
+# Politique : on ne remplace JAMAIS la créature du scénario par une autre
+# espèce (le scénario se rompt) et on ne modifie JAMAIS le bestiaire.
+# L'équilibrage se fait via le paramètre `ajustement` d'`engager_combat` /
+# `combat_ajouter_combattant` : les stats adaptées ne vivent QUE dans les
+# entrées `monstres_combat` de la partie en cours et disparaissent à la
+# clôture du combat.
+import re as _re_ajust
+
+_RE_AJUST_PV_PCT = _re_ajust.compile(r"pv\s*(?:x|×|\*)?\s*(\d{1,3})\s*%", _re_ajust.I)
+_RE_AJUST_PV_MULT = _re_ajust.compile(r"pv\s*(?:x|×|\*)\s*(0?\.\d+)", _re_ajust.I)
+_RE_AJUST_ATTAQUE = _re_ajust.compile(r"attaques?\s*([+-]?\d{1,2})", _re_ajust.I)
+_RE_AJUST_DEGATS = _re_ajust.compile(r"d[ée]g[âa]ts?\s*([+-]?\d{1,2})", _re_ajust.I)
+_RE_AJUST_CA = _re_ajust.compile(r"\bca\s*([+-]?\d{1,2})", _re_ajust.I)
+_RE_AJUST_FP = _re_ajust.compile(r"\bfp\s*(\d{1,2}(?:\s*/\s*\d{1,2})?)", _re_ajust.I)
+
+
+def _parser_ajustement(txt: str) -> dict:
+    """Parse une consigne d'ajustement libre (ex. « pv 30%, attaque -4,
+    dégâts -4, ca -3, fp 2 ») en directives chiffrées. Tolérant : ce qui
+    ne matche pas est ignoré. Renvoie un dict avec `actif=False` si aucune
+    directive reconnue."""
+    t = str(txt or "")
+    facteur = 1.0
+    mm = _RE_AJUST_PV_PCT.search(t)
+    if mm:
+        facteur = max(0.05, min(2.0, int(mm.group(1)) / 100.0))
+    else:
+        mm = _RE_AJUST_PV_MULT.search(t)
+        if mm:
+            facteur = max(0.05, min(2.0, float(mm.group(1))))
+
+    def _delta(rx, plafond: int) -> int:
+        md = rx.search(t)
+        if not md:
+            return 0
+        return max(-plafond, min(plafond, int(md.group(1))))
+
+    fp = ""
+    mf = _RE_AJUST_FP.search(t)
+    if mf:
+        fp = mf.group(1).replace(" ", "")
+    aj = {
+        "facteur_pv": facteur,
+        "attaque": _delta(_RE_AJUST_ATTAQUE, 10),
+        "degats": _delta(_RE_AJUST_DEGATS, 15),
+        "ca": _delta(_RE_AJUST_CA, 10),
+        "fp": fp,
+    }
+    aj["actif"] = bool(
+        aj["facteur_pv"] != 1.0 or aj["attaque"] or aj["degats"]
+        or aj["ca"] or aj["fp"]
+    )
+    return aj
+
+
+def _decris_ajustement(aj: dict, pv_avant: int, ca_avant: int, fp_avant: str) -> str:
+    """Résumé lisible des modifications appliquées à UNE créature."""
+    parts: list[str] = []
+    if aj["facteur_pv"] != 1.0:
+        pv_apres = max(1, int(pv_avant * aj["facteur_pv"]))
+        parts.append(
+            f"PV {pv_avant}→{pv_apres} ({int(aj['facteur_pv'] * 100)} %)"
+        )
+    if aj["ca"]:
+        parts.append(f"CA {ca_avant}→{max(1, ca_avant + aj['ca'])}"
+                     f" ({aj['ca']:+d})")
+    if aj["attaque"]:
+        parts.append(f"attaque {aj['attaque']:+d}")
+    if aj["degats"]:
+        parts.append(f"dégâts {aj['degats']:+d}")
+    if aj["fp"]:
+        parts.append(f"FP {fp_avant}→{aj['fp']}")
+    return ", ".join(parts)
+
+
+_HINT_AJUSTEMENT = (
+    "_Pour CONSERVER cette créature du scénario (jamais d'autre espèce à sa "
+    "place, bestiaire inchangé), relance `engager_combat` avec "
+    "`ajustement=\"pv 30%, attaque -4, dégâts -4, ca -3, fp 2\"` — "
+    "adaptation TEMPORAIRE qui ne vaut que pour ce combat._"
+)
+
+
+def _appliquer_ajustement_entry(entry: dict, aj: dict) -> None:
+    """Applique les directives d'ajustement à une entrée `monstres_combat`.
+    Marque l'entrée (`_ajuste`) pour que le moteur de combat (attaques
+    automatiques) applique aussi les deltas d'attaque/dégâts."""
+    if not aj.get("actif"):
+        return
+    pv_avant = int(entry.get("pv", 0) or 0)
+    ca_avant = int(entry.get("ca", 0) or 0)
+    if aj["facteur_pv"] != 1.0 and pv_avant > 0:
+        pv_apres = max(1, int(pv_avant * aj["facteur_pv"]))
+        entry["pv"] = pv_apres
+        entry["pv_max"] = pv_apres
+    if aj["ca"] and ca_avant > 0:
+        entry["ca"] = max(1, ca_avant + aj["ca"])
+    if aj["attaque"]:
+        entry["_aj_attaque"] = aj["attaque"]
+    if aj["degats"]:
+        entry["_aj_degats"] = aj["degats"]
+    if aj["fp"]:
+        entry["fp"] = aj["fp"]
+    entry["_ajuste"] = True
+
+
 def _prochain_vivant(etat: dict, ordre: list[dict], idx: int) -> int:
     """Renvoie l'indice du prochain combattant vivant dans `ordre`, en
     partant de `idx` (le combattant qui doit normalement agir), en bouclant
@@ -186,7 +295,9 @@ def _cr_numerique(fp: Any) -> Optional[float]:
 
 
 @tool
-async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
+async def engager_combat(
+    ctx: ToolContext, monstres: str, ajustement: str = ""
+) -> ToolResult:
     """
     Engage un combat contre un ou plusieurs monstres EN UN SEUL APPEL :
     résout chaque monstre du bestiaire, lance l'initiative officielle
@@ -196,6 +307,11 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
 
     :param monstres (str): noms de monstres séparés par des virgules
         (ex. "Squelette" ou "Gobelin, Gobelin").
+    :param ajustement (str): OPTIONNEL — adaptation TEMPORAIRE de la
+        rencontre pour l'équilibrage (combat inégal), SANS jamais modifier
+        le bestiaire ni remplacer la créature du scénario. Ex.
+        "pv 30%, attaque -4, dégâts -4, ca -3, fp 2". Les stats adaptées
+        ne valent QUE pour ce combat.
     """
     import random
 
@@ -208,6 +324,7 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     noms = [n.strip() for n in monstres.split(",") if n.strip()]
     if not noms:
         return ToolResult(text="❌ Donne au moins un nom de monstre.")
+    aj = _parser_ajustement(ajustement)
 
     # ── PLAFOND DE RENCONTRE ────────────────────────────────────────────
     # Au-delà du plafond, exigence de vagues cohérentes avec la scène : un
@@ -321,8 +438,13 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     marge = 4 if nb_pj <= 2 else (6 if nb_pj <= 4 else 8)
     fp_plafond = niveau_ref + marge
     trop_forts: list[tuple[str, str]] = []
+    cr_ajuste = _cr_numerique(aj["fp"]) if aj["fp"] else None
     for nom, m in zip(noms, monstres_ok):
         cr = _cr_numerique((m or {}).get("fp"))
+        # FP ajusté explicitement : l'équilibre est évalué sur la valeur
+        # adaptée (temporaire), pas sur la fiche d'origine.
+        if cr_ajuste is not None:
+            cr = cr_ajuste
         if cr is not None and cr > fp_plafond:
             trop_forts.append((nom, str((m or {}).get("fp") or "?")))
     if trop_forts:
@@ -350,10 +472,12 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
                 f"{niveau_ref} ({nb_pj} PJ) — rencontre sans espoir."
             )
         lignes_fp.append(
-            f"_\nPlafond du groupe : FP {fp_plafond}. Rejoue avec une "
-            "créature du bestiaire adaptée — et respecte la trame du "
-            "scénario en cours (ses ennemis listés en priorité)._"
+            f"_\nPlafond du groupe : FP {fp_plafond}. NE remplace PAS la "
+            "créature par une autre espèce (le scénario se rompt) : "
+            "conserve-la et adapte-la temporairement — et respecte la trame "
+            "du scénario en cours (ses ennemis listés en priorité)._"
         )
+        lignes_fp.append(_HINT_AJUSTEMENT)
         if candidats:
             lignes_fp.append(
                 "_Créatures plausibles (FP ≤ " + str(fp_plafond) + ") : "
@@ -375,9 +499,12 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
     somme_pv = 0
     for m in monstres_ok:
         try:
-            somme_pv += max(0, int(str(m.get("pv", "0")).strip().split("(")[0]))
+            pv_i = max(0, int(str(m.get("pv", "0")).strip().split("(")[0]))
         except (ValueError, TypeError):
             continue
+        # PV ajustés (équilibrage temporaire) : le gouverneur évalue la
+        # rencontre sur la valeur adaptée, pas sur la fiche d'origine.
+        somme_pv += max(1, int(pv_i * aj["facteur_pv"])) if pv_i else 0
     if somme_pv > plafond_pv:
         from .monstres import _load_bestiaire
         best = _load_bestiaire(ctx)
@@ -403,9 +530,9 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
             f"🚫 **Rencontre écrasante refusée** : {somme_pv} PV cumulés "
             f"contre {pv_groupe} PV pour le groupe (plafond : {plafond_pv}, "
             "2,5×). Le combat serait invictable et long à mort.",
-            "Réduis à des créatures adaptées (PV cumulés ≤ "
-            f"{max(8, plafond_pv - 10)}) ou scrute le scénario pour des vagues "
-            "cohérentes :",
+            "NE remplace PAS la créature par une autre espèce : conserve "
+            "celle du scénario et adapte-la temporairement (PV cumulés ≤ "
+            f"{max(8, plafond_pv - 10)}), ou scinde en vagues cohérentes :",
         ]
         if candidats:
             lignes_taille.append(
@@ -416,11 +543,13 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
             "_Rappel : `engager_combat` ne doit PAS créer volontairement une "
             "rencontre sans espoir pour les PJ._"
         )
+        lignes_taille.append(_HINT_AJUSTEMENT)
         return ToolResult(text="\n".join(lignes_taille))
 
     participants: list[dict] = []
     monstres_combat: list[dict] = []
     lignes: list[str] = ["🎲 **Initiative du combat**"]
+    lignes_ajust: list[str] = []
 
     def _mod_initiative_pj(nom_pj: str, mod_dex: int) -> int:
         """Mod. DEX + dons d'initiative lus sur la fiche (Initiative
@@ -457,10 +586,19 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
         except ValueError:
             ca_m = 0
         # Suivi mécanique des PV du monstre pendant le combat.
-        monstres_combat.append({
+        entry_mc = {
             "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
             "fp": str(m.get("fp", "?")), "conditions": [],
-        })
+        }
+        # ⚖️ Ajustement TEMPORAIRE (équilibre) : modifie l'entrée de CE
+        # combat uniquement — le bestiaire reste inchangé.
+        if aj["actif"]:
+            _appliquer_ajustement_entry(entry_mc, aj)
+        monstres_combat.append(entry_mc)
+        if aj["actif"]:
+            lignes_ajust.append(_decris_ajustement(
+                aj, pv_m, ca_m, str(m.get("fp", "?"))
+            ))
         jet = random.randint(1, 20)
         participants.append({"nom": label, "init": jet + mod,
                              "jet_brut": jet, "mod": mod})
@@ -509,6 +647,18 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
         )
 
     participants.sort(key=lambda x: x["init"], reverse=True)
+
+    # ⚖️ Annonce transparente de l'ajustement temporaire (équilibre) :
+    # le MJ (et la table) doivent savoir que CES stats ne valent que pour
+    # ce combat — la fiche du bestiaire reste inchangée.
+    if lignes_ajust:
+        lignes += [
+            "",
+            "⚖️ **Ajustement temporaire d'équilibrage** — le bestiaire "
+            "n'est PAS modifié ; ces stats adaptées ne valent QUE pour ce "
+            "combat :",
+        ]
+        lignes += [f"- {la}" for la in lignes_ajust]
 
     etat["phase"] = "combat"
     etat["tour"] = 1
@@ -622,12 +772,13 @@ async def engager_combat(ctx: ToolContext, monstres: str) -> ToolResult:
         if isinstance(p_, dict):
             patch.update(p_)
     if res_boucle.combat_termine:
+        raison_fr = (
+            "victoire" if res_boucle.combat_termine == "victoire"
+            else "défaite"
+        )
         lignes += [
             "",
-            (
-                f"💀 _Le combat s'est achevé dès le round 1 "
-                f"({res_boucle.combat_termine}) — clôturé par le serveur._"
-            ),
+            f"💀 _Le combat s'est achevé dès le round 1 ({raison_fr})._",
         ]
     return ToolResult(
         text="\n".join(lignes),
@@ -811,6 +962,7 @@ async def combat_ajouter_combattant(
     nom: str,
     initiative: Optional[int] = None,
     allie: bool = False,
+    ajustement: str = "",
 ) -> ToolResult:
     """
     Ajoute un combattant AU combat DÉJÀ EN COURS sans le réinitialiser :
@@ -826,6 +978,9 @@ async def combat_ajouter_combattant(
         sinon 1d20 + mod bestiaire).
     :param allie (bool): True si le combattant se bat POUR les PJ (invoqué
         par un lanceur de sorts joueur). Défaut: False (ennemi).
+    :param ajustement (str): OPTIONNEL — adaptation TEMPORAIRE
+        d'équilibrage (ex. "pv 30%, attaque -3, dégâts -3, ca -2, fp 1"),
+        sans jamais modifier le bestiaire ni changer d'espèce.
     """
     import random
 
@@ -915,6 +1070,7 @@ async def combat_ajouter_combattant(
     ordre.sort(key=lambda x: x.get("init", 0), reverse=True)
 
     # Suivi mécanique des PV (ennemis ET alliés invoqués).
+    aj_renfort = _parser_ajustement(ajustement)
     if m:
         try:
             pv_m = int(str(m.get("pv", "0")).strip().split("(")[0])
@@ -928,6 +1084,10 @@ async def combat_ajouter_combattant(
             "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
             "fp": str(m.get("fp", "?")), "conditions": [],
         }
+        # ⚖️ Ajustement TEMPORAIRE (équilibre) — bestiaire inchangé.
+        if aj_renfort["actif"]:
+            _appliquer_ajustement_entry(monstre_entry, aj_renfort)
+            pv_m = int(monstre_entry["pv"])
     else:
         monstre_entry = {
             "nom": label, "pv": -1, "pv_max": -1, "ca": None,
@@ -962,7 +1122,10 @@ async def combat_ajouter_combattant(
                 f"{pv_groupe} PV pour le groupe — écrasant et non jouable "
                 f"(plafond : {plafond}). N'invoque PAS ce renfort : raconte "
                 "qu'il reste en embuscade ou que son appel échoue, puis "
-                "continue le combat avec les forces déjà engagées."
+                "continue le combat avec les forces déjà engagées. "
+                "Alternative : relance avec `ajustement=\"pv 30%, attaque "
+                "-3, dégâts -3\"` (adaptation temporaire, bestiaire "
+                "inchangé, même créature)."
             ))
     etat.setdefault("monstres_combat", []).append(monstre_entry)
 
@@ -972,6 +1135,15 @@ async def combat_ajouter_combattant(
 
     camp = "allié invoqué" if allie else "ennemi"
     src = "" if m else " (stats inconnues : mod +0 — consulte le bestiaire)"
+    if aj_renfort["actif"]:
+        src += (
+            " — ⚖️ ajustement temporaire (" + _decris_ajustement(
+                aj_renfort,
+                int(str(m.get("pv", "0")).strip().split("(")[0] or 0) if m else 0,
+                int(str(m.get("ca", "0")).strip() or 0) if m else 0,
+                str(m.get("fp", "?")) if m else "?",
+            ) + ") — bestiaire inchangé."
+        )
     position = ordre.index(entree) + 1
     return ToolResult(
         text=(

@@ -82,7 +82,11 @@ def test_bible_edition_avertissement_3_5():
         assert bible["edition_detectee"] == "5e"
         assert "3.5" in bible["edition_partie"]
         assert "avertissement" in bible and bible["avertissement"]
-        assert "réinterprète" in bible["avertissement"].lower() or "reinterprete" in bible["avertissement"].lower()
+        # Politique : créatures CONSERVÉES (jamais remplacées), adaptation
+        # TEMPORAIRE via `ajustement` (bestiaire inchangé).
+        bas = bible["avertissement"].lower()
+        assert "conserve" in bas and "ajustement" in bas
+        assert "jamais" in bas
     finally:
         pass
 

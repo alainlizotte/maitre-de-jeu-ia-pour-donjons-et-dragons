@@ -49,7 +49,10 @@ export interface PartyState {
     etages?: Record<string, unknown>;
   }>;
   quete: { titre: string; pitch: string; source: string };
-  histoire: string[];
+  /** Journal serveur des événements (jamais rendu au joueur côté client). */
+  histoire: { ts: string; tour: string; evenement: string }[];
+  /** 💀 Tous les héros sont morts : partie terminée (bloc game over). */
+  game_over?: boolean;
   derniere_narration: string;
   /** Calepin du MJ : notes libres avec case à cocher. */
   calepin?: CalepinNote[];

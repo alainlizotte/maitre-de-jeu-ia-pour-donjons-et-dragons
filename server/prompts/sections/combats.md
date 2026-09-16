@@ -23,6 +23,11 @@ règles structurelles.
    actions à la **3ᵉ personne** (« Le naga plonge sa lance vers Borin… »)
    d'après les résultats serveur. La structure « Adresse : nomme le joueur
    dont c'est le tour » ne vaut QUE pour les PJ humains à la table.
+   **Camps intangibles** : les créatures étiquetées ennemies dans les
+   événements mécaniques restent des ADVERSAIRES — ne les présente JAMAIS
+   comme des compagnons, alliés ou membres du groupe (« votre compagnon le
+   magmatique » est une erreur grave) ; les héros sont « vous/te », jamais
+   désignés à la 3ᵉ personne comme des tiers.
    La rotation, la fin du combat et l'XP sont SERVEUR : le serveur ajoute
    lui-même la ligne « Au tour de X (joueur Y) de décider une action » —
    TERMINE ta narration SANS question de relance quand les événements

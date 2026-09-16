@@ -242,6 +242,17 @@ export function PartyPage() {
   // sélecteur de scénario (avant le premier choix), puis le chat.
   const colonneCentrale = (
     <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+      {state?.game_over && (
+        <div className="m-4 mb-2 shrink-0 rounded-lg border border-red-600/60 bg-red-900/30 px-4 py-2 text-sm">
+          <span className="text-red-300 font-semibold">
+            💀 Game over — tous les héros sont tombés.
+          </span>{" "}
+          <span className="text-stone-300">
+            Le MJ propose la suite : nouvelle partie, résurrection négociée
+            ou reprise narrative.
+          </span>
+        </div>
+      )}
       {quete?.titre && <QuestBanner />}
       {showPicker && partie_id && (
         <div

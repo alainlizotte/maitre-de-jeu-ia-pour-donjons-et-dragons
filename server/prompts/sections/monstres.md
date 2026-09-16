@@ -68,7 +68,22 @@ raconte l'éventuel bonus narratif sans inventer de jet.
 Au chargement d'un scénario (`scenarios_laelith_charger`), chacun de ses
 monstres (dossier artwork « Monstres ») est ajouté au bestiaire local s'il n'y
 figure pas encore — avec une **fiche de secours générique** si nécessaire. Tu
-peux donc les engager sans blocage (`engager_combat`). Si la fiche générée est
-trop faible, remplace-la par les stats officielles du scénario via
-`monstre_ajouter_bestiaire` ; ne modifie jamais un PV/CA de monstre à la volée
-sans passer par la fiche.
+peux donc les engager sans blocage (`engager_combat`).
+
+### Équilibrage SANS substitution — bestiaire intouchable
+
+Les créatures du scénario ne se remplacent JAMAIS (changer d'espèce rompt
+le scénario) et le bestiaire ne se modifie JAMAIS pour équilibrer. Une
+rencontre trop dure ou trop facile s'ajuste TEMPORAIREMENT, sur la
+créature elle-même :
+
+- `engager_combat(monstres="Dracoliche", ajustement="pv 30%, attaque -4,
+  dégâts -4, ca -3, fp 2")` — PV, CA, bonus d'attaque, dégâts et FP
+  adaptés pour CE combat uniquement (les stats du bestiaire reviennent au
+  combat suivant) ; même mécanisme via `combat_ajouter_combattant` pour un
+  renfort ;
+- et/ou le NOMBRE d'exemplaires (3 goules au lieu de 6).
+
+En plein combat, ne retouche jamais les stats d'un combattant déjà engagé
+en narrant des chiffres : l'ajustement se déclare à l'engagement et le
+moteur l'applique (attaques automatiques incluses).

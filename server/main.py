@@ -429,17 +429,66 @@ def _mecanique_deja_narree(events: list[str], narration: str) -> bool:
     return cites >= 2 and cites >= len(mots) // 3
 
 
+def _camps_du_combat(etat: dict) -> tuple[list[str], list[str]]:
+    """(noms des héros, noms des ennemis) depuis un état de partie —
+    nourrit `_narrer_mecaniques_serveur` pour que la narration respecte
+    les camps (un ennemi n'est jamais un compagnon)."""
+    heros = [
+        str(p.get("nom") or "")
+        for p in (etat.get("pj") or []) if str(p.get("nom") or "")
+    ]
+    ennemis = [
+        str(m.get("nom") or "")
+        for m in (etat.get("monstres_combat") or [])
+        if not m.get("allie") and str(m.get("nom") or "")
+    ]
+    return heros, ennemis
+
+
 async def _narrer_mecaniques_serveur(
-    app: FastAPI, events: list[str], contexte: str = ""
+    app: FastAPI,
+    events: list[str],
+    contexte: str = "",
+    heros: Optional[list[str]] = None,
+    ennemis: Optional[list[str]] = None,
 ) -> str:
     """Narre les événements mécaniques DÉJÀ résolus par le moteur serveur
     (jets des monstres, coups de grâce, XP…) via un appel LLM SANS tools.
 
     C'est le chaînon « mécanique d'abord, narration ensuite » : le serveur
     joue, le LLM reformule en prose fidèle — jamais l'inverse. Retourne ""
-    en cas d'échec : l'appelant retombe sur le bloc brut historique."""
+    en cas d'échec : l'appelant retombe sur le bloc brut historique.
+
+    `heros` / `ennemis` fixent les camps : sans eux, le LLM prenait les
+    créatures des événements pour des compagnons des héros (partie
+    87b8f286 : « votre compagnon le magmatique »)."""
     if not events:
         return ""
+    roles = ""
+    if heros:
+        roles += (
+            "HÉROS (personnages des joueurs — adresse-toi à eux à la 2ᵉ "
+            f"personne : « vous ») : {', '.join(heros)}.\n"
+        )
+        if len(heros) == 1:
+            roles += (
+                "Il n'y a qu'UN SEUL héros : « vous » le désigne "
+                "directement, lui — ne parle jamais de lui à la 3ᵉ "
+                "personne ni comme d'un « compagnon ».\n"
+            )
+    if ennemis:
+        roles += (
+            "ENNEMIS (créatures HOSTILES aux héros — jamais des "
+            f"compagnons, alliés ou membres du groupe) : "
+            f"{', '.join(ennemis)}.\n"
+        )
+    if roles:
+        roles += (
+            "Toute créature absente de ces listes est un allié explicite "
+            "ou un PNJ : suis l'étiquette (ennemi/allié) des événements. "
+            "Ne qualifie JAMAIS un héros de « compagnon » : les héros "
+            "sont les joueurs eux-mêmes.\n"
+        )
     consignes = (
         "Tu es le maître du jeu D&D 3.5. Voici la liste EXACTE des jets et "
         "effets mécaniques DÉJÀ résolus par le moteur de jeu serveur "
@@ -448,8 +497,10 @@ async def _narrer_mecaniques_serveur(
         "1. Narre ces événements de façon vivante et CONCISE (1 à 3 courts "
         "paragraphes), à la 2ᵉ personne pour les héros.\n"
         "2. Respecte EXACTEMENT les résultats : qui touche, qui rate, quels "
-        "dégâts, quels PV restants, qui meurt. Cite les totaux clés "
-        "(« jet 17 vs CA 15 ») sans recopier tous les détails.\n"
+        "dégâts, quels PV restants, qui meurt. Reste sur les CONSÉQUENCES "
+        "concrètes (dégâts subis, état final, mort) sans recopier la "
+        "mécanique : aucune formule de dés (« 1d6+3 »), aucun « jet 17 vs "
+        "CA 15 », aucune mention de serveur, d'outils ou de moteur.\n"
         "3. N'INVENTE AUCUN jet, dégât ou événement absent de la liste ; "
         "n'ajoute aucun monstre, aucun renfort, aucune action bonus.\n"
         "4. N'appelle AUCUN outil : tout est déjà résolu et inscrit.\n"
@@ -457,10 +508,14 @@ async def _narrer_mecaniques_serveur(
         "serveur affiche lui-même la ligne « au tour de… » quand c'est "
         "l'heure.\n"
         "6. De la prose narrative uniquement : pas de titre, pas de liste à "
-        "puces, pas de section « mécanique »."
+        "puces, pas de section « mécanique ».\n"
+        "7. Respecte les camps ci-dessus : les ennemis restent des "
+        "adversaires (« la créature vous assaille »), jamais des "
+        "compagnons."
     )
     contenu = (
         (("Contexte : " + contexte.strip() + "\n\n") if contexte.strip() else "")
+        + (roles + "\n" if roles else "")
         + "Événements mécaniques à narler :\n\n"
         + "\n\n".join(events)
     )
@@ -2593,12 +2648,39 @@ async def _handle_say(
                     if joueur_actif and player.strip().lower() != joueur_actif:
                         # Les événements mécaniques du pre-run (monstres
                         # joués, tours passés…) sont montrés à la table même
-                        # si le message n'ouvre pas un tour LLM.
+                        # si le message n'ouvre pas un tour LLM — NARRÉS par
+                        # le LLM (mécanique d'abord, prose ensuite) : le bloc
+                        # brut n'est que le repli. Timeout court : ce chemin
+                        # ne doit pas retarder l'avis « attendez votre tour ».
                         if events_pre:
+                            _heros_b, _ennemis_b = _camps_du_combat(etat_avant)
+                            _nar_bloc = ""
+                            try:
+                                _nar_bloc = await asyncio.wait_for(
+                                    _narrer_mecaniques_serveur(
+                                        app,
+                                        events_pre,
+                                        contexte=str(
+                                            (etat_avant.get("lieu") or {})
+                                            .get("nom") or ""
+                                        ),
+                                        heros=_heros_b,
+                                        ennemis=_ennemis_b,
+                                    ),
+                                    timeout=20.0,
+                                )
+                            except (asyncio.TimeoutError, Exception) as e_b:  # noqa: BLE001
+                                print(
+                                    "[dnd35] Narration pre-run (tour bloqué) "
+                                    f"échouée/timeout (repli brut) : {e_b}"
+                                )
                             await session.broadcast({
                                 "type": "dm",
-                                "text": "⚙️ _Mécanique serveur :_\n\n"
-                                        + "\n\n".join(events_pre),
+                                "text": _nar_bloc
+                                or (
+                                    "⚙️ _Mécanique serveur :_\n\n"
+                                    + "\n\n".join(events_pre)
+                                ),
                                 "tool_events": [],
                                 "state_patches": patches_pre,
                                 "tool_calls_trace": [],
@@ -3067,8 +3149,8 @@ async def _handle_say(
             # correctifs qui remplacent `result.narration`.
             if getattr(result, "notes_mecaniques", None):
                 result.narration = (
-                    result.narration + "\n\n⚙️ _Application serveur des "
-                    "dégâts :_\n\n" + "\n".join(result.notes_mecaniques)
+                    result.narration + "\n\n⚖️ _Dégâts appliqués "
+                    "automatiquement :_\n\n" + "\n".join(result.notes_mecaniques)
                 ).strip()
 
             # 5bis-c2. 💥 Dé-duplication des dégâts de monstres : tout excès
@@ -3107,15 +3189,15 @@ async def _handle_say(
                                     if c not in ("Détruit", "Detruit")
                                 ]
                             _corrections.append(
-                                f"⚙️ {str(_mo.get('nom'))} : {_e} dégâts "
-                                f"appliqués en double — PV restitués "
+                                f"⚖️ {str(_mo.get('nom'))} : {_e} dégâts "
+                                f"comptés deux fois — PV réajustés "
                                 f"({_pv}/{str(_mo.get('pv_max') or '?')})."
                             )
                         if _corrections:
                             _st_dd.save(_etat_dd)
                             result.narration += (
-                                "\n\n⚙️ _Correction serveur (dégâts doublés "
-                                "annulés) :_\n\n" + "\n".join(_corrections)
+                                "\n\n⚖️ _Réajustement (dégâts comptés "
+                                "deux fois) :_\n\n" + "\n".join(_corrections)
                             )
                             result.state_patches.append(
                                 {"monstres_combat": _mc_dd}
@@ -3148,7 +3230,7 @@ async def _handle_say(
                     events_pre, result.narration
                 ):
                     result.narration += (
-                        "\n\n⚙️ _Mécanique résolue par le serveur :_\n\n"
+                        "\n\n⚔️ _Résolution automatique du round :_\n\n"
                         + "\n\n".join(events_pre)
                     )
                 if events_pre:
@@ -3204,6 +3286,7 @@ async def _handle_say(
                             # cette limite le tour restait figé « en réflexion »
                             # après un combat. Au-delà de 90 s : repli bloc brut.
                             try:
+                                _heros_p, _ennemis_p = _camps_du_combat(apres)
                                 nar_post = await asyncio.wait_for(
                                     _narrer_mecaniques_serveur(
                                         app,
@@ -3211,6 +3294,8 @@ async def _handle_say(
                                         contexte=str(
                                             (apres.get("lieu") or {}).get("nom") or ""
                                         ),
+                                        heros=_heros_p,
+                                        ennemis=_ennemis_p,
                                     ),
                                     timeout=90.0,
                                 )
@@ -3224,7 +3309,7 @@ async def _handle_say(
                             result.narration += "\n\n" + nar_post
                         else:
                             result.narration += (
-                                "\n\n⚙️ _Mécanique du tour (serveur) :_\n\n"
+                                "\n\n⚔️ _Résolution automatique du tour :_\n\n"
                                 + "\n\n".join(res_post.events)
                             )
                     if res_post.patches:
@@ -3255,9 +3340,10 @@ async def _handle_say(
                             # Liste DÉTERMINISTE des ennemis vivants : sans
                             # elle, le MJ inventait des adversaires (« squelette
                             # géant ») ou attaquait des cadavres au tour suivant.
+                            # Noms seuls : les PV exacts des monstres sont de
+                            # l'information de MJ, pas du joueur.
                             vivants = [
-                                f"{m.get('nom')} ({m.get('pv')}/"
-                                f"{m.get('pv_max')} PV)"
+                                str(m.get("nom") or "")
                                 for m in (apres.get("monstres_combat") or [])
                                 if "Détruit" not in (m.get("conditions") or [])
                                 and int(m.get("pv", 1) or 0) > 0

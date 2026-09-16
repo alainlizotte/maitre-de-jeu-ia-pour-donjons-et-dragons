@@ -68,6 +68,66 @@ def _norm(s: str) -> str:
     return "".join(c for c in nf if not unicodedata.combining(c))
 
 
+def _garde_trame_voyage(etat: dict[str, Any], destination: str) -> Optional[str]:
+    """⛔ Garde de séquence : un voyage ne doit pas sauter une étape de la
+    trame du scénario (partie 87b8f286 : départ vers la gemme de Sarr ALORS
+    QUE la Couronne n'avait pas été récupérée (4,0) — prérequis du module).
+
+    La trame vient du manifeste de donjon (`donjon.etapes`) : la première
+    étape porteuse d'une `salle` non visitée est l'étape courante. Tant
+    qu'elle n'est pas accomplie, tout voyage est refusé (sauf `forcer`)."""
+    donjon = etat.get("donjon") or {}
+    etapes = donjon.get("etapes") or []
+    if not etapes:
+        return None
+    grilles = [donjon.get("grille") or []]
+    for fl in (donjon.get("etages") or {}).values():
+        if isinstance(fl, dict):
+            grilles.append(fl.get("grille") or [])
+
+    def _visitee(salle_txt: str) -> bool:
+        try:
+            parts = [
+                int(p) for p in str(salle_txt).split(",") if p.strip()
+            ]
+            if len(parts) < 2:
+                return True
+            xy = (parts[-2], parts[-1])
+        except (TypeError, ValueError):
+            return True
+        for grille in grilles:
+            for s in grille:
+                if not isinstance(s, dict):
+                    continue
+                try:
+                    if (int(s.get("x")), int(s.get("y"))) == xy:
+                        return bool(s.get("visitee"))
+                except (TypeError, ValueError):
+                    continue
+        return True
+
+    for e in etapes:
+        if not isinstance(e, dict):
+            continue
+        salle = str(e.get("salle") or "").strip()
+        if not salle or _visitee(salle):
+            continue  # étape sans salle liée, ou déjà accomplie
+        return (
+            "⛔ **TRAME DU SCÉNARIO — voyage refusé** : l'étape courante "
+            f"« {e.get('titre', '?')} » (salle {salle}) n'est PAS accomplie. "
+            + (
+                f"{str(e.get('detail')).strip()} "
+                if str(e.get("detail") or "").strip() else ""
+            )
+            + f"Ne lance PAS de voyage vers « {destination} » tant que cette "
+            "étape n'est pas faite : la séquence du module serait rompue. "
+            "Reprends l'exploration du donjon (`carte_donjon_explorer`) vers "
+            f"la salle {salle}. Si la table choisit DÉLIBÉRÉMENT d'abandonner "
+            "la trame, relance `voyage_demarrer` avec `forcer=true`."
+        )
+    return None
+
+
 @tool
 async def voyage_demarrer(
     ctx: ToolContext,
@@ -76,6 +136,7 @@ async def voyage_demarrer(
     mode: str = "marche",
     terrain: str = "plaine",
     piste: bool = False,
+    forcer: bool = False,
 ) -> ToolResult:
     """
     Lance un voyage hors donjon et calcule sa durée réelle selon les règles
@@ -91,6 +152,9 @@ async def voyage_demarrer(
         "desert" | "marais" | "montagne".
     :param piste (bool): True si sentier/route connue (jamais perdu) ;
         False par défaut en terrain inconnu.
+    :param forcer (bool): True pour passer outre la garde de trame (le
+        groupe abandonne délibérément la séquence du scénario). Réserver
+        aux choix EXPLICITES des joueurs.
     """
     mode_n = _norm(mode)
     if mode_n not in _ALLURES:
@@ -107,6 +171,20 @@ async def voyage_demarrer(
         )
     if distance_km <= 0:
         return ToolResult(text="⚠️ distance_km doit être > 0.")
+
+    # ⛔ Garde de trame : pas de voyage tant qu'une étape à salle du
+    # scénario reste à faire (sauter la séquence du module rompt le fil).
+    if not forcer:
+        try:
+            from ..game.state import PartyState   # lazy : évite tout cycle
+            _etat_v = PartyState(
+                data_dir=ctx.data_dir, partie_id=ctx.partie_id
+            ).load()
+            garde = _garde_trame_voyage(_etat_v, destination)
+        except Exception:                                        # noqa: BLE001
+            garde = None
+        if garde:
+            return ToolResult(text=garde)
 
     tdata = _TERRAINS[terrain_n]
     allure_label, base_kmj = _ALLURES[mode_n]

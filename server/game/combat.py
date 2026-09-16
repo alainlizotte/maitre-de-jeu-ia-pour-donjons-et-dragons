@@ -315,6 +315,25 @@ async def _attaque_auto(
         return
     nom_arme, bonus_atk, nb_des, faces, bonus_dmg = arme
 
+    # ⚖️ Ajustement temporaire d'équilibrage (partie 87b8f286) : si cette
+    # créature a été engagée avec `ajustement=…` (engager_combat /
+    # combat_ajouter_combattant), les deltas d'attaque/dégâts s'appliquent
+    # aux attaques automatiques — la fiche du bestiaire reste inchangée.
+    mo_aj = next(
+        (mo for mo in etat.get("monstres_combat") or []
+         if _norm(mo.get("nom")) == _norm(attaquant)),
+        None,
+    )
+    if mo_aj is not None and mo_aj.get("_ajuste"):
+        try:
+            bonus_atk += int(mo_aj.get("_aj_attaque") or 0)
+        except (TypeError, ValueError):
+            pass
+        try:
+            bonus_dmg += int(mo_aj.get("_aj_degats") or 0)
+        except (TypeError, ValueError):
+            pass
+
     if ennemi:
         cible_ca = _premiere_cible_pj(etat)
         coup_de_grace = False
@@ -337,14 +356,19 @@ async def _attaque_auto(
             ca = 10
         coup_de_grace = False
 
+    # Étiquette de camp : sans elle, la narration LLM (et le journal brut)
+    # peut prendre une créature pour un membre du groupe (« votre compagnon
+    # le magmatique ») — observé en partie réelle 87b8f286.
+    camp = "ennemi" if ennemi else "allié"
+
     if coup_de_grace:
         # Coup de grâce : touche automatique, dégâts critiques (dés maximaux
         # doublés — multiplicateur standard ×2), pas de jet d'attaque.
         total = max(0, (nb_des * faces + bonus_dmg) * 2)
         res.events.append(
-            f"☠️ **Coup de grâce** : {attaquant} achève {cible} à terre — "
-            f"dégâts critiques automatiques ({nb_des}d{faces} max ×2"
-            f"{bonus_dmg:+d}) = **{total}**."
+            f"☠️ **Coup de grâce ({camp})** : {attaquant} achève {cible} "
+            f"à terre — dégâts critiques automatiques ({nb_des}d{faces} "
+            f"max ×2{bonus_dmg:+d}) = **{total}**."
         )
         tr = await _tool(
             ctx, "fiche_perso_infliger_degats",
@@ -364,7 +388,11 @@ async def _attaque_auto(
     )
     if tr_atk is None or tr_atk.text.startswith("❌"):
         return
-    res.events.append(tr_atk.text)
+    res.events.append(
+        tr_atk.text.replace(
+            "⚔️ **Attaque** :", f"⚔️ **Attaque ({camp})** :", 1
+        )
+    )
     if ("✅ **Touché**" not in tr_atk.text) and ("⭐ **20 naturel**" not in tr_atk.text):
         return
 
@@ -549,19 +577,29 @@ async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
         etat = state.load()
         _memoriser_combat(etat, raison)
         res.events.append(
-            "⚔️ _Tous les ennemis sont à terre — le combat est terminé "
-            "(clôturé par le serveur)._"
+            "⚔️ _Tous les ennemis sont à terre — le combat est terminé._"
         )
     else:
         _memoriser_combat(etat, raison)
+        # 💀 GAME OVER : tous les PJ sont morts. On pose le flag (réinjecté
+        # au MJ via le récap) — sans lui, la partie repartait en exploration
+        # avec un groupe décédé et « continuait » comme de rien n'était
+        # (partie 87b8f286).
+        etat["game_over"] = True
         res.events.append(
-            "💀 _Tous les héros sont tombés — la partie est perdue "
-            "(clôturée par le serveur)._"
+            "💀 _Tous les héros sont tombés — GAME OVER. Proposez à la "
+            "table : nouvelle partie, résurrection négociée ou reprise "
+            "narrative plus tôt._"
         )
+    # Événement d'histoire : libellé lisible et sans ambiguïté (les noms
+    # listés sont des ENNEMIS — une liste nue comme « Combat terminé
+    # (defaite) : Magmatique, Ane, Rat » ressemblait au groupe et poussait
+    # la narration à traiter les monstres comme des compagnons).
+    raison_fr = "victoire" if raison == "victoire" else "défaite"
     etat.setdefault("histoire", []).append({
         "ts": datetime.now().isoformat(),
         "tour": "",
-        "evenement": f"Combat terminé ({raison}) : "
+        "evenement": f"Combat terminé — {raison_fr}. Ennemis : "
         + ", ".join(
             str(m.get("nom") or "")
             for m in etat.get("monstres_combat") or [] if not m.get("allie")
@@ -574,6 +612,7 @@ async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
     res.patches.append({
         "phase": "exploration", "tour": 0, "courant_tour_pour": None,
         "initiative": [], "monstres_combat": [],
+        **({"game_over": True} if raison != "victoire" else {}),
     })
 
 

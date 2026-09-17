@@ -168,6 +168,8 @@ interface FormState {
   alignement: string;
   dieu: string;
   carac: CaracMap;
+  /** +1 de caractéristique des niveaux multiples de 4 (baked dans carac à l'enregistrement). */
+  gainCarac: CaracCle | "";
   or: number;
   armesChoisies: string[];
   armuresChoisies: string[];
@@ -196,6 +198,7 @@ const FORM_VIDE: FormState = {
   alignement: "",
   dieu: "",
   carac: { FOR: 0, DEX: 0, CON: 0, INT: 0, SAG: 0, CHA: 0 },
+  gainCarac: "",
   or: 0,
   armesChoisies: [],
   armuresChoisies: [],
@@ -313,6 +316,7 @@ export function CharacterFormPage() {
       alignement: f.alignement ?? "",
       dieu: (f as Partial<FichePerso>).dieu ?? "",
       carac: caracBaseDepuisFiche(f, m.races),
+      gainCarac: "",
       or: f.or ?? 0,
       armesChoisies,
       armuresChoisies,
@@ -351,6 +355,16 @@ export function CharacterFormPage() {
     [modele.data, form.classe],
   );
 
+  // Capacités visibles : traits raciaux (dès le niveau 1) + capacités de
+  // classe acquises au niveau choisi (tableaux de classe PHB 3.5).
+  const capacites = useMemo(() => {
+    const race = (raceModele?.capacites ?? []).map((c) => ({ ...c, source: "Race" as const }));
+    const classe = (classeModele?.capacites ?? [])
+      .filter((c) => (c.niveau ?? 1) <= form.niveau)
+      .map((c) => ({ ...c, source: "Classe" as const }));
+    return { race, classe };
+  }, [raceModele, classeModele, form.niveau]);
+
   // Dieux acceptant le personnage comme serviteur (filtre race/classe/alignement).
   const dieuxEligibles = useMemo(
     () =>
@@ -379,7 +393,12 @@ export function CharacterFormPage() {
   const calc = useMemo(() => {
     const modsRace = raceModele?.mods ?? {};
     const final = {} as CaracMap;
-    for (const c of CARACS) final[c] = Math.max(1, (form.carac[c] || 10) + (modsRace[c] ?? 0));
+    for (const c of CARACS) {
+      final[c] = Math.max(
+        1,
+        (form.carac[c] || 10) + (modsRace[c] ?? 0) + (form.gainCarac === c ? 1 : 0),
+      );
+    }
     const mods = {} as CaracMap;
     for (const c of CARACS) mods[c] = modCarac(final[c]);
 
@@ -436,7 +455,7 @@ export function CharacterFormPage() {
       chargeMax: chargeMaximale(final.FOR, raceModele?.taille ?? "M"),
       complet: Boolean(raceModele && classeModele),
     };
-  }, [raceModele, classeModele, form.carac, form.niveau, form.armuresChoisies, form.donsChoisis, form.donsLibre, modele.data]);
+  }, [raceModele, classeModele, form.carac, form.gainCarac, form.niveau, form.armuresChoisies, form.donsChoisis, form.donsLibre, modele.data]);
 
   // ------------------------- Magie (sorts 3.5) ----------------------------
   // Miroir de server/sorts.py : castable, emplacements/jour, budgets connus.
@@ -451,11 +470,13 @@ export function CharacterFormPage() {
       : ({} as Record<number, number>);
     const budgetConnus = sortsLib.sortsConnusMax(tables, form.classe, form.niveau);
     const liste = lanceur ? sortsLib.sortsDisponibles(tables, form.classe, nls) : [];
-    // Grimoire de départ du magicien niv.1 : 3 + mod INT sorts de niveau 1
-    // (tous les tours de magicien sont connus automatiquement).
-    const budgetGrimoire1 =
-      form.classe === "Magicien" ? 3 + sortsLib.modCarac(calc.final.INT) : 0;
-    return { lanceur, nls, cle, slots, budgetConnus, liste, budgetGrimoire1 };
+    // Grimoire du magicien : départ 3 + mod INT sorts de niveau ≥ 1 (tous les
+    // tours sont connus d'office) + 2 sorts par niveau de magicien gagné.
+    const budgetGrimoire =
+      form.classe === "Magicien"
+        ? 3 + sortsLib.modCarac(calc.final.INT) + 2 * Math.max(0, form.niveau - 1)
+        : 0;
+    return { lanceur, nls, cle, slots, budgetConnus, liste, budgetGrimoire };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modele.data, form.classe, form.niveau, calc]);
 
@@ -473,11 +494,13 @@ export function CharacterFormPage() {
     for (const [lvlStr, mx] of Object.entries(magie.budgetConnus)) {
       exces += Math.max(0, (comptes[Number(lvlStr)] ?? 0) - mx);
     }
-    if (form.classe === "Magicien" && form.niveau === 1) {
-      const niv1 = form.sortsConnus.filter(
-        (n) => magie.liste.find((x) => x.nom === n)?.niveau === 1,
+    if (form.classe === "Magicien") {
+      // Grimoire : les sorts de niveau ≥ 1 consomment le budget global
+      // (départ 3 + INT, +2 par niveau gagné) — les tours sont d'office connus.
+      const horsTours = form.sortsConnus.filter(
+        (n) => (magie.liste.find((x) => x.nom === n)?.niveau ?? 0) >= 1,
       ).length;
-      exces += Math.max(0, niv1 - magie.budgetGrimoire1);
+      exces += Math.max(0, horsTours - magie.budgetGrimoire);
     }
     return exces;
   }, [magie, form.sortsConnus, form.classe, form.niveau]);
@@ -581,6 +604,66 @@ export function CharacterFormPage() {
   const donsTotal = form.donsChoisis.length + donsLibresUtilises;
   const donsPlein = donsTotal >= budgetDons;
 
+  // Checklist « avancement » : gains attendus au niveau courant (PHB 3.5) —
+  // don aux niv. 3/6/9…, +1 caractéristique aux niv. 4/8/12…, nouveaux sorts,
+  // rangs de compétence du nouveau niveau. Sert de guide à la montée de
+  // niveau via l'édition de la fiche.
+  const avancement = useMemo(() => {
+    const items: { libelle: string; note: string; etat: "ok" | "a_faire" | "info" }[] = [];
+    if (form.niveau < 2) return items;
+    if (form.niveau % 4 === 0) {
+      items.push({
+        libelle: "+1 à une caractéristique",
+        note: form.gainCarac
+          ? `attribué à ${LIBELLES_CARACS[form.gainCarac]}`
+          : "à répartir (sélecteur dans « Caractéristiques »)",
+        etat: form.gainCarac ? "ok" : "a_faire",
+      });
+    }
+    const budgetAvant =
+      1 + Math.floor((form.niveau - 1) / 3) + (form.race === "Humain" ? 1 : 0);
+    if (budgetDons > budgetAvant) {
+      items.push({
+        libelle: "Don supplémentaire",
+        note: `${donsTotal} / ${budgetDons} don(s) choisi(s)`,
+        etat: donsTotal >= budgetDons ? "ok" : "a_faire",
+      });
+    }
+    if (magie.lanceur) {
+      if (form.classe === "Magicien") {
+        const horsTours = form.sortsConnus.filter(
+          (n) => (magie.liste.find((x) => x.nom === n)?.niveau ?? 0) >= 1,
+        ).length;
+        items.push({
+          libelle: "Grimoire (+2 sorts par niveau gagné)",
+          note: `${horsTours} / ${magie.budgetGrimoire} sorts de niveau ≥ 1`,
+          etat: horsTours >= magie.budgetGrimoire ? "ok" : "info",
+        });
+      } else if (form.classe === "Sorcier" || form.classe === "Barde") {
+        items.push({
+          libelle: "Nouveaux sorts connus",
+          note: "budgets par niveau dans la section Sorts",
+          etat: "info",
+        });
+      } else {
+        items.push({
+          libelle: "Sorts divins",
+          note: "liste de classe complète disponible — mémorisation en jeu",
+          etat: "info",
+        });
+      }
+    }
+    items.push({
+      libelle: "Rangs de compétence",
+      note: budgetRangs > 0
+        ? `${rangsUtilises} / ${budgetRangs} rangs utilisés`
+        : "choisissez une classe",
+      etat: budgetRangs <= 0 ? "a_faire" : rangsUtilises >= budgetRangs ? "ok" : "info",
+    });
+    return items;
+  }, [form.niveau, form.race, form.gainCarac, form.classe, form.sortsConnus,
+      budgetDons, donsTotal, magie, budgetRangs, rangsUtilises]);
+
   const toggleListe = (
     cle: "armesChoisies" | "armuresChoisies" | "equipChoisi" | "donsChoisis" | "sortsConnus",
     valeur: string,
@@ -649,12 +732,15 @@ export function CharacterFormPage() {
   const enregistrer = useMutation({
     mutationFn: () => {
       // Le serveur recalcule PV/CA/BBA/sauvegardes et régénère le portrait.
+      // Le +1 de caractéristique (niveaux multiples de 4) est envoyé à part :
+      // le serveur l'applique et le journalise dans `gains_carac`.
       const payload: Record<string, unknown> = {
         nom: form.nom.trim(),
         race: form.race,
         classe: form.classe,
         niveau: form.niveau,
         carac: form.carac,
+        gain_carac: form.gainCarac || undefined,
         alignement: form.alignement,
         dieu: form.dieu.trim(),
         or: Number(form.or) || 0,
@@ -763,14 +849,15 @@ export function CharacterFormPage() {
         }
       }
     }
-    if (magie.lanceur && form.classe === "Magicien" && form.niveau === 1) {
-      const niv1 = form.sortsConnus.filter(
-        (n) => magie.liste.find((x) => x.nom === n)?.niveau === 1,
+    if (magie.lanceur && form.classe === "Magicien") {
+      const horsTours = form.sortsConnus.filter(
+        (n) => (magie.liste.find((x) => x.nom === n)?.niveau ?? 0) >= 1,
       ).length;
-      if (niv1 > magie.budgetGrimoire1) {
+      if (horsTours > magie.budgetGrimoire) {
         setErreur(
-          `Grimoire de départ : maximum ${magie.budgetGrimoire1} sorts de ` +
-          `niveau 1 (3 + mod INT) — ${niv1} sélectionnés.`,
+          `Grimoire : maximum ${magie.budgetGrimoire} sorts de niveau ≥ 1 ` +
+          `(départ 3 + mod INT${form.niveau > 1 ? ` + 2 × ${form.niveau - 1} niveaux gagnés` : ""}) — ` +
+          `${horsTours} sélectionnés.`,
         );
         return;
       }
@@ -782,10 +869,36 @@ export function CharacterFormPage() {
       );
       return;
     }
+    // Avancement en attente : les gains du niveau doivent être consommés
+    // (mêmes règles que le serveur — retour immédiat sans aller-retour).
+    if (avancementAttente) {
+      if (donsTotal < budgetDons) {
+        setErreur(
+          `Avancement incomplet : il reste ${budgetDons - donsTotal} don(s) à ` +
+          `choisir (${donsTotal}/${budgetDons}).`,
+        );
+        return;
+      }
+      if (form.niveau % 4 === 0 && !form.gainCarac) {
+        setErreur(
+          `Avancement incomplet : le niveau ${form.niveau} (multiple de 4) doit ` +
+          "recevoir son +1 de caractéristique.",
+        );
+        return;
+      }
+    }
     enregistrer.mutate();
   };
 
   const chargementFiche = modeEdition && ficheExistante.isLoading;
+
+  // Verrou d'avancement : la fiche n'est modifiable que si un passage de
+  // niveau est en attente (niveau gagné par XP > dernier niveau confirmé).
+  const avancementConfirme = Number(
+    (ficheExistante.data as Partial<FichePerso> | undefined)?.avancement_confirme ?? 1,
+  );
+  const avancementAttente = modeEdition && avancementConfirme < form.niveau;
+  const verrouille = modeEdition && !avancementAttente;
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -807,6 +920,24 @@ export function CharacterFormPage() {
           <p className="text-stone-400">Chargement de la fiche…</p>
         ) : ficheExistante.isError ? (
           <p className="text-rose-400">⚠️ {(ficheExistante.error as Error).message}</p>
+        ) : verrouille ? (
+          <section className="bg-stone-800/40 border border-amber-700/40 rounded-lg p-8 text-center space-y-3">
+            <div className="text-4xl">🔒</div>
+            <h2 className="font-serif text-xl text-amber-200">Fiche verrouillée</h2>
+            <p className="text-sm text-stone-400 max-w-md mx-auto">
+              Les choix d'avancement de <strong>{form.nom}</strong> (niveau{" "}
+              {form.niveau}) sont confirmés. La fiche sera de nouveau
+              modifiable au prochain passage de niveau — gagnez de l'XP en
+              jouant !
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="px-4 py-2 bg-stone-700 hover:bg-stone-600 rounded text-sm text-stone-200"
+            >
+              ← Retour
+            </button>
+          </section>
         ) : (
           <>
             {/* ------------------------- Identité ------------------------- */}
@@ -850,14 +981,15 @@ export function CharacterFormPage() {
                 </label>
                 <label className="block">
                   <span className="text-stone-400 text-xs">Niveau</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
-                    value={form.niveau}
-                    onChange={(e) => set("niveau", Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                  />
+                  <div
+                    className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm text-amber-100"
+                    title="Le niveau évolue automatiquement avec l'XP gagnée en jeu"
+                  >
+                    {form.niveau}{" "}
+                    <span className="text-stone-500 text-xs">
+                      {modeEdition ? "— gagné par XP" : "— départ"}
+                    </span>
+                  </div>
                 </label>
                 <label className="block">
                   <span className="text-stone-400 text-xs">Alignement</span>
@@ -965,6 +1097,23 @@ export function CharacterFormPage() {
                   );
                 })}
               </div>
+              {form.niveau >= 4 && form.niveau % 4 === 0 && (
+                <label className="block mt-3 max-w-xs">
+                  <span className="text-stone-400 text-xs">
+                    Gain de caractéristique (niv. multiple de 4) — +1 à :
+                  </span>
+                  <select
+                    className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
+                    value={form.gainCarac}
+                    onChange={(e) => set("gainCarac", e.target.value as CaracCle | "")}
+                  >
+                    <option value="">— Aucun —</option>
+                    {CARACS.map((c) => (
+                      <option key={c} value={c}>{LIBELLES_CARACS[c]}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </section>
 
             {/* -------------------- Calculs automatiques -------------------- */}
@@ -1007,6 +1156,104 @@ export function CharacterFormPage() {
                   Choisissez une race et une classe pour activer tous les calculs.
                 </p>
               )}
+            </section>
+
+            {/* --------------------- Avancement (niveau) -------------------- */}
+            {avancement.length > 0 && (
+              <section className="bg-stone-800/40 border border-emerald-700/40 rounded-lg p-4">
+                <h2 className="font-serif text-lg text-amber-200 mb-1">
+                  Avancement — niveau {form.niveau}
+                </h2>
+                <p className="text-xs text-stone-500 mb-3">
+                  Gains attendus à ce niveau (PHB 3.5) — réglez chaque point
+                  dans les sections correspondantes avant d'enregistrer.
+                </p>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                  {avancement.map((it) => (
+                    <li key={it.libelle} className="flex items-start gap-2 text-xs">
+                      <span
+                        className={
+                          it.etat === "ok"
+                            ? "text-emerald-400"
+                            : it.etat === "a_faire"
+                              ? "text-amber-400"
+                              : "text-stone-500"
+                        }
+                      >
+                        {it.etat === "ok" ? "✓" : it.etat === "a_faire" ? "●" : "ℹ"}
+                      </span>
+                      <span className="leading-snug">
+                        <span className="text-stone-100">{it.libelle}</span>
+                        <span className="text-stone-500"> — {it.note}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* -------------------------- Capacités ------------------------ */}
+            <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4">
+              <h2 className="font-serif text-lg text-amber-200 mb-1">Capacités</h2>
+              <p className="text-xs text-stone-500 mb-3">
+                Traits raciaux et capacités de classe acquises au niveau choisi
+                (PHB 3.5) — ils figurent aussi sur la fiche du personnage.
+              </p>
+              {!raceModele && !classeModele && (
+                <p className="text-xs text-amber-500/80 italic">
+                  Choisissez une race et une classe pour voir les capacités.
+                </p>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {capacites.race.length > 0 && (
+                  <div>
+                    <div className="text-xs text-stone-400 mb-1.5">
+                      Traits raciaux — <span className="text-amber-200">{form.race}</span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {capacites.race.map((c) => (
+                        <li
+                          key={c.nom}
+                          className="bg-stone-900/60 border border-stone-800 rounded p-2"
+                          title={c.description}
+                        >
+                          <div className="text-xs text-stone-100 font-medium">{c.nom}</div>
+                          <div className="text-[11px] text-stone-500 leading-snug">{c.description}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {capacites.classe.length > 0 && (
+                  <div>
+                    <div className="text-xs text-stone-400 mb-1.5">
+                      Capacités de classe —{" "}
+                      <span className="text-amber-200">
+                        {form.classe} niv. {form.niveau}
+                      </span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {capacites.classe.map((c) => (
+                        <li
+                          key={c.nom}
+                          className="bg-stone-900/60 border border-stone-800 rounded p-2"
+                          title={c.description}
+                        >
+                          <div className="text-xs text-stone-100 font-medium">
+                            {c.nom}
+                            {(c.niveau ?? 1) > 1 && (
+                              <span className="text-amber-300/80 font-sans text-[10px] ml-1.5">
+                                niv. {c.niveau}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-stone-500 leading-snug">{c.description}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* -------------------- Charge transportée -------------------- */}
@@ -1414,9 +1661,17 @@ export function CharacterFormPage() {
                 {form.classe === "Magicien" && form.niveau === 1 && (
                   <p className="text-xs text-stone-400">
                     Grimoire de départ : tous les tours de magicien (inclus
-                    ci-dessous, grisés) + {magie.budgetGrimoire1} sort(s) de
+                    ci-dessous, grisés) + {magie.budgetGrimoire} sort(s) de
                     niveau 1. La mémorisation quotidienne se fera en jeu (repos +
                     préparation avec le MJ).
+                  </p>
+                )}
+                {form.classe === "Magicien" && form.niveau > 1 && (
+                  <p className="text-xs text-stone-400">
+                    Grimoire : {magie.budgetGrimoire} sorts de niveau ≥ 1 au
+                    total (départ 3 + mod INT, +2 par niveau gagné — tours
+                    d'office connus, grisés). La mémorisation quotidienne se
+                    fera en jeu (repos + préparation avec le MJ).
                   </p>
                 )}
                 {(form.classe === "Sorcier" || form.classe === "Barde") && (
@@ -1449,8 +1704,8 @@ export function CharacterFormPage() {
                       // grimoire de départ (Magicien niv.1 : 3 + mod INT).
                       const budget =
                         magie.budgetConnus[Number(lvl)] ??
-                        (form.classe === "Magicien" && Number(lvl) === 1
-                          ? magie.budgetGrimoire1
+                        (form.classe === "Magicien" && form.niveau === 1 && Number(lvl) === 1
+                          ? magie.budgetGrimoire
                           : undefined);
                       const choisis = form.sortsConnus.filter(
                         (n) => sorts.some((s) => s.nom === n),
@@ -1591,8 +1846,9 @@ export function CharacterFormPage() {
             {erreur && <p className="text-rose-400 text-sm">⚠️ {erreur}</p>}
             {succes && (
               <p className="text-emerald-400 text-sm">
-                ✅ Fiche enregistrée — portrait en cours de génération d'après votre fiche
-                et les traits des {form.race.toLowerCase()}s…
+                {modeEdition
+                  ? "✅ Avancement confirmé — fiche verrouillée jusqu'au prochain passage de niveau. Portrait en cours de génération…"
+                  : "✅ Fiche enregistrée — portrait en cours de génération d'après votre fiche et les traits de la race…"}
               </p>
             )}
             <div className="flex items-center gap-3 pb-6">

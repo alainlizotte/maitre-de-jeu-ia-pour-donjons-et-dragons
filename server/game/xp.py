@@ -111,6 +111,31 @@ def _mod_con(fiche: dict[str, Any]) -> int:
     return (con - 10) // 2
 
 
+def _resync_derivees(fiche: dict[str, Any], niveau: int) -> None:
+    """Recalcule BBA, sauvegardes, initiative et charge max après un
+    changement de niveau (les PV sont gérés séparément par jet de dé).
+
+    Best effort : une fiche aux champs incomplets ne bloque jamais la
+    montée de niveau — seuls les dérivés recalculables sont mis à jour.
+    """
+    try:
+        from .. import persos as _persos  # lazy (évite les cycles d'import)
+        armures = [
+            str(e.get("nom")) for e in (fiche.get("equipement") or [])
+            if isinstance(e, dict) and e.get("nom")
+        ]
+        calc = _persos.calculer_derivees(
+            fiche.get("carac") or {}, str(fiche.get("race") or ""),
+            str(fiche.get("classe") or ""), niveau, armures=armures,
+        )
+        fiche["bab"] = calc["bab"]
+        fiche["sauvegardes"] = calc["sauvegardes"]
+        fiche["initiative"] = calc["initiative"]
+        fiche["charge_max"] = calc["charge_max"]
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
 def _bonus_dons_pv(dons: Any, niveau: int) -> int:
     """Bonus de PV apporté par les dons d'un personnage (PHB 3.5 finales).
 
@@ -197,6 +222,7 @@ def appliquer_gain(
             fiche["niveau"] = niveau
             fiche["pv_max"] = max(1, int(fiche.get("pv_max", dv)) - perte)
             fiche["pv"] = min(int(fiche.get("pv", 1)), fiche["pv_max"])
+            _resync_derivees(fiche, niveau)
             pv_max_new, pv_new = _resync_dons_pv(fiche, niveau, _bonus_dons_pv(fiche.get("dons"), niveau + 1))
             fiche["pv_max"] = pv_max_new
             fiche["pv"] = pv_new
@@ -225,6 +251,7 @@ def appliquer_gain(
         fiche["pv_max"] = int(fiche.get("pv_max", dv)) + gain_pv
         fiche["pv"] = int(fiche.get("pv", 1)) + gain_pv
         # Recaler le bonus de PV des dons qui évoluent avec le niveau
+        _resync_derivees(fiche, niveau)
         pv_max_new, pv_new = _resync_dons_pv(fiche, niveau, bonus_dons_avant)
         bonus_dons_avant = _bonus_dons_pv(fiche.get("dons"), niveau)
         fiche["pv_max"] = pv_max_new
@@ -269,6 +296,7 @@ def appliquer_perte_niveau(fiche: dict[str, Any], nb: int = 1) -> list[str]:
         fiche["xp"] = milieu
         fiche["pv_max"] = max(1, int(fiche.get("pv_max", dv)) - perte)
         fiche["pv"] = min(int(fiche.get("pv", 1)), fiche["pv_max"])
+        _resync_derivees(fiche, nouveau)
         pv_max_new, pv_new = _resync_dons_pv(fiche, nouveau, _bonus_dons_pv(fiche.get("dons"), niveau))
         fiche["pv_max"] = pv_max_new
         fiche["pv"] = pv_new

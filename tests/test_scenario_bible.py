@@ -134,6 +134,43 @@ def test_detecter_edition_modules_francais_5e():
     assert _detecter_edition("Un scénario pour 3.5, d&d3.5, SRD 3.5") == "3.5"
 
 
+def test_detecter_edition_adnd_2e():
+    """Régression ee5684fe : un module AD&D (The Crown of Mystra) classé
+    « 5e » UNIQUEMENT à cause du mot générique « Background » (signature 5e
+    trop large). L'explicite « AD&D adventure » doit imposer « 2e » — et le
+    mot « background » seul ne doit plus jamais classer un module en 5e."""
+    texte_adnd = (
+        "The Crown of Mystra is an AD&D adventure for 4-6 player characters "
+        "of levels 1-8. Background: Recently, Cyric has eluded Mystra's "
+        "defenses and stolen her crown. Tome of Magic, TSR Inc."
+    )
+    assert _detecter_edition(texte_adnd) == "2e"
+    # « background » (titre de section universel) ne suffit plus à valider 5e.
+    assert _detecter_edition(
+        "Background: The heroes gather in the inn. Adventure Hook."
+    ) == "inconnue"
+
+
+def test_resume_texte_ignore_sommaire():
+    """Régression ee5684fe : `resume` commençait par la TABLE DES MATIÈRES
+    du PDF (lignes de sommaire « Adventure Background 2 ») — le MJ n'avait
+    AUCUN contenu d'aventure et inventait un autre module. Le résumé doit
+    démarrer à la VRAIE section Background/Introduction du corps du livret."""
+    from server.tools.scenarios import _resume_texte
+
+    texte = (
+        "Adventure Background\n2\n\nAdventure Plot Line\n2\n\nThe Artifact\n"
+        "2-4\n\n---\n\nThe Crown of Mystra\n\n"
+        "Background:  Recently, Cyric has managed to elude Mystra's defenses "
+        "and steal one of her most valued possessions -- her crown. He then "
+        "gave the crown to his high priest in Zhentil Keep. " * 4
+    )
+    resume = _resume_texte(texte, cible=600)
+    assert resume.startswith("Background:  Recently, Cyric"), resume[:120]
+    assert "Plot Line" not in resume, "la table des matières ne doit pas rester"
+    assert "2-4" not in resume, "les numéros de page du sommaire doivent être ignorés"
+
+
 def test_scenario_etape_suit_avancement():
     """`scenario_etape` enregistre l'étape en cours puis l'étape accomplie,
     et persiste le tout dans la bible."""

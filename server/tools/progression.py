@@ -65,6 +65,8 @@ async def fiche_perso_gagner_xp(
     _maj_etat_pj(ctx, fiche.get("nom", nom), {
         "niveau": fiche.get("niveau"), "xp": fiche.get("xp", 0),
         "pv": fiche.get("pv"), "pv_max": fiche.get("pv_max"),
+        "bab": fiche.get("bab"), "sauvegardes": fiche.get("sauvegardes"),
+        "charge_max": fiche.get("charge_max"),
     })
     return ToolResult(
         text="\n".join(logs) or f"ℹ️ Aucun changement ({m:+d} XP).",
@@ -193,6 +195,8 @@ async def fiche_perso_perte_niveau(
     _maj_etat_pj(ctx, fiche.get("nom", nom), {
         "niveau": fiche.get("niveau"), "xp": fiche.get("xp", 0),
         "pv": fiche.get("pv"), "pv_max": fiche.get("pv_max"),
+        "bab": fiche.get("bab"), "sauvegardes": fiche.get("sauvegardes"),
+        "charge_max": fiche.get("charge_max"),
     })
     return ToolResult(
         text="\n".join(logs),

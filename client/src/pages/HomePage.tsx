@@ -44,9 +44,14 @@ function MiniPortrait({ perso }: { perso: FichePerso }) {
 
 function CartePerso({ perso }: { perso: FichePerso }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [confirmer, setConfirmer] = useState(false);
   const [voirFiche, setVoirFiche] = useState(false);
   const slug = slugify(perso.nom);
+  // Un passage de niveau est en attente : la fiche est modifiable pour
+  // régler les gains du niveau (dons, +1 carac, sorts…).
+  const avancementAttente =
+    perso.niveau > (perso.avancement_confirme ?? 1);
   const supprimer = useMutation({
     mutationFn: () => api.deletePerso(slug),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["persos"] }),
@@ -73,6 +78,15 @@ function CartePerso({ perso }: { perso: FichePerso }) {
           <div className="text-[10px] text-amber-500/70 mt-1 italic">
             Portrait en génération…
           </div>
+        )}
+        {avancementAttente && (
+          <button
+            className="mt-2 w-full px-2 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded text-xs font-medium text-white"
+            onClick={() => navigate(`/personnage/${slug}`)}
+            title="Niveau gagné : dons, caractéristiques et sorts à régler"
+          >
+            ⬆ Avancement à régler (niv. {perso.niveau})
+          </button>
         )}
         <div className="mt-auto pt-3 flex gap-2">
           {/* Consultation seule : la fiche s'ouvre en lecture (modale). */}

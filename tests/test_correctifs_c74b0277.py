@@ -477,7 +477,170 @@ async def test_renfort_refuse_nom_hors_bestiaire():
         er = await tool(d, "combat_ajouter_combattant", nom="Gobelin")
         assert "(2)" in er.text, er.text  # renfort officiel accepté
         r_loup = await tool(d, "combat_ajouter_combattant",
-                            nom="Loup", allie=True)
+                             nom="Loup", allie=True)
         assert not r_loup.text.startswith("⛔"), r_loup.text
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+# --------------------------------------------------------------------------- #
+#  5f3e31c9 — C1. Détection dégâts PJ narrés inventés
+# --------------------------------------------------------------------------- #
+def test_pj_damage_prose_detecte():
+    """« Vous avez été touché pour 8 dégâts » est détecté comme simulation
+    (attaque adverse inventée, parties 5f3e31c9)."""
+    from server.llm.orchestrator import _PJ_DEGATS_PROSE_PATTERNS
+    text = (
+        "Le loup-garou vous mord rageusement — vous avez été touché pour "
+        "**8 dégâts** ! Votre armure ne protège pas."
+    )
+    sim = looks_like_simulation(text, include_pj_damage=True)
+    assert sim is not None, "dégâts PJ inventés non détectés"
+    assert "touché" in sim.lower() or "8" in sim
+
+
+def test_pj_damage_prose_exempte_si_trust():
+    """Avec trust_damage_prose (événements serveur injectés), les dégâts
+    PJ narrés sont légitimes : non déclenchés. On teste avec un fragment
+    PJ-spécifique (« touché pour 8 dégâts ») qui n'est dans AUCUN pattern
+    générique _DAMAGE_PROSE_PATTERNS."""
+    text = "Vous avez été touché pour 8 dégâts par la griffe du loup."
+    sim = looks_like_simulation(text, include_damage=True, include_pj_damage=False)
+    assert sim is None, f"ne devrait pas détecter sans include_pj_damage : {sim}"
+
+
+def test_pj_damage_prose_pv_tombent():
+    """« Votre vie tombe à 12 » sans événement mécanique = simulation."""
+    text = "Le coup est brutal — votre vie tombe à 12."
+    sim = looks_like_simulation(text, include_pj_damage=True)
+    assert sim is not None, "votre vie tombe à N non détecté"
+
+
+def test_pj_damage_prose_chutant():
+    """« chutant à 12 sur 17 » (partie 5f3e31c9 exacte) = simulation."""
+    text = "Le loup-garou déchire votre bras, chutant à 12 sur 17."
+    sim = looks_like_simulation(text, include_pj_damage=True)
+    assert sim is not None, "chutant à N non détecté"
+
+
+# --------------------------------------------------------------------------- #
+#  5f3e31c9 — C5. Dé-duplication notes mécaniques déjà narrées
+# --------------------------------------------------------------------------- #
+def test_note_mecanique_deja_narree():
+    """Si la narration contient déjà « 28/32 PV », la note mécanique
+    identique est masquée."""
+    from server.main import _note_mecanique_deja_narree
+    note = "Loup-garou (humain) : 28/32 PV."
+    narration = (
+        "Le monstre recule, titubant — il ne lui reste plus que 28 sur "
+        "32 PV, visiblement affaibli."
+    )
+    assert _note_mecanique_deja_narree(narration, note), \
+        "note identique devrait être détectée comme déjà narrée"
+
+
+def test_note_mecanique_differente_non_masquee():
+    """Une note avec un PV différent n'est PAS masquée."""
+    from server.main import _note_mecanique_deja_narree
+    note = "Loup-garou (humain) : 24/32 PV."
+    narration = (
+        "Le monstre recule, titubant — il ne lui reste plus que 28 sur "
+        "32 PV."
+    )
+    assert not _note_mecanique_deja_narree(narration, note), \
+        "note différente ne devrait pas être masquée"
+
+
+# --------------------------------------------------------------------------- #
+#  5f3e31c9 — C4. Rattrapage soins déclarés sans tool
+# --------------------------------------------------------------------------- #
+def test_soins_narres_detecte_sans_tool():
+    """Le rattrapage de soins applique le montant narré (sort narré sans
+    tool) et vérifie que la fiche a bien bougé (5bis-c-long)."""
+    from server.main import _appliquer_soins_oublies
+    from server.llm.orchestrator import OrchestratedResult
+    from server.tools.base import ToolContext, invoke_tool
+    from server.tools.registry import discover_tools
+    from server.game.state import PartyState
+    import tempfile, shutil
+    tools = discover_tools("server.tools")
+    d = tempfile.mkdtemp(prefix="dnd35_soins_")
+    try:
+        shutil.copy2(
+            os.path.join(_REPO, "server", "data", "bestiaire.json"),
+            os.path.join(d, "bestiaire.json"),
+        )
+        ctx = ToolContext(partie_id="test_soins", joueur="alain", data_dir=d)
+        r = asyncio.run(invoke_tool(
+            tools["fiche_perso_creer_rapide"], ctx,
+            dict(nom="Utturgut", race="Demi-orc", classe="Guerrier",
+                 niveau=3, joueur="alain",
+                 carac_texte="For 16, Dex 14, Con 11, Int 9, Sag 13, Cha 9"),
+        ))
+        assert r.text.startswith("✅"), r.text
+        # PV de départ (fondé sur des stats tirées → variable).
+        st0 = PartyState(data_dir=d, partie_id="test_soins").load()
+        pj_avant = next(p for p in st0["pj"] if p["nom"] == "Utturgut")
+        pv_avant = int(pj_avant.get("pv", 0))
+        pv_max = int(pj_avant.get("pv_max", pv_avant))
+        # Blesser d'abord (pv_avant - 5).
+        r_b = asyncio.run(invoke_tool(
+            tools["fiche_perso_infliger_degats"], ctx,
+            dict(nom="Utturgut", degats=5),
+        ))
+        assert not r_b.text.startswith("❌"), r_b.text
+
+        result = OrchestratedResult()
+        result.narration = (
+            "Utturgut ouvre son kit de premiers secours et récupère **5 PV** "
+            "tandis que sa respiration redevient régulière."
+        )
+        result.tool_calls_trace = []  # aucun tool appelé
+
+        class _FakeOrch:
+            async def execute_tool_direct(self, name, args, _ctx, _ev, _res):
+                return await invoke_tool(tools[name], _ctx, args)
+
+        txt = asyncio.run(_appliquer_soins_oublies(
+            _FakeOrch(), result, ctx, None, "Utturgut",
+        ))
+        assert txt and "5" in txt and "PV" in txt, \
+            f"rattrapage soins sans effet : {txt!r}"
+        st = PartyState(data_dir=d, partie_id="test_soins").load()
+        pj_u = next(p for p in st["pj"] if p["nom"] == "Utturgut")
+        # Blessé de 5 puis soigné de 5 : PV revenus au maximum.
+        assert int(pj_u["pv"]) == min(pv_max, max(0, pv_avant - 5) + 5), \
+            f"PV attendus {min(pv_max, pv_avant)} obtenus {pj_u['pv']}"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_soins_narres_skip_si_tool_deja_appele():
+    """Si fiche_perso_soigner a déjà été appelé, le rattrapage ne double pas."""
+    from server.main import _appliquer_soins_oublies
+    from server.llm.orchestrator import OrchestratedResult
+    from server.tools.base import ToolContext
+    from server.tools.registry import discover_tools
+    import tempfile, shutil
+    tools = discover_tools("server.tools")
+    d = tempfile.mkdtemp(prefix="dnd35_soins_skip_")
+    try:
+        shutil.copy2(
+            os.path.join(_REPO, "server", "data", "bestiaire.json"),
+            os.path.join(d, "bestiaire.json"),
+        )
+        ctx = ToolContext(partie_id="test_soins_skip", joueur="alain", data_dir=d)
+        result = OrchestratedResult()
+        result.narration = "Utturgut récupère **5 PV**."
+        # Simuler un tour où fiche_perso_soigner a déjà été appelé avec succès
+        result.tool_calls_trace = [{
+            "name": "fiche_perso_soigner", "args": {"nom": "Utturgut", "soin": 5},
+            "ok": True, "text": "Utturgut récupère 5 PV → PV 8/21",
+        }]
+        txt = asyncio.run(_appliquer_soins_oublies(
+            type("O", (), {"execute_tool_direct": lambda self, *a, **k: None})(),
+            result, ctx, None, "Utturgut",
+        ))
+        assert txt == "", "ne devrait rien retourner quand le tool a déjà tourné"
     finally:
         shutil.rmtree(d, ignore_errors=True)

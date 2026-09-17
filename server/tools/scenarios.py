@@ -141,15 +141,26 @@ def _noms_monstres_scenario(s: dict[str, Any]) -> list[str]:
 # League 5e lancé dans une partie 3.5).
 _SIGNATURES_5E = [
     "adventurers league", "organized play", "basic rules",
-    "passive wisdom", "downtime", "background", "5th level",
+    "passive wisdom", "downtime", "5th level",
     "4th level characters", "1st level character", "logsheet",
-    "spellcasting services", "raise dead", "adventurers",
+    "spellcasting services",
     # Modules français/custom marquent souvent l'édition explicitement.
     "d&d 5", "d&d5", "d&d 5e", "rules of d&d 5", "règles de d&d 5",
 ]
+# NB: « background » et « adventurers » ne sont PAS des signatures — ces mots
+# génériques apparaissent dans TOUT module (même un AD&D 2e) et faussaient la
+# détection (partie ee5684fe : « The Crown of Mystra » classé Adventurers
+# League 5e uniquement à cause du mot « Background: »).
 _SIGNATURES_35 = [
     "srd 3.5", "dungeon master's guide", "tome of horros",
     "3rd edition", "v3.5", "3.5", "d&d 3.5", "d&d3.5",
+]
+# AD&D 1e/2e : modules anciens (ex. « The Crown of Mystra », 1990) dont les
+# stats (PV/DV/CA, DD, XP) ne sont ni 3.5 ni 5e.
+_SIGNATURES_ADND = [
+    "ad&d", "advanced dungeons", "tome of magic", "2nd edition",
+    "2e edition", "tsr", "wrath of the immortals", "planescape",
+    "approved for use with the advanced dungeons",
 ]
 
 _ED5_RE = re.compile(r"\b(?:5e|dnd5|d&d\s?5e?)\b", re.IGNORECASE)
@@ -158,10 +169,18 @@ _ED35_RE = re.compile(r"\b3\.5\b")
 
 def _detecter_edition(texte: str) -> str:
     """Détecte l'édition probable d'un scénario à partir de son texte PDF.
-    Renvoie '5e', '3.5' ou 'inconnue' (signatures + marqueurs autonomes)."""
-    bas = (texte or "")
-    score5 = sum(1 for s in _SIGNATURES_5E if s in bas.lower())
-    score3 = sum(1 for s in _SIGNATURES_35 if s in bas.lower())
+    Renvoie '5e', '3.5', '2e' (AD&D) ou 'inconnue' (signatures + marqueurs
+    autonomes). La détection AD&D précède le score 5e/3.5 : l'explicite
+    « AD&D adventure » d'un livret 2e doit l'emporter sur de faux positifs
+    5e (le mot générique « background » était la cause du faux classement
+    5e de The Crown of Mystra)."""
+    bas = (texte or "").lower()
+    # AD&D : signature explicite, ou TSR couplé à du vocabulaire d'époque.
+    adnd = sum(1 for s in _SIGNATURES_ADND if s in bas)
+    if "ad&d" in bas or "advanced dungeons" in bas or adnd >= 2:
+        return "2e"
+    score5 = sum(1 for s in _SIGNATURES_5E if s in bas)
+    score3 = sum(1 for s in _SIGNATURES_35 if s in bas)
     # Marqueurs autonomes « 5e » et « 3.5 » (robustes, non noyés dans les
     # signatures). On compte les occurrences uniques.
     score5 += len(_ED5_RE.findall(bas))
@@ -196,20 +215,72 @@ def _extraire_niveau(texte: str) -> str:
     return a or str(m.group(4) or "")
 
 
+_RESUME_SECTIONS = (
+    "adventure background", "adventure hook", "introduction",
+    "overview", "background",
+)
+
+
+def _est_ligne_sommaire(propre: str, idx: int) -> bool:
+    """True si la phrase du texte contenant `idx` est une ligne de SOMMAIRE
+    (table des matières OCR/PDF) : en-tête court suivi de pointillés, ou
+    d'un numéro de page isolé sur la même ligne ou la ligne suivante.
+
+    Le sommaire des livrets fait échouer la recherche de section : « Background »
+    était trouvé à la page 1 (ligne de TOC) et `resume` ne contenait que la
+    table des matières + mention légale — le MJ n'avait AUCUN contenu d'aventure
+    et inventait un autre module (partie ee5684fe : Phandalin à la place de
+    The Crown of Mystra).
+    """
+    debut = propre.rfind("\n", 0, idx) + 1
+    fin = propre.find("\n", idx)
+    fin = len(propre) if fin == -1 else fin
+    ligne = propre[debut:fin].strip()
+    if not ligne:
+        return True
+    if "..." in ligne or "\u2026" in ligne:
+        return True
+    # En-tête court + ligne suivante réduite à un numéro de page.
+    suite = propre[fin:fin + 12].strip()
+    if len(ligne) <= 60 and re.fullmatch(r"\d+\s*", suite):
+        return True
+    # En-tête court se terminant par un numéro de page isolé.
+    if re.search(r"\d+\s*$", ligne) and len(ligne) <= 60:
+        return True
+    return False
+
+
 def _resume_texte(texte: str, cible: int = 2200) -> str:
     """Condensé du début du scénario (synopsis/background/hook) pour la
-    bible — suffisant au MJ sans noyer le contexte (~2 ko)."""
+    bible — suffisant au MJ sans noyer le contexte (~2 ko).
+
+    Privilégie la DERNIÈRE occurrence d'une section de fond (Background,
+    Introduction…), jamais une ligne de sommaire : la table des matières
+    précède systématiquement le corps du livret. Sans section trouvée, on
+    retombe sur le début du texte (avec marqueur de troncature)."""
     if not texte:
         return ""
-    # On privilégie les sections les plus utiles du livret si présentes.
     propre = texte.replace("\r", "")
-    for section in ("Overview", "Adventure Background", "Adventure Hook",
-                    "Introduction", "Background"):
-        idx = propre.lower().find(section.lower())
-        if idx != -1:
-            debut = propre[idx: idx + cible]
-            if len(debut) >= 200:
-                return debut
+    bas = propre.lower()
+    candidats: list[int] = []
+    for section in _RESUME_SECTIONS:
+        pos = -1
+        while True:
+            pos = bas.find(section, pos + 1)
+            if pos == -1:
+                break
+            if not _est_ligne_sommaire(propre, pos):
+                candidats.append(pos)
+    if candidats:
+        debut = max(candidats)
+        # Démarre APRÈS l'en-tête de section isolé (rend la ligne d'en-tête
+        # inutile) pour garder le maximum de contenu utile dans `cible`.
+        fin_en_tete = propre.find("\n", debut)
+        if fin_en_tete != -1 and len(propre[debut:fin_en_tete].strip()) <= 80:
+            debut = fin_en_tete + 1
+        extrait = propre[debut:debut + cible].strip()
+        if len(extrait) >= 120:
+            return extrait
     return propre[:cible] + ("…" if len(propre) > cible else "")
 
 

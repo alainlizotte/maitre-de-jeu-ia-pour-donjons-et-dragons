@@ -4,7 +4,7 @@
   "donjon_id": "La Couronne de Mystra",
   "titre": "La Couronne de Mystra — la quête des huit gemmes",
   "source": "The Crown of Mystra (AD&D, Michael P. Brock) — appendices A à K : Tour de l'Équilibre (silvermoon), Groove/Caverne de Nulentok (App. B), Phare de Sarr (App. C), Boutique de Sergental à Aluarim (App. D), Oasis d'Olomaa et QG Zhentarim (App. E/F), Manoir de Rineen à Calimport (App. G), Temple ruiné de Farouk à Chult (App. H), Fosse de Shakkak sur le Grand Glacier (App. I), Tour de Mortagne à Luskan (App. J), Château de Meredoth à Surthay (App. K).",
-  "note_convention": "Manifeste des zones clés de la quête de la Couronne de Mystra, mises en grille serpentin (une salle par lieu marquant du module). Monstres traduits en fiches D&D 3.5 du bestiaire local ; les adversaires trop puissants (FP > 5) ou absents du bestiaire sont signalés en « note » [AJUSTEMENT REQUIS] avec une alternative jouable.",
+  "note_convention": "Manifeste des zones clés de la quête de la Couronne de Mystra, mises en grille serpentin (une salle par lieu marquant du module). ⚠️ CONVENTION DE DÉPLACEMENT : les salles (0,0) à (4,0) forment le VRAI donjon — la grotte de Nulentok, explorée à pied, portes physiques. TOUTES les salles suivantes ((4,1) à (0,3)) sont des LIEUX DISPERSÉS SUR FAERÛN : la « porte » qui les relie est un SAUT DE TÉLÉPORTATION de la baguette de Thukmuul Teleshann (voyage instantané), IMPOSSIBLE tant que la Couronne n'a pas été reprise à Nulentok (étape 1). Monstres traduits en fiches D&D 3.5 du bestiaire local ; les adversaires trop puissants (FP > 5) ou absents du bestiaire sont signalés en « note » [AJUSTEMENT REQUIS] avec une alternative jouable.",
   "etages": [
     {
       "nom": "Parcours de la Couronne de Mystra",
@@ -27,7 +27,7 @@
           "pnj": [
             "Thukmuul Teleshann (magesteresse NG de la Tour de l'Équilibre — donne la quête)"
           ],
-          "note": "Point de départ : récupérer la Couronne chez Zendar Nulentok, puis réunir ses huit gemmes dispersées sur Faerûn ; la baguette de téléportation qu'elle remettra ensuite ne s'active qu'au contact de la couronne."
+          "note": "Point de départ : récupérer la Couronne chez Zendar Nulentok, puis réunir ses huit gemmes dispersées sur Faerûn ; la baguette de téléportation qu'elle remettra ensuite ne s'active qu'au contact de la couronne. ⚠️ La porte EST n'est PAS un couloir intérieur : la franchir = PRENDRE LA ROUTE hors de Silverymoon — narrez le VOYAGE (plusieurs jours, la vie animale se raréfie à l'approche du groove) qui mène à la bouche de la grotte de Nulentok, salle suivante (1,0)."
         },
         {
           "x": 1,
@@ -39,11 +39,11 @@
             "est": true,
             "ouest": true
           },
-          "description": "Une vaste caverne où quatorze myconides aveuglés par Nulentok attendent, immobiles, la mort — leurs teintes fanées dans la pénombre. Au moindre bruit, ils gémissent une prière rauque : on peut leur rendre la vue.",
+          "description": "Au terme du voyage depuis Silverymoon — les jours de route ont laissé place à une lande morne où la vie animale se fait rare —, la grotte de Nulentok s'ouvre dans le flanc de la colline. À l'intérieur, une vaste caverne où quatorze myconides aveuglés par Nulentok attendent, immobiles, la mort — leurs teintes fanées dans la pénombre. Au moindre bruit, ils gémissent une prière rauque : on peut leur rendre la vue.",
           "pnj": [
             "Quatorze myconides aveuglés (alliés si on guérit leur cécité)"
           ],
-          "note": "Guérir les champignons-gens et leur redonner espoir engage des alliés précieux contre l'anti-druide."
+          "note": "Première salle VRAIE de la grotte (exploration à pied). Guérir les champignons-gens et leur redonner espoir engage des alliés précieux contre l'anti-druide."
         },
         {
           "x": 2,
@@ -87,7 +87,7 @@
           ],
           "tresor": "La Couronne de Mystra (dépouillée de ses huit gemmes) et le parchemin des énigmes (Appendice A).",
           "piege": "Stalagmites enchantées de pierres à pointes (spikes stones) : franchir l'entrée force à longer au moins cinq cônes hérissés.",
-          "note": "Nulentok est intelligent : il fuit s'il est dominé et traquera le groupe tant qu'il n'aura pas récupéré la couronne."
+          "note": "Nulentok est intelligent : il fuit s'il est dominé et traquera le groupe tant qu'il n'aura pas récupéré la couronne. ⚠️ La porte SUD n'est pas un couloir : reprendre la Couronne ici active la baguette de Teleshann — la franchir = PREMIER SAUT DE TÉLÉPORTATION vers un site-gemme de Faerûn (salle (4,1) ou suivante). Tant que la Couronne n'est pas reprise (étape 1 ⬜), cette porte est SCELLED : nulle part où aller sauf en revenant sur ses pas."
         },
         {
           "x": 4,
@@ -104,7 +104,7 @@
             "Squelette ×4"
           ],
           "tresor": "Le Beljuril (gemme d'Abjuration), conservé dans un sac sans fond dissimulé sous le coffre.",
-          "note": "[AJUSTEMENT REQUIS] Le coffre est en réalité un mimique (8 DV) qui attaque quiconque veut l'ouvrir : le MJ peut le remplacer par un piège ou une goule gardienne."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Le coffre est en réalité un mimique (8 DV) qui attaque quiconque veut l'ouvrir : le MJ peut le remplacer par un piège ou une goule gardienne."
         },
         {
           "x": 3,
@@ -121,7 +121,7 @@
             "Cynthia Seregental (agent Zhentarim nerveux CE — croit tenir un simple joyau)"
           ],
           "tresor": "Le Diamant (gemme de Convocation et d'invocation), caché derrière le tableau de la ville ; lettres et registres adressés à ses supérieurs.",
-          "note": "Cynthia fuit si on la presse ; en dernier recours, elle propose la gemme en échange de sa liberté."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). Cynthia fuit si on la presse ; en dernier recours, elle propose la gemme en échange de sa liberté."
         },
         {
           "x": 2,
@@ -134,7 +134,7 @@
             "ouest": true
           },
           "description": "Les cuisines du QG zhentarim de l'oasis d'Olomaa mêlent marmites, épices rares de Kara-Tur et butin d'une caravane pillée. Des réserves de vivres pour des mois s'entassent dans la soute voisine, où des watchspiders montent la garde dans les ténèbres.",
-          "note": "[AJUSTEMENT REQUIS] Les watchspiders du module (App. F-9, attaquent dès que tous les PJ sont entrés) ne sont pas au bestiaire : les remplacer par des araignées géantes ou des rats."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Les watchspiders du module (App. F-9, attaquent dès que tous les PJ sont entrés) ne sont pas au bestiaire : les remplacer par des araignées géantes ou des rats."
         },
         {
           "x": 1,
@@ -150,7 +150,7 @@
           "pnj": [
             "Le prêtre de Cyric (gardien de l'oasis — 15% de chances qu'il dorme à l'arrivée des PJ)"
           ],
-          "note": "S'il est alerté, il combat prêt ; son symbole d'électrum vaut 2 500 po."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). S'il est alerté, il combat prêt ; son symbole d'électrum vaut 2 500 po."
         },
         {
           "x": 0,
@@ -168,7 +168,7 @@
             "La licorne captive (la libérer vaut des présents de Mielikki)"
           ],
           "tresor": "La Jacinthe (gemme d'Alteration), sertie à l'extrémité de la chaîne magique greffée au tyran oculaire.",
-          "note": "[AJUSTEMENT REQUIS] Le tyran oculaire (FP très supérieur à 5) : le remplacer par un nécromancien rouge et ses serviteurs, la Jacinthe devenant accessible après leur défaite."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Le tyran oculaire (FP très supérieur à 5) : le remplacer par un nécromancien rouge et ses serviteurs, la Jacinthe devenant accessible après leur défaite."
         },
         {
           "x": 0,
@@ -185,7 +185,7 @@
             "Max Rinnen (werejackal NE, voleur 12 — détient la Rogue Stone)"
           ],
           "tresor": "La Rogue Stone (gemme d'Illusion et de phantasm), qu'il ne laisse qu'avec la vie ; amulette de protection +4 et bottes de striding et springing sur lui.",
-          "note": "Sous le coup d'une attaque, il passe aussitôt sous sa forme hybride ; sa morsure transmet la lycanthropie."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). Sous le coup d'une attaque, il passe aussitôt sous sa forme hybride ; sa morsure transmet la lycanthropie."
         },
         {
           "x": 1,
@@ -200,7 +200,7 @@
           "description": "La chambre au trésor secrète de Rineen regorge de coffres et de butins, mais le voleur aime jouer : des lames de cheville jaillissent des murs à l'ouverture de la porte, et d'autres surgissent du sol si l'interrupteur du linteau n'est pas manœuvré.",
           "tresor": "Trésors des types F, S, T et Z (monnaies, joyaux, objets magiques) et documents compromettants.",
           "piege": "Lames de cheville (ThAC0 6, 1d8) — 30% de trancher le tendon d'Achille ; lames du sol si l'interrupteur au-dessus de la porte n'est pas basculé.",
-          "note": "Toutes les serrures et les pièges du manoir se détectent et se retirent avec un malus de 25%."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). Toutes les serrures et les pièges du manoir se détectent et se retirent avec un malus de 25%."
         },
         {
           "x": 2,
@@ -216,7 +216,7 @@
           "ennemis": [
             "Gobelin ×4"
           ],
-          "note": "La troisième nuit, une partie de chasse de quinze Kuro Goblins attaque aux dards soporifiques ; si tous les PJ sont endormis, ils emportent tous les objets de métal — y compris la couronne."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). La troisième nuit, une partie de chasse de quinze Kuro Goblins attaque aux dards soporifiques ; si tous les PJ sont endormis, ils emportent tous les objets de métal — y compris la couronne."
         },
         {
           "x": 3,
@@ -232,7 +232,7 @@
           "ennemis": [
             "Goule ×2"
           ],
-          "note": "[AJUSTEMENT REQUIS] Le module place aussi deux ghats et un gantelet (wight) dans cette salle : les ajouter selon le niveau du groupe."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Le module place aussi deux ghats et un gantelet (wight) dans cette salle : les ajouter selon le niveau du groupe."
         },
         {
           "x": 4,
@@ -249,7 +249,7 @@
             "Masad Farouk (rakshasa CE déguisé — garde l'Émeraude)"
           ],
           "tresor": "L'Émeraude de Shou Lung (gemme de Divination), sertie dans la gueule du bâton-sceptre, et le trésor de type F.",
-          "note": "[AJUSTEMENT REQUIS] Le rakshasa (FP bien supérieur à 5) et ses gorilles ne sont pas au bestiaire : les remplacer par une troupe de goules ou d'ombres servantes."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Le rakshasa (FP bien supérieur à 5) et ses gorilles ne sont pas au bestiaire : les remplacer par une troupe de goules ou d'ombres servantes."
         },
         {
           "x": 4,
@@ -264,7 +264,7 @@
           "description": "La crevasse de Shakkak, sur le Grand Glacier : une neige scintillante qui n'est pas de la neige — la glace de fée, granuleuse, s'enfonce comme des sables mouvants sous les pas. Au pied du totem dressé sur la glace repose le cimetière des dragons blancs, gardé par le souffle éternel d'un dracoliche.",
           "tresor": "Le Saphir étoilé (gemme d'Enchantement et de charme), dans le trésor du dracoliche.",
           "piege": "Glace de fée : on s'y enfonce d'un pied par round comme dans des sables mouvants ; une vérification de Force ou de Dex permet de s'extraire, sinon on risque la suffocation.",
-          "note": "[AJUSTEMENT REQUIS] Le dracoliche (FP bien supérieur à 5) : le remplacer par des ombres et des squelettes gelés gardant le totem et le saphir."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Le dracoliche (FP bien supérieur à 5) : le remplacer par des ombres et des squelettes gelés gardant le totem et le saphir."
         },
         {
           "x": 3,
@@ -283,7 +283,7 @@
           "pnj": [
             "Prisonniers de Mortagne (à sauver avant qu'ils ne deviennent des minions)"
           ],
-          "note": "[AJUSTEMENT REQUIS] Mortagne le vampire (FP 8) domine la tour : le remplacer, pour la rencontre d'étage, par des goules ou des vampires-mineurs du bestiaire."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Mortagne le vampire (FP 8) domine la tour : le remplacer, pour la rencontre d'étage, par des goules ou des vampires-mineurs du bestiaire."
         },
         {
           "x": 2,
@@ -302,7 +302,7 @@
           "pnj": [
             "Werpafel (capitaine et mage mineur de Meredoth — accueille puis referme le piège)"
           ],
-          "note": "[AJUSTEMENT REQUIS] Les gardes du corps grimlocks du module sont jouables (FP 2) ; le nécromancien rouge évoque les arcanes thayans de Meredoth."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Les gardes du corps grimlocks du module sont jouables (FP 2) ; le nécromancien rouge évoque les arcanes thayans de Meredoth."
         },
         {
           "x": 1,
@@ -316,7 +316,7 @@
           },
           "description": "La bibliothèque privée de Meredoth aligne cinq grimoires à parchemins retroussés, scellés de nécromancie : clone, doigt de la mort, sphère prismatique... Chaque volume semble palpiter d'un souffle surnaturel dans une pièce aux murs tapissés de fioles et de reliques impies.",
           "tresor": "Les cinq grimoires de Meredoth (sorts de nécromancien) ainsi que ses bracers AC 4, sa cape de protection +3 et son anneau d'étoiles filantes.",
-          "note": "S'emparer des grimoires prive le lich de ses arcanes les plus funestes."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). S'emparer des grimoires prive le lich de ses arcanes les plus funestes."
         },
         {
           "x": 0,
@@ -333,7 +333,7 @@
             "Ombre ×2"
           ],
           "tresor": "L'Étoile de rubis (gemme de Nécromancie), portée au cou du lich — et, une fois la couronne rechargée, la restauration des pouvoirs de la déesse Mystra.",
-          "note": "[AJUSTEMENT REQUIS] Meredoth (lige FP très supérieur à 5) est remplacé par ses ombres-conjurées et ses serviteurs : la confrontation finale se joue contre les gardiens de la dernière gemme."
+          "note": "📍 LIEU DE FAERÛN — cette salle n'est PAS physiquement adjacente à la précédente : sa « porte » est un SAUT DE TÉLÉPORTATION de la baguette de Teleshann (voyage instantané), SCELLÉ tant que la Couronne n'a pas été reprise à Nulentok (étape 1 ⬜). [AJUSTEMENT REQUIS] Meredoth (lige FP très supérieur à 5) est remplacé par ses ombres-conjurées et ses serviteurs : la confrontation finale se joue contre les gardiens de la dernière gemme."
         }
       ]
     }

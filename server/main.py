@@ -44,6 +44,7 @@ from .llm.client import Message
 from .llm.client import OllamaClient
 from .llm.orchestrator import EventCallback, Orchestrator
 from .llm.orchestrator import _ENNEMIS_MOTS_GENERIQUES
+from .llm.orchestrator import _assemble_narrations
 from .llm.prompt_builder import PromptBuilder
 from .rag.store import RagStore
 from .tools.base import ToolContext
@@ -52,6 +53,16 @@ from .tools.registry import discover_tools
 from .game.combat import boucle_auto as _boucle_combat
 
 import re as _re_mod
+
+# Mots TROP génériques de la narration de combat (normalisés, sans accents) :
+# « un monstre surgit », « une créature attaque » ne désignent AUCUNE
+# créature précise — jamais de rattrapage d'engagement sur ces mots
+# (a6d11005 : le rattrapage avait engagé le placeholder « monstre »).
+_MOTS_COMBAT_GENERIQUES = frozenset({
+    "monstre", "monstres", "creature", "creatures", "ennemi", "ennemis",
+    "adversaire", "adversaires", "chose", "truc", "silhouette", "ombre",
+    "ombres", "forme", "formes", "masse", "figure",
+})
 
 # Détection d'une invoquation / renfort annoncé par un joueur en combat :
 # déclenche le rattrapage 5bis-b si le MJ l'a narré sans tool.
@@ -65,6 +76,99 @@ _INVOKE_RE = _re_mod.compile(
 _ACTION_COMBAT_RE = _re_mod.compile(
     r"\b(attaqu\w*|frapp\w*|assén\w*|lanc\w+|incant\w*|tir\w*|soign\w*"
     r"|soins|guér\w*|charge\w*|degat\w*|dégâts?)\b",
+    _re_mod.IGNORECASE,
+)
+
+# Détection d'une INTENTION D'ATTAQUE MELEE/ARMÉE déclarée par le joueur
+# (séparé de _ACTION_COMBAT_RE pour ne déclencher la résolution déterministe
+# que sur des attaques physiques, pas les sorts / soins / invocation).
+_ACTION_ATTAQUE_RE = _re_mod.compile(
+    r"\b(attaqu\w*|frapp\w*|assén\w*|hach\w*|épé\w*|sabre\w*"
+    r"|poignard\w*|marteau\w*|couteau\w*|dague\w*|lance\b)\b",
+    _re_mod.IGNORECASE,
+)
+
+# Détection d'une INTENTION DE SOINS déclarée par le joueur : si le LLM
+# narrer « vous avez récupéré 3 PV » SANS appeler fiche_perso_soigner, le
+# rattrapage 5bis-c-long applique le montant déclaré à la fiche. Séparé de
+# _ACTION_COMBAT_RE pour ne déclencher le rattrapage que sur les actions
+# de soins déclarées (pas sur les attaques).
+_ACTION_SOIN_RE = _re_mod.compile(
+    r"\b(?:soign\w*|soins|gu[ée]r\w*|pans\w*|bandag\w*"
+    r"|kit\s+(?:de\s+)?premiers\s+secours"
+    r"|r[ée]tabl\w*|r[ée]cup[ée]r\w*(?:\s+d['']?)?\s*(?:PV|points?\s+de\s+vie))\b",
+    _re_mod.IGNORECASE,
+)
+
+# Objets d'équipement/inventaire qui PERMETTENT un soin (kit de premiers
+# secours, trousse, pansement…) : si le joueur déclare un soin SANS que le
+# LLM n'annonce de montant ni n'appelle `fiche_perso_soigner`, le serveur
+# résout lui-même un 1d4 au lieu de laisser l'action sans effet (partie
+# 5f3e31c9 : le joueur pensait avoir pansé, est resté à 3 PV, a attendu le
+# timeout de 300 s, puis est mort au tour du loup-garou).
+_RE_KIT_SOIN = _re_mod.compile(
+    r"kit\s+(?:de\s+)?premiers\s+secours|trousse\s+de\s+soins"
+    r"|pansement|bandage",
+    _re_mod.IGNORECASE,
+)
+
+# ✨ Résurrection narrée (après GAME OVER) : le MJ narre la restauration
+# d'un PJ mort (« récupéré 1 point de vie par niveau, maintenant à 16 PV
+# sur vos 17 ») SANS tool — et aucun tool existant ne peut lever « Mort »
+# (repos_long ignore pv<0, soigner ne retire pas Mort). Partie 5f3e31c9 :
+# PJ resté Mort/-10 alors que la narration l'avait relevé à 16/17.
+_RE_PV_RECUPERES = _re_mod.compile(
+    r"(?:r[éèe]cup[éèe]r\w*|soign\w*|rend|restaure)\w*\s*(?:\*\*)?\d{1,3}"
+    r"(?:\*\*)?\s*(?:PV\b|points?\s+de\s+vie|point\s+de\s+vie)"
+    r"|(?:maintenant\s+)?à\s*(?:\*\*)?\d{1,3}(?:\*\*)?\s*PV(?:\*\*)?"
+    r"\s*(?:sur|/)\s*(?:vos\s+)?\d{1,3}"
+    r"|repos\s+(?:long|de\s+nuit)",
+    _re_mod.IGNORECASE,
+)
+_RESURRECTION_RE = _re_mod.compile(
+    r"\b(ressuscit\w*|r[ée]surrection|r[ée]anim\w*"
+    r"|reven\w*\s+à\s+la\s+vie|raise\s+dead|r[ée]incarn\w*)\b",
+    _re_mod.IGNORECASE,
+)
+# Offre de choix / refus (« Je ne peux pas ressusciter… voici vos options ») :
+# la résurrection est PROPOSÉE, pas réalisée → ne pas appliquer.
+_RE_OFFRE_RESURRECTION = _re_mod.compile(
+    r"ne (?:peux|peut|pourr\w*)\s+pas|nous devons|il faudr\w*"
+    r"|choix pour la suite|que choisissez|choisissez-vous"
+    r"|co[ûu]t narratif|quelle est votre|à vous de (?:choisir|décider)",
+    _re_mod.IGNORECASE,
+)
+# ✨ Résurrection VRAIE (True Resurrection, Clr 9) : l'UNIQUE variante sans
+# perte de niveau ni de CON (DMG 3.5) — Raise Dead (niv 5) et Résurrection
+# (niv 7) infligent toujours la pénalité ; seul le 9e niveau l'évite.
+_RE_RESURRECTION_VRAIE = _re_mod.compile(
+    r"(?:vraie|v[ée]ritable|totale|parfaite|sup[ée]rieure)\s+r[ée]surrection"
+    r"|r[ée]surrection\s+(?:vraie|v[ée]ritable|totale|parfaite|sup[ée]rieure)"
+    r"|true\s+resurrection",
+    _re_mod.IGNORECASE,
+)
+# ⚔️ Engagement de combat NARRÉ (hors phase combat) : le LLM écrit
+# « Engagement du combat / Initiative : X (14) vs Y (12) » et joue même les
+# tours de monstres sans appeler `engager_combat` — la phase reste
+# exploration et tout le combat est une fiction sans ancre (partie
+# 5f3e31c9, msg 30 : initiative, tour de Zendar et dégâts 100 % inventés,
+# « PV 28/32 » recyclés du Loup-garou). On exige l'outil — mais seulement
+# si le JOUEUR a déclaré une action de combat (un « combat imminent » dans
+# une simple offre de choix ne doit pas engager avant sa décision).
+_RE_ENGAGEMENT_NARRE = _re_mod.compile(
+    r"engagement du combat|combat\s+est\s+engag[ée]|combat\s+engag[ée]e?\b"
+    r"|initiative\s*:\s*[A-Za-zÉÀ]|jet\s+d['']initiative"
+    r"|ordre\s+d['']initiative",
+    _re_mod.IGNORECASE,
+)
+# 💥 Dégâts annoncés en prose contre un PJ (« vous subissez 12 dégâts »,
+# « Utturgut subit 8 dégâts ») SANS tool : en combat, les filets
+# `_appliquer_degats_oublies` couvrent le cas ; hors combat AUCUN filet
+# n'existait → la narration blessait sans toucher l'état (partie 5f3e31c9,
+# msg 30 : « 12 dégâts de foudre » restés sans effet, PV intacts).
+_RE_DEGATS_SUBIS_PJ = _re_mod.compile(
+    r"(?:subit|subissez|encaiss\w*|re[çc]oit|prenez)[^.!?\n]{0,60}?"
+    r"(?:\*\*)?(\d{1,3})(?:\*\*)?\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
     _re_mod.IGNORECASE,
 )
 
@@ -144,6 +248,25 @@ _COMBAT_PROSE_END_MARKERS = (
     "vous fuyez", "se rendent", "game over", "vous êtes mort",
 )
 
+# Pont anglais → français pour les NOMS de monstres en prose : le petit modèle
+# écrit parfois « Ghoul » en anglais dans une narration française. C'est la
+# SEULE forme de rapprochement tolérée (`_detecter_combat_prose`) — le difflib
+# flou produisait des faux positifs qui faisaient REFUSER tout le rattrapage
+# (partie ee5684fe : « signes » → « Singe », « hurle » → « Hurleur »,
+# « menaçante » → « Ane », « gobelin » → « Hobgobelin » : cumulés, 65 PV vs
+# plafond 42 → `engager_combat` refusait TOUT, aucun combat engagé).
+_MONSTRES_EN_FR_PROSE: dict[str, str] = {
+    "ghoul": "Goule",
+    "goblin": "Gobelin", "goblins": "Gobelin",
+    "skeleton": "Squelette", "skeletons": "Squelette",
+    "zombie": "Zombie", "zombies": "Zombie",
+    "kobold": "Kobold",
+    "troll": "Troll",
+    "ogre": "Ogre",
+    "gargoyle": "Gargouille",
+    "specter": "Spectre",
+}
+
 # Marqueurs d'un déplacement / exploration narré EN PROSE par le LLM (le petit
 # modèle décrit souvent une progression sans appeler `carte_donjon_*`).
 _EXPLO_PROSE_MARKERS = (
@@ -206,7 +329,31 @@ _ITEM_ACQUISITION_RE = _re_mod.compile(
 _SOIN_RE = _re_mod.compile(
     r"\b(soign\w*|soins|guéri\w*|guéris\w*|guériss\w*|répar\w*|cicatris\w*"
     r"|soins\s+légers|lancer\s+des\s+et\s+soigne|ressusci\w*"
-    r"|repos\w*|récupèr\w*|régénér\w*)\b",
+    r"|repos\w*|r[éè]cup[éèe]r\w*|r[ée]tabl\w*|régénér\w*|bandag\w*)\b",
+    _re_mod.IGNORECASE,
+)
+
+
+# Prose intermédiaire d'attaque « brouillon supplanté » : blocs narrés AVANT
+# les outils qui décrivent le résultat d'une attaque en prose. Quand le rejeu
+# correctif 5bis-a réussit et appelle les outils, ces blocs sont supplantés
+# par la narration finale (avec jets réels) — sinon la même attaque apparaît
+# deux fois dans le message final (bug vécu 5f3e31c9 : double description de
+# la hache qui s'abat).
+_RE_PROSE_RESOLUTION = _re_mod.compile(
+    r"\b(encaiss\w*|touch\w*|dégâts|degats|bless\w*|s'enfonc\w*|s'abat\w*"
+    r"|manqu\w*|esquiv\w*|raté\w*|rate\w*|inflige\w*|subit\w*)\b",
+    _re_mod.IGNORECASE,
+)
+
+# Bandeau « Au tour de … » recopié par le LLM : le petit modèle ré-émet le
+# footer déterministe (avec PV inventés + « Que décidez-vous de faire ? »)
+# qu'il a vu en contexte — la table voit alors 2× le même appel d'action.
+# Le serveur retire ces copies avant d'ajouter SA version officielle.
+_RE_AUTOUR_STRIP = _re_mod.compile(
+    r"(?:\n\s*)?⚔[\uFE0F\uFE0E]?\s*\*\*Au tour de .*?\(joueur\s+.+?\)\s*"
+    r"de décider une action\.[^\n]*(?:\n\s*🎯[^\n]*)*"
+    r"(?:\n\s*Que décidez-vous[^\n]*)?",
     _re_mod.IGNORECASE,
 )
 
@@ -384,6 +531,7 @@ def _orchestrator(app: FastAPI) -> Orchestrator:
         tool_mode=cfg.llm.tool_mode,
         detect_simulation=cfg.llm.detect_simulation,
         max_iterations=cfg.llm.max_tool_iterations,
+        decision_phase=getattr(cfg.game, "decision_phase", True),
     )
 
 
@@ -427,6 +575,28 @@ def _mecanique_deja_narree(events: list[str], narration: str) -> bool:
         return False
     cites = sum(1 for w in mots if w in bas)
     return cites >= 2 and cites >= len(mots) // 3
+
+
+def _note_mecanique_deja_narree(narration: str, note: str) -> bool:
+    """True si la note mécanique (ex. « Loup-garou : 28/32 PV ») est déjà
+    reflétée dans la narration (le MJ a déjà cité le même état PV). Sans ce
+    test, la ligne « ⚖️ Dégâts appliqués automatiquement : » ajoutait une
+    seconde copie du même chiffre (contradiction « 24/32 » vs « 28/32 » vu
+    en partie 5f3e31c9)."""
+    if not note:
+        return False
+    # Extraire le motif « N/M PV » (format le plus courant dans les notes).
+    m_pv = _re_mod.search(
+        r"(?:(\d{1,3})/(\d{1,3})\s*(?:PV)|PV\s*(\d{1,3})/(\d{1,3}))", note,
+    )
+    if not m_pv:
+        return False
+    n1 = m_pv.group(1) or m_pv.group(3)
+    n2 = m_pv.group(2) or m_pv.group(4)
+    chiffre = f"{n1}/{n2}"
+    sur = f"{n1} sur {n2}"
+    bas = (narration or "").lower()
+    return chiffre in bas or sur in bas
 
 
 def _camps_du_combat(etat: dict) -> tuple[list[str], list[str]]:
@@ -960,7 +1130,11 @@ async def persos_modele() -> dict[str, Any]:
     """Catalogues pour le formulaire : races, classes, alignements, dieux."""
     return {
         "races": [
-            {"nom": nom, "mods": r["mods"], "taille": r["taille"], "vitesse": r["vitesse"]}
+            {"nom": nom, "mods": r["mods"], "taille": r["taille"], "vitesse": r["vitesse"],
+             "capacites": [
+                 {"nom": c["nom"], "description": c["description"], "niveau": 1}
+                 for c in persos_mod.CAPACITES_RACES.get(nom, [])
+             ]}
             for nom, r in persos_mod.RACES.items()
         ],
         "classes": [
@@ -969,6 +1143,7 @@ async def persos_modele() -> dict[str, Any]:
                 "de_vie": c["de_vie"],
                 "bab": c["bab"],
                 "sauves_bonnes": c["sauves_bonnes"],
+                "capacites": persos_mod.CAPACITES_CLASSES.get(nom, []),
             }
             for nom, c in persos_mod.CLASSES.items()
         ],
@@ -1223,9 +1398,43 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail=f"Caractéristique {c} invalide.")
 
+    # +1 de caractéristique des niveaux multiples de 4 : fourni explicitement
+    # par le formulaire d'avancement (champ `gain_carac`), appliqué à la base.
+    gain_carac = str(payload.get("gain_carac") or "").strip().upper()
+    if gain_carac:
+        if gain_carac not in persos_mod.CARACS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Gain de caractéristique invalide : « {gain_carac} ».",
+            )
+        carac[gain_carac] = int(carac.get(gain_carac, 10)) + 1
+
     race = (payload.get("race") or "").strip()
     classe = (payload.get("classe") or "").strip()
-    niveau = max(1, int(payload.get("niveau") or 1))
+
+    # Verrou d'avancement : le niveau ne se choisit PAS dans le formulaire.
+    # - création : tout personnage débute au niveau 1 ;
+    # - édition : le niveau courant vient de l'XP (moteur de combat / tools MJ)
+    #   et la fiche n'est modifiable QUE si un passage de niveau est en attente
+    #   (niveau > avancement_confirmé). Après confirmation, re-verrouillage.
+    if existante:
+        niveau = max(1, int(existante.get("niveau", 1) or 1))
+        avancement_confirme = int(existante.get("avancement_confirme", 1) or 1)
+        if avancement_confirme >= niveau:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Fiche verrouillée : les choix d'avancement de ce niveau "
+                    "sont déjà confirmés. La fiche sera de nouveau modifiable "
+                    "au prochain passage de niveau."
+                ),
+            )
+        gains_carac_precedents = list(existante.get("gains_carac") or [])
+    else:
+        niveau = 1
+        avancement_confirme = 1
+        gains_carac_precedents = []
+
     equipement = _normaliser_equipement(payload.get("equipement"))
     # Armures/boucliers portés (présents au catalogue) → comptés dans la CA
     # (10 + armure + bouclier + Dex plafonnée par l'armure, règles PHB 3.5).
@@ -1339,19 +1548,27 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
                            f"puissant pour {classe_canon} niv.{niveau} (max : "
                            f"niveau de sort {nls}).",
                 )
-        if classe_canon == "Magicien" and niveau == 1:
-            # Grimoire de départ PHB : 3 + mod INT sorts de niveau 1.
+        if classe_canon == "Magicien":
+            # Grimoire PHB 3.5 : départ = 3 + mod INT sorts de niveau 1 ;
+            # chaque nouveau niveau de magicien ajoute 2 sorts de niveau ≥ 1
+            # (n'importe quel niveau castable). Les tours sont connus d'office.
             mod_int = (int(calculs["carac_final"]["INT"]) - 10) // 2
-            budget_liv1 = 3 + mod_int
-            niv1 = [
+            budget_grimoire = 3 + mod_int + 2 * max(0, niveau - 1)
+            detail_budget = (
+                f"départ 3 + INT {mod_int:+d}"
+                if niveau == 1
+                else f"départ 3 + INT {mod_int:+d} + 2 x {niveau - 1} niveaux gagnés"
+            )
+            hors_tours = [
                 s for s in sorts_connus
-                if (sorts_mod.sort_par_nom(str(s)) or {}).get("niveau") == 1
+                if (sorts_mod.sort_par_nom(str(s)) or {}).get("niveau", 0) >= 1
             ]
-            if len(niv1) > budget_liv1:
+            if len(hors_tours) > budget_grimoire:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Grimoire de départ : maximum {budget_liv1} sorts de "
-                           f"niveau 1 (3 + mod INT {mod_int:+d}) — {len(niv1)} saisis.",
+                    detail=f"Grimoire : maximum {budget_grimoire} sorts de "
+                           f"niveau ≥ 1 ({detail_budget}) — "
+                           f"{len(hors_tours)} présents.",
                 )
         if classe_canon in sorts_mod.SPONTANE:
             exces = sorts_mod.depassement_connus(classe_canon, niveau, sorts_connus)
@@ -1361,11 +1578,57 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
                     status_code=400,
                     detail=f"Trop de sorts connus ({classe_canon} niv.{niveau}) : {det}.",
                 )
+    # ---------------- Gains obligatoires du passage de niveau ----------------
+    # L'enregistrement n'est possible QUE pendant un avancement en attente
+    # (niveau > avancement_confirmé) ; il exige que les gains du niveau soient
+    # consommés : dons complets, +1 de caractéristique aux niveaux 4/8/12…,
+    # sorts connus au complet pour les spontanés (Sorcier/Barde, table PHB).
+    if existante and niveau > avancement_confirme:
+        if len(dons) < max_dons:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Avancement incomplet : il reste {max_dons - len(dons)} "
+                       f"don(s) à choisir ({len(dons)}/{max_dons}).",
+            )
+        if niveau % 4 == 0 and not gain_carac:
+            raise HTTPException(
+                status_code=400,
+                detail="Avancement incomplet : un niveau multiple de 4 doit "
+                       "recevoir son +1 de caractéristique.",
+            )
+        if classe_canon in sorts_mod.SPONTANE:
+            budget_connus = sorts_mod.sorts_connus_max(classe_canon, niveau)
+            comptes: dict[int, int] = {}
+            for s in sorts_connus:
+                sp = sorts_mod.sort_par_nom(str(s))
+                if sp and sp["niveau"] in budget_connus:
+                    comptes[sp["niveau"]] = comptes.get(sp["niveau"], 0) + 1
+            manquants = {
+                lvl: n - comptes.get(lvl, 0)
+                for lvl, n in budget_connus.items()
+                if comptes.get(lvl, 0) < n
+            }
+            if manquants:
+                det = ", ".join(
+                    f"niv.{lvl} : {m} manquant(s)"
+                    for lvl, m in sorted(manquants.items())
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Avancement incomplet — sorts connus "
+                           f"({classe_canon} niv.{niveau}) : {det}.",
+                )
+
     sorts_fiche = {
         "connus": [str(s) for s in sorts_connus],
         "prepares": {str(k): max(1, int(v or 1)) for k, v in sorts_prepares.items()},
         "depenses": {},
     }
+
+    # En édition, l'XP gagnée en jeu est conservée : elle n'évolue que par la
+    # progression automatique (moteur de combat) et les tools MJ — jamais par
+    # le formulaire (qui ne l'affiche pas et ne doit pas la remettre à zéro).
+    xp_conservee = int(existante.get("xp", 0) or 0) if existante else 0
 
     fiche = {
         "nom": nom,
@@ -1374,7 +1637,16 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         "race": persos_mod.resoudre_race(race) or race,
         "classe": persos_mod.resoudre_classe(classe) or classe,
         "niveau": niveau,
-        "xp": 0,
+        "xp": xp_conservee,
+        # Avancement : dernier niveau dont les choix sont confirmés. Tant que
+        # niveau > avancement_confirme, la fiche est modifiable (un passage de
+        # niveau est en attente) ; la confirmation re-verrouille. Ici, la
+        # sauvegarde a passé le verrou → les choix de CE niveau sont confirmés.
+        "avancement_confirme": niveau,
+        "gains_carac": (
+            gains_carac_precedents
+            + ([gain_carac] if gain_carac and niveau % 4 == 0 else [])
+        ),
         "carac": calculs["carac_final"],
         "pv": pv,
         "pv_max": pv_max,
@@ -2298,6 +2570,532 @@ async def _appliquer_degats_oublies(
     return "\n\n".join(lignes)
 
 
+async def _appliquer_soins_oublies(
+    orch: Orchestrator,
+    result: Any,
+    ctx: ToolContext,
+    on_event: Optional[Any],
+    actif_avant: str,
+) -> str:
+    """Rattrapage mécanique des SOINS (miroir de `_appliquer_degats_oublies`) :
+    quand le joueur actif a déclaré un soin (kit de premiers secours, potion,
+    sort narré…) mais que `fiche_perso_soigner` n'a JAMAIS été appelé dans le
+    tour — le LLM se contente souvent de NARRER « Vous avez récupéré 3 PV »
+    (corrigé 3× en tant que simulation par D1bis/5bis-a sans jamais appeler
+    le tool) — le serveur applique alors le MONTANT ANNONCÉ à la fiche.
+    Sinon le chat affirme une guérison que l'état n'enregistre jamais
+    (partie 5f3e31c9 : chat « 3 PV → 6/17 » mais état réel resté 3/17).
+
+    N'applique RIEN si aucun montant chiffré n'est annoncé près du verbe de
+    soin (on n'invente pas de gain) et ne touche pas aux soins déjà résolus.
+
+    Renvoie le texte mécanique à ajouter à la narration ("" si rien à faire).
+    """
+    if not actif_avant:
+        return ""
+    if any(
+        tc.get("name") == "fiche_perso_soigner" and tc.get("ok")
+        for tc in result.tool_calls_trace
+    ):
+        return ""
+    narration = result.narration or ""
+    # Montant annoncé près d'un verbe de soin/récupération (« récupéré 3 PV »,
+    # « soigne 5 points de vie », « rend 4 PV », « restaure 2 PV »).
+    m_annonce = _re_mod.search(
+        r"(?:r[éèe]cup[éèe]r(?:ant|[éèe]|er)?|soign(?:e|ant)?|rend|restaure)"
+        r"\w*\s*(?:\*\*)?\d{1,3}(?:\*\*)?\s*(?:PV\b|points?\s+de\s+vie)",
+        narration,
+    )
+    if not m_annonce:
+        # 🩹 C6bis — Soin DÉCLARÉ mais narré SANS montant ni tool : si le PJ
+        # possède un kit de premiers secours (ou équivalent), le serveur
+        # résout lui-même le soin (1d4) au lieu de laisser le tour sans
+        # effet — sinon le joueur croit avoir agi, attend le timeout et
+        # meurt au tour du monstre (partie 5f3e31c9, msg 20).
+        return await _soin_kit_sans_montant(
+            orch, ctx, on_event, result, actif_avant)
+    m_soin = _re_mod.search(r"(\d{1,3})(?:\*\*)?\s*(?:PV\b|points?\s+de\s+vie)",
+                            m_annonce.group(0))
+    if not m_soin:
+        return ""
+    try:
+        soin_total = int(m_soin.group(1))
+    except (TypeError, ValueError):
+        return ""
+    if soin_total <= 0:
+        return ""
+    tr = await orch.execute_tool_direct(
+        "fiche_perso_soigner",
+        {"nom": actif_avant, "soin": soin_total},
+        ctx, on_event, result,
+    )
+    if tr is not None and not tr.text.startswith("❌"):
+        return (
+            "ℹ️ **Soin appliqué par le serveur** : le montant narré "
+            f"(« {m_annonce.group(0).strip()} ») était annoncé sans appel à "
+            f"`fiche_perso_soigner` — {tr.text}."
+        )
+    return ""
+
+
+async def _soin_kit_sans_montant(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Any,
+    result: Any,
+    actif_avant: str,
+) -> str:
+    """Résout un soin DÉCLARÉ (kit de premiers secours en main) que le LLM
+    a narré SANS montant ni appel à `fiche_perso_soigner` : le serveur
+    lance lui-même le 1d4 et l'applique à la fiche — sinon le tour reste
+    sans effet et sans rotation (le joueur croit avoir agi, attend le
+    timeout, puis subit le tour du monstre ; partie 5f3e31c9, msg 20).
+    Renvoie la note mécanique, ou '' si le PJ n'a aucun objet de soin."""
+    from .tools.fiches import _chemin  # pylint: disable=import-outside-toplevel
+
+    path = _chemin(ctx, actif_avant)
+    if not os.path.isfile(path):
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            fiche = json.load(f)
+    except Exception:                                            # noqa: BLE001
+        return ""
+    objets = list(fiche.get("equipement") or []) + list(
+        fiche.get("inventaire") or [])
+    a_kit = any(
+        _RE_KIT_SOIN.search(
+            str(o.get("nom") or "") if isinstance(o, dict) else str(o))
+        for o in objets
+    )
+    if not a_kit:
+        return ""
+    tr_des = await orch.execute_tool_direct(
+        "lancer_des",
+        {
+            "nb_des": 1, "faces": 4, "bonus": 0,
+            "raison": f"soin kit premiers secours ({actif_avant})",
+        },
+        ctx, on_event, result,
+    )
+    if tr_des is None:
+        return ""
+    m_des = _re_mod.search(r"Total jets\s*:\s*(\d+)", tr_des.text or "")
+    if not m_des:
+        return ""
+    soin = int(m_des.group(1))
+    if soin <= 0:
+        return ""
+    tr = await orch.execute_tool_direct(
+        "fiche_perso_soigner",
+        {"nom": actif_avant, "soin": soin},
+        ctx, on_event, result,
+    )
+    if tr is None or tr.text.startswith("❌"):
+        return ""
+    return (
+        "ℹ️ **Soin résolu par le serveur** : kit de premiers secours "
+        f"utilisé sans jet — **{soin} PV** récupérés. {tr.text.strip()}"
+    )
+
+
+async def _ressusciter_pj_oublie(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Any,
+    result: Any,
+) -> str:
+    """Résout la RÉSURRECTION d'un PJ mort que le MJ a narrée SANS tool.
+
+    Après un GAME OVER, le MJ propose « résurrection négociée », la table
+    accepte, le MJ narre la scène (repos, PV récupérés, « à 16 PV sur 17 »)
+    — mais AUCUN tool existant ne peut lever la condition « Mort » :
+    `repos_long` ignore les PV négatifs et `fiche_perso_soigner` n'ôte pas
+    « Mort ». L'état restait Mort/-10 alors que la narration décrivait un
+    personnage debout (partie 5f3e31c9, msgs 21-24).
+
+    Ici : conditions mortelles levées (Mort/Mourant/Stabilisé/Inconscient),
+    PV portés au montant narré (défaut 1), pénalité officielle de Raise
+    Dead appliquée (niveau > 1 : −1 niveau ; niveau 1 : −2 CON, perte
+    irréparable, PV max réduits si le mod. CON baisse) — SAUF pour une
+    Résurrection Vraie (Clr 9, l'unique variante sans perte), flag
+    `game_over` effacé. La narration du prix négocié reste à la charge du
+    MJ. Renvoie la note mécanique, ou '' si rien n'est à faire.
+    """
+    import unicodedata as _uni
+
+    def _nn(s: Any) -> str:
+        n = _uni.normalize("NFKD", str(s or "").strip().lower())
+        return "".join(c for c in n if not _uni.combining(c))
+
+    narration = result.narration or ""
+
+    def _est_mort(p: dict) -> bool:
+        conds = {_nn(c) for c in (p.get("conditions") or [])}
+        if "mort" in conds:
+            return True
+        try:
+            return int(p.get("pv", 0) or 0) <= -10
+        except (TypeError, ValueError):
+            return False
+
+    try:
+        st = PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id)
+        etat = st.load()
+    except Exception:                                            # noqa: BLE001
+        return ""
+    morts = [p for p in (etat.get("pj") or []) if _est_mort(p)]
+    if not morts:
+        return ""
+    # Gate : la narration doit AFFIRMER une restauration (montant de PV
+    # récupérés / repos long), ou user du vocabulaire de résurrection SANS
+    # être une simple offre de choix (« je ne peux pas… choisissez »).
+    revendique = bool(_RE_PV_RECUPERES.search(narration)) or (
+        bool(_RESURRECTION_RE.search(narration))
+        and not _RE_OFFRE_RESURRECTION.search(narration)
+    )
+    if not revendique:
+        return ""
+
+    # Montant narré (« maintenant à **16 PV** sur vos 17 ») : honoré pour
+    # UN seul PJ mort ; sinon retour à 1 PV (conscient, à terre).
+    cible_pv = 1
+    if len(morts) == 1:
+        m_c = _re_mod.search(
+            r"à\s*(?:\*\*)?(\d{1,3})(?:\*\*)?\s*PV(?:\*\*)?"
+            r"\s*(?:sur|/)\s*(?:vos\s+)?\d{1,3}",
+            narration, _re_mod.IGNORECASE,
+        )
+        if m_c:
+            cible_pv = max(1, int(m_c.group(1)))
+
+    lignes: list[str] = []
+    from .tools.fiches import _chemin  # pylint: disable=import-outside-toplevel
+
+    for p in morts:
+        nom = str(p.get("nom") or "")
+        if not nom:
+            continue
+        # 1) Conditions mortelles levées (outil par outil, valeur stockée).
+        chemin = _chemin(ctx, nom)
+        try:
+            with open(chemin, "r", encoding="utf-8") as f:
+                fiche = json.load(f)
+        except Exception:                                    # noqa: BLE001
+            fiche = dict(p)
+        conds_fiche = [
+            str(c) for c in (fiche.get("conditions") or [])
+            if _nn(c) in {"mort", "mourant", "stabilise", "inconscient"}
+        ]
+        for cond in conds_fiche:
+            await orch.execute_tool_direct(
+                "fiche_perso_condition",
+                {"nom": nom, "condition": cond, "appliquer": False},
+                ctx, on_event, result,
+            )
+        # 2) PV portés au montant narré (plafonné par le tool à pv_max).
+        try:
+            pv_actuel = int(fiche.get("pv", 0) or 0)
+        except (TypeError, ValueError):
+            pv_actuel = p.get("pv", 0)
+        pv_cible = min(cible_pv, int(fiche.get("pv_max", 0) or cible_pv))
+        if pv_cible > pv_actuel:
+            tr = await orch.execute_tool_direct(
+                "fiche_perso_soigner",
+                {"nom": nom, "soin": pv_cible - pv_actuel},
+                ctx, on_event, result,
+            )
+            if tr is not None:
+                lignes.append(tr.text)
+        lignes.append(
+            f"- {nom} : conditions mortelles levées "
+            f"({', '.join(conds_fiche) or 'aucune'})."
+        )
+
+        # 3) Pénalité de résurrection (Raise Dead / Résurrection, DMG 3.5) :
+        #    le sujet perd un niveau — ou, s'il est de niveau 1, 2 points de
+        #    Constitution à la place (perte IRRÉPARABLE par aucun moyen). Si
+        #    le mod. CON baisse, les PV max diminuent d'autant (× niveau).
+        #    EXCEPTION : Résurrection VRAIE (Clr 9) — aucune perte.
+        try:
+            with open(chemin, "r", encoding="utf-8") as f:
+                fiche = json.load(f)
+        except Exception:                                    # noqa: BLE001
+            pass
+        if _RE_RESURRECTION_VRAIE.search(narration):
+            lignes.append(
+                f"- {nom} : Résurrection Vraie (niv 9) — aucune perte de "
+                "niveau ni de CON (règles 3.5)."
+            )
+            continue
+        try:
+            niveau_r = int(fiche.get("niveau", 1) or 1)
+        except (TypeError, ValueError):
+            niveau_r = 1
+        if niveau_r > 1:
+            tr_np = await orch.execute_tool_direct(
+                "fiche_perso_perte_niveau",
+                {"nom": nom, "nb": 1},
+                ctx, on_event, result,
+            )
+            if tr_np is not None:
+                lignes.append(tr_np.text)
+        else:
+            try:
+                con = int((fiche.get("carac") or {}).get("CON", 10) or 10)
+            except (TypeError, ValueError):
+                con = 10
+            nouvelle_con = max(1, con - 2)
+            perte_pvmax = max(0, (con - 10) // 2 - (nouvelle_con - 10) // 2)
+            await orch.execute_tool_direct(
+                "fiche_perso_mettre_a_jour",
+                {"nom": nom, "champ": "carac.CON",
+                 "valeur": str(nouvelle_con)},
+                ctx, on_event, result,
+            )
+            if perte_pvmax > 0:
+                try:
+                    pv_max_new = max(
+                        1, int(fiche.get("pv_max", 1) or 1) - perte_pvmax)
+                except (TypeError, ValueError):
+                    pv_max_new = 1
+                await orch.execute_tool_direct(
+                    "fiche_perso_mettre_a_jour",
+                    {"nom": nom, "champ": "pv_max",
+                     "valeur": str(pv_max_new)},
+                    ctx, on_event, result,
+                )
+                try:
+                    if int(fiche.get("pv", 0) or 0) > pv_max_new:
+                        await orch.execute_tool_direct(
+                            "fiche_perso_mettre_a_jour",
+                            {"nom": nom, "champ": "pv",
+                             "valeur": str(pv_max_new)},
+                            ctx, on_event, result,
+                        )
+                except (TypeError, ValueError):
+                    pass
+            lignes.append(
+                f"- {nom} : pénalité de résurrection (Raise Dead, DMG 3.5, "
+                f"niveau 1) — −2 CON ({con}→{nouvelle_con}, irréparable)"
+                + (f", PV max −{perte_pvmax}." if perte_pvmax else ".")
+            )
+
+    # 4) Levée du flag GAME OVER (collant : prompt_builder le réinjecte).
+    try:
+        etat2 = st.load()
+        if etat2.get("game_over"):
+            etat2["game_over"] = False
+            st.save(etat2)
+            result.state_patches.append({"game_over": False})
+    except Exception:                                            # noqa: BLE001
+        pass
+
+    return (
+        "✨ **Résurrection appliquée par le serveur** : la narration "
+        "décrivait un retour à la vie, mais l'état indiquait encore un "
+        "personnage mort (aucun tool de résurrection n'existe) — levée des "
+        "conditions mortelles et PV rétablis :\n" + "\n".join(lignes)
+    )
+
+
+async def _appliquer_degats_pj_narres(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Any,
+    result: Any,
+    actif_avant: str = "",
+) -> str:
+    """Rattrapage HORS COMBAT : dégâts annoncés en prose contre un PJ
+    (« vous subissez 12 dégâts de foudre ») sans aucun
+    `fiche_perso_infliger_degats` dans la trace. En combat, les filets de
+    `_appliquer_degats_oublies` couvrent déjà le cas ; en exploration, un
+    monstre narré blessait le personnage sans toucher l'état (partie
+    5f3e31c9, msg 30 : « 12 dégâts de foudre » restés sans effet).
+    Renvoie la note mécanique, ou '' si rien n'est à faire."""
+    if any(
+        tc.get("name") == "fiche_perso_infliger_degats" and tc.get("ok")
+        for tc in result.tool_calls_trace
+    ):
+        return ""
+    try:
+        etat = PartyState(
+            data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+        ).load()
+    except Exception:                                            # noqa: BLE001
+        return ""
+    if etat.get("phase") == "combat":
+        # En combat, les filets dédiés (orphelins lancer_degats + « touché
+        # sans dégâts ») s'appliquent — ne pas créer de double application.
+        return ""
+    narration = result.narration or ""
+    m = _RE_DEGATS_SUBIS_PJ.search(narration)
+    if not m:
+        return ""
+    try:
+        total = int(m.group(1))
+    except (TypeError, ValueError):
+        return ""
+    if total <= 0:
+        return ""
+    # Victime : le PJ nommé dans la fenêtre de l'annonce, sinon le PJ actif
+    # (la prose « vous subissez… » s'adresse à lui) ou l'unique PJ.
+    pjs = [str(p.get("nom") or "") for p in (etat.get("pj") or [])
+           if p.get("nom")]
+    if not pjs:
+        return ""
+    fenetre = narration[max(0, m.start() - 120):m.end()].lower()
+    victime = next((n for n in pjs if n.lower() in fenetre), "")
+    if not victime:
+        if len(pjs) == 1:
+            victime = pjs[0]
+        elif actif_avant and actif_avant in pjs:
+            victime = actif_avant
+        else:
+            return ""
+    tr = await orch.execute_tool_direct(
+        "fiche_perso_infliger_degats",
+        {"nom": victime, "degats": total},
+        ctx, on_event, result,
+    )
+    if tr is None or tr.text.startswith("❌"):
+        return ""
+    return (
+        "ℹ️ **Dégâts appliqués par le serveur** : la narration annonçait "
+        f"« {m.group(0).strip()[:80]} » sans jet enregistré — {tr.text}"
+    )
+
+
+async def _attaque_pj_sans_jet(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Any,
+    result: Any,
+    nom_pj: str,
+) -> str:
+    """Résout déterministiquement l'attaque d'un PJ déclarée sans aucun jet.
+
+    Le petit modèle (Gemma 9B) narre l'attaque en prose et n'appelle jamais
+    `lancer_attaque`/`lancer_degats` — le rejeu correctif 5bis-a échoue aussi,
+    et « l'avancement forcé » laisse l'état inchangé (bug vécu 5f3e31c9 : le
+    loup-garou restait à 28/32 alors que la narration annonçait un coup).
+    On applique alors la même logique que le moteur pour les monstres :
+    fiche du PJ (BBA + mod FOR/DEX), arme du catalogue, première cible
+    ennemie vivante, jet d'attaque puis dégâts via execute_tool_direct
+    (l'auto-application inflige les PV du monstre suivi). Renvoie la note
+    mécanique, ou '' si rien n'a pu être joué.
+    """
+    from .tools.fiches import _chemin  # pylint: disable=import-outside-toplevel
+
+    try:
+        etat = PartyState(
+            data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+        ).load()
+    except Exception:                                            # noqa: BLE001
+        return ""
+
+    # 1) Cible ennemie vivante — première debout suivie.
+    cible = None
+    ca_cible = 10
+    for mo in etat.get("monstres_combat") or []:
+        if mo.get("allie"):
+            continue
+        try:
+            pv = int(mo.get("pv", 0) or 0)
+        except (TypeError, ValueError):
+            pv = 0
+        conds = mo.get("conditions") or []
+        if pv <= 0 or "Détruit" in conds or "Detruit" in conds:
+            continue
+        cible = str(mo.get("nom") or "")
+        try:
+            ca_cible = int(mo.get("ca") or 10)
+        except (TypeError, ValueError):
+            ca_cible = 10
+        break
+    if not cible:
+        return ""
+
+    # 2) Lecture de la fiche du PJ.
+    path = _chemin(ctx, nom_pj)
+    if not os.path.isfile(path):
+        return ""
+    with open(path, "r", encoding="utf-8") as f:
+        fiche = json.load(f)
+    caracs = fiche.get("carac") or {}
+    bab = int(fiche.get("bab") or 0)
+
+    # 3) Arme portée (1er objet d'équipement présent au catalogue ARMES).
+    arme_nom = ""
+    arme_cat = None
+    for obj in fiche.get("equipement") or []:
+        nom_item = (
+            obj.get("nom") if isinstance(obj, dict) else str(obj)
+        )
+        for a in catalogue_mod.ARMES:
+            if (
+                str(a.get("nom") or "").strip().lower()
+                == str(nom_item).strip().lower()
+            ):
+                arme_nom = nom_item
+                arme_cat = a
+                break
+        if arme_cat is not None:
+            break
+    if arme_cat is None:
+        return ""
+
+    # 4) Bonus d'attaque = BBA + mod FOR (mêlée) / DEX (distance).
+    distance = bool(arme_cat.get("distance"))
+    cle = "DEX" if distance else "FOR"
+    mod_car = (int(caracs.get(cle, 10) or 10) - 10) // 2
+    bonus_atk = bab + mod_car
+
+    # 5) Dégâts du catalogue (ex. « 1d12 »).
+    md = _re_mod.search(r"(\d+)d(\d+)", str(arme_cat.get("degats") or "1d6"))
+    nb_des, faces = (int(md.group(1)), int(md.group(2))) if md else (1, 6)
+    bonus_dmg = mod_car if not distance else 0
+    if not distance and "deux mains" in str(arme_nom).lower():
+        bonus_dmg = int(mod_car * 1.5)
+
+    # 6) Jet d'attaque — la CA officielle du bestiaire prime toujours.
+    tr_atk = await orch.execute_tool_direct(
+        "lancer_attaque",
+        {
+            "bonus_attaque": bonus_atk,
+            "ca_cible": ca_cible,
+            "nom_attaquant": nom_pj,
+            "arme": arme_nom,
+            "nom_cible": cible,
+        },
+        ctx, on_event, result,
+    )
+    if tr_atk is None or tr_atk.text.startswith("❌"):
+        return ""
+    note = tr_atk.text
+    if (
+        "✅ **Touché**" in tr_atk.text
+        or "⭐ **20 naturel**" in tr_atk.text
+    ):
+        tr_dm = await orch.execute_tool_direct(
+            "lancer_degats",
+            {
+                "nb_des": nb_des,
+                "faces": faces,
+                "bonus": bonus_dmg,
+                "arme_ou_sort": arme_nom,
+                "cible": cible,
+            },
+            ctx, on_event, result,
+        )
+        # Les dégâts sont auto-appliqués par _auto_appliquer_degats
+        # et affichés dans les notes mécaniques ; on ne les ajoute pas
+        # ici pour éviter un double affichage.
+        if tr_dm is not None:
+            note = note + "\n" + tr_dm.text
+    return note
+
+
 def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any]) -> list[str]:
     """Repère les monstres du bestiaire mentionnés dans une narration qui
     relate un combat SANS avoir appelé `engager_combat`.
@@ -2331,59 +3129,99 @@ def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any])
         best = _load_bestiaire_plain(data_dir)
     except Exception:
         return []
-    trouves: list[str] = []
-    # Vocabulaire de la prose (mots ≥ 4 lettres, normalisés sans accent,
-    # singulier OU pluriel) pour le rapprochement flou des noms — le petit
-    # modèle écrit parfois le nom ANGLAIS du monstre (« Ghoul ») là où le
-    # bestiaire porte le nom français (« Goule ») : sans rapprochement,
-    # l'attaque narrée restait sans combat et sans suivi de PV.
-    import difflib as _difflib
     import unicodedata as _ud
 
     def _sans_accents(w: str) -> str:
         nf = _ud.normalize("NFKD", w)
         return "".join(c for c in nf if not _ud.combining(c))
 
-    mots_prose: set[str] = set()
+    def _normaliser_nom(nom: str) -> str:
+        return _sans_accents(str(nom).lower()).replace("_", " ")
+
+    # Vocabulaire de la prose : MOTS ENTIERS (minuscules, accents retirés)
+    # au singulier ET au pluriel. Plus de sous-chaîne ni de difflib flou :
+    # « menaçante » ne doit pas faire apparaître « Ane », « signes » → « Singe »,
+    # « hurle » → « Hurleur », « gobelin » → « Hobgobelin » (partie ee5684fe —
+    # ces faux positifs faisaient refuser TOUT le rattrapage par engager_combat).
+    tokens_bruts: list[str] = []
     for w in _re_mod.split(r"[^a-z']+", bas):
         w = w.strip("'")
         if len(w) < 4:
             continue
-        w2 = _sans_accents(w)
-        mots_prose.add(w2)
-        if w2.endswith("s"):
-            mots_prose.add(w2[:-1])
+        tokens_bruts.append(_sans_accents(w))
+    if not tokens_bruts:
+        return []
+    mots_prose: set[str] = set(tokens_bruts)
+    for w in tokens_bruts:
+        if w.endswith("s") and len(w) > 4:
+            mots_prose.add(w[:-1])
+
+    def _mots_entiers(nl: str) -> bool:
+        """True si le nom normalisé `nl` apparaît comme MOT(S) ENTIER(S) dans
+        la prose (nom mono-mot dans le vocabulaire, ou suite de mots
+        consécutifs tolérante au pluriel pour les noms composés)."""
+        parts = nl.split()
+        if not parts:
+            return False
+        if len(parts) == 1:
+            return parts[0] in mots_prose
+        k = len(parts)
+        for i in range(len(tokens_bruts) - k + 1):
+            if all(
+                parts[j] == tokens_bruts[i + j]
+                or (
+                    len(tokens_bruts[i + j]) > 4
+                    and tokens_bruts[i + j].endswith("s")
+                    and parts[j] == tokens_bruts[i + j][:-1]
+                )
+                for j in range(k)
+            ):
+                return True
+        return False
+
+    # Index des noms du bestiaire (normalisés → nom d'affichage) : sert au
+    # rapprochement exact ET au pont anglais→français. Les fiches GÉNÉRIQUES
+    # ou SANS NOM (ex. « cle: monstre », nom vide) sont exclues — partie
+    # a6d11005 : la prose « un monstre surgit » a engagé un placeholder FP ¼
+    # sans identité comme si c'était une créature du module.
+    noms_normalises: dict[str, str] = {}
     for cle, m in (best.get("monstres", {}) or {}).items():
         if not isinstance(m, dict):
             continue
+        if m.get("generique"):
+            continue
         nom = str(m.get("nom") or cle or "").strip()
-        # On ne retient que les monstres explicitement nommés dans la prose
-        # (insensible casse, minuscules normalisées). Un « zombie » mentionné
-        # en passant compte, mais il faut aussi un marqueur de combat ou une
-        # prose de dégâts (vérifiés plus haut) pour déclencher le rattrapage.
         if not nom or len(nom) < 3:
             continue
-        nl = _sans_accents(nom.lower())
+        noms_normalises.setdefault(_normaliser_nom(nom), nom)
+
+    trouves: list[str] = []
+    for nl, nom in noms_normalises.items():
         # Garde anti-faux-positifs (partie dfccc120) : les mots génériques
         # (« ombre », « silhouette »…) désignent le décor, jamais une
-        # rencontre — jamais de rattrapage sur ces mots. La prose de dégâts
-        # / marqueur de combat exigée plus haut suffit comme signal ici ;
-        # pas d'exigence de quantificateur (contrairement au garde
-        # `_ennemis_annonces` de l'orchestrateur, qui s'arme sur la seule
-        # narration d'attaque).
+        # rencontre — jamais de rattrapage sur ces mots. La prose de dégâts /
+        # marqueur de combat exigée plus haut suffit comme signal ici.
         if nl in _ENNEMIS_MOTS_GENERIQUES:
             continue
-        if nl in _sans_accents(bas):
-            trouves.append(nom)
+        # Mots TROP génériques de la narration de combat : « un monstre
+        # surgit », « une créature attaque » ne désignent AUCUNE créature
+        # du bestiaire (a6d11005).
+        if nl in _MOTS_COMBAT_GENERIQUES:
             continue
-        # Rapprochement flou : nom du bestiaire vs mot de la prose (ratio ≥
-        # 0.8 → « Ghoul »/« Goule » = 0.8 exactement). Réservé aux noms
-        # d'au moins 4 lettres pour limiter les faux positifs.
-        if len(nl) >= 4:
-            for w in mots_prose:
-                if _difflib.SequenceMatcher(None, nl, w).ratio() >= 0.8:
-                    trouves.append(nom)
-                    break
+        if _mots_entiers(nl):
+            trouves.append(nom)
+    # Pont anglais→français : un mot de la prose résout vers un nom officiel
+    # du bestiaire (ex. « Ghoul » → « Goule »). Uniquement pour des mots NON
+    # résolus en exact ci-dessus, pour ne jamais concourir avec un nom propre.
+    for w in tokens_bruts:
+        if w in noms_normalises:
+            continue  # déjà couvert par le rapprochement exact
+        cible = _MONSTRES_EN_FR_PROSE.get(w)
+        if not cible:
+            continue
+        c = _normaliser_nom(cible)
+        if c in noms_normalises and c not in _ENNEMIS_MOTS_GENERIQUES:
+            trouves.append(noms_normalises[c])
     # Déduplique par nom (plusieurs clés du bestiaire peuvent pointer vers le
     # même affichage) pour un `engager_combat(nom, nom, …)` propre.
     _dedup = {_t: 1 for _t in trouves}
@@ -2500,7 +3338,9 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
             # sans cela, le texte aperçu disparaîtrait à l'écran au moment
             # du remplacement par la narration du rejeu.
             result.narration = "\n\n".join(
-                [*result.narrations_intermediaires, result2.narration]
+                _assemble_narrations(
+                    result.narrations_intermediaires, result2.narration
+                )
             ).strip()
             result.iterations += result2.iterations
             # (c) La narration finale remplace celle déjà streamée : on
@@ -2928,10 +3768,23 @@ async def _handle_say(
                                         result2.notes_mecaniques
                                     )
                                     # Préserve les narrations intermédiaires
-                                    # déjà diffusées (cf. _rejoue_correctif).
+                                    # déjà diffusées (cf. _rejoue_correctif),
+                                    # mais abandonne celles qui RÉSOLVENT déjà
+                                    # l'action en prose (touché/dégâts) : le
+                                    # rejeu les re-narre avec les jets réels —
+                                    # les garder relirait la MÊME attaque deux
+                                    # fois (bug vécu 5f3e31c9).
+                                    _parts = _assemble_narrations(
+                                        result.narrations_intermediaires,
+                                        result2.narration,
+                                    )
+                                    if _parts:
+                                        _parts = [
+                                            p for p in _parts[:-1]
+                                            if not _RE_PROSE_RESOLUTION.search(p)
+                                        ] + _parts[-1:]
                                     result.narration = "\n\n".join(
-                                        [*result.narrations_intermediaires,
-                                         result2.narration]
+                                        _parts
                                     ).strip()
                                     result.iterations += result2.iterations
                                     await reset_stream()
@@ -2946,6 +3799,39 @@ async def _handle_say(
                                         f"[dnd35] Rejeu PJ {actif_avant} "
                                         "toujours sans jet — avancement forcé"
                                     )
+                                    # Le LLM n'appellera JAMAIS l'outil
+                                    # (partie 5f3e31c9 : Loup-garou resté
+                                    # 28/32 malgré une narration de coup).
+                                    # Le serveur résout l'attaque lui-même,
+                                    # comme le moteur le fait pour les
+                                    # monstres — sinon le tour avance sans
+                                    # effet et l'action du joueur est perdue.
+                                    if _ACTION_ATTAQUE_RE.search(text or ""):
+                                        try:
+                                            _note_atk = await (
+                                                _attaque_pj_sans_jet(
+                                                    orch, ctx, on_event,
+                                                    result, actif_avant,
+                                                )
+                                            )
+                                            if _note_atk:
+                                                result.narration = (
+                                                    result.narration
+                                                    + "\n\n⚙️ _Attaque résolue "
+                                                    "par le serveur :_\n\n"
+                                                    + _note_atk
+                                                ).strip()
+                                                print(
+                                                    f"[dnd35] Attaque PJ "
+                                                    f"{actif_avant} résolue "
+                                                    "déterministiquement "
+                                                    "(tools serveur)."
+                                                )
+                                        except Exception as e:       # noqa: BLE001
+                                            print(
+                                                "[dnd35] Attaque PJ "
+                                                f"déterministe échouée : {e}"
+                                            )
                             except Exception as e:                   # noqa: BLE001
                                 print(f"[dnd35] Rejeu PJ failed: {e}")
             except Exception as e:
@@ -3112,8 +3998,10 @@ async def _handle_say(
                         # Préserve les narrations intermédiaires déjà
                         # diffusées (cf. _rejoue_correctif).
                         result.narration = "\n\n".join(
-                            [*result.narrations_intermediaires,
-                             result2.narration]
+                            _assemble_narrations(
+                                result.narrations_intermediaires,
+                                result2.narration,
+                            )
                         ).strip()
                         result.iterations += result2.iterations
                         await reset_stream()
@@ -3143,15 +4031,45 @@ async def _handle_say(
             except Exception as e:
                 print(f"[dnd35] Rattrapage dégâts échoué (ignoré) : {e}")
 
+            # 5bis-c-long. 🩹 Rattrapage soin déclaré SANS tool : le joueur
+            # (ou le MJ) affirme « vous récupérez N PV » mais
+            # fiche_perso_soigner n'a jamais été appelé. Le serveur applique
+            # le montant déclaré (plafonné à pv_max par le tool) — sinon
+            # l'état reste figé alors que la narration affirme une guérison
+            # (partie 5f3e31c9 : chat « 3 PV → 6/17 » mais état 3/17).
+            try:
+                if (
+                    actif_avant
+                    and etat_avant.get("phase") == "combat"
+                    and _ACTION_SOIN_RE.search(text or "")
+                ):
+                    txt_soins = await _appliquer_soins_oublies(
+                        orch, result, ctx, on_event, actif_avant)
+                    if txt_soins:
+                        result.narration += "\n\n" + txt_soins
+                        print("[dnd35] Soins narrés appliqués "
+                              "automatiquement (tools serveur).")
+            except Exception as e:
+                print(f"[dnd35] Rattrapage soins échoué (ignoré) : {e}")
+
             # 5bis-c-bis. ⚔️ Lignes mécaniques des dégâts auto-appliqués
             # (cf. orchestrator._auto_appliquer_degats) : ajoutées à la dm
             # finale ICI (et non dans run()) pour survivre aux rejeux
             # correctifs qui remplacent `result.narration`.
+            # C5 : ne réafficher QUE les notes dont l'état PV n'est PAS
+            # déjà cité dans la narration du MJ (le chiffre PV serait en
+            # double et lirait comme une « correction » contradictoire).
             if getattr(result, "notes_mecaniques", None):
-                result.narration = (
-                    result.narration + "\n\n⚖️ _Dégâts appliqués "
-                    "automatiquement :_\n\n" + "\n".join(result.notes_mecaniques)
-                ).strip()
+                notes_visibles = [
+                    n for n in result.notes_mecaniques
+                    if not _note_mecanique_deja_narree(result.narration, n)
+                ]
+                if notes_visibles:
+                    result.narration = (
+                        result.narration + "\n\n⚖️ _Dégâts appliqués "
+                        "automatiquement :_\n\n"
+                        + "\n".join(notes_visibles)
+                    ).strip()
 
             # 5bis-c2. 💥 Dé-duplication des dégâts de monstres : tout excès
             # appliqué par le LLM au-delà de ce qu'il a réellement jeté est
@@ -3323,6 +4241,18 @@ async def _handle_say(
                         data_dir=str(cfg.abs(cfg.paths.data_dir)),
                         partie_id=partie_id,
                     ).load()
+                    # Retire INCONDITIONNELLEMENT les copies LLM du bandeau
+                    # « Au tour de » (PV inventés + « Que décidez-vous de
+                    # faire ? ») : même quand le combat se CLÔTURE dans ce
+                    # tour (mort du PJ → phase exploration), la copie LLM
+                    # ne doit pas fuir les PV du monstre (partie 5f3e31c9,
+                    # msg 20 : bandeau « 28/32 PV » resté après GAME OVER).
+                    result.narration = _re_mod.sub(
+                        r"\n{3,}", "\n\n",
+                        _RE_AUTOUR_STRIP.sub(
+                            "", result.narration
+                        ).strip(),
+                    )
                     # ⚔️ Ligne de relance DÉTERMINISTE : quand la mécanique a
                     # fait avancer la rotation jusqu'à un PJ, la table doit
                     # savoir QUI décide maintenant — sans dépendre du LLM
@@ -3527,10 +4457,24 @@ async def _handle_say(
                             from .tools.base import (
                                 _TOOL_REGISTRY, invoke_tool,
                             )
+                            # Défense en profondeur : on n'engage QUE les
+                            # monstres qui résolvent réellement dans le
+                            # bestiaire (un nom détecté peut devenir obsolète
+                            # si le bestiaire a changé entre détection et
+                            # engagement). Sans cette passe, `engager_combat`
+                            # REFUSAIT TOUT le rattrapage dès qu'un nom était
+                            # inconnu — le « combat » narré restait en prose
+                            # sans mécanique (partie ee5684fe).
+                            from .tools.monstres import _find_monstre_strict
+                            resolus = [
+                                nom for nom in _types
+                                if _find_monstre_strict(ctx, nom) is not None
+                            ]
                             spec = _TOOL_REGISTRY.get("engager_combat")
-                            if spec is not None:
+                            if spec is not None and resolus:
                                 tr = await invoke_tool(
-                                    spec, ctx, {"monstres": ", ".join(_types)},
+                                    spec, ctx,
+                                    {"monstres": ", ".join(resolus)},
                                 )
                                 if tr is not None and not (
                                     tr.text.startswith("⛔")
@@ -3546,19 +4490,51 @@ async def _handle_say(
                                         "officielle engagée pour des "
                                         "monstres du bestiaire._\n\n"
                                         + "".join(
-                                            line + "\n" for line in tr.text.splitlines()
+                                            line + "\n"
+                                            for line in tr.text.splitlines()
                                         )
                                     )
                                     print(
                                         f"[dnd35] Combat prose rattrapé : "
-                                        f"engager_combat({', '.join(_types)})"
+                                        f"engager_combat({', '.join(resolus)})"
                                     )
-                                    # Recharge l'état pour que l'image soit
-                                    # générée pour les monstres désormais suivis.
-                                    apres = PartyState(
-                                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
-                                        partie_id=partie_id,
-                                    ).load()
+                                elif tr is not None:
+                                    # Refus (ex. rencontre écrasante, monstre
+                                    # refusé) : NE PAS avaler l'échec en
+                                    # silence — la table doit savoir que le
+                                    # combat narré n'est PAS officiel (sinon
+                                    # le joueur continue à « jouer » une
+                                    # scène sans panneau ni initiative).
+                                    result.narration += (
+                                        "\n\n⚙️ _Le serveur n'a pas pu engager "
+                                        "ce combat narré en prose._\n\n"
+                                        + tr.text
+                                        + "\n\n_Reprends l'action hors "
+                                        "initiative : ce combat narré n'existe "
+                                        "pas mécaniquement._"
+                                    )
+                                    print(
+                                        f"[dnd35] Combat prose REFUSÉ par "
+                                        f"engager_combat({', '.join(resolus)}) : "
+                                        f"{tr.text[:120]}"
+                                    )
+                            elif _types and spec is not None:
+                                print(
+                                    f"[dnd35] Combat prose ignoré : aucun "
+                                    f"monstre détecté ne résout au bestiaire "
+                                    f"({', '.join(_types)})"
+                                )
+                            else:
+                                print(
+                                    f"[dnd35] Combat prose ignoré : registre "
+                                    f"engager_combat absent"
+                                )
+                            # Recharge l'état pour que l'image soit générée
+                            # pour les monstres désormais suivis.
+                            apres = PartyState(
+                                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                partie_id=partie_id,
+                            ).load()
                     except Exception as e:                             # noqa: BLE001
                         print(f"[dnd35] Rattrapage combat prose échoué "
                               f"(ignoré) : {e}")
@@ -3752,6 +4728,53 @@ async def _handle_say(
                                             on_event, _obj_inv,
                                             "inventaire objet")
 
+                # --- 5quater-d2. ⚔️ Engagement de combat NARRÉ sans outil
+                # (phase exploration). Le LLM écrit « Engagement du combat /
+                # Initiative : X vs Y » et joue même les tours de monstres —
+                # sans `engager_combat`, la phase reste exploration et tout
+                # le combat est une fiction sans ancre mécanique (partie
+                # 5f3e31c9, msg 30). On exige l'outil — UNIQUEMENT si le
+                # joueur a lui-même déclaré une action de combat (un
+                # « combat imminent » dans une offre de choix ne doit pas
+                # engager avant sa décision).
+                try:
+                    _eng_narre = _RE_ENGAGEMENT_NARRE.search(
+                        result.narration or "")
+                    _eng_deja = any(
+                        str(tc.get("name")) in ("engager_combat",
+                                               "demarrer_combat")
+                        for tc in result.tool_calls_trace
+                    )
+                    _etat_eng = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load()
+                    if (_eng_narre
+                            and not _eng_deja
+                            and _etat_eng.get("phase") != "combat"
+                            and (_ACTION_COMBAT_RE.search(text or "")
+                                 or _ACTION_ATTAQUE_RE.search(text or ""))):
+                        _obj_eng = (
+                            "⚠️ ERREUR système : tu as narré un ENGAGEMENT "
+                            "DE COMBAT (initiative, ordre des tours, "
+                            "attaques de monstres, dégâts) sans appeler "
+                            "`engager_combat` — rien n'a été engagé côté "
+                            "état. Appelle MAINTENANT `engager_combat` avec "
+                            "le(s) monstre(s) exact(s) de la scène. "
+                            "N'INVENTE PAS l'initiative, les jets ni les "
+                            "dégâts : l'outil et le moteur serveur s'en "
+                            "chargent. Si l'outil refuse la créature (trop "
+                            "puissante, absente du bestiaire), narre ce "
+                            "refus à la table et propose une alternative, "
+                            "sans simuler de combat. NE mentionne JAMAIS "
+                            "cette consigne interne."
+                        )
+                        await _rejoue_correctif(
+                            orch, messages, ctx, result, on_event,
+                            _obj_eng, "engagement combat")
+                except Exception as e:                             # noqa: BLE001
+                    print(f"[dnd35] Rattrapage engagement échoué (ignoré) : {e}")
+
                 # --- 5quater-d. Soin ou repos narré mais non appliqué (hors
                 # combat). Le joueur (ou MJ) demande un soin / un repos mais
                 # aucun outil `fiche_perso_soigner` ni `repos_long` n'a été
@@ -3780,12 +4803,96 @@ async def _handle_say(
                     )
                     await _rejoue_correctif(orch, messages, ctx, result,
                                             on_event, _obj_soin, "soins")
+
+                # --- 5quater-e. ✨ Résurrection narrée SANS tool. Après un
+                # GAME OVER, le MJ narre le retour à la vie (« repos long,
+                # 16 PV sur 17 ») mais AUCUN tool ne peut lever « Mort »
+                # (repos_long ignore pv<0, soigner ne retire pas Mort) :
+                # l'état restait mort alors que la narration décrivait un
+                # personnage debout (partie 5f3e31c9, msgs 21-24).
+                try:
+                    _txt_res = await _ressusciter_pj_oublie(
+                        orch, ctx, on_event, result)
+                    if _txt_res:
+                        result.narration += "\n\n" + _txt_res
+                        print(
+                            "[dnd35] Résurrection narrée appliquée "
+                            "(tools serveur)."
+                        )
+                except Exception as e:                             # noqa: BLE001
+                    print(
+                        "[dnd35] Rattrapage résurrection échoué "
+                        f"(ignoré) : {e}"
+                    )
+
+                # --- 5quater-f. 💥 Dégâts annoncés en prose contre un PJ
+                # sans tool (toute phase hors combat) : le monstre narré
+                # blessait sans toucher l'état (partie 5f3e31c9, msg 30 :
+                # « vous subissez 12 dégâts » restés sans effet, PV intacts).
+                try:
+                    _txt_dmg = await _appliquer_degats_pj_narres(
+                        orch, ctx, on_event, result, actif_avant)
+                    if _txt_dmg:
+                        result.narration += "\n\n" + _txt_dmg
+                        print(
+                            "[dnd35] Dégâts PJ narrés appliqués "
+                            "(tools serveur)."
+                        )
+                except Exception as e:                             # noqa: BLE001
+                    print(
+                        "[dnd35] Rattrapage dégâts narrés échoué "
+                        f"(ignoré) : {e}"
+                    )
+
+                # --- 5quater-g. 🧹 Bandeau « Au tour de » hors combat : le
+                # strip déterministe ne tourne qu'après le moteur (phase
+                # combat). En exploration, une copie LLM du bandeau avec PV
+                # inventés restait (msg 30 : « Zendar Nulentok (PV 28/32) »
+                # recyclé du Loup-garou). On nettoie si la phase n'est PAS
+                # le combat (en combat, la ligne officielle du moteur est
+                # légitime — ne pas la retirer).
+                try:
+                    _phase_fin = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load().get("phase")
+                    if _phase_fin != "combat":
+                        result.narration = _re_mod.sub(
+                            r"\n{3,}", "\n\n",
+                            _RE_AUTOUR_STRIP.sub(
+                                "", result.narration).strip(),
+                        )
+                except Exception:                                  # noqa: BLE001
+                    pass
             except Exception as e:                                     # noqa: BLE001
                 print(f"[dnd35] 5quater rattrapage échoué (ignoré) : {e}")
 
             # 5. On ajoute la narration finale à l'historique de la session.
             if result.narration:
                 session.remember_assistant(result.narration)
+
+            # 5ter-h. 📓 Auto-mémorisation serveur de la narration du tour.
+            # Le LLM n'appelait jamais `set_derniere_narration` (abd81275 :
+            # champ resté vide après 15 min de jeu) — or ce résumé court sert
+            # de repère anti-répétition et de continuité aux tours suivants.
+            # On l'écrit ICI, déterministe, à partir de la narration finale
+            # (déjà rétrécie aux ~600 premiers caractères utiles).
+            try:
+                if (result.narration or "").strip():
+                    _st_nar = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    )
+                    _et_nar = _st_nar.load()
+                    if "_erreur" not in _et_nar:
+                        _nar_courte = " ".join(
+                            (result.narration or "").split()
+                        )[:1200]
+                        if _et_nar.get("derniere_narration") != _nar_courte:
+                            _et_nar["derniere_narration"] = _nar_courte
+                            _st_nar.save(_et_nar)
+            except Exception as e_nar:                             # noqa: BLE001
+                print(f"[dnd35] Auto-mémorisation narration échouée : {e_nar}")
 
             # 6. Broadcast final (= complet, même en streaming : permet le rendu MD).
             await session.broadcast({

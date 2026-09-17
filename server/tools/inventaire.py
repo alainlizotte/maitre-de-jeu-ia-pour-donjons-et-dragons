@@ -133,6 +133,18 @@ _POIDS_OFFICIELS: dict[str, dict[str, Any]] = {
     "fleau d arme": _kg(10.0),
     "hallebarde":   _kg(12.0),
     "glaive":       _kg(10.0),
+    "guisarme":     _kg(12.0),
+    "ransueur":     _kg(10.0),
+    "faux":         _kg(10.0),
+    "fau":          _kg(10.0),                        # faux (scythe) — _norm retire le s
+    "trident":      _kg(4.0),
+    "epee batarde": _kg(6.0),
+    "etoile du matin": _kg(6.0),
+    "lance longue": _kg(9.0),
+    "flechette":    _kg(0.5),
+    "sarbacane":    _kg(2.0),
+    "arc court composite": _kg(2.0),
+    "arc long composite": _kg(3.0),
     "javelot":      _kg(2.0),
     "javeline":     _kg(2.0),
     "lance":        _kg(6.0),                         # lance (spear)
@@ -154,9 +166,16 @@ _POIDS_OFFICIELS: dict[str, dict[str, Any]] = {
     "cotte de maille": _kg(40.0),
     "plastron":     _kg(30.0),
     "harnois complet": _kg(50.0),
+    "armure a lame": _kg(45.0),
+    "armure a bande": _kg(35.0),
+    "demi harnoi":  _kg(50.0),
     "targe":        _kg(5.0),
     "bouclier bois leger": _kg(5.0),
     "bouclier bois lourd": _kg(10.0),
+    "bouclier acier leger": _kg(6.0),
+    "bouclier acier lourd": _kg(15.0),
+    "pavois":       _kg(45.0),
+    "pavoi":        _kg(45.0),                        # pavois — _norm retire le s
     # --- Équipement d'aventurier -------------------------------------------
     "sac a dos":    _kg(2.0),
     "torche":       _kg(1.0),
@@ -167,6 +186,21 @@ _POIDS_OFFICIELS: dict[str, dict[str, Any]] = {
     "ration journaliere": _kg(1.0),
     "corde":        _kg(10.0),                        # corde 15 m
     "corde de chanvre": _kg(10.0),
+    "corde de soie": _kg(5.0),
+    "pioche":       _kg(6.0),
+    "pelle":        _kg(8.0),
+    "barre a mine": _kg(5.0),
+    "marteau":      _kg(2.0),
+    "miroir":       _kg(0.5),
+    "tente":        _kg(20.0),
+    "echelle":      _kg(10.0),
+    "seau":         _kg(2.0),
+    "chaine":       _kg(20.0),
+    "cadenas":      _kg(1.0),
+    "crochets de voleur": _kg(2.0),
+    "ustensiles d alchimiste": _kg(10.0),
+    "tenue":        _kg(4.0),
+    "tenue de voyage": _kg(5.0),
     "couverture":   _kg(5.0),
     "sac de couchage": _kg(5.0),
     "lit de camp":  _kg(5.0),
@@ -266,6 +300,14 @@ def _reparer_entree(e: dict[str, Any]) -> Optional[dict[str, Any]]:
     except (TypeError, ValueError):
         qte = 1
     sortie: dict[str, Any] = {"nom": nom, "qte": qte}
+    # Charges d'objets à usages limités (kit de premiers secours : 10) :
+    # champ de jeu légitime, préservé au round-trip (sinon le compteur
+    # repartait à 10 à CHAQUE lecture de l'inventaire).
+    if e.get("charges") is not None:
+        try:
+            sortie["charges"] = int(e["charges"])
+        except (TypeError, ValueError):
+            pass
     if e.get("poids") is not None:
         try:
             sortie["poids"] = float(e["poids"])
@@ -717,3 +759,85 @@ def _normaliser_fiche(fiche: dict[str, Any]) -> dict[str, Any]:
     fiche["etat_encumbrance"] = cat
     fiche["charge_max"] = int(max_kg)
     return fiche
+
+
+def _consommer_fragment(
+    fiche: dict[str, Any], fragment: str, quantite: int = 1
+) -> Optional[str]:
+    """Décrémente dans l'inventaire DE LA FICHE (sans sauvegarder) l'objet
+    correspondant à `fragment` — recherche floue normalisée (l'objet
+    « Flèches » répond au fragment « flèche », « potion de soins légers » à
+    « potion »). Renvoie le nom de l'objet consommé, ou None si introuvable
+    ou quantité insuffisante.
+
+    Appelé par l'application des règles côté serveur : potion bue
+    (`fiche_perso_soigner(source=…)`), munition tirée (`lancer_attaque`
+    arc/arbalète/fronde/sarbacane/javelot) — la quantité en fiche reflète
+    l'usage RÉEL sans dépendre de la mémoire du LLM (a6d11005, demande
+    joueur : potions, flèches, carreaux… se soustraient à l'utilisation)."""
+    frag = _norm(fragment)
+    if not frag:
+        return None
+    inv = _inventaire(fiche)
+    trouve = None
+    for e in inv:
+        ne = _norm(e.get("nom"))
+        if ne == frag or frag in ne or ne in frag:
+            trouve = e
+            break
+    if trouve is None:
+        return None
+    qte = int(trouve.get("qte", 1) or 1)
+    if qte < quantite:
+        return None
+    reste = qte - quantite
+    if reste > 0:
+        trouve["qte"] = reste
+    else:
+        inv.remove(trouve)
+    fiche["inventaire"] = inv
+    fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
+                           for i in inv if i.get("nom")]
+    _normaliser_fiche(fiche)
+    return str(trouve.get("nom") or fragment)
+
+
+def _consommer_charge_kit(fiche: dict[str, Any]) -> tuple[bool, int]:
+    """Consomme 1 CHARGE du kit de premiers secours (D&D 3.5 : 10
+    utilisations par kit). Le compteur vit dans `inventaire[].charges`
+    (initialisé à 10 à la première utilisation pour les fiches existantes).
+
+    Renvoie `(True, charges_restantes)` si une charge a été dépensée,
+    `(False, 0)` si aucun kit n'est porté ou si le kit est épuisé
+    (auquel cas il est retiré de l'inventaire — à remplacer ou réparer :
+    un kit ne se « recharge » pas, on rachète les charges en ville).
+
+    Appelé par `fiche_perso_soigner` : source explicite « kit » OU petit
+    soin non-magique conventionnel (≤ 4 PV, la rule-maison 1d4 du kit)."""
+    inv = _inventaire(fiche)
+    for e in inv:
+        nom_n = _norm(e.get("nom"))
+        # « secours » → norm « secour » (singulier approx) : matcher le RADICAL.
+        if not (("kit" in nom_n or "trousse" in nom_n)
+                and ("secour" in nom_n or "soin" in nom_n)):
+            continue
+        brut = e.get("charges")
+        try:
+            charges = 10 if brut is None else int(brut)
+        except (TypeError, ValueError):
+            charges = 10
+        if charges <= 0:
+            # Kit épuisé : retiré de l'inventaire (son poids aussi).
+            inv.remove(e)
+            fiche["inventaire"] = inv
+            fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
+                                   for i in inv if i.get("nom")]
+            _normaliser_fiche(fiche)
+            return False, 0
+        e["charges"] = charges - 1
+        fiche["inventaire"] = inv
+        fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
+                               for i in inv if i.get("nom")]
+        _normaliser_fiche(fiche)
+        return True, charges - 1
+    return False, 0

@@ -543,6 +543,91 @@ def _marquer_mouvement(ctx: ToolContext) -> None:
         _MOUVEMENTS_TOUR[ctx.partie_id] = ctx.tour_id
 
 
+def _journaliser_lieu(
+    ctx: ToolContext,
+    etat: dict[str, Any],
+    donjon: dict[str, Any],
+    salle: Optional[dict[str, Any]],
+    evenement: str,
+) -> None:
+    """Auto-journalisation serveur d'un déplacement de donjon (mutation en
+    place de `etat` ; l'appelant sauvegarde).
+
+    Le LLM oubliait systématiquement d'appeler `ajouter_evenement_histoire`,
+    `memoire_position` ou `scenario_etape` en explorant (partie abd81275 :
+    `histoire` vide, `lieu` resté « (non déterminé)/ville » au fond de la
+    grotte, étape de trame figée sur le message d'ouverture malgré deux
+    combats et trois salles) — une fois l'historique chat tronqué, le MJ
+    perdait tout ancrage. L'état géographique et le journal sont donc tenus
+    ICI, à chaque entrée/déplacement, indépendamment de la coopération du MJ :
+    - `etat["lieu"]` : position affichée au front (fini le « non déterminé ») ;
+    - `memoire.position` : cohérence de campagne longue ;
+    - `histoire` : événement court horodaté (mémoire longue) ;
+    - trame : arrivée dans la salle d'une étape non accomplie → l'objectif
+      courant de la bible scénario suit la position réelle du groupe.
+    """
+    from datetime import datetime as _dt
+
+    pos = donjon.get("courant") or [0, 0]
+    try:
+        cx, cy = int(pos[0]), int(pos[1])
+    except (TypeError, ValueError, IndexError):
+        cx = cy = 0
+    salle = salle or {}
+    typ = str(salle.get("type") or "salle")
+    nom_dj = str(donjon.get("id") or "")
+    # 1) etat["lieu"].
+    etat["lieu"] = {
+        "nom": nom_dj,
+        "type": "donjon",
+        "description": str(salle.get("description") or "").strip()[:300],
+        "position_x": cx,
+        "position_y": cy,
+    }
+    # 2) memoire.position.
+    nom_etage = ""
+    try:
+        fl = (donjon.get("etages") or {}).get(
+            str(int(donjon.get("etage", 0) or 0))
+        ) or {}
+        nom_etage = str(fl.get("nom") or "")
+    except (TypeError, ValueError):
+        nom_etage = ""
+    pos_mem = (
+        etat.setdefault("memoire", {})
+        .setdefault("position", {"lieu": "", "zone": "", "detail": ""})
+    )
+    pos_mem.update({
+        "lieu": nom_dj,
+        "zone": nom_etage or f"étage {donjon.get('etage', 0)}",
+        "detail": f"salle ({cx},{cy}) — {typ}",
+    })
+    # 3) Journal d'histoire.
+    hist = etat.setdefault("histoire", [])
+    hist.append({
+        "ts": _dt.now().isoformat(),
+        "tour": str(etat.get("tour") or ""),
+        "evenement": evenement,
+    })
+    if len(hist) > 50:
+        etat["histoire"] = hist[-50:]
+    # 4) Trame : la bible scénario suit la salle d'étape atteinte.
+    for e in (donjon.get("etapes") or []):
+        if not isinstance(e, dict):
+            continue
+        salle_ref = str(e.get("salle") or "").strip()
+        titre = str(e.get("titre") or "").strip()
+        if not salle_ref or not titre or f"{cx},{cy}" != salle_ref:
+            continue
+        bible = etat.setdefault("quete", {}).setdefault("bible", {})
+        faites = [str(x).lower() for x in (bible.get("etapes_terminees") or [])]
+        if titre.lower() in faites:
+            break
+        bible["etape_courante"] = titre
+        bible["objectif"] = str(e.get("detail") or titre).strip()[:600]
+        break
+
+
 @tool
 async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     """
@@ -669,6 +754,17 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             )
     etat["donjon"] = donjon
     etat["phase"] = "exploration"
+    # 📓 Auto-journalisation serveur de l'entrée (voir _journaliser_lieu).
+    _cr_ent = list(donjon.get("courant") or [0, 0])
+    _salles_ent = _grille_vers_dict(donjon.get("grille") or [])
+    _journaliser_lieu(
+        ctx, etat, donjon,
+        _salles_ent.get((_cr_ent[0] if len(_cr_ent) > 0 else 0,
+                         _cr_ent[1] if len(_cr_ent) > 1 else 0)),
+        f"Entrée dans le donjon « {donjon.get('id')} » — salle "
+        f"({_cr_ent[0] if len(_cr_ent) > 0 else 0},"
+        f"{_cr_ent[1] if len(_cr_ent) > 1 else 0}).",
+    )
     _marquer_mouvement(ctx)
     err = _sauver_etat(ctx, etat)
     if err:
@@ -1588,6 +1684,14 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
     donjon["salles_visitees"] = salles_vis
     _sync_etage(donjon)
     etat["donjon"] = donjon
+    # 📓 Auto-journalisation serveur (lieu, memoire.position, histoire,
+    # trame) — voir _journaliser_lieu : le LLM n'appelait jamais ces tools.
+    _journaliser_lieu(
+        ctx, etat, donjon, salles[(nx, ny)],
+        f"Déplacement : salle ({nx},{ny}) — "
+        f"{str(salles[(nx, ny)].get('type') or 'salle')} du donjon "
+        f"« {donjon.get('id')} ».",
+    )
     _marquer_mouvement(ctx)
     err = _sauver_etat(ctx, etat)
     if err:

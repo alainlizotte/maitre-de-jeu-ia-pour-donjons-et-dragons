@@ -309,8 +309,16 @@ class OllamaClient:
         tools: Optional[list[dict[str, Any]]] = None,
         tool_choice: Optional[str] = None,
         temperature: Optional[float] = None,
+        response_format: Optional[dict[str, Any]] = None,
     ) -> ChatResult:
-        """Appel non-streaming. `tools` est le schéma JSON des fonctions."""
+        """Appel non-streaming. `tools` est le schéma JSON des fonctions.
+
+        `response_format` (OpenAI structured outputs) : {"type":
+        "json_schema", "json_schema": {...}} — llama.cpp compile le schéma
+        en grammaire et MASQUE les logits à chaque token : la sortie qui ne
+        conforme pas au schéma devient impossible (pas juste découragée).
+        Utilisé par la phase de décision contrainte de l'orchestrateur.
+        """
         await self.ensure_model_loaded()
         messages = _normaliser_messages(messages)
         payload = _payload_base(self.cfg, messages, stream=False)
@@ -320,6 +328,8 @@ class OllamaClient:
             payload["tools"] = tools
             if tool_choice:
                 payload["tool_choice"] = tool_choice
+        if response_format:
+            payload["response_format"] = response_format
 
         # Retry sur 500 : le modèle peut avoir été déchargé (course multi-tours)
         # ou être en concurrence VRAM avec ComfyUI (illustrations de salles).
@@ -342,6 +352,14 @@ class OllamaClient:
         else:
             if last_exc:
                 raise last_exc
+        if resp.status_code >= 400:
+            # Journalise le CORPS de l'erreur : llama.cpp renvoie la raison
+            # (ex. « the request exceeds the available context size ») —
+            # sans lui, un 400 est indifférenciable d'un bug de payload.
+            _log.error(
+                "chat %d : %s",
+                resp.status_code, (resp.text or "")[:400],
+            )
         resp.raise_for_status()
         data = resp.json()
         choice = data["choices"][0]

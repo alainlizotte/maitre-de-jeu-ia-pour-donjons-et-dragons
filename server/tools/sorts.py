@@ -345,18 +345,56 @@ async def preparer_sorts(
 
 
 @tool
-async def repos_long(ctx: ToolContext, nom_personnage: str = "") -> ToolResult:
+async def repos_long(
+    ctx: ToolContext, nom_personnage: str = "", forcer: bool = False
+) -> ToolResult:
     """
     Applique un repos long de 8 heures : restaure TOUS les emplacements de
     sorts (dépenses du jour remises à zéro — les préparateurs doivent
     re-mémoriser via preparer_sorts) et récupération naturelle de 1 PV par
     niveau. Sans argument, applique à TOUS les PJ de la partie.
 
+    UN SEUL repos long par période de repos : si le groupe vient à peine de
+    se reposer, l'outil REFUSE (un perso ne récupère pas deux nuits de suite
+    sans que le temps s'écoule) — fais alors avancer le temps (voyage,
+    veille narrative) ou utilise fiche_perso_soigner/une potion.
+
     :param nom_personnage (str): nom du PJ (vide = toute l'équipe).
+    :param forcer (bool): True pour passer outre la garde anti-répétition
+        (à réserver aux cas où le temps passe réellement : plusieurs jours
+        de voyage, week-end de repos à l'auberge…).
     """
     from .. import sorts as cat
     from .fiches import _load_fiche, _save_fiche, _sync_pj, _patch_pj
     from ..game.state import PartyState
+    from datetime import datetime as _dt
+
+    # ── Garde anti-repos-spam ────────────────────────────────────────────
+    # Observé en partie réelle (abd81275) : 4 repos longs forcés en 4
+    # minutes — le MJ utilisait le repos comme bouton de soin après CHAQUE
+    # action, brisant le rythme (4×8 h de sommeil devant la grotte). Un
+    # second repos à moins de 20 min de réel d'intervalle est refusé : le
+    # temps de jeu ne s'écoule pas si vite sans narration de voyage.
+    state_repos = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+    etat_repos = state_repos.load()
+    dernier = str((etat_repos.get("repos_dernier") or ""))[:19]
+    if dernier and not bool(forcer):
+        try:
+            delta_min = (
+                _dt.now() - _dt.fromisoformat(dernier)
+            ).total_seconds() / 60.0
+        except ValueError:
+            delta_min = 1e9
+        if delta_min < 20.0:
+            return ToolResult(text=(
+                f"⛔ **Repos refusé** : le groupe vient à peine de se reposer "
+                f"(il y a {int(delta_min)} min). Un repos long de 8 h ne peut "
+                "pas recommencer immédiatement : ce n'est pas un soin rapide. "
+                "Soigne plutôt via `fiche_perso_soigner` ou une potion ; pour "
+                "un VRAI nouveau repos, fais d'abord avancer le temps (voyage "
+                "de plusieurs heures/jours, veille de garde…), puis relance "
+                "`repos_long(forcer=true)`."
+            ))
 
     cibles: list[str] = []
     if nom_personnage.strip():
@@ -404,4 +442,12 @@ async def repos_long(ctx: ToolContext, nom_personnage: str = "") -> ToolResult:
         if idx is not None:
             patches[f"pj.{idx}.pv"] = f["pv"]
     patches["pj_updated"] = ", ".join(cibles)
+    # Horodate le dernier repos réussi (garde anti-repos-spam).
+    try:
+        etat_r = state_repos.load()
+        etat_r["repos_dernier"] = _dt.now().isoformat()
+        state_repos.save(etat_r)
+        patches["repos_dernier"] = etat_r["repos_dernier"]
+    except Exception:                                        # noqa: BLE001
+        pass
     return ToolResult(text="\n".join(lignes), state_patch=patches)

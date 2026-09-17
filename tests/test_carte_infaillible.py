@@ -304,3 +304,29 @@ async def test_engager_joueur_premier_agit_en_premier(monkeypatch):
         )
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+def test_detecter_combat_prose_retourne_uniquement_gobelin_ee5684fe():
+    """Régression ee5684fe : la narration d'ouverture (combat narré EN PROSE
+    contre « un gobelin ») ne doit rapporter QUE `Gobelin` — pas les faux
+    positifs du difflib/sous-chaîne (`Ane` via « menaçante », `Singe` via
+    « signes », `Hurleur` via « hurle », `Hobgobelin` via « gobelin »).
+    Ces faux positifs cumulés faisaient REFUSER tout le rattrapage par
+    `engager_combat` (65 PV vs plafond 42) → aucun combat officiel engagé."""
+    from server.main import _detecter_combat_prose
+
+    d = _fresh_dir(avec_bestiaire=True)
+    try:
+        narration = (
+            "Soudain, une ombre se détache dans l'entrée de la mine. "
+            "Un gobelin, armé d'un couteau rouillé, surgit de l'ombre et "
+            "vous lance une flèche empoisonnée ! **14 au toucher, 3 dégâts** ! "
+            "Le demi-orc barbare parvient à esquamaner la flèche, mais elle "
+            "s'abat sur le mage, qui hurle de douleur. « Attention ! » crie "
+            "Utturgut. Des signes de violence marquent l'entrée menaçante. "
+            "Le combat commence !"
+        )
+        types = _detecter_combat_prose(d, narration, {"phase": "exploration"})
+        assert types == ["Gobelin"], types
+    finally:
+        shutil.rmtree(d, ignore_errors=True)

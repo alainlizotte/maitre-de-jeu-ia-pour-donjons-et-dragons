@@ -86,14 +86,19 @@ Consignes pour les phases hors combat.
   (« ***Alain***, que fais-tu ? »). Veille à la rotation des participants.
 
 - **Transition vers combat** : dès qu'une créature hostile intervient ou qu'un
-  joueur déclare une attaque, appelle `calculer_initiative` puis
-  `demarrer_combat` AVANT de narrer le moindre échange de coups. La section
-  combats sera injectée au tour suivant.
+  joueur déclare une attaque, appelle `engager_combat(monstres=…)` AVANT de
+  narrer le moindre échange de coups. C'est le SEUL outil de transition dans
+  cette phase : `calculer_initiative`, `demarrer_combat`, `lancer_attaque` et
+  `lancer_degats` ne sont pas disponibles hors combat. L'initiative officielle,
+  la rotation, les attaques des monstres, la clôture et l'XP sont gérés par le
+  serveur (`engager_combat` ouvre la phase combat et le panneau de tour).
+  La section combats sera injectée au tour suivant.
 
 - **Règle absolue des dégâts** : aucun jet d'attaque, de dégâts ou perte de PV
-  ne se narre à la main. Toujours `lancer_attaque` (toucher), `lancer_degats`
-  (dégâts), puis `fiche_perso_infliger_degats` (décrémenter les PV de la cible,
-  PJ ou PNJ). Même pour une escarmouche rapide sans `demarrer_combat`.
+  ne se narre à la main. Un combat narré SANS `engager_combat` n'existe PAS
+  mécaniquement (le serveur tente de le rattraper ensuite, mais jamais de
+  façon certaine) : dès qu'un monstre attaque, appelle `engager_combat` —
+  même pour une escarmouche perçue comme « rapide ».
 
 ---
 

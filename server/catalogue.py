@@ -57,60 +57,82 @@ PROFICIENCES: dict[str, dict[str, Any]] = {
 
 
 # --------------------------------------------------------------------------- #
-#  Armes (sélection courante niveau 1)
+#  Armes (liste complète PHB 3.5 — simples et martiales)
 # --------------------------------------------------------------------------- #
-# groupe : "simple" | "martiale" ; distance=True = arme à distance.
+# groupe : "simple" | "martiale" ; distance=True = arme à distance (jet ou tir).
 ARMES: list[dict[str, Any]] = [
     # Simples, corps à corps
     {"nom": "Bâton",                  "groupe": "simple",   "distance": False, "degats": "1d6",      "cout": 0,   "poids": 1.81},
     {"nom": "Matraque",               "groupe": "simple",   "distance": False, "degats": "1d6",      "cout": 0,   "poids": 1.36},
     {"nom": "Dague",                  "groupe": "simple",   "distance": True,  "degats": "1d4",      "cout": 2,   "poids": 0.45},
     {"nom": "Masse d'armes légère",   "groupe": "simple",   "distance": False, "degats": "1d6",      "cout": 8,   "poids": 1.81},
+    {"nom": "Masse d'armes lourde",   "groupe": "simple",   "distance": False, "degats": "1d8",      "cout": 12,  "poids": 3.63},
     {"nom": "Faucille",               "groupe": "simple",   "distance": False, "degats": "1d6",      "cout": 8,   "poids": 0.91},
     {"nom": "Lance courte",           "groupe": "simple",   "distance": True,  "degats": "1d6",      "cout": 1,   "poids": 1.36},
+    {"nom": "Étoile du matin",        "groupe": "simple",   "distance": False, "degats": "1d8",      "cout": 8,   "poids": 2.72},
+    {"nom": "Lance",                  "groupe": "simple",   "distance": True,  "degats": "1d8",      "cout": 2,   "poids": 2.72},
+    {"nom": "Lance longue",           "groupe": "simple",   "distance": False, "degats": "1d8",      "cout": 5,   "poids": 4.08},
     # Simples, distance
     {"nom": "Javeline",               "groupe": "simple",   "distance": True,  "degats": "1d6",      "cout": 1,   "poids": 0.91},
+    {"nom": "Fléchette",              "groupe": "simple",   "distance": True,  "degats": "1d4",      "cout": 0.5, "poids": 0.23},
+    {"nom": "Sarbacane",              "groupe": "simple",   "distance": True,  "degats": "1d2",      "cout": 1,   "poids": 0.91},
     {"nom": "Fronde",                 "groupe": "simple",   "distance": True,  "degats": "1d4",      "cout": 0,   "poids": 0.0},
     {"nom": "Arbalète légère",        "groupe": "simple",   "distance": True,  "degats": "1d8",      "cout": 35,  "poids": 1.81},
     {"nom": "Arbalète lourde",        "groupe": "simple",   "distance": True,  "degats": "1d10",     "cout": 50,  "poids": 3.63},
-    {"nom": "Lance",                  "groupe": "simple",   "distance": True,  "degats": "1d8",      "cout": 2,   "poids": 2.72},
     # Martiales, corps à corps
     {"nom": "Épée longue",            "groupe": "martiale", "distance": False, "degats": "1d8",      "cout": 15,  "poids": 1.81},
     {"nom": "Épée courte",            "groupe": "martiale", "distance": False, "degats": "1d6",      "cout": 10,  "poids": 0.91},
+    {"nom": "Épée bâtarde",           "groupe": "martiale", "distance": False, "degats": "1d10",     "cout": 35,  "poids": 2.72},
     {"nom": "Rapière",                "groupe": "martiale", "distance": False, "degats": "1d6",      "cout": 20,  "poids": 0.91},
     {"nom": "Hache d'arme",           "groupe": "martiale", "distance": False, "degats": "1d8",      "cout": 30,  "poids": 2.72},
+    {"nom": "Hachette",               "groupe": "martiale", "distance": True,  "degats": "1d6",      "cout": 6,   "poids": 1.36},
     {"nom": "Hache à deux mains",     "groupe": "martiale", "distance": False, "degats": "1d12",     "cout": 40,  "poids": 5.44},
     {"nom": "Espadon",                "groupe": "martiale", "distance": False, "degats": "2d6",      "cout": 50,  "poids": 3.63},
-    {"nom": "Masse d'armes lourde",   "groupe": "martiale", "distance": False, "degats": "1d8",      "cout": 12,  "poids": 3.63},
     {"nom": "Fléau d'armes",          "groupe": "martiale", "distance": False, "degats": "1d8",      "cout": 15,  "poids": 4.54},
     {"nom": "Marteau de guerre",      "groupe": "martiale", "distance": False, "degats": "1d8",      "cout": 12,  "poids": 2.27},
     {"nom": "Glaive",                 "groupe": "martiale", "distance": False, "degats": "1d10",     "cout": 8,   "poids": 4.54},
     {"nom": "Hallebarde",             "groupe": "martiale", "distance": False, "degats": "1d10",     "cout": 10,  "poids": 5.44},
+    {"nom": "Guisarme",               "groupe": "martiale", "distance": False, "degats": "2d4",      "cout": 9,   "poids": 5.44},
+    {"nom": "Ransueur",               "groupe": "martiale", "distance": False, "degats": "2d4",      "cout": 10,  "poids": 4.54},
+    {"nom": "Faux",                   "groupe": "martiale", "distance": False, "degats": "2d4",      "cout": 18,  "poids": 4.54},
+    {"nom": "Trident",                "groupe": "martiale", "distance": True,  "degats": "1d8",      "cout": 15,  "poids": 1.81},
     # Martiales, distance
     {"nom": "Arc court",              "groupe": "martiale", "distance": True,  "degats": "1d6",      "cout": 30,  "poids": 0.91},
     {"nom": "Arc long",               "groupe": "martiale", "distance": True,  "degats": "1d8",      "cout": 75,  "poids": 1.36},
+    {"nom": "Arc court composite",    "groupe": "martiale", "distance": True,  "degats": "1d6",      "cout": 75,  "poids": 0.91},
+    {"nom": "Arc long composite",     "groupe": "martiale", "distance": True,  "degats": "1d8",      "cout": 100, "poids": 1.36},
 ]
 
 _ARMES_PAR_NOM = {a["nom"]: a for a in ARMES}
 
 
 # --------------------------------------------------------------------------- #
-#  Armures et boucliers
+#  Armures et boucliers (liste complète PHB 3.5)
 # --------------------------------------------------------------------------- #
 # categorie : "Legere" | "Moyenne" | "Lourde" | "Bouclier"
 ARMURES: list[dict[str, Any]] = [
+    # Légères
     {"nom": "Armure rembourrée",    "categorie": "Legere",  "ca": 1, "dex_max": 8, "malus": 0, "cout": 5,     "poids": 4.54},
     {"nom": "Armure de cuir",       "categorie": "Legere",  "ca": 2, "dex_max": 6, "malus": 0, "cout": 10,    "poids": 6.80},
     {"nom": "Cuir clouté",          "categorie": "Legere",  "ca": 3, "dex_max": 5, "malus": 1, "cout": 25,    "poids": 9.07},
-    {"nom": "Chemise de mailles",   "categorie": "Moyenne", "ca": 4, "dex_max": 4, "malus": 2, "cout": 100,   "poids": 11.34},
+    {"nom": "Chemise de mailles",   "categorie": "Legere",  "ca": 4, "dex_max": 4, "malus": 1, "cout": 100,   "poids": 11.34},
+    # Moyennes
     {"nom": "Cuir épais",           "categorie": "Moyenne", "ca": 3, "dex_max": 4, "malus": 3, "cout": 15,    "poids": 11.34},
     {"nom": "Armure d'écailles",    "categorie": "Moyenne", "ca": 4, "dex_max": 3, "malus": 4, "cout": 50,    "poids": 13.61},
-    {"nom": "Cotte de mailles",     "categorie": "Lourde",  "ca": 5, "dex_max": 2, "malus": 5, "cout": 150,   "poids": 18.14},
-    {"nom": "Plastron",             "categorie": "Lourde",  "ca": 5, "dex_max": 3, "malus": 4, "cout": 200,   "poids": 13.61},
+    {"nom": "Cotte de mailles",     "categorie": "Moyenne", "ca": 5, "dex_max": 2, "malus": 4, "cout": 150,   "poids": 18.14},
+    {"nom": "Plastron",             "categorie": "Moyenne", "ca": 5, "dex_max": 3, "malus": 4, "cout": 200,   "poids": 13.61},
+    # Lourdes
+    {"nom": "Armure à lames",       "categorie": "Lourde",  "ca": 6, "dex_max": 0, "malus": 7, "cout": 200,   "poids": 20.41},
+    {"nom": "Armure à bandes",      "categorie": "Lourde",  "ca": 6, "dex_max": 1, "malus": 6, "cout": 250,   "poids": 15.88},
+    {"nom": "Demi-harnois",         "categorie": "Lourde",  "ca": 7, "dex_max": 0, "malus": 7, "cout": 600,   "poids": 22.68},
     {"nom": "Harnois complet",      "categorie": "Lourde",  "ca": 8, "dex_max": 1, "malus": 6, "cout": 1500,  "poids": 22.68},
+    # Boucliers
     {"nom": "Targe",                "categorie": "Bouclier", "ca": 1, "dex_max": None, "malus": 1, "cout": 15, "poids": 2.27},
     {"nom": "Bouclier bois léger",  "categorie": "Bouclier", "ca": 1, "dex_max": None, "malus": 1, "cout": 3,  "poids": 2.27},
+    {"nom": "Bouclier acier léger", "categorie": "Bouclier", "ca": 1, "dex_max": None, "malus": 0, "cout": 9,  "poids": 2.72},
     {"nom": "Bouclier bois lourd",  "categorie": "Bouclier", "ca": 2, "dex_max": None, "malus": 2, "cout": 7,  "poids": 4.54},
+    {"nom": "Bouclier acier lourd", "categorie": "Bouclier", "ca": 2, "dex_max": None, "malus": 2, "cout": 20, "poids": 6.80},
+    {"nom": "Pavois",               "categorie": "Bouclier", "ca": 4, "dex_max": 2, "malus": 10, "cout": 30, "poids": 20.41},
 ]
 
 
@@ -118,47 +140,98 @@ ARMURES: list[dict[str, Any]] = [
 #  Équipement d'aventurier (accessible à toutes les classes)
 # --------------------------------------------------------------------------- #
 EQUIPEMENT: list[dict[str, Any]] = [
-    {"nom": "Sac à dos",              "cout": 2, "poids": 0.91},
-    {"nom": "Sac de couchage",        "cout": 0, "poids": 2.27},
-    {"nom": "Lit de camp",            "cout": 0, "poids": 2.27},
-    {"nom": "Outre à eau",            "cout": 0, "poids": 1.81},
-    {"nom": "Corde de chanvre (15 m)", "cout": 1, "poids": 4.54},
-    {"nom": "Torche",                 "cout": 0, "poids": 0.45},
-    {"nom": "Silex et amorce",        "cout": 1, "poids": 0.0},
-    {"nom": "Lanterne à capuchon",    "cout": 7, "poids": 0.91},
-    {"nom": "Huile (pinte)",          "cout": 0, "poids": 0.45},
-    {"nom": "Rations journalières",   "cout": 1, "poids": 0.45},
-    {"nom": "Gibecière",              "cout": 2, "poids": 0.23},
-    {"nom": "Kit premiers secours",   "cout": 1, "poids": 0.45},
-    {"nom": "Grappin et corde",       "cout": 1, "poids": 1.81},
-    {"nom": "Flèches (20)",           "cout": 1, "poids": 1.36},
-    {"nom": "Carreaux (10)",          "cout": 1, "poids": 0.45},
-    {"nom": "Pierre à aiguiser",      "cout": 0, "poids": 0.45},
-    {"nom": "Savon",                  "cout": 0, "poids": 0.23},
-    {"nom": "Craie",                  "cout": 0, "poids": 0.05},
+    # Sac, campement, lumière
+    {"nom": "Sac à dos",              "cout": 2,   "poids": 0.91},
+    {"nom": "Sac de couchage",        "cout": 0,   "poids": 2.27},
+    {"nom": "Lit de camp",            "cout": 0,   "poids": 2.27},
+    {"nom": "Tente",                  "cout": 10,  "poids": 9.07},
+    {"nom": "Outre à eau",            "cout": 0,   "poids": 1.81},
+    {"nom": "Torche",                 "cout": 0,   "poids": 0.45},
+    {"nom": "Silex et amorce",        "cout": 1,   "poids": 0.0},
+    {"nom": "Lanterne à capuchon",    "cout": 7,   "poids": 0.91},
+    {"nom": "Lanterne à miroir",      "cout": 12,  "poids": 1.36},
+    {"nom": "Huile (pinte)",          "cout": 0,   "poids": 0.45},
+    {"nom": "Rations journalières",   "cout": 1,   "poids": 0.45},
+    # Exploration, survie
+    {"nom": "Corde de chanvre (15 m)", "cout": 1,  "poids": 4.54},
+    {"nom": "Corde de soie (15 m)",   "cout": 20,  "poids": 2.27},
+    {"nom": "Grappin et corde",       "cout": 1,   "poids": 1.81},
+    {"nom": "Pioche",                 "cout": 3,   "poids": 2.72},
+    {"nom": "Pelle",                  "cout": 2,   "poids": 3.63},
+    {"nom": "Barre à mine",           "cout": 2,   "poids": 2.27},
+    {"nom": "Marteau (menuisier)",    "cout": 0.5, "poids": 0.91},
+    {"nom": "Clous (10)",             "cout": 0.5, "poids": 0.23},
+    {"nom": "Chaîne (3 m)",           "cout": 45,  "poids": 9.07},
+    {"nom": "Cadenas (bon)",          "cout": 80,  "poids": 0.45},
+    {"nom": "Échelle (3 m)",          "cout": 0.1, "poids": 4.54},
+    {"nom": "Seau",                   "cout": 0.5, "poids": 0.91},
+    {"nom": "Gibecière",              "cout": 2,   "poids": 0.23},
+    {"nom": "Kit premiers secours",   "cout": 1,   "poids": 0.45},
+    {"nom": "Flèches (20)",           "cout": 1,   "poids": 1.36},
+    {"nom": "Carreaux (10)",          "cout": 1,   "poids": 0.45},
+    # Outils et savoir-faire
+    {"nom": "Crochets de voleur",     "cout": 30,  "poids": 0.91},
+    {"nom": "Ustensiles d'alchimiste", "cout": 50, "poids": 4.54},
+    {"nom": "Instrument de musique (luth)", "cout": 5, "poids": 1.36},
+    {"nom": "Grimoire (vide)",        "cout": 15,  "poids": 1.36},
+    {"nom": "Parchemin (feuille)",    "cout": 0.2, "poids": 0.0},
+    {"nom": "Encre (fiole)",          "cout": 8,   "poids": 0.0},
+    {"nom": "Plume d'écriture",       "cout": 0.1, "poids": 0.0},
+    {"nom": "Cire à sceller",         "cout": 1,   "poids": 0.0},
+    {"nom": "Étui à parchemins",      "cout": 1,   "poids": 0.23},
+    {"nom": "Miroir en acier poli",   "cout": 10,  "poids": 0.23},
+    {"nom": "Pierre à aiguiser",      "cout": 0,   "poids": 0.45},
+    {"nom": "Savon",                  "cout": 0,   "poids": 0.23},
+    {"nom": "Craie",                  "cout": 0,   "poids": 0.05},
+    {"nom": "Tenue d'aventurier",     "cout": 1,   "poids": 1.81},
+    {"nom": "Tenue de voyage",        "cout": 1,   "poids": 2.27},
 ]
 
 
 # --------------------------------------------------------------------------- #
-#  Dons courants niveau 1
+#  Dons (généraux PHB 3.5, majoritairement accessibles au niveau 1)
 # --------------------------------------------------------------------------- #
 # prereq : conditions chiffrées vérifiables sur les caractéristiques finales
-# ou le BBA. Vide = accessible à tous.
+# ou le BBA. Vide = accessible à tous. Les prérequis non chiffrés (dons
+# préalables) figurent dans `condition` à titre indicatif.
 DONS: list[dict[str, Any]] = [
+    # Généraux sans prérequis
     {"nom": "Alerte",             "condition": "",                     "prereq": {}},
     {"nom": "Initiative améliorée", "condition": "",                   "prereq": {}},
     {"nom": "Course",             "condition": "",                     "prereq": {}},
+    {"nom": "Endurance",          "condition": "",                     "prereq": {}},
     {"nom": "Dur à cuire (+3 PV)", "condition": "",                    "prereq": {}},
+    {"nom": "Vigueur surhumaine", "condition": "",                     "prereq": {}},
+    {"nom": "Réflexes surhumains", "condition": "",                    "prereq": {}},
+    {"nom": "Volonté de fer",     "condition": "",                     "prereq": {"sag": 13}},
+    {"nom": "Persuasion",         "condition": "",                     "prereq": {}},
+    {"nom": "Négociateur",        "condition": "",                     "prereq": {}},
+    {"nom": "Combat en aveugle",  "condition": "",                     "prereq": {}},
+    {"nom": "Attaque à mains nues améliorée", "condition": "",         "prereq": {}},
+    {"nom": "Tir de près",        "condition": "",                     "prereq": {}},
+    {"nom": "Arme de prédilection", "condition": "une arme au choix",  "prereq": {}},
+    # Physiques (Force / Dextérité)
     {"nom": "Esquive",            "condition": "DEX 13+",              "prereq": {"dex": 13}},
+    {"nom": "Mobilité",           "condition": "DEX 13+, Esquive",     "prereq": {"dex": 13}},
+    {"nom": "Attaque éclair",     "condition": "DEX 13+, BBA 4+, Mobilité", "prereq": {"dex": 13, "bab": 4}},
     {"nom": "Ambidextrie",        "condition": "DEX 13+",              "prereq": {"dex": 13}},
     {"nom": "Combat à deux armes", "condition": "DEX 15+",             "prereq": {"dex": 15}},
+    {"nom": "Combat à deux armes amélioré", "condition": "BBA 6+, Combat à deux armes", "prereq": {"bab": 6}},
     {"nom": "Attaque en puissance", "condition": "FOR 13+",            "prereq": {"for": 13}},
+    {"nom": "Attaque en rotation", "condition": "FOR 13+, Attaque en puissance", "prereq": {"for": 13}},
+    {"nom": "Attaque circulaire", "condition": "FOR 13+, BBA 4+, Attaque en rotation", "prereq": {"for": 13, "bab": 4}},
+    {"nom": "Athlète",            "condition": "FOR 13+",              "prereq": {"for": 13}},
     {"nom": "Attaque en finesse", "condition": "BBA 1+",               "prereq": {"bab": 1}},
-    {"nom": "Expertise combatif", "condition": "INT 13+",              "prereq": {"int": 13}},
-    {"nom": "Tir de près",        "condition": "",                     "prereq": {}},
+    # Combat à distance
+    {"nom": "Tir précis",         "condition": "Tir de près",          "prereq": {}},
+    {"nom": "Tir de loin",        "condition": "Tir de près",          "prereq": {}},
+    {"nom": "Tir rapide",         "condition": "DEX 13+, Tir de près", "prereq": {"dex": 13}},
     {"nom": "Tir en mouvement",   "condition": "DEX 13+",              "prereq": {"dex": 13}},
-    {"nom": "Volonté de fer",     "condition": "",                     "prereq": {"sag": 13}},
-    {"nom": "Arme de prédilection", "condition": "une arme au choix",  "prereq": {}},
+    # Esthétique de combat (INT / BBA)
+    {"nom": "Expertise combatif", "condition": "INT 13+",              "prereq": {"int": 13}},
+    {"nom": "Science du désarmement", "condition": "INT 13+, Expertise combatif", "prereq": {"int": 13}},
+    {"nom": "Science du renversement", "condition": "INT 13+, Expertise combatif", "prereq": {"int": 13}},
+    {"nom": "Science de la critique", "condition": "BBA 8+, une arme au choix", "prereq": {"bab": 8}},
 ]
 
 
@@ -167,21 +240,31 @@ DONS: list[dict[str, Any]] = [
 # --------------------------------------------------------------------------- #
 # Liste maîtresse (nom, caractéristique associée).
 COMPETENCES: list[dict[str, str]] = [
+    {"nom": "Acrobaties",             "cara": "DEX"},
     {"nom": "Alchimie",               "cara": "INT"},
+    {"nom": "Artisanat",              "cara": "INT"},
+    {"nom": "Bluff",                  "cara": "CHA"},
+    {"nom": "Collecte d'informations", "cara": "CHA"},
     {"nom": "Concentration",          "cara": "CON"},
+    {"nom": "Connaissance (histoire)", "cara": "INT"},
+    {"nom": "Connaissance (magie)",   "cara": "INT"},
+    {"nom": "Connaissance (nature)",  "cara": "INT"},
     {"nom": "Connaissance (religion)", "cara": "INT"},
     {"nom": "Connaissance des sorts", "cara": "INT"},
+    {"nom": "Contrefaçon",            "cara": "INT"},
     {"nom": "Décryptage",             "cara": "INT"},
     {"nom": "Déguisement",            "cara": "CHA"},
     {"nom": "Détection",              "cara": "SAG"},
     {"nom": "Déplacement silencieux", "cara": "DEX"},
     {"nom": "Desceller",              "cara": "DEX"},
+    {"nom": "Désamorçage",            "cara": "DEX"},
     {"nom": "Discrétion",             "cara": "DEX"},
     {"nom": "Diplomatie",             "cara": "CHA"},
     {"nom": "Équilibre",              "cara": "DEX"},
     {"nom": "Escalade",               "cara": "FOR"},
     {"nom": "Escamotage",             "cara": "DEX"},
     {"nom": "Estimation",             "cara": "INT"},
+    {"nom": "Évasion",                "cara": "DEX"},
     {"nom": "Fouille",                "cara": "INT"},
     {"nom": "Intimidation",           "cara": "CHA"},
     {"nom": "Interprétation",         "cara": "CHA"},
@@ -189,44 +272,63 @@ COMPETENCES: list[dict[str, str]] = [
     {"nom": "Natation",               "cara": "FOR"},
     {"nom": "Perception auditive",    "cara": "SAG"},
     {"nom": "Premiers secours",       "cara": "SAG"},
+    {"nom": "Profession",             "cara": "SAG"},
     {"nom": "Psychologie",            "cara": "SAG"},
     {"nom": "Saut",                   "cara": "FOR"},
     {"nom": "Survie",                 "cara": "SAG"},
     {"nom": "Équitation",             "cara": "DEX"},
+    {"nom": "Utilisation d'objets magiques", "cara": "CHA"},
+    {"nom": "Utilisation de cordes",  "cara": "DEX"},
 ]
 
 # Compétences de classe par classe (les autres sont « hors classe » → grisées).
 COMPETENCES_CLASSE: dict[str, list[str]] = {
     "Barbare":  ["Escalade", "Intimidation", "Saut", "Natation", "Équitation",
-                 "Perception auditive", "Survie", "Maîtrise des animaux"],
+                 "Perception auditive", "Survie", "Maîtrise des animaux",
+                 "Artisanat", "Profession"],
     "Barde":    ["Concentration", "Décryptage", "Déplacement silencieux",
                  "Diplomatie", "Détection", "Discrétion", "Équilibre",
                  "Escamotage", "Estimation", "Intimidation", "Interprétation",
                  "Perception auditive", "Premiers secours", "Psychologie",
-                 "Fouille", "Déguisement", "Connaissance des sorts"],
+                 "Fouille", "Déguisement", "Connaissance des sorts",
+                 "Bluff", "Acrobaties", "Collecte d'informations", "Évasion",
+                 "Utilisation d'objets magiques", "Utilisation de cordes",
+                 "Connaissance (histoire)", "Connaissance (magie)",
+                 "Connaissance (nature)", "Artisanat", "Profession"],
     "Clerc":    ["Concentration", "Diplomatie", "Psychologie",
                  "Premiers secours", "Connaissance (religion)",
-                 "Connaissance des sorts"],
+                 "Connaissance des sorts", "Artisanat", "Profession"],
     "Druide":   ["Concentration", "Diplomatie", "Maîtrise des animaux",
                  "Perception auditive", "Premiers secours", "Survie",
-                 "Connaissance des sorts"],
-    "Guerrier": ["Escalade", "Intimidation", "Saut", "Natation", "Équitation"],
+                 "Connaissance des sorts", "Connaissance (nature)",
+                 "Artisanat", "Profession"],
+    "Guerrier": ["Escalade", "Intimidation", "Saut", "Natation", "Équitation",
+                 "Artisanat", "Profession"],
     "Magicien": ["Concentration", "Alchimie", "Estimation", "Fouille",
-                 "Connaissance des sorts"],
+                 "Connaissance des sorts", "Connaissance (histoire)",
+                 "Connaissance (magie)", "Connaissance (nature)",
+                 "Artisanat", "Profession"],
     "Moine":    ["Équilibre", "Escalade", "Saut", "Concentration",
                  "Déplacement silencieux", "Psychologie",
-                 "Perception auditive"],
+                 "Perception auditive", "Acrobaties",
+                 "Artisanat", "Profession"],
     "Paladin":  ["Concentration", "Diplomatie", "Équitation",
-                 "Premiers secours", "Psychologie"],
+                 "Premiers secours", "Psychologie", "Artisanat", "Profession"],
     "Rodeur":   ["Déplacement silencieux", "Discrétion", "Escalade",
                  "Natation", "Équitation", "Saut", "Perception auditive",
                  "Survie", "Maîtrise des animaux", "Fouille",
-                 "Premiers secours", "Psychologie"],
-    "Sorcier":  ["Concentration", "Connaissance des sorts", "Estimation"],
+                 "Premiers secours", "Psychologie", "Connaissance (nature)",
+                 "Utilisation de cordes", "Artisanat", "Profession"],
+    "Sorcier":  ["Concentration", "Connaissance des sorts", "Estimation",
+                 "Bluff", "Connaissance (magie)", "Artisanat", "Profession"],
     "Voleur":   ["Équilibre", "Déplacement silencieux", "Desceller",
                  "Discrétion", "Escalade", "Escamotage", "Estimation",
                  "Fouille", "Perception auditive", "Décryptage",
-                 "Déguisement", "Intimidation", "Saut"],
+                 "Déguisement", "Intimidation", "Saut", "Bluff",
+                 "Désamorçage", "Évasion", "Contrefaçon",
+                 "Collecte d'informations", "Acrobaties",
+                 "Utilisation d'objets magiques", "Utilisation de cordes",
+                 "Artisanat", "Profession"],
 }
 
 # Points de compétence par niveau (avant mod. INT ; niveau 1 ×4).

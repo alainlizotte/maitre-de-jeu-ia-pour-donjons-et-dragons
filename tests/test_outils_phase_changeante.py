@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import sys
 import tempfile
 from typing import Any
@@ -136,3 +137,49 @@ def test_outils_combat_disponibles_apres_engager_en_cours_de_tour():
         assert etat.get("phase") == "combat", etat.get("phase")
     finally:
         pass
+
+
+def test_memoire_ecriture_retiree_sans_texte_scenario():
+    """Régression ee5684fe : un scénario choisi mais dont la bible est vide
+    (PDF illisible, résumé absent) ne doit PAS exposer les outils d'écriture
+    de mémoire (memoire_lieu/personnage/intrigue/evenement/mission/position)
+    en phase exploration — sans texte ancre, le MJ inventerait des lieux/PNJ
+    fictifs et les persisterait (Phandalin, un « mage » compagnon…).
+    La mémoire en lecture (récap) n'est pas affectée."""
+    d = tempfile.mkdtemp(prefix="dnd35_memoire_guard_")
+    try:
+        # Scénario choisi MAIS résumé trop court (< 120 chars) → mémoire
+        # d'écriture retirée, lecture OK.
+        PartyState(data_dir=d, partie_id="memoire_guard").save({
+            "meta": {"titre": "test"},
+            "phase": "exploration",
+            "pj": [{"nom": "BBB", "pv": 20, "pv_max": 20, "joueur": "alain"}],
+            "quete": {
+                "titre": "Un scénario sans texte",
+                "pitch": "...",
+                "source": "[fake_id] /data/fake.pdf",
+                "bible": {"resume": "court"},
+            },
+            "histoire": [],
+        })
+        from server.llm.orchestrator import Orchestrator, _MEMOIRE_ECRITURE_TOOLS
+        client = _ClientFaux([
+            ChatResult(content="Vous arrivez en ville.",
+                       tool_calls=[], finish_reason="stop", raw={}),
+        ])
+        orch = Orchestrator(client=client, tools=discover_tools(), tool_mode="native")
+        ctx = ToolContext(partie_id="memoire_guard", joueur="alain", data_dir=d)
+        result = asyncio.run(orch.run(
+            [Message(role="system", content="MJ."),
+             Message(role="user", content="J'entre.")],
+            ctx,
+        ))
+        # memoire_* n'est pas dans les schémas exposés au LLM.
+        outils_vus = client.tools_vus[-1] if client.tools_vus else set()
+        memoire_absente = outils_vus.isdisjoint(_MEMOIRE_ECRITURE_TOOLS)
+        assert memoire_absente, (
+            f"memoire_* écriture ne doit PAS être exposée quand le résumé est "
+            f"trop court : {outils_vus & _MEMOIRE_ECRITURE_TOOLS}"
+        )
+    finally:
+        shutil.rmtree(d, ignore_errors=True)

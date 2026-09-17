@@ -3,7 +3,7 @@
 // clic sur le nom ou le portrait → fiche complète : caractéristiques,
 // inventaire, sorts, etc.).
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/rest";
 import { useParty } from "../store";
@@ -452,6 +452,17 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
     niveau: f.niveau ?? pj?.niveau,
     alignement: f.alignement,
   };
+
+  // Capacités raciales + capacités de classe acquises au niveau courant
+  // (tableaux PHB 3.5 des catalogues — recalculées, rien à stocker en fiche).
+  const capacites = useMemo(() => {
+    const m = modeleQuery.data;
+    const race = (m?.races ?? []).find((r) => r.nom === identite.race)?.capacites ?? [];
+    const niv = Number(identite.niveau ?? 1);
+    const classe = ((m?.classes ?? []).find((c) => c.nom === identite.classe)?.capacites ?? [])
+      .filter((c) => (c.niveau ?? 1) <= niv);
+    return { race, classe };
+  }, [modeleQuery.data, identite.race, identite.classe, identite.niveau]);
   const pv = (f.pv as number) ?? pj?.pv;
   const pvMax = (f.pv_max as number) ?? pj?.pv_max;
   const ca = (f.ca as number) ?? pj?.ca;
@@ -462,7 +473,7 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
     "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
     "ca", "carac", "sauvegardes", "bab", "competences", "dons", "equipement",
     "inventaire", "armes", "or", "histoire", "conditions", "sorts",
-    "sorts_connus", "charge_max", "apparence",
+    "sorts_connus", "charge_max", "apparence", "capacites",
   ]);
   const extras = Object.entries(f).filter(([k]) => !connus.has(k));
   const apparence = (f.apparence ?? pj?.apparence) as
@@ -610,6 +621,28 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
         <Field label="Sauvegardes" value={f.sauvegardes} />
         <Field label="Compétences" value={f.competences} />
         <Field label="Dons" value={f.dons} />
+        {(capacites.race.length > 0 || capacites.classe.length > 0) && (
+          <div className="mt-2 rounded bg-stone-800/40 border border-stone-800 p-2">
+            <div className="text-xs text-stone-500 mb-1">Capacités</div>
+            <ul className="space-y-1.5">
+              {[
+                ...capacites.race.map((c) => ({ ...c, src: `Race · ${String(identite.race ?? "")}` })),
+                ...capacites.classe.map((c) => ({
+                  ...c,
+                  src: `${String(identite.classe ?? "")} · niv. ${c.niveau ?? 1}`,
+                })),
+              ].map((c) => (
+                <li key={`${c.src}-${c.nom}`} className="text-xs leading-snug">
+                  <span className="text-stone-200">{c.nom}</span>{" "}
+                  <span className="text-stone-500">({c.src})</span>
+                  {c.description ? (
+                    <div className="text-[11px] text-stone-500">{c.description}</div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <PanneauSorts
           modele={modeleQuery.data}
           fiche={{

@@ -275,8 +275,13 @@ export interface FichePerso {
   race: string;
   classe: string;
   niveau: number;
-  /** Points d'expérience courants (montée de niveau officielle 3.5). */
+  /** XP courants (montée de niveau officielle 3.5). */
   xp?: number;
+  /** Dernier niveau dont les choix d'avancement sont confirmés (verrou :
+   *  la fiche n'est modifiable que si niveau > avancement_confirme). */
+  avancement_confirme?: number;
+  /** Niveaux multiples de 4 où le +1 de caractéristique a été appliqué. */
+  gains_carac?: string[];
   carac: CaracMap;
   pv: number;
   pv_max: number;
@@ -313,6 +318,8 @@ export interface RaceModele {
   mods: Partial<Record<string, number>>;
   taille: string;
   vitesse: number;
+  /** Traits raciaux (obtenus dès le niveau 1). */
+  capacites?: CapaciteModele[];
 }
 
 export interface ClasseModele {
@@ -320,6 +327,18 @@ export interface ClasseModele {
   de_vie: number;
   bab: "bon" | "moyen" | "mauvais";
   sauves_bonnes: ("Vigueur" | "Reflexes" | "Volonte")[];
+  /** Capacités de classe avec niveau d'obtention. */
+  capacites?: CapaciteModele[];
+}
+
+/** Trait racial ou capacité de classe (miroir de server/persos.py). */
+export interface CapaciteModele {
+  nom: string;
+  description: string;
+  /** Niveau d'obtention (1 pour un trait racial). */
+  niveau?: number;
+  /** « Race » ou « Classe ». */
+  source?: string;
 }
 
 export interface DieuModele {

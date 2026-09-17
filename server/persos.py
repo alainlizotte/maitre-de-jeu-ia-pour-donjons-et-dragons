@@ -360,6 +360,240 @@ def resoudre_classe(classe: str) -> str:
     return _CLASSE_ALIASES.get(_normaliser(classe), "")
 
 
+# --------------------------------------------------------------------------- #
+#  Capacités — traits raciaux et capacités de classe (PHB 3.5)
+# --------------------------------------------------------------------------- #
+# Alimente la section « Capacités » du formulaire de création ET la fiche du
+# personnage. Les traits raciaux s'obtiennent dès le niveau 1 ; les capacités
+# de classe portent le niveau d'obtention (`niveau`) et sont filtrées à
+# l'affichage selon le niveau courant du personnage.
+CAPACITES_RACES: dict[str, list[dict[str, str]]] = {
+    "Humain": [
+        {"nom": "Don supplémentaire",
+         "description": "Un don supplémentaire au niveau 1."},
+        {"nom": "Compétences étendues",
+         "description": "+4 points de compétence au niveau 1, +1 par niveau."},
+    ],
+    "Elfe": [
+        {"nom": "Vision nocturne",
+         "description": "Voit à 18 m à la lueur des étoiles comme en plein jour."},
+        {"nom": "Immunité au sommeil",
+         "description": "Immune aux effets de sommeil magique."},
+        {"nom": "Sang-froid elfique",
+         "description": "+2 aux sauvegardes contre les enchantements."},
+        {"nom": "Sens aiguisés",
+         "description": "+2 en Détection, Perception auditive et Fouille."},
+        {"nom": "Armes elfiques",
+         "description": "Maîtrise de l'épée longue, la rapière, l'arc long et l'arc court."},
+        {"nom": "Méditation elfique",
+         "description": "Se repose en 4 h de transe au lieu de 8 h de sommeil."},
+    ],
+    "Nain": [
+        {"nom": "Vision dans le noir",
+         "description": "Voit à 18 m dans le noir total (noir et blanc)."},
+        {"nom": "Résistance naine",
+         "description": "+2 aux sauvegardes contre poison et sorts."},
+        {"nom": "Bête des cavernes",
+         "description": "+1 attaque contre orques et gobelinoïdes ; +4 CA contre les géants."},
+        {"nom": "Connaissance de la pierre",
+         "description": "+2 en Détection, Perception auditive et Fouille sur la pierre."},
+        {"nom": "Poids plume",
+         "description": "La vitesse n'est jamais réduite par l'armure ou la charge."},
+    ],
+    "Halfelin": [
+        {"nom": "Petite taille",
+         "description": "+1 CA, +1 attaque, +4 Discrétion, −4 empoignade."},
+        {"nom": "Droit en botte",
+         "description": "+1 aux attaques avec frondes et armes de jet."},
+        {"nom": "Vif",
+         "description": "+2 en Escalade, Saut et Déplacement silencieux."},
+        {"nom": "Chanceux",
+         "description": "+1 à toutes les sauvegardes."},
+        {"nom": "Cœur vaillant",
+         "description": "+2 aux sauvegardes contre la peur."},
+    ],
+    "Gnome": [
+        {"nom": "Petite taille",
+         "description": "+1 CA, +1 attaque, +4 Discrétion, −4 empoignade."},
+        {"nom": "Vision nocturne",
+         "description": "Voit à 18 m à la lueur des étoiles comme en plein jour."},
+        {"nom": "Résistance à l'illusion",
+         "description": "+2 aux sauvegardes contre les illusions."},
+        {"nom": "Sorts mineurs innés",
+         "description": "Tours de magie de prestige 1/jour (DD 11, CHA)."},
+        {"nom": "Haine des gobelins",
+         "description": "+1 attaque contre kobolds et gobelinoïdes ; +4 CA contre les géants."},
+        {"nom": "Bricolage",
+         "description": "+2 en Alchimie et Perception auditive."},
+        {"nom": "Bavardage souterrain",
+         "description": "Parle une fois/jour aux animaux fouisseurs (taupe, blaireau…)."},
+    ],
+    "Demi-elfe": [
+        {"nom": "Immunité au sommeil",
+         "description": "Immune aux effets de sommeil magique."},
+        {"nom": "Sang-froid",
+         "description": "+2 aux sauvegardes contre les enchantements."},
+        {"nom": "Héritage elfique",
+         "description": "+2 en Diplomatie et Collecte d'informations."},
+        {"nom": "Sang elfique",
+         "description": "Compté comme elfe pour les effets liés à la race."},
+    ],
+    "Demi-orc": [
+        {"nom": "Vision dans le noir",
+         "description": "Voit à 18 m dans le noir total (noir et blanc)."},
+        {"nom": "Sang orc",
+         "description": "Compté comme orc pour les effets liés à la race."},
+    ],
+}
+
+CAPACITES_CLASSES: dict[str, list[dict[str, Any]]] = {
+    "Barbare": [
+        {"niveau": 1, "nom": "Fureur",
+         "description": "1/jour : +4 FOR et CON, +2 Volonté, −2 CA (plus souvent ensuite)."},
+        {"niveau": 1, "nom": "Mouvement rapide",
+         "description": "+3 m de vitesse en armure légère ou sans armure."},
+        {"niveau": 2, "nom": "Réflexes d'instinct",
+         "description": "Conserve son bonus de DEX même pris au dépourvu."},
+        {"niveau": 3, "nom": "Sens des pièges",
+         "description": "+1 aux sauvegardes de Réflexes contre les pièges (+1 tous les 3 niveaux)."},
+        {"niveau": 5, "nom": "Réflexes d'instinct amélioré",
+         "description": "Ne peut plus être flatté par les feintes."},
+        {"niveau": 7, "nom": "Réduction des dégâts",
+         "description": "−1 point de dégât par coup (−1 tous les 3 niveaux)."},
+    ],
+    "Barde": [
+        {"niveau": 1, "nom": "Savoir barde",
+         "description": "Connaissances utilisables sans rang (+1 par niveau)."},
+        {"niveau": 1, "nom": "Musique barde",
+         "description": "Chant d'inspiration (+1 attaque/dégâts/sauves des alliés), fascination, contre-chant."},
+        {"niveau": 1, "nom": "Sorts",
+         "description": "Lance des sorts d'arcane spontanés (CHARISME)."},
+    ],
+    "Clerc": [
+        {"niveau": 1, "nom": "Sorts divins",
+         "description": "Prépare ses sorts chaque jour (SAGESSE)."},
+        {"niveau": 1, "nom": "Tourner ou exorciser les morts-vivants",
+         "description": "Repousse (ou commande si maléfique) 3 + mod CHA fois par jour."},
+        {"niveau": 1, "nom": "Domaine",
+         "description": "Un domaine de son dieu : sort de domaine + pouvoir associé."},
+        {"niveau": 1, "nom": "Aura",
+         "description": "Son alignement se voit via Détection du bien/mal."},
+    ],
+    "Druide": [
+        {"niveau": 1, "nom": "Sorts divins",
+         "description": "Prépare ses sorts chaque jour (SAGESSE)."},
+        {"niveau": 1, "nom": "Compagnon animal",
+         "description": "Un lien durable avec un animal naturel."},
+        {"niveau": 1, "nom": "Empathie sauvage",
+         "description": "Apaise un animal (CHA + niveau)."},
+        {"niveau": 1, "nom": "Passer sans trace",
+         "description": "Laisse une piste illisible en terrain naturel."},
+        {"niveau": 1, "nom": "Langage druidique",
+         "description": "Connaît la langue secrète des druides."},
+        {"niveau": 5, "nom": "Forme sauvage",
+         "description": "Se transforme en animal 1/jour (2/jour au niv 6…)."},
+        {"niveau": 9, "nom": "Immunité aux venins",
+         "description": "Immune aux poisons naturels et organiques."},
+        {"niveau": 13, "nom": "Mille visages",
+         "description": "Prend l'apparence d'un humanoïde 1/jour."},
+    ],
+    "Guerrier": [
+        {"niveau": 1, "nom": "Dons de guerrier",
+         "description": "1 don supplémentaire aux niveaux 1, 2, 4, 6, 8, 10, 12, 14, 16, 18 et 20."},
+    ],
+    "Magicien": [
+        {"niveau": 1, "nom": "Grimoire",
+         "description": "Prépare ses sorts d'arcane depuis son grimoire (INT)."},
+        {"niveau": 1, "nom": "Familier",
+         "description": "Un animal magique compagnon (chat, hibou…)."},
+        {"niveau": 1, "nom": "Scribe de parchemins",
+         "description": "Don gratuit : copie ses sorts connus sur parchemin."},
+    ],
+    "Moine": [
+        {"niveau": 1, "nom": "Poings de fer",
+         "description": "Attaques en rafale : un coup supplémentaire avec −2."},
+        {"niveau": 1, "nom": "Attaque stupéfiante",
+         "description": "1/jour : DC 10 + niv/2 + SAG, cible étourdie 1 round."},
+        {"niveau": 1, "nom": "Défense sans armes",
+         "description": "Ajoute son mod SAG à la CA quand il n'est ni armuré ni encombré."},
+        {"niveau": 2, "nom": "Réflexes combatifs",
+         "description": "Aucun dégât de zone si sa sauvegarde réussit."},
+        {"niveau": 3, "nom": "Esprit détaché",
+         "description": "+2 aux sauvegardes contre les enchantements."},
+        {"niveau": 4, "nom": "Poings de ki",
+         "description": "Ses attaques à mains nues comptent comme magiques."},
+        {"niveau": 4, "nom": "Chute ralentie",
+         "description": "Encaisse une chute de 6 m comme si elle était plus courte (plus ensuite)."},
+    ],
+    "Paladin": [
+        {"niveau": 1, "nom": "Détection du mal",
+         "description": "Détecte les auras maléfiques à vue."},
+        {"niveau": 1, "nom": "Imposition des mains",
+         "description": "Soigne (PV = niveau × 2) 1/jour, ou frappe les morts-vivants."},
+        {"niveau": 2, "nom": "Grâce divine",
+         "description": "Ajoute son mod CHA à toutes ses sauvegardes."},
+        {"niveau": 3, "nom": "Santé divine",
+         "description": "Immunité aux maladies."},
+        {"niveau": 4, "nom": "Sorts divins",
+         "description": "Lance des sorts de clerc limités (SAGESSE)."},
+        {"niveau": 5, "nom": "Monture spéciale",
+         "description": "Un cheval magique fidèle et intelligent."},
+    ],
+    "Rodeur": [
+        {"niveau": 1, "nom": "Ennemi juré",
+         "description": "+2 dégâts, Bluff, Détection, Écoute et Psychologie contre un type de créature (+1 autre type aux niv 5, 10, 15)."},
+        {"niveau": 1, "nom": "Empathie sauvage",
+         "description": "Apaise un animal (CHA + niveau/2)."},
+        {"niveau": 1, "nom": "Pistage",
+         "description": "Don gratuit : suit une piste grâce à la Survie."},
+        {"niveau": 2, "nom": "Style de combat",
+         "description": "Spécialisation arc ou deux armes (dons de style)."},
+        {"niveau": 4, "nom": "Compagnon animal",
+         "description": "Un compagnon naturel fidèle."},
+        {"niveau": 4, "nom": "Sorts",
+         "description": "Sorts de druide limités (SAGESSE)."},
+    ],
+    "Sorcier": [
+        {"niveau": 1, "nom": "Sorts spontanés",
+         "description": "Lance ses sorts connus sans préparation (CHARISME)."},
+        {"niveau": 1, "nom": "Familier",
+         "description": "Un animal magique compagnon (chat, hibou…)."},
+    ],
+    "Voleur": [
+        {"niveau": 1, "nom": "Attaque en sournois",
+         "description": "+1d6 dégâts sur une cible prise de cours (+1d6 aux niv 3, 5, 7…)."},
+        {"niveau": 1, "nom": "Détection des pièges",
+         "description": "Peut repérer les pièges magiques avec Fouille et Désamorçage."},
+        {"niveau": 2, "nom": "Réflexes combatifs",
+         "description": "Aucun dégât de zone si sa sauvegarde réussit."},
+        {"niveau": 3, "nom": "Esquive extraordinaire",
+         "description": "Conserve son bonus de DEX même pris au dépourvu."},
+        {"niveau": 4, "nom": "Précision",
+         "description": "Attaque en sournois possible à distance jusqu'à 9 m."},
+        {"niveau": 7, "nom": "Esquive totale",
+         "description": "+4 CA contre une attaque qu'il voit venir."},
+    ],
+}
+
+
+def capacites_personnage(race: str, classe: str, niveau: int) -> list[dict[str, Any]]:
+    """Capacités complètes d'un personnage : traits raciaux + capacités de
+    classe acquises au niveau indiqué (liste triée : race puis classe,
+    par niveau d'obtention)."""
+    race_c = resoudre_race(race) or (race or "")
+    classe_c = resoudre_classe(classe) or (classe or "")
+    niv = max(1, int(niveau or 1))
+    resultat: list[dict[str, Any]] = []
+    for c in CAPACITES_RACES.get(race_c, []):
+        resultat.append({"source": "Race", "niveau": 1,
+                         "nom": c["nom"], "description": c["description"]})
+    for c in CAPACITES_CLASSES.get(classe_c, []):
+        if int(c.get("niveau", 1)) <= niv:
+            resultat.append({"source": "Classe", "niveau": int(c.get("niveau", 1)),
+                             "nom": c["nom"], "description": c["description"]})
+    return resultat
+
+
 ALIGNEMENTS = [
     "Loyal Bon", "Neutre Bon", "Chaotique Bon",
     "Loyal Neutre", "Neutre", "Chaotique Neutre",
@@ -1057,23 +1291,63 @@ def enregistrer_personnage_partie(
     if "_erreur" in etat:
         return None
 
+    # ── PV/conditions : la PARTIE est la source de vérité pendant le jeu ──
+    # La fiche est partagée entre les parties : recopier bêtement `pv` depuis
+    # la fiche (a) démarrait une NOUVELLE partie avec un perso blessé par le
+    # combat d'une AUTRE partie (abd81275 démarré à 4/16 PV après un combat
+    # de 5f3e31c9 — le MJ, perdu, enchaînait des repos longs pour « réparer »)
+    # et (b) au rejoin, écrasait les PV de la partie en cours par ceux de la
+    # fiche (partie et fiche divergent dès le premier dégât/soin).
+    pj_list = etat.get("pj") or []
+    existant = next(
+        (p for p in pj_list
+         if str(p.get("nom", "")).lower()
+         == str(fiche.get("nom", nom_personnage)).lower()),
+        None,
+    )
+    if existant is not None:
+        # Rejoin / refresh de la même partie : on garde les PV, conditions et
+        # XP VÉCUS dans cette partie ; seuls les champs statiques sont
+        # resynchronisés depuis la fiche.
+        pv_entree = existant.get("pv", fiche.get("pv", 0))
+        pv_max_entree = existant.get("pv_max", fiche.get("pv_max", 0))
+        conditions_entree = existant.get("conditions", [])
+        xp_entree = existant.get("xp", fiche.get("xp", 0))
+    else:
+        # Nouvelle partie = nouveau départ : le perso entre à PLEINE SANTÉ
+        # (la fiche est aussi soignée, car des tools comme repos_long ou
+        # fiche_perso_soigner réécrivent `pj.pv` depuis la fiche — la laisser
+        # blessée ré-injurerait le perso à la première synchro).
+        pv_entree = fiche.get("pv_max", fiche.get("pv", 0))
+        pv_max_entree = fiche.get("pv_max", 0)
+        conditions_entree = []
+        xp_entree = fiche.get("xp", 0)
+        if fiche.get("pv") != pv_entree or fiche.get("conditions"):
+            fiche["pv"] = pv_entree
+            fiche["conditions"] = []
+            try:
+                with open(chemin_fiche(data_dir, fiche.get("nom", nom_personnage)),
+                          "w", encoding="utf-8") as f:
+                    json.dump(fiche, f, ensure_ascii=False, indent=2)
+            except OSError:
+                pass
+
     entree = {
         "nom": fiche.get("nom", nom_personnage),
         "joueur": joueur,
         "race": fiche.get("race", ""),
         "classe": fiche.get("classe", ""),
         "niveau": fiche.get("niveau", 1),
-        "xp": fiche.get("xp", 0),
-        "pv": fiche.get("pv", 0),
-        "pv_max": fiche.get("pv_max", 0),
+        "xp": xp_entree,
+        "pv": pv_entree,
+        "pv_max": pv_max_entree,
         "ca": fiche.get("ca", 10),
         "carac": fiche.get("carac", {}),
         "sauvegardes": fiche.get("sauvegardes", {}),
         "bab": fiche.get("bab", 0),
-        "conditions": fiche.get("conditions", []),
+        "conditions": conditions_entree,
         "alignement": fiche.get("alignement", ""),
     }
-    pj_list = etat.get("pj") or []
     remplace = False
     for i, p in enumerate(pj_list):
         if str(p.get("nom", "")).lower() == entree["nom"].lower():

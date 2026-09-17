@@ -280,6 +280,30 @@ async def calculer_initiative(ctx: ToolContext, participants: str) -> ToolResult
     )
 
 
+def _munition_pour_arme(arme_txt: str) -> str:
+    """Munition consommée par une arme à distance (règles 3.5 : chaque tir
+    dépense 1 projectile). Vide = arme de mêlée ou jet sans arme."""
+    a = (arme_txt or "").lower()
+    import unicodedata as _ud
+    a = "".join(
+        c for c in _ud.normalize("NFD", a)
+        if _ud.category(c) != "Mn"
+    )
+    if not a:
+        return ""
+    if "arbalete" in a or "arbalet" in a:
+        return "carreau d'arbalète"
+    if "sarbacane" in a:
+        return "dard"
+    if "fronde" in a:
+        return "balle de fronde"
+    if "javelot" in a:
+        return "javelot"
+    if "arc" in a:
+        return "flèche"
+    return ""
+
+
 @tool
 async def lancer_attaque(
     ctx: ToolContext,
@@ -351,6 +375,7 @@ async def lancer_attaque(
     # avec une marge de +3 pour les bonus magiques temporaires.
     bonus_final = bonus_attaque
     note_bonus = ""
+    note_ammo = ""
     try:
         from .fiches import _chemin  # pylint: disable=import-outside-toplevel
         import os as _os                             # noqa: I001
@@ -376,6 +401,33 @@ async def lancer_attaque(
                     f"(fiche de {nom_attaquant} : BBA {bab:+d}, {cle_car} "
                     f"{val_car} ({mod_car:+d}) + marge +3 max pour bonus divers)."
                 )
+            # 🏹 Munition auto (a6d11005, règles d'usage) : chaque tir à
+            # distance déduit 1 projectile de l'inventaire du PJ — sans
+            # dépendre de l'appel (oublié) à inventaire_consommer_munition.
+            munition = _munition_pour_arme(arme)
+            if munition:
+                from .inventaire import _consommer_fragment
+                consomme = _consommer_fragment(fiche, munition, 1)
+                if consomme:
+                    with open(path, "w", encoding="utf-8") as f:
+                        json.dump(fiche, f, ensure_ascii=False, indent=2)
+                    reste = next(
+                        (int(e.get("qte", 1) or 1)
+                         for e in fiche.get("inventaire") or []
+                         if str(e.get("nom", "")).lower() == consomme.lower()),
+                        0,
+                    )
+                    note_ammo = (
+                        f"\n- 🏹 **1 × {consomme}** consommée — "
+                        + (f"restantes : {reste}" if reste
+                           else "plus de munitions !")
+                    )
+                else:
+                    note_ammo = (
+                        f"\n- ⚠️ Aucune {munition} dans l'inventaire — tir "
+                        "résolu cette fois, mais réapprovisionne-toi "
+                        "(inventaire_ajouter) : sans munition, plus de tir."
+                    )
     except Exception:                                           # noqa: BLE001
         pass  # fiche absente (monstre ?) → on trust le bonus fourni
 
@@ -384,7 +436,7 @@ async def lancer_attaque(
     lignes = [
         f"⚔️ **Attaque** : {nom_attaquant} [{arme}] vs {nom_cible} (CA {ca_cible})",
         f"- Jet brut d'attaque : {jet}",
-        f"- Bonus total : {bonus_final:+d}" + note_bonus + note_ca,
+        f"- Bonus total : {bonus_final:+d}" + note_bonus + note_ca + note_ammo,
         f"- **Total attaque : {total}**",
     ]
     if jet == 20:

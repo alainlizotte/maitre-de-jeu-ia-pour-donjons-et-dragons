@@ -86,6 +86,11 @@ game:
                                # true pour afficher la narration token par
                                # token (streaming) au fil de la génération
   block_messages_during_think: false  # bloquer l'envoi de messages pendant que le MJ travaille
+  # 🎯 Phase de décision contrainte : avant la narration, un appel LLM court
+  # avec json_schema (grammaire llama.cpp) choisit les outils mécaniques du
+  # tour — la sortie invalide devient impossible. Repli automatique sur la
+  # boucle normale si le backend ne supporte pas les schémas.
+  decision_phase: true
 
 image:
   # Génération d'images via ComfyUI (monstres, salles, portraits).

@@ -14,6 +14,7 @@ Reproduit la logique de `Filtre_EtatPartie_INJECT.py` :
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -263,11 +264,52 @@ def _donjon_bloc(etat: dict[str, Any]) -> str:
     return "\n".join(lignes)
 
 
-def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
+def _ennemis_donjon(etat: dict[str, Any]) -> dict[str, Any]:
+    """Créatures listées dans les salles du donjon courant.
+
+    Le manifeste de scénario (`<nom>.donjon.json`) porte le contenu canonique
+    de chaque salle (`ennemis: ["Squelette ×4", …]`) — souvent PLUS fidèle
+    que `bible.ennemis`, qui dérive d'un extrait PDF plafonné (abd81275 :
+    la bible ne détectait que « Squelette » alors que le module met en scène
+    gobelins, goules, rats, ombres et un nécromancien rouge ; le MJ
+    improvisait donc des rencontres hors scénario, ex. un loup-garou).
+
+    Renvoie `{"places": {nom_normalisé: (nom_affiché, [salles "x,y"])}}` :
+    l'annotation de SALLE injectée dans le prompt empêche le MJ de faire
+    surgir un ennemi d'ENDGAME au premier étage (a6d11005 : une Ombre FP 3
+    de la salle (0,3) attaquée dans le temple d'entrée contre un barbare
+    niv 1)."""
+    places: dict[str, tuple[str, list[str]]] = {}
+    for s in ((etat.get("donjon") or {}).get("grille") or []):
+        if not isinstance(s, dict):
+            continue
+        try:
+            salle = f"{int(s['x'])},{int(s['y'])}"
+        except (KeyError, TypeError, ValueError):
+            continue
+        for e in (s.get("ennemis") or []):
+            # « Squelette ×4 » / « Gobelin x2 » → « Squelette » / « Gobelin ».
+            nom = re.sub(r"\s*[×xX*]\s*\d+\s*$", "", str(e or "")).strip()
+            if not nom:
+                continue
+            cle = nom.lower()
+            if cle not in places:
+                places[cle] = (nom, [])
+            if salle not in places[cle][1]:
+                places[cle][1].append(salle)
+    return {"places": places}
+
+
+def _scenario_bible_bloc(
+    quete: dict[str, Any], etat: dict[str, Any] | None = None
+) -> str:
     """Bloc « SCÉNARIO (bible) » injecté au MJ à chaque tour : la trame du
     scénario (accroche, PNJ, objectifs, étapes en cours/accomplies) et
     l'avertissement d'édition. Suffisant pour que le MJ reste sur la trame
-    même quand l'historique est tronqué."""
+    même quand l'historique est tronqué.
+
+    Avec `etat`, les ennemis canoniques des salles du donjon (manifeste)
+    sont fusionnés à `bible.ennemis` — la liste d'ancrage des rencontres."""
     bible = (quete or {}).get("bible") or {}
     if not bible:
         return ""
@@ -282,8 +324,36 @@ def _scenario_bible_bloc(quete: dict[str, Any]) -> str:
                if bible.get("joueurs_recommandes") else "")
         )
     if bible.get("resume"):
-        lignes.append(f"Résumé du scénario : {bible['resume'][:1400]}")
-    ennemis = bible.get("ennemis") or []
+        lignes.append(f"Résumé du scénario : {bible['resume'][:2000]}")
+    ennemis = list(bible.get("ennemis") or [])
+    if etat is not None:
+        # Fusion (sans doublon) avec les ennemis du donjon — annotés de LEUR
+        # SALLE : le MJ doit les rencontrer là où le module les place, pas
+        # les semer n'importe où (a6d11005 : Ombre d'endgame dans le temple
+        # d'entrée contre un barbare niv 1).
+        places = _ennemis_donjon(etat).get("places") or {}
+        vus = {str(n).strip().lower() for n in ennemis}
+        for _cle, (nom, salles) in places.items():
+            if nom.lower() in vus:
+                continue
+            vus.add(nom.lower())
+            if salles:
+                lbl = (
+                    f"{nom} (salles {', '.join(salles)})"
+                    if len(salles) > 1
+                    else f"{nom} (salle {salles[0]})"
+                )
+            else:
+                lbl = nom
+            ennemis.append(lbl)
+        if places:
+            lignes.append(
+                "📍 PLACEMENT : chaque ennemi du donjon ci-dessous est "
+                "annoté de SA(S) salle(s) — ne le fait PAS surgir ailleurs "
+                "(une salle sans ennemi listé n'a PAS de rencontre prévue "
+                "par le module ; une rencontre de voyage aléatoire reste "
+                "possible hors donjon)."
+            )
     if not ennemis and bible.get("resume"):
         # Repli : bibles persistées AVANT l'ajout de la détection (liste
         # vide) — on recalcule les ennemis du scénario à chaque tour
@@ -596,7 +666,7 @@ class PromptBuilder:
                 )
                 if not (etat.get("histoire") or []):
                     lignes.append(_DEBUT_AVENTURE)
-            bible_min = _scenario_bible_bloc(quete_min)
+            bible_min = _scenario_bible_bloc(quete_min, etat=etat)
             if bible_min:
                 lignes.append(bible_min)
             # Carte du donjon (source de vérité géographique) : sans elle,
@@ -795,7 +865,7 @@ class PromptBuilder:
                 lignes.append(_DEBUT_AVENTURE)
             # Bible du scénario : la trame, les étapes et la difficulté,
             # réinjectées pour tenir le cap malgré l'improvisation.
-            bible_bloc = _scenario_bible_bloc(quete)
+            bible_bloc = _scenario_bible_bloc(quete, etat=etat)
             if bible_bloc:
                 lignes.append(bible_bloc)
 

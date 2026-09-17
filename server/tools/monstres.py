@@ -642,6 +642,13 @@ def _est_monstre_generique(m: Optional[dict[str, Any]]) -> bool:
     module, avec image générique inadaptée)."""
     if not isinstance(m, dict):
         return False
+    # Fiche marquée générique, ou SANS NOM (« cle: monstre » créée par un
+    # rattrapage passé — partie a6d11005 : un combat entier engagé contre un
+    # placeholder sans identité) : aucune identité jouable.
+    if m.get("generique"):
+        return True
+    if not str(m.get("nom") or "").strip():
+        return True
     if str(m.get("type") or "").strip() not in ("—", "-", ""):
         return False
     return "_de_taille_" in _normalise_nom(str(m.get("nom") or ""))

@@ -18,6 +18,7 @@ dans le guide d'installation d'OpenWebUI.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import re
@@ -169,8 +170,109 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# Outils d'ÉCRITURE de la mémoire de campagne. Retirés temporairement quand
+# un scénario choisi n'a pas de texte exploitable (voir le garde-mémoire de
+# `_filter_tools_by_phase`) : sans trame officielle, leurs écritures
+# persisteraient des lieux/PNJ inventés. La lecture (récap) n'est pas concernée.
+_MEMOIRE_ECRITURE_TOOLS = frozenset({
+    "memoire_mission", "memoire_lieu", "memoire_personnage",
+    "memoire_position", "memoire_intrigue", "memoire_evenement",
+})
+
 
 _log = logging.getLogger("dnd35.orchestrator")
+
+# --------------------------------------------------------------------------- #
+# 🎯 Phase de décision contrainte (correctif abd81275)
+#
+# Le 9B « narratif » choisit parfois la prose au lieu de l'appel d'outil
+# (repos/inventaire/déplacement narrés sans tool — 15 rejeux en 15 min en
+# partie réelle). La couche anti-simulation rattrape, mais au prix de rejeux
+# lents et d'une narration décousue. La décision est donc ANTICIPÉE dans un
+# appel LLM court contraint par `response_format: json_schema` : llama.cpp
+# masque les logits à chaque token — un nom d'outil hors `enum` ou une
+# réponse en prose devient STRUCTURELLEMENT impossible (pas juste découragé).
+# Les outils décidés sont exécutés serveur, puis la boucle narrative
+# normale raconte à partir des résultats officiels.
+#
+# Périmètre volontairement restreint : les actions du MONDE (exploration,
+# voyage, soin, inventaire, magie, dés). Hors périmètre :
+# - le COMBAT : le moteur serveur y joue déjà les tours déterministes et la
+#   boucle corrective 5bis y est fiable ;
+# - les tools de consultation/rédaction (etat_partie_get, memoire_*, monstre_
+#   consulter, scenario_etape…) : sans effet mécanique immédiat.
+# --------------------------------------------------------------------------- #
+_PHASES_DECISION = frozenset({"exploration", "voyage", "roleplay"})
+
+_OUTILS_DECISION = frozenset({
+    # Déplacement / monde
+    "carte_donjon_entrer", "carte_donjon_explorer", "carte_donjon_etage",
+    "carte_donjon_sortir", "voyage_demarrer",
+    "carte_joueurs_deplacer", "carte_joueurs_placer_ville",
+    # Combat (engagement uniquement — la rotation est serveur)
+    "engager_combat",
+    # Repos / soin / dégâts
+    "repos_long", "fiche_perso_soigner", "fiche_perso_infliger_degats",
+    # Inventaire
+    "inventaire_ajouter", "inventaire_ramasser", "inventaire_retirer",
+    "inventaire_consommer_munition",
+    # Magie 3.5
+    "incanter_sort", "preparer_sorts",
+    # Jets de dés isolés (jet de caractéristique, test de compétence…)
+    "lancer_d20", "lancer_sauvegarde", "lancer_des",
+})
+
+# Garde-fou : la phase de décision ne peut déclencher que 2 outils par tour
+# (une action joueur = une mécanique ; les chaînes plus longues passent par
+# la boucle narrative normale).
+_MAX_OUTILS_DECISION = 2
+
+# 🧱 Budget total du contexte de tour (en CARACTÈRES) : au-delà, les messages
+# les plus anciens de `work` (hors message système) sont retirés. Calibrage :
+# ctx llama.cpp 20 000 tokens, n_predict 2 048 → ~17 950 tokens disponibles
+# pour le prompt ; le français Qwen coûte ~3 chars/token, tools + template
+# consomment ~2-4 k tokens → 40 000 chars ≈ 13-14 k tokens, marge confortable.
+_WORK_BUDGET_CHARS = 40_000
+_TRONC_MARQUEUR = (
+    "…[les échanges les plus anciens de CE tour ont été retirés pour tenir "
+    "dans le contexte du modèle — les résultats d'outils ESSENTIELS "
+    "restent listés ci-dessous]…"
+)
+
+
+def _borner_work(work: list[Message]) -> list[Message]:
+    """Borne la taille totale de `work` : retire les messages intermédiaires
+    les plus anciens (en gardant le system et les plus récents) tant que le
+    total dépasse `_WORK_BUDGET_CHARS`. Non destructif pour l'appelant :
+    renvoie une NOUVELLE liste tronquée (le `work` de la boucle reste vivant
+    pour les itérations suivantes, on ne le mute pas)."""
+    total = sum(len(m.content or "") for m in work)
+    if total <= _WORK_BUDGET_CHARS:
+        return work
+    garde_tete = 1 if (work and work[0].role == "system") else 0
+    # Conserve depuis la FIN tant que le budget n'est pas atteint.
+    gardes: list[Message] = []
+    reste = _WORK_BUDGET_CHARS - sum(
+        len(m.content or "") for m in work[:garde_tete]
+    )
+    for m in reversed(work[garde_tete:]):
+        l = len(m.content or "")
+        if reste - l < 0 and gardes:
+            break
+        reste -= l
+        gardes.append(m)
+    gardes.reverse()
+    sortie = work[:garde_tete]
+    if garde_tete:
+        sortie = sortie + [Message(role="system", content=_TRONC_MARQUEUR)]
+    else:
+        sortie = [Message(role="user", content=_TRONC_MARQUEUR)]
+    sortie = sortie + gardes
+    _log.info(
+        "work borné : %d → %d chars (%d messages conservés)",
+        total, sum(len(m.content or "") for m in sortie), len(gardes),
+    )
+    return sortie
 
 # Suffixe anti-écho apposé à TOUT message correctif injecté en fin de tour.
 # Les petits modèles (Qwen 9B, Gemma E4B) recopient parfois la consigne
@@ -412,6 +514,54 @@ _GAIN_PROSE_PATTERNS = [
     ),
 ]
 
+# Dégâts SUBIS PAR LES PJ narrés en prose SANS résultat mécanique officiel :
+# « vous avez été touché pour 8 dégâts », « vous subissez 6 PV de dégâts »,
+# « votre vie tombe à 12 ». Le LLM inventait l'attaque d'un monstre et les
+# dégâts correspondants (partie 5f3e31c9 : « Vous avez été touché pour
+# **8 dégâts** » pour un Loup-garou DÉJÀ joué en échec officiel par le
+# serveur). Ces dégâts passent TOUJOURS par l'événement mécanique du moteur
+# serveur : la narration ne peut QUE reformuler un événement injecté en
+# pre-run — désactivé quand `trust_damage_prose` (des événements serveur avec
+# « dégâts » viennent d'être injectés : la reformulation est légitime).
+_PJ_DEGATS_PROSE_PATTERNS = [
+    # « (vous avez été) touché/touchée/touchez pour 8 dégâts / 6 PV ».
+    re.compile(
+        r"\btouch[ée]e?s?\s+(?:par|pour)\s+(?:\*\*)?\d{1,3}(?:\*\*)?\s*"
+        r"(?:points?\s+de\s+)?(?:d[ée]g[âa]ts|dégats|PV)\b",
+        re.IGNORECASE,
+    ),
+    # « vous subissez 8 (points de) dégâts / 6 PV » (paradigme « subissez »
+    # absent de _DAMAGE_PROSE_PATTERNS qui ne couvre que subit/subissent).
+    re.compile(
+        r"\b(?:vous\s+)?subissez\s+(?:\*\*)?\d{1,3}(?:\*\*)?\s*"
+        r"(?:points?\s+de\s+)?(?:d[ée]g[âa]ts|dégats|PV)\b",
+        re.IGNORECASE,
+    ),
+    # « votre vie chute/tombe/descend/baissé », « vos PV tombent ».
+    re.compile(
+        r"\b(?:votre|ta|vos|tes)\s+(?:sant[ée]|vie|points?\s+de\s+vie|PV)\s*"
+        r"[,:\s]+(?:descend|chute|tombe|s['']?effondre|baiss[ée])\b",
+        re.IGNORECASE,
+    ),
+    # « (il) chute/chutant à 12 (sur 17) », « vous tombez à 12 PV » —
+    # l'état d'un PJ affirmé sans événement mécanique (5f3e31c9 : le LLM
+    # écrivait « chutant à 12 sur 17 » pour 3/17 réels).
+    re.compile(
+        r"\b(?:chut\w*|tombez?)\s+[àa]\s+(?:\*\*)?\d{1,3}(?:\*\*)?"
+        r"\s*(?:sur\b|PV\b)?",
+        re.IGNORECASE,
+    ),
+]
+
+
+def _norm_nom_outil(s: Any) -> str:
+    """Normalisation d'un nom de combattant (LLM vs état) : minuscules,
+    sans accents, accents circonflexes/trémas plats. « Loup-garou (humain) »
+    et « loup-garou » doivent correspondre."""
+    import unicodedata as _uni
+    n = _uni.normalize("NFKD", str(s or "").strip().lower())
+    return "".join(c for c in n if not _uni.combining(c))
+
 
 def looks_like_simulation(
     text: str,
@@ -419,6 +569,7 @@ def looks_like_simulation(
     include_checks: bool = True,
     include_creation: bool = True,
     include_gains: bool = True,
+    include_pj_damage: bool = True,
 ) -> Optional[str]:
     """Renvoie le fragment de simulation trouvé, ou None.
 
@@ -431,12 +582,18 @@ def looks_like_simulation(
     narrés — utilisé quand un outil d'écriture de fiche a réellement tourné.
     `include_gains=False` désactive les gains d'état en prose (soins, XP,
     inventaire) — légitimes quand l'outil canonique a déjà tourné.
+    `include_pj_damage=False` désactive les patterns de dégâts SUBIS par les
+    PJ (« vous avez été touché pour 8 dégâts ») — utilisé quand le moteur
+    serveur vient d'injecter des événements mécaniques avec « dégâts »
+    (pre-run) : la reformulation en prose est alors légitime.
     """
     if not text:
         return None
     pats: list[re.Pattern[str]] = list(_SIMULATION_PATTERNS)
     if include_damage:
         pats += _DAMAGE_PROSE_PATTERNS
+    if include_pj_damage:
+        pats += _PJ_DEGATS_PROSE_PATTERNS
     if include_checks:
         pats += _CHECK_PROSE_PATTERNS
         # Formules de dés récitées (« 1d20 + 5 (BBA) + 3 = 18 ») : jet
@@ -1672,12 +1829,14 @@ class Orchestrator:
         tool_mode: str = "prompt",   # "native" | "prompt" | "auto"
         detect_simulation: bool = True,
         max_iterations: int = 10,
+        decision_phase: bool = True,
     ):
         self.client = client
         self.tools = tools
         self.tool_mode = tool_mode
         self.detect_simulation = detect_simulation
         self.max_iterations = max_iterations
+        self.decision_phase = decision_phase
 
     # ------------------------------------------------------------------ #
     def _filter_tools_by_phase(
@@ -1707,10 +1866,240 @@ class Orchestrator:
         elif phase not in _PHASE_TOOLS:
             phase = "exploration"
         allowed = set(_PHASE_TOOLS[phase])
+        # Garde-mémoire (partie ee5684fe) : un scénario CHOISI mais dont la
+        # bible est inutilisable (résumé vide/absent — PDF illisible) ne peut
+        # pas ancrer le monde : on retire les outils d'ÉCRITURE de mémoire
+        # (lieux, PNJ, intrigue, événements, mission, position) pour que le
+        # MJ ne persiste pas des faits INVENTÉS (Phandalin, un « mage »
+        # compagnon…) à la place du décor réel. La lecture reste automatique
+        # via le récap ; et une aventure « libre » (source=libre, sans
+        # scénario) garde sa mémoire : c'est le seul fil de la campagne.
+        if phase in ("exploration", "voyage", "roleplay"):
+            quete = etat.get("quete") or {}
+            source = str(quete.get("source") or "").strip()
+            resume = str(((quete.get("bible") or {}).get("resume") or "")).strip()
+            scena_sans_texte = bool(
+                str(quete.get("titre") or "").strip()
+                and source and source != "libre"
+                and len(resume) < 120
+            )
+            if scena_sans_texte:
+                allowed -= _MEMOIRE_ECRITURE_TOOLS
         filtered = {n: s for n, s in all_tools.items() if n in allowed}
         # Garde-fou : si on n'obtient rien (ex. config cassée), on retombe sur
         # l'ensemble complet pour ne jamais brider la discussion.
         return filtered or all_tools
+
+    # ------------------------------------------------------------------ #
+    #  🎯 Phase de décision contrainte (json_schema → grammaire llama.cpp)
+    # ------------------------------------------------------------------ #
+    def _schema_decision(self, noms: list[str]) -> dict[str, Any]:
+        """Schéma JSON de décision : `action` + outils optionnels.
+
+        Les noms d'outils sont un `enum` : llama.cpp compile le schéma en
+        grammaire et masque les logits — un nom inventé ou une réponse en
+        prose devient impossible au niveau des tokens."""
+        return {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["outils", "narrer"]},
+                "outils": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "nom": {"type": "string", "enum": sorted(noms)},
+                            "arguments": {"type": "object"},
+                        },
+                        "required": ["nom"],
+                    },
+                },
+            },
+            "required": ["action"],
+        }
+
+    def _contexte_decision(
+        self, ctx: ToolContext
+    ) -> tuple[dict[str, Any], str]:
+        """Bloc d'état MINIMAL pour la décision (~15 lignes) : phase, salle
+        courante et portes, PV des PJ, dernier événement. Volontairement
+        minuscule — la fiabilité de la décision dépend de la petitesse du
+        contexte (le gros prompt narratif est ce qui diluait les consignes)."""
+        etat: dict[str, Any] = {}
+        try:
+            etat = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                max_history=50,
+            ).load()
+        except Exception:                                        # noqa: BLE001
+            pass
+        lignes = [f"Phase : {etat.get('phase') or '?'}"]
+        donjon = etat.get("donjon") or {}
+        if donjon.get("id"):
+            cr = list(donjon.get("courant") or [0, 0])
+            cx, cy = (cr[0], cr[1]) if len(cr) >= 2 else (0, 0)
+            salle = next(
+                (s for s in (donjon.get("grille") or [])
+                 if s.get("x") == cx and s.get("y") == cy), {},
+            )
+            portes = [d for d, v in (salle.get("portes") or {}).items() if v]
+            lignes.append(
+                f"Donjon « {donjon.get('id')} » — salle ({cx},{cy}) "
+                f"type « {salle.get('type', '?')} » — portes ouvertes : "
+                + (", ".join(portes) or "AUCUNE (cul-de-sac)")
+            )
+        pjs = etat.get("pj") or []
+        if pjs:
+            lignes.append("PJ : " + "; ".join(
+                f"{p.get('nom')} ({p.get('classe')} {p.get('niveau')}, "
+                f"PV {p.get('pv')}/{p.get('pv_max')}"
+                + (f", conditions : {', '.join(p.get('conditions'))}"
+                   if p.get("conditions") else "")
+                + ")"
+                for p in pjs
+            ))
+        der = str(etat.get("derniere_narration") or "").strip()
+        if der:
+            lignes.append("Dernier événement : " + der[:300])
+        return etat, "\n".join(lignes)
+
+    def _prompt_decision(
+        self, noms: list[str], filtered: dict[str, ToolSpec],
+        contexte: str,
+    ) -> str:
+        """System prompt COURT de la phase de décision."""
+        specs = []
+        for n in noms:
+            spec = filtered.get(n)
+            if spec is None:
+                continue
+            args = []
+            for pname, p in spec.expected_args.items():
+                req = "" if p.default is inspect.Parameter.empty else "?"
+                args.append(f"{pname}{req}")
+            desc = " ".join(
+                str(spec.docstring or "").split()
+            )[:110]
+            specs.append(f"- {n}({', '.join(args)}) — {desc}")
+        return (
+            "Tu es le module de DÉCISION MÉCANIQUE d'un MJ D&D 3.5. "
+            "Le joueur vient d'agir : détermine quels outils doivent être "
+            "exécutés pour résoudre SON action. La narration sera écrite "
+            "plus tard par un autre module — ne raconte RIEN ici.\n\n"
+            "Règles :\n"
+            "- action \"outils\" SEULEMENT si l'action du joueur (ou sa "
+            "conséquence immédiate) nécessite de la mécanique : "
+            "déplacement, entrée/sortie de donjon, voyage, engagement de "
+            "combat, repos de nuit, soin, dégâts subis/infligés, objet "
+            "gagné/perdu, sort, jet de dés.\n"
+            "- Plusieurs outils nécessaires ? Liste-les dans l'ordre "
+            f"(max {_MAX_OUTILS_DECISION}).\n"
+            "- Action purement narrative, dialogue ou description → "
+            "\"narrer\" (outils absent ou vide).\n"
+            "- En cas de doute entre deux outils, choisis le plus "
+            "spécifique (soin ponctuel = fiche_perso_soigner, nuit "
+            "complète = repos_long).\n\n"
+            "=== ÉTAT DU JEU ===\n" + contexte + "\n\n"
+            "=== OUTILS DISPONIBLES ===\n" + "\n".join(specs)
+        )
+
+    async def _phase_decision(
+        self,
+        work: list[Message],
+        ctx: ToolContext,
+        filtered: dict[str, ToolSpec],
+    ) -> list[dict[str, Any]]:
+        """Décide les outils du tour par un appel contraint json_schema.
+
+        Renvoie une liste de calls `[{"name":…, "arguments":{…}}]` prêts
+        pour `_exec_tool_calls_prompt`, ou [] (pas de mécanique à résoudre,
+        phase non concernée, backend sans support, ou réponse inexploitable
+        — dans tous ces cas la boucle narrative normale prend le relais
+        SANS régression)."""
+        if not self.decision_phase:
+            return []
+        # Dernier message joueur = l'action à résoudre.
+        dernier_user = ""
+        for m in reversed(work):
+            if m.role == "user":
+                dernier_user = m.content or ""
+                break
+        if not dernier_user.strip():
+            return []
+        etat, contexte = self._contexte_decision(ctx)
+        phase = str(etat.get("phase") or "").strip().lower()
+        if phase not in _PHASES_DECISION:
+            return []
+        noms = sorted(set(filtered) & _OUTILS_DECISION)
+        if not noms:
+            return []
+        messages_dec = [
+            Message(role="system", content=self._prompt_decision(
+                noms, filtered, contexte)),
+            Message(role="user", content=(
+                f"[Message du joueur] {dernier_user}\n\n"
+                "Résous la décision mécanique (objet JSON attendu)."
+            )),
+        ]
+        try:
+            res = await self.client.chat(
+                messages_dec,
+                temperature=0.1,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "decision_outil",
+                        "schema": self._schema_decision(noms),
+                    },
+                },
+            )
+        except Exception as e:                                   # noqa: BLE001
+            # Backend sans support json_schema ou panne : repli transparent.
+            _log.warning(
+                "décision contrainte indisponible (repli boucle normale) : %s",
+                e,
+            )
+            return []
+        # Parse robuste : le contenu contraint DEVRAIT être l'objet JSON
+        # exact ; on tolère un emballage résiduel (fences, prose courte).
+        brut = (res.content or "").strip()
+        if brut.startswith("```"):
+            brut = re.sub(r"^```[a-zA-Z0-9]*\s*|\s*```$", "", brut).strip()
+        try:
+            decision = json.loads(brut)
+        except json.JSONDecodeError:
+            m = re.search(r"\{.*\}", brut, re.DOTALL)
+            if not m:
+                _log.warning("décision non parsable : %.200s", brut)
+                return []
+            try:
+                decision = json.loads(m.group(0))
+            except json.JSONDecodeError:
+                _log.warning("décision non parsable (2e essai) : %.200s", brut)
+                return []
+        if not isinstance(decision, dict):
+            return []
+        if str(decision.get("action") or "") != "outils":
+            return []
+        calls: list[dict[str, Any]] = []
+        for o in (decision.get("outils") or [])[:_MAX_OUTILS_DECISION]:
+            if not isinstance(o, dict):
+                continue
+            nom = str(o.get("nom") or "").strip()
+            # L'enum garantit déjà la validité, mais un backend défaillant
+            # pourrait laisser passer : re-vérification stricte.
+            if nom in noms:
+                args = o.get("arguments")
+                calls.append({
+                    "name": nom,
+                    "arguments": args if isinstance(args, dict) else {},
+                })
+        if calls:
+            _log.info(
+                "phase de décision : %s", 
+                ", ".join(f"{c['name']}({c['arguments']})" for c in calls),
+            )
+        return calls
 
     # ------------------------------------------------------------------ #
     async def _preserve_narration(
@@ -1828,6 +2217,37 @@ class Orchestrator:
             phase_combat = False
         seuil_repet = 0.75 if phase_combat else _REPET_SEUIL_CHEVAUCHEMENT
         cles_filtre_prec: Optional[set] = None
+
+        # 🎯 PHASE DE DÉCISION CONTRAITE — avant toute narration, un appel
+        # LLM court avec `response_format: json_schema` choisit les outils
+        # mécaniques du tour (enum = sortie invalide impossible). Les outils
+        # retenus sont exécutés serveur ICI ; la boucle narrative en dessous
+        # raconte ensuite à partir des résultats officiels injectés dans
+        # `work`. Repli total sur la boucle normale au moindre pépin
+        # (backend sans support, réponse non parsable, phase hors périmètre).
+        if not phase_combat:
+            try:
+                calls_decides = await self._phase_decision(work, ctx, filtered)
+            except Exception as e:                               # noqa: BLE001
+                _log.warning(
+                    "phase de décision échouée (repli boucle normale) : %s", e,
+                )
+                calls_decides = []
+            if calls_decides:
+                work.append(Message(
+                    role="system",
+                    content=(
+                        "ℹ️ SYSTÈME : la mécanique du tour a DÉJÀ été "
+                        "résolue (décision contrainte) — les résultats "
+                        "officiels des outils exécutés suivent. Narre le "
+                        "tour en t'appuyant sur CES résultats ; ne rappelle "
+                        "PAS ces outils pour la même action."
+                    ),
+                ))
+                await self._exec_tool_calls_prompt(
+                    calls_decides, ctx, work, result, on_event,
+                )
+
         for _ in range(self.max_iterations):
             result.iterations += 1
             use_native = self.tool_mode in ("native", "auto")
@@ -1898,6 +2318,13 @@ class Orchestrator:
             # (répétitions observées en e2e avec Qwen standard).
             temp_relance = 0.35 if result.corrections > corrections_vues else None
             corrections_vues = result.corrections
+            # 🧱 Borne de contexte : les résultats d'outils (≤ 4 000 chars
+            # chacun) et les correctifs s'accumulent dans `work` au fil des
+            # itérations — en combat, le prompt a atteint 18 709 tokens pour
+            # un ctx de 20 000 (n_predict 2 048) et llama.cpp renvoyait 400
+            # « exceeds the available context size » → « problème technique »
+            # (partie a6d11005). On borne le total AVANT chaque appel.
+            work = _borner_work(work)
             chat = await self.client.chat(
                 work, tools=tools_arg,
                 tool_choice="auto" if use_native else None,
@@ -2247,7 +2674,12 @@ class Orchestrator:
                             ),
                         ))
                         await self._exec_tool_calls_prompt(
-                            [{"name": "repos_long", "arguments": {}}],
+                            # forcer=True : le repos est ici piloté PAR LE
+                            # JOUEUR (demande explicite) — la garde
+                            # anti-repos-spam ne doit pas le bloquer ; elle
+                            # vise les repos initiés par le MJ en rafale.
+                            [{"name": "repos_long",
+                              "arguments": {"forcer": True}}],
                             ctx, work, result, on_event,
                         )
                         continue
@@ -2325,15 +2757,34 @@ class Orchestrator:
                     include_checks=not dice_rolled,
                     include_creation=not fiche_ecrite,
                     include_gains=not gain_rolled,
+                    include_pj_damage=not trust_damage_prose,
                 )
                 if sim:
                     result.simulation_attempted = True
                     if result.corrections < 2:
                         result.corrections += 1
-                        # Correctif ciblé : jet de compétence/caractéristique
-                        # ANNONCÉ mais non résolu (« Je lance un jet de
-                        # Force… » et le tour s'arrête sans résultat).
+                        # Correctif ciblé : attaque adverse et dégâts SUBIS
+                        # INVENTÉS (« vous avez été touché pour 8 dégâts ») —
+                        # le serveur joue les monstres, leur résultat arrive
+                        # en événement officiel APRÈS le tour PJ.
                         if any(
+                            p.search(sim) for p in _PJ_DEGATS_PROSE_PATTERNS
+                        ):
+                            consigne_sim = (
+                                "⚠️ CORRECTION : tu as narré "
+                                f"« {sim} » — une attaque de monstre et des "
+                                "dégâts SUBIS par un personnage sans aucun "
+                                "événement mécanique. Le serveur joue les "
+                                "monstres avec les jets officiels du "
+                                "bestiaire : leurs résultats t'arrivent en "
+                                "événements à NARRER (jamais à inventer). "
+                                "Termine ta narration à l'action du JOUEUR : "
+                                "résous SON attaque avec `lancer_attaque` "
+                                "puis `lancer_degats` et narre le résultat "
+                                "officiel, SANS inventer de riposte adverse."
+                                + _CORRECTIF_INTERNE
+                            )
+                        elif any(
                             p.search(sim) for p in _CHECK_PROSE_PATTERNS
                         ):
                             consigne_sim = (
@@ -2471,6 +2922,7 @@ class Orchestrator:
                     include_checks=not dice_rolled_final,
                     include_creation=not fiche_ecrite_final,
                     include_gains=not gain_rolled_final,
+                    include_pj_damage=not trust_damage_prose,
                 )
                 if sim_final:
                     result.simulation_attempted = True
@@ -2487,6 +2939,28 @@ class Orchestrator:
                         "simulation dans narration streamée (« %s », correction %d) — relance",
                         sim_final, result.corrections,
                     )
+                    # Dégâts SUBIS par les PJ INVENTÉS (attaque adverse
+                    # sans événement mécanique) : correctif CIBLÉ.
+                    if any(
+                        p.search(sim_final) for p in _PJ_DEGATS_PROSE_PATTERNS
+                    ):
+                        work.append(Message(
+                            role="system",
+                            content=(
+                                "⚠️ CORRECTION : ta narration contient "
+                                f"« {sim_final} » — une attaque de monstre et "
+                                "des dégâts subis INVENTÉS, sans événement "
+                                "mécanique officiel. Le serveur joue les "
+                                "monstres (jets du bestiaire) et NARRE leurs "
+                                "résultats APRÈS ton tour : ne les anticipe "
+                                "JAMAIS. Termine ta narration à l'action du "
+                                "joueur, avec SEUL le résultat officiel de "
+                                "SON action (lancer_attaque/lancer_degats) "
+                                "et les événements déjà fournis."
+                                + _CORRECTIF_INTERNE
+                            ),
+                        ))
+                        continue
                     if any(
                         p.search(sim_final) for p in _FICHE_CREATION_PATTERNS
                     ):
@@ -2729,7 +3203,7 @@ class Orchestrator:
                 + _CORRECTIF_INTERNE
             ),
         )
-        final_work = work + [fallback_msg]
+        final_work = _borner_work(work) + [fallback_msg]
         try:
             if on_delta:
                 collected = ""
@@ -2834,6 +3308,47 @@ class Orchestrator:
         On refuse ces appels : le modèle doit narreR la transition SANS
         mécanique et attendre les résultats officiels déjà injectés.
         """
+        # C2 : DOUBLE application sur monstre suivi — indépendante du garde
+        # « serveur joue les monstres » (le double se produit en plein tour
+        # PJ, sans terminer_mon_tour/engager_combat dans la même trace).
+        if resolved == "fiche_perso_infliger_degats":
+            nom_c2 = str(args.get("nom") or "").strip()
+            if nom_c2:
+                try:
+                    _etat_c2 = PartyState(
+                        data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                    ).load()
+                    _suivis_c2 = {
+                        _norm_nom_outil(m.get("nom"))
+                        for m in (_etat_c2.get("monstres_combat") or [])
+                        if isinstance(m, dict)
+                        and "Détruit" not in (m.get("conditions") or [])
+                        and "Detruit" not in (m.get("conditions") or [])
+                        and int(m.get("pv", 0) or 0) > 0
+                    }
+                except Exception:                             # noqa: BLE001
+                    _suivis_c2 = set()
+                _nc2 = _norm_nom_outil(nom_c2)
+                if (
+                    _nc2 in _suivis_c2
+                    and any(
+                        tc.get("name") == "lancer_degats" and tc.get("ok")
+                        and _norm_nom_outil((tc.get("args") or {}).get("cible"))
+                        == _nc2
+                        for tc in result.tool_calls_trace
+                    )
+                ):
+                    return (
+                        "⛔ Les dégâts de cette frappe sont DÉJÀ appliqués "
+                        "par le serveur : chaque `lancer_degats` réussi sur "
+                        "un ennemi suivi est appliqué automatiquement au "
+                        "moment du jet. N'appelez PAS "
+                        "`fiche_perso_infliger_degats` sur un ennemi dont "
+                        "les dégâts ont déjà été jetés/auto-appliqués ce "
+                        "tour — cela les compterait DEUX FOIS. Narrez le "
+                        "résultat tel qu'il est affiché dans la sortie "
+                        "officielle du `lancer_degats`."
+                    )
         if not any(
             tc.get("name") in ("terminer_mon_tour", "engager_combat")
             and tc.get("ok")

@@ -126,6 +126,31 @@ ciblé nommant l'outil canonique. Couvertures :
 
 Déclenché 7× en 2 parties E2E, chaque relance a abouti à l'appel réel.
 
+## Phase de décision contrainte (09/2026 — partie abd81275)
+
+L'anti-simulation rattrape, mais au prix de rejeux lents. Le correctif
+structurel : **décider AVANT de narrer** (`server/llm/orchestrateur.py`,
+`_phase_decision`, flag `game.decision_phase`).
+
+1. **Appel de décision court** (~2 k chars : état minimal + outils
+   mécaniques éligibles) avec `response_format: json_schema` — llama.cpp
+   compile le schéma en grammaire et **masque les logits** : un nom d'outil
+   hors `enum` ou une réponse en prose devient impossible au niveau des
+   tokens (contrairement à `tool_choice: "required"`, dont l'application
+   dépend du template — issue llama.cpp #27217).
+2. **Exécution serveur** des outils retenus (max 2) via le pipeline
+   existant (garde escalier, monstres, budget par tour).
+3. **Boucle narrative normale**, nourrie des résultats officiels injectés.
+
+Périmètre : exploration/voyage/roleplay, outils d'action du monde
+(`_OUTILS_DECISION`) — PAS le combat (moteur serveur déterministe déjà en
+place). Repli transparent sur la boucle historique au moindre pépin
+(backend sans support, réponse non parsable) : zéro régression.
+
+Validé en E2E réel (Qwen3.5-9B + llama.cpp) : « je vais à l'est » →
+décision contrainte → `carte_donjon_explorer(est)` exécuté → salle (1,0)
+atteinte → narration fondée sur le résultat officiel.
+
 ## Piège d'évaluation (pour les testeurs)
 
 Un scénario de test doit respecter l'ÉTAT DU JEU : un personnage mourant

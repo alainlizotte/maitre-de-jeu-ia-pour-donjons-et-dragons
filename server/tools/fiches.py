@@ -1332,13 +1332,22 @@ async def fiche_perso_infliger_degats(
 
 @tool
 async def fiche_perso_soigner(
-    ctx: ToolContext, nom: str, soin: int
+    ctx: ToolContext, nom: str, soin: int, source: str = ""
 ) -> ToolResult:
     """
     Soigne un personnage (restaure des PV, plafonnés à pv_max).
 
     :param nom (str): nom du personnage.
     :param soin (int): points de vie restaurés (≥0).
+    :param source (str): OPTIONNEL — l'objet consommé pour ce soin
+        (ex. "potion de soins légers", "fiole de guérison", "kit de
+        premiers secours"). La DOSE est déduite automatiquement de
+        l'inventaire (quantité −1, objet retiré à 0 ; kit : 1 CHARGE sur
+        10). Si l'objet n'existe pas dans l'inventaire, le soin est
+        REFUSÉ (règles : il faut la dose réelle). Pour un SORT, passe
+        source="sort de soins" (aucun consommable — l'emplacement est
+        déjà décompté par incanter_sort). Vide + soin ≤ 4 PV = petit soin
+        par le kit (1 charge déduite si un kit est porté).
     """
     try:
         s = max(0, int(float(str(soin).strip())))
@@ -1353,6 +1362,75 @@ async def fiche_perso_soigner(
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    # 📦 Consommable (a6d11005) : une potion bue se SOUSTRAIT de
+    # l'inventaire — sans l'objet réel, pas de soin.
+    # 🧰 Charges (a6d11005) : le kit de premiers secours a 10 utilisations
+    # (D&D 3.5) — chaque soin par kit déduit 1 charge ; à 0, le kit est
+    # retiré de l'inventaire (il se remplace, il ne se « recharge » pas).
+    consomme_note = ""
+    source = str(source or "").strip()
+    from .inventaire import _consommer_charge_kit, _consommer_fragment, _norm
+    source_n = _norm(source)
+    est_kit = "kit" in source_n or "trousse" in source_n
+    est_magie = any(
+        k in source_n for k in ("sort", "magie", "priere", "divin", "invocation")
+    )
+    if source and not est_magie:
+        if est_kit:
+            ok, charges = _consommer_charge_kit(fiche)
+            if not ok:
+                # Persiste le retrait éventuel du kit épuisé (mutation en
+                # mémoire par _consommer_charge_kit) avant de refuser.
+                try:
+                    _save_fiche(ctx, nom, fiche)
+                except ValueError:
+                    pass
+                return ToolResult(
+                    text=(
+                        f"❌ {nom} n'a PAS de kit de premiers secours "
+                        "utilisable (absent de l'inventaire ou charges "
+                        "épuisées) — soin REFUSÉ. Réapprovisionne-toi via "
+                        "`inventaire_ajouter`, ou soigne autrement."
+                    ),
+                )
+            consomme_note = (
+                f"\n🧰 **Kit de premiers secours** — 1 charge consommée "
+                f"({charges}/10 restantes)"
+                + (" — ⚠️ kit ÉPUISÉ, à remplacer !" if charges == 0 else "")
+            )
+        else:
+            consomme = _consommer_fragment(fiche, source, 1)
+            if consomme is None:
+                return ToolResult(
+                    text=(
+                        f"❌ {nom} veut boire/utiliser « {source} » mais cet "
+                        "objet n'est PAS dans son inventaire (ou dose déjà "
+                        "épuisée) — soin REFUSÉ. Vérifie avec "
+                        "`inventaire_consulter`, ou soigne autrement."
+                    ),
+                )
+            reste = next(
+                (int(e.get("qte", 1) or 1)
+                 for e in fiche.get("inventaire") or []
+                 if str(e.get("nom", "")).lower() == consomme.lower()),
+                0,
+            )
+            consomme_note = (
+                f"\n📦 **{consomme}** consommé — "
+                + (f"restant : {reste}" if reste else "dose épuisée")
+            )
+    elif not source and s <= 4:
+        # Petit soin conventionnel (le 1d4 de l'app) = soin par le kit :
+        # 1 charge déduite automatiquement si un kit est porté. Sans kit,
+        # le soin passe sans tracking (soin magique ou narratif).
+        ok, charges = _consommer_charge_kit(fiche)
+        if ok:
+            consomme_note = (
+                f"\n🧰 **Kit de premiers secours** — 1 charge consommée "
+                f"({charges}/10 restantes)"
+                + (" — ⚠️ kit ÉPUISÉ, à remplacer !" if charges == 0 else "")
+                + " (source non précisée : petit soin = kit par convention)"
+            )
     try:
         max_pv = int(fiche.get("pv_max", 0))
         nv = min(max_pv, int(fiche.get("pv", 0)) + s)
@@ -1389,6 +1467,7 @@ async def fiche_perso_soigner(
             f"✨ {nom} récupère {s} PV → PV {nv}/{max_pv}"
             + (" (maximum atteint)" if nv == max_pv else "")
             + (" — conditions de blessure levées." if nettoye else "")
+            + consomme_note
         ),
         state_patch=_patch_pj(nom, idx, {"pv": nv, "conditions": conds}),
     )

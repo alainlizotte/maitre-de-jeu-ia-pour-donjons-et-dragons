@@ -111,6 +111,13 @@ class GameConfig:
     # ⚔️ Combat server-driven : délai (secondes) après lequel le tour d'un
     # joueur silencieux est passé automatiquement par le moteur (0 = jamais).
     combat_turn_timeout_seconds: int = 300
+    # 🎯 Phase de décision contrainte (correctif abd81275) : AVANT la
+    # narration, un appel LLM court avec `response_format: json_schema`
+    # (grammaire llama.cpp) choisit les outils mécaniques du tour. La sortie
+    # invalide devient STRUCTURLEMENT impossible (les noms sont un `enum`,
+    # le modèle ne peut pas « narrer au lieu d'appeler »). Le modèle peut
+    # toujours être désactivé ici si le backend ne supporte pas les schémas.
+    decision_phase: bool = True
 
 
 @dataclass

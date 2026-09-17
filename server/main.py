@@ -357,6 +357,22 @@ _RE_AUTOUR_STRIP = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
+# Bandeau de charge / encombrement recopié par le LLM : la fiche du PJ affiche
+# DÉJÀ une jauge de poids transporté côté interface — le MJ ne doit pas remettre
+# cette valeur mécanique dans sa narration (répétée à CHAQUE tour, partie
+# 5a9b99c8 : « Votre charge actuelle est de 41,35 kg (26,3% de votre
+# capacité). Vous sentez une tension… »). On retire la phrase de charge (souvent
+# la 1re d'un paragraphe, suivie d'autres phrases) ou le bandeau d'outil verbatim
+# (« ⚖️ **Charge transportée : 41.35 kg / 157 kg (26.3%) — encombrement :
+# Légère.** »).
+_RE_CHARGE_STRIP = _re_mod.compile(
+    r"[ \t]*(?:Votre|Ta|Sa|La|Leur)\s+charge\b[^.\n]*?\bkg\b[^.\n]*?\."
+    r"|(?:[ \t]*(?:🧺\s*)?(?:⚖[\uFE0F\uFE0E]?\s*)?\**\s*Charge\s+transport[ée]e"
+    r"\b[^\n]*)"
+    r"|(?:[ \t]*[^.\n]*?\bencombrement\s*:[^.\n]*?\.)",
+    _re_mod.IGNORECASE,
+)
+
 
 # Tools qui CONSOMMENT l'action standard du personnage courant : dès que le
 # joueur actif en a appelé un, le moteur serveur avance la rotation (le LLM
@@ -3698,12 +3714,34 @@ async def _handle_say(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
                     partie_id=partie_id,
                 ).load()
+                # Une attaque ARMÉE déclarée par le joueur n'est résolue que si
+                # un outil d'attaque a réellement tourné (lancer_attaque /
+                # lancer_degats / fiche_perso_infliger_degats). Un simple
+                # `lancer_d20` — ou AUCUN jet — laisse le coup SANS effet : on
+                # déclenche alors le rattrapage 5bis-a MÊME si la rotation a
+                # déjà avancé (partie 5a9b99c8 : le MJ a narré « jet 24 /
+                # dégâts 11 / goule hors de combat » sans AUCUN outil, et
+                # `terminer_mon_tour` avait déplacé le tour actif → le
+                # garde-fou historique ne se déclenchait pas, la goule restait
+                # à 16/16 malgré la prose).
+                _attaque_declaree = bool(_ACTION_ATTAQUE_RE.search(text or ""))
+                _outil_attaque = any(
+                    tc.get("name") in (
+                        "lancer_attaque", "lancer_degats",
+                        "fiche_perso_infliger_degats",
+                    )
+                    for tc in result.tool_calls_trace
+                )
+                _attaque_non_resolue = _attaque_declaree and not _outil_attaque
                 if (
                     etat_avant.get("phase") == "combat"
                     and apres.get("phase") == "combat"
-                    and str(apres.get("courant_tour_pour") or "")
-                    == actif_avant
                     and actif_avant
+                    and (
+                        str(apres.get("courant_tour_pour") or "")
+                        == actif_avant
+                        or _attaque_non_resolue
+                    )
                 ):
                     pj_actif_apres = next(
                         (p for p in (apres.get("pj") or [])
@@ -3726,6 +3764,12 @@ async def _handle_say(
                             )
                             for tc in result.tool_calls_trace
                         )
+                        # Une attaque ARMÉE exige un outil d'ATTAQUE : un
+                        # `lancer_d20` isolé (jet sans application) ne résout
+                        # pas le coup — sinon le MJ narre « touché/dégâts »
+                        # sans aucun effet sur les PV.
+                        if _attaque_non_resolue:
+                            pj_a_agi = False
                         if (
                             not pj_a_agi
                             and _ACTION_COMBAT_RE.search(text or "")
@@ -4891,6 +4935,21 @@ async def _handle_say(
                             _RE_AUTOUR_STRIP.sub(
                                 "", result.narration).strip(),
                         )
+                except Exception:                                  # noqa: BLE001
+                    pass
+
+                # --- 5quater-g2. 🧹 Charge / encombrement recopiés : la fiche
+                # du PJ affiche DÉJÀ une jauge de poids transporté — ce texte
+                # mécanique ne doit pas apparaître dans la narration (répété à
+                # chaque tour, partie 5a9b99c8 : « Votre charge actuelle est de
+                # 41,35 kg (26,3% de votre capacité). »). Retrait déterministe,
+                # toutes phases confondues.
+                try:
+                    result.narration = _re_mod.sub(
+                        r"\n{3,}", "\n\n",
+                        _RE_CHARGE_STRIP.sub(
+                            "", result.narration or "").strip(),
+                    )
                 except Exception:                                  # noqa: BLE001
                     pass
             except Exception as e:                                     # noqa: BLE001

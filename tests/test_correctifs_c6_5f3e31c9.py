@@ -37,6 +37,7 @@ from server.main import (  # noqa: E402
     _ACTION_COMBAT_RE,
     _ACTION_SOIN_RE,
     _RE_AUTOUR_STRIP,
+    _RE_CHARGE_STRIP,
     _RE_DEGATS_SUBIS_PJ,
     _RE_ENGAGEMENT_NARRE,
     _RE_PROSE_RESOLUTION,
@@ -706,6 +707,46 @@ def test_strip_bandeau_serveur_idempotent():
     )
     stripped = _RE_AUTOUR_STRIP.sub("", seul).strip()
     assert "Au tour de" not in stripped
+
+
+# --------------------------------------------------------------------------- #
+#  Bandeau de charge / encombrement recopié par le LLM (partie 5a9b99c8)
+# --------------------------------------------------------------------------- #
+def test_strip_charge_en_tete_de_paragraphe():
+    txt = (
+        "Votre charge actuelle est de 41,35 kg (26,3% de votre capacité). "
+        "Vous sentez une tension palpable dans l'air."
+    )
+    out = _RE_CHARGE_STRIP.sub("", txt).strip()
+    assert "41,35" not in out and "charge actuelle" not in out
+    assert "Vous sentez une tension palpable" in out
+
+
+def test_strip_charge_fin_de_paragraphe():
+    txt = (
+        "Vous disposez de la fiole.\n\n"
+        "Votre charge actuelle est de 40,04 kg (25,5% de votre capacité), "
+        "ce qui reste léger."
+    )
+    out = _RE_CHARGE_STRIP.sub("", txt).strip()
+    assert "charge" not in out.lower()
+    assert "Vous disposez de la fiole." in out
+
+
+def test_strip_bandeau_outil_charge():
+    txt = (
+        "⚖️ **Charge transportée : 41.35 kg / 157 kg (26.3%) — "
+        "encombrement : Légère.**"
+    )
+    assert _RE_CHARGE_STRIP.sub("", txt).strip() == ""
+
+
+def test_charge_prose_legitime_preservee():
+    # « charge » dans un sens narratif (attaque, portage) ne doit PAS être
+    # retiré : seul le bandeau mécanique kg/capacité l'est.
+    for txt in ("Le troll vous charge avec fureur.",
+                "Vous soulevez la charge et avancez."):
+        assert _RE_CHARGE_STRIP.sub("", txt) == txt
 
 
 def test_rejeu_attaque_narree_une_seule_fois():

@@ -958,6 +958,50 @@ def resume_dons_competences(fiche: dict[str, Any]) -> str:
     return " · ".join(parties)
 
 
+def resume_inventaire(fiche: dict[str, Any], max_items: int = 30) -> str:
+    """Résumé compact « Sac : objet ×qte, … » de l'inventaire d'une fiche.
+
+    Sert au récapitulatif injecté dans le prompt du MJ : sans lui, l'IA ne
+    connaît PAS le contenu réel du sac et peut affirmer à tort qu'un objet
+    est absent (bug « tu n'as pas de fiole de guérison » alors que le PJ en
+    porte 4). Les quantités et charges de kit sont incluses ; la liste est
+    plafonnée à `max_items` entrées pour ne pas gonfler le prompt.
+
+    Renvoie une chaîne vide si la fiche n'a pas d'inventaire.
+    """
+    inv = fiche.get("inventaire")
+    if not isinstance(inv, list) or not inv:
+        inv = fiche.get("equipement") or []
+    if not isinstance(inv, list):
+        return ""
+    items: list[str] = []
+    for e in inv:
+        if not isinstance(e, dict):
+            continue
+        nom = str(e.get("nom") or "").strip()
+        if not nom:
+            continue
+        try:
+            qte = int(e.get("qte", 1) or 1)
+        except (TypeError, ValueError):
+            qte = 1
+        libelle = f"{nom} ×{qte}" if qte > 1 else nom
+        charges = e.get("charges")
+        if charges is not None:
+            try:
+                libelle += f" ({int(charges)} charges)"
+            except (TypeError, ValueError):
+                pass
+        items.append(libelle)
+    if not items:
+        return ""
+    reste = len(items) - max_items
+    txt = ", ".join(items[:max_items])
+    if reste > 0:
+        txt += f", … (+{reste} autres)"
+    return "Sac : " + txt
+
+
 def _meme_compte(a: Any, b: Any) -> bool:
     """Comparaison de comptes insensible à la casse/espaces.
 

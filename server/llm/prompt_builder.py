@@ -453,6 +453,46 @@ def _dons_competences_pj(data_dir: str, nom: str) -> str:
         return ""
 
 
+def _inventaire_pj(data_dir: str, nom: str) -> str:
+    """Résumé compact du sac d'un PJ, lu dans sa fiche sur disque — l'entrée
+    `pj` de l'état ne transporte PAS l'inventaire. Sans cette ligne, le MJ
+    ignore le contenu réel du sac et peut nier un objet pourtant porté
+    (bug « tu n'as pas de fiole de guérison » alors que le PJ en a 4).
+    Renvoie '' si fiche absente ou sans inventaire (fail-safe)."""
+    if not nom or not data_dir:
+        return ""
+    try:
+        from ..persos import charger_fiche, resume_inventaire
+        return resume_inventaire(charger_fiche(data_dir, nom) or {})
+    except Exception:                                        # noqa: BLE001
+        return ""
+
+
+def _fiche_pj_lignes(data_dir: str, nom: str) -> list[str]:
+    """Détails officiels d'un PJ lus dans sa fiche sur disque : sac,
+    dons/compétences, sorts. L'entrée `pj` de l'état n'en transporte aucun.
+    Renvoie une liste de lignes (préfixées par l'appelant), vide si fiche
+    absente (fail-safe)."""
+    if not nom or not data_dir:
+        return []
+    out: list[str] = []
+    sac = _inventaire_pj(data_dir, nom)
+    if sac:
+        out.append(sac)
+    dons = _dons_competences_pj(data_dir, nom)
+    if dons:
+        out.append(dons)
+    try:
+        from ..persos import charger_fiche
+        from ..sorts import resume_sorts
+        sorts = resume_sorts(charger_fiche(data_dir, nom) or {})
+    except Exception:                                        # noqa: BLE001
+        sorts = ""
+    if sorts:
+        out.append(sorts)
+    return out
+
+
 # --------------------------------------------------------------------------- #
 #  Extraction du SystemPrompt
 # --------------------------------------------------------------------------- #
@@ -645,7 +685,9 @@ class PromptBuilder:
                      + ", ".join(
                          f"{p.get('nom','?')} ({p.get('race','?')} "
                          f"{p.get('classe','?')}, genre "
-                         f"{_genre_pj(data_dir, p) or '?'})" for p in pj
+                         f"{_genre_pj(data_dir, p) or '?'}, "
+                         f"PV {p.get('pv','?')}/{p.get('pv_max','?')}, "
+                         f"CA {p.get('ca','?')})" for p in pj
                      )
             )
             lignes = [
@@ -654,6 +696,21 @@ class PromptBuilder:
                 f"Partie : {titre or '(sans-titre)'} — phase : {phase or 'opening'} — {pjs_sum}",
                 f"Distribution manuels : {'FAITE (ne PAS redistribuer)' if distrib else 'PAS ENCORE FAITE'}.",
             ]
+            # Fiches PJ (valeurs officielles) : sac, dons/rangs, sorts. Sans
+            # elles, le MJ ignore ce que porte réellement le PJ et peut nier
+            # un objet pourtant présent (bug « pas de fiole de guérison » ×4).
+            for p in pj:
+                det = _fiche_pj_lignes(data_dir, str(p.get("nom") or ""))
+                if det:
+                    lignes.append(
+                        f"  · {p.get('nom','?')} — " + " · ".join(det)
+                    )
+            if pj:
+                lignes.append(
+                    "  (Sac listé = contenu OFFICIEL de l'inventaire : ne dis "
+                    "JAMAIS qu'un objet listé est absent ; pour l'utiliser, "
+                    "appelle le tool avec `source=\"<nom exact listé>\"`.)"
+                )
             if go:
                 lignes.append(_BLOC_GAME_OVER)
             # Quête choisie via l'interface — le MJ doit la connaître même en
@@ -791,24 +848,23 @@ class PromptBuilder:
                     f"CA {p.get('ca','?')} — joueur: {p.get('joueur','?')} — "
                     f"conditions: {p.get('conditions') or 'aucune'}"
                 )
-                # Dons + rangs de compétences = valeurs officielles de la
-                # fiche : le MJ doit les respecter dans tous les jets.
-                extra = _dons_competences_pj(data_dir, str(p.get("nom") or ""))
-                if extra:
-                    lignes.append(f"    · {extra}")
-                # Magie : emplacements restants + sorts préparés/connus.
-                try:
-                    from ..persos import charger_fiche as _cf
-                    from ..sorts import resume_sorts
-                    _sorts = resume_sorts(_cf(data_dir, str(p.get("nom") or "")) or {})
-                except Exception:                                # noqa: BLE001
-                    _sorts = ""
-                if _sorts:
-                    lignes.append(f"    · {_sorts}")
+                # Fiche PJ (valeurs officielles) : sac, dons/rangs, sorts —
+                # l'entrée `pj` de l'état n'en transporte aucune.
+                for detail in _fiche_pj_lignes(
+                    data_dir, str(p.get("nom") or "")
+                ):
+                    lignes.append(f"    · {detail}")
             lignes.append(
                 "  (Dons et rangs listés = valeurs officielles des fiches : "
                 "applique-les systématiquement aux jets de compétence, "
                 "d'initiative, de sauvegarde et aux effets des dons.)"
+            )
+            lignes.append(
+                "  (Le « Sac » listé = contenu OFFICIEL de l'inventaire : ne "
+                "dis JAMAIS qu'un objet listé est absent. Pour utiliser un "
+                "objet, appelle le tool (ex. `fiche_perso_soigner` avec "
+                "`source=\"<nom exact de l'objet listé>\"`) ; la quantité se "
+                "déduit toute seule.)"
             )
 
         pnjs = etat.get("pnj", []) or []
@@ -871,7 +927,11 @@ class PromptBuilder:
 
         derniere = etat.get("derniere_narration", "")
         if derniere:
-            lignes.append("\nDernier événement marquant :")
+            lignes.append(
+                "\nDernier événement marquant (DÉJÀ NARRÉ au tour précédent "
+                "— ne le RE-NARRE PAS, ne redonne PAS ce qui a déjà été "
+                "remis ou dit ; poursuis l'histoire À PARTIR de cet état) :"
+            )
             lignes.append(derniere[:1500])
 
         recap = "\n".join(lignes)

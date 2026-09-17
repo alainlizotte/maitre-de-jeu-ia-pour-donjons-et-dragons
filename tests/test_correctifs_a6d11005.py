@@ -5,7 +5,10 @@
    grossissait sans limite (résultats d'outils ≤ 4 000 chars × itérations +
    correctifs) → prompt 18 709 tokens pour un ctx de 20 000 (n_predict
    2 048) → llama.cpp renvoyait 400. Désormais `_borner_work` borne le
-   total AVANT chaque appel.
+   total AVANT chaque appel (en réservant aussi la place des schémas
+   d'outils natifs envoyés hors de `work` — partie 5a9b99c8 : work 40 k +
+   schémas 22 k = 21 058 tokens → 400 ; llama.cpp tronquait alors le début
+   du prompt, le system était perdu et la narration sortait courte/coupée).
 2. Combat contre un « monstre » générique : le rattrapage de combat en
    prose (`_detecter_combat_prose`) extrayait le MOT « monstre » et
    engageait un placeholder du bestiaire (fiche `generique: true`, nom
@@ -31,7 +34,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from server.llm.client import Message  # noqa: E402
-from server.llm.orchestrator import _borner_work  # noqa: E402
+from server.llm.orchestrator import _borner_work, _REQ_BUDGET_CHARS  # noqa: E402
 from server.llm.prompt_builder import _ennemis_donjon  # noqa: E402
 from server.tools.base import ToolContext  # noqa: E402
 from server.tools.dice import lancer_attaque  # noqa: E402
@@ -60,7 +63,7 @@ def test_borner_work_tronque_les_plus_anciens():
     recent = Message(role="user", content="R" * 2000)
     sortie = _borner_work([system] + gros + [recent])
     total = sum(len(m.content or "") for m in sortie)
-    assert total <= 40_000 + 500  # budget + marqueur
+    assert total <= _REQ_BUDGET_CHARS + 500  # budget + marqueur
     # Le system et le message le plus RÉCENT sont conservés.
     assert sortie[0].content.startswith("SSS")
     assert sortie[-1].content.startswith("RRR")
@@ -68,6 +71,25 @@ def test_borner_work_tronque_les_plus_anciens():
     petit = [Message(role="system", content="sys"),
              Message(role="user", content="bonjour")]
     assert _borner_work(petit) == petit
+
+
+def test_borner_work_reserve_la_place_des_schemas_natifs():
+    """Les schémas d'outils sont envoyés HORS de `work` : ils doivent être
+    réservés dans le budget, sinon la requête dépasse le ctx du serveur
+    (partie 5a9b99c8 : 21 058 tokens > 20 224 → 400)."""
+    system = Message(role="system", content="S" * 5000)
+    gros = [Message(role="user", content="X" * 9000) for _ in range(6)]
+    # Sans réserve : budget plein.
+    sans = _borner_work([system] + gros)
+    # Avec 20 000 chars réservés (schémas) : budget réduit de 20 000.
+    avec = _borner_work([system] + gros, reserve_chars=20_000)
+    t_sans = sum(len(m.content or "") for m in sans)
+    t_avec = sum(len(m.content or "") for m in avec)
+    assert t_avec < t_sans
+    assert t_avec <= (_REQ_BUDGET_CHARS - 20_000) + 500
+    # La réserve ne descend jamais sous le plancher (system + derniers échanges).
+    enorme = _borner_work([system] + gros, reserve_chars=999_999)
+    assert sum(len(m.content or "") for m in enorme) >= 5_000
 
 
 # --------------------------------------------------------------------------- #

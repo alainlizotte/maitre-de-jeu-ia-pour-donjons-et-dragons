@@ -3357,6 +3357,28 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
         print(f"[dnd35] Rejeu {tag} failed: {e}")
 
 
+def _journaliser_ouverture_si_besoin(etat: dict[str, Any], narration: str) -> bool:
+    """Premier tour narré de la partie → consigne l'ouverture dans
+    `histoire`. Renvoie True si l'événement a été ajouté.
+
+    Sans cela, la directive « ⚠️ DÉBUT DE L'AVENTURE » (injectée par le
+    prompt_builder TANT QUE `histoire` est vide) restait active CHAQUE
+    tour : le MJ re-narrait l'accroche du scénario et re-remettait le
+    matériel à l'infini (partie 5a9b99c8 : le parchemin de Teleshann
+    remis trois tours de suite, le MJ « recommençant » l'ouverture)."""
+    if etat.get("histoire"):
+        return False
+    if not (narration or "").strip():
+        return False
+    from datetime import datetime as _dt
+    etat.setdefault("histoire", []).append({
+        "ts": _dt.now().isoformat(),
+        "tour": "",
+        "evenement": "Début de l'aventure : " + " ".join(narration.split())[:300],
+    })
+    return True
+
+
 async def _handle_say(
     initiator: WebSocket,
     session: PartySession,
@@ -4776,10 +4798,18 @@ async def _handle_say(
                     print(f"[dnd35] Rattrapage engagement échoué (ignoré) : {e}")
 
                 # --- 5quater-d. Soin ou repos narré mais non appliqué (hors
-                # combat). Le joueur (ou MJ) demande un soin / un repos mais
-                # aucun outil `fiche_perso_soigner` ni `repos_long` n'a été
-                # appelé → les PV ne bougent pas. On ré-invoque une fois, y
-                # compris hors combat.
+                # combat). Le joueur annonce un soin / un repos mais aucun
+                # outil `fiche_perso_soigner` ni `repos_long` n'a été
+                # appelé — les PV ne bougent pas. On ré-invoque une fois,
+                # y compris hors combat.
+                # ⚠️ Déclencheur = message du JOUEUR uniquement : chercher
+                # aussi dans la narration faisait réagir le garde sur la
+                # prose du MJ lui-même (« vous reposer... bénéfique ») — la
+                # consigne corrective réinjectée contenait alors « REPOS »
+                # et le garde repos de l'orchestrateur forçait un repos
+                # long de 8 h en pleine scène d'ouverture (5a9b99c8). Les
+                # soins NARRÉS par le MJ relèvent de la couche
+                # anti-simulation (gains en prose) dans la boucle.
                 _soin_global_appele = any(
                     str(tc.get("name")) in (
                         "fiche_perso_soigner", "repos_long",
@@ -4788,8 +4818,7 @@ async def _handle_say(
                     for tc in result.tool_calls_trace
                 )
                 if (not _soin_global_appele
-                        and _SOIN_RE.search((text or "") + " "
-                                            + (result.narration or ""))):
+                        and _SOIN_RE.search(text or "")):
                     _obj_soin = (
                         "⚠️ ERREUR système : un SOIN ou un REPOS a été annoncé "
                         "mais aucun outil n'a été appelé — les PV ne sont pas "
@@ -4885,11 +4914,20 @@ async def _handle_say(
                     )
                     _et_nar = _st_nar.load()
                     if "_erreur" not in _et_nar:
+                        _changed = False
                         _nar_courte = " ".join(
                             (result.narration or "").split()
                         )[:1200]
                         if _et_nar.get("derniere_narration") != _nar_courte:
                             _et_nar["derniere_narration"] = _nar_courte
+                            _changed = True
+                        # Premier tour narré → journalise l'ouverture :
+                        # désactive la directive « DÉBUT DE L'AVENTURE »
+                        # (sinon le MJ re-narrait l'accroche à chaque tour).
+                        if _journaliser_ouverture_si_besoin(
+                                _et_nar, result.narration):
+                            _changed = True
+                        if _changed:
                             _st_nar.save(_et_nar)
             except Exception as e_nar:                             # noqa: BLE001
                 print(f"[dnd35] Auto-mémorisation narration échouée : {e_nar}")

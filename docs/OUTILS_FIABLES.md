@@ -151,6 +151,34 @@ Validé en E2E réel (Qwen3.5-9B + llama.cpp) : « je vais à l'est » →
 décision contrainte → `carte_donjon_explorer(est)` exécuté → salle (1,0)
 atteinte → narration fondée sur le résultat officiel.
 
+## Contexte borné : work + schémas d'outils (09/2026 — partie 5a9b99c8)
+
+Symptôme : « le texte du MJ est tronqué » / « problème technique » en pleine
+scène. Cause mesurée dans les logs llama.cpp : `request (21058 tokens) exceeds
+the available context size (20224 tokens)`. Le budget de tour ne comptait que
+`work`, alors que les **schémas d'outils natifs** (function-calling « auto »)
+sont envoyés HORS de `work` : 39 schémas ≈ 20,7 k chars. Quand la requête
+dépasse le ctx, soit llama.cpp renvoie 400, soit il **tronque lui-même le
+début du prompt** — le system prompt (et ses règles) disparaît, et la
+narration sort courte, coupée en plein mot.
+
+Correctifs (`server/llm/orchestrator.py`, `server/tools/registry.py`,
+`docker-compose.yml`) :
+
+1. `_borner_work(work, reserve_chars=…)` réserve la place des schémas dans le
+   budget : le TOKEN TOTAL de la requête reste sous le ctx du serveur.
+2. Budget `_REQ_BUDGET_CHARS` calé sur le ctx réel (~2,9 chars/token mesurés
+   pour le français Qwen ; 68 000 chars ≈ 23,4 k tokens).
+3. Descriptions de schémas plafonnées (`_SUMMARY_MAX_CHARS`/`_PARAM_MAX_CHARS`
+   dans `registry.py`) : `auto` envoie les schémas à CHAQUE requête.
+4. Contexte llama.cpp porté à **32 768** (`-c`, ~+206 Mo de VRAM seulement,
+   KV unifié q8_0) : ~30,7 k tokens de prompt disponibles.
+5. `SystemPrompt_EXPLORATION_COURT.md` réellement compacté (14,6 k → 8,1 k
+   chars) : c'est la plus grosse part fixe du system prompt.
+
+Vérification : requête pleine taille (system + 39 schémas + work au budget)
+= **21 377 tokens, `truncated = 0`**, HTTP 200.
+
 ## Piège d'évaluation (pour les testeurs)
 
 Un scénario de test doit respecter l'ÉTAT DU JEU : un personnage mourant

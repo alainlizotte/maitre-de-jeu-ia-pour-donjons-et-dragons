@@ -48,6 +48,22 @@ _ARG_DOC_RE = re.compile(
 )
 
 
+#  ⛓️ Cap taille des descriptions de schéma (économie de tokens) : en mode
+#  « auto » (function-calling natif), les schémas de ~25 outils sont envoyés
+#  À CHAQUE requête ; des docstrings de 300-600 chars × 25 ≈ 4-5 k tokens
+#  inutiles. Les consignes d'usage restent détaillées dans le bloc « ROUTAGE »
+#  compact injecté dans le system prompt (voir tools_prompt_compact).
+_SUMMARY_MAX_CHARS = 160
+_PARAM_MAX_CHARS = 90
+
+
+def _cap(text: str, limit: int) -> str:
+    text = " ".join(text.split())[:limit]
+    if text.endswith((",", ";", ":", "-")):
+        text = text[:-1]
+    return text
+
+
 def _doc_summary(doc: str) -> str:
     """Premier paragraphe de la docstring : sert de description du tool."""
     if not doc:
@@ -60,7 +76,8 @@ def _doc_summary(doc: str) -> str:
     )
     m = stoppers.search(cleaned)
     head = cleaned[:m.start()] if m else cleaned
-    return " ".join(part.strip() for part in head.split("\n\n")).strip()
+    return _cap(" ".join(part.strip() for part in head.split("\n\n")).strip(),
+                _SUMMARY_MAX_CHARS)
 
 
 def _doc_param_doc(spec: ToolSpec, pname: str) -> str:
@@ -104,7 +121,7 @@ def tool_schema(spec: ToolSpec) -> dict[str, Any]:
         desc = _doc_param_doc(spec, pname)
         prop: dict[str, Any] = {"type": jtype}
         if desc:
-            prop["description"] = desc
+            prop["description"] = _cap(desc, _PARAM_MAX_CHARS)
         properties[pname] = prop
         if p.default is inspect.Parameter.empty:
             required.append(pname)

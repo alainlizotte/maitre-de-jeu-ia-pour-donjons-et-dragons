@@ -101,6 +101,39 @@ def test_rejoin_ne_crase_pas_les_pv_vcus_dans_la_partie(tmp_path):
     assert etat2["pj"][0]["pv"] == 6
 
 
+def test_nouvelle_partie_conserve_inventaire_or_et_xp(tmp_path):
+    """Progression PERSISTANTE entre les quêtes (choix joueur 2026-09-17) :
+    le personnage garde son inventaire, son or et ses XP d'une partie à
+    l'autre — seule la santé repart à pleine en début de quête."""
+    d = str(tmp_path)
+    from server.persos import chemin_fiche
+    chemin = chemin_fiche(d, "Utturgut")
+    with open(chemin, "w", encoding="utf-8") as f:
+        json.dump({
+            "nom": "Utturgut", "joueur": "alain", "proprietaire": "alain",
+            "race": "Demi-orc", "classe": "Barbare", "niveau": 1,
+            "pv": 16, "pv_max": 16, "ca": 14, "bab": 1,
+            "xp": 900, "or": 110, "conditions": [],
+            "carac": {"FOR": 19, "DEX": 10, "CON": 13, "INT": 9,
+                      "SAG": 12, "CHA": 9},
+            "inventaire": [
+                {"nom": "potion de soins légers", "qte": 2, "poids": 0.5},
+                {"nom": "bourse de 50 pièces d'or", "qte": 1, "poids": 0.5},
+            ],
+            "equipement": [{"nom": "potion de soins légers", "qte": 2}],
+        }, f, ensure_ascii=False)
+    fiche = enregistrer_personnage_partie(d, PID, "Utturgut", "alain")
+    assert fiche is not None
+    # Inventaire, or et XP INTACTS sur la fiche (persistants entre quêtes).
+    assert fiche["or"] == 110
+    assert len(fiche["inventaire"]) == 2
+    assert fiche["xp"] == 900
+    # L'entrée de partie porte bien les XP portés.
+    etat = PartyState(data_dir=d, partie_id=PID).load()
+    pj = next(p for p in etat["pj"] if p["nom"] == "Utturgut")
+    assert pj["xp"] == 900
+
+
 # --------------------------------------------------------------------------- #
 # 2. Garde anti-repos-spam
 # --------------------------------------------------------------------------- #

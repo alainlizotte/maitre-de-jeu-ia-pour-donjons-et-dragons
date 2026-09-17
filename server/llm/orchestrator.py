@@ -227,12 +227,22 @@ _OUTILS_DECISION = frozenset({
 # la boucle narrative normale).
 _MAX_OUTILS_DECISION = 2
 
-# 🧱 Budget total du contexte de tour (en CARACTÈRES) : au-delà, les messages
-# les plus anciens de `work` (hors message système) sont retirés. Calibrage :
-# ctx llama.cpp 20 000 tokens, n_predict 2 048 → ~17 950 tokens disponibles
-# pour le prompt ; le français Qwen coûte ~3 chars/token, tools + template
-# consomment ~2-4 k tokens → 40 000 chars ≈ 13-14 k tokens, marge confortable.
-_WORK_BUDGET_CHARS = 40_000
+# 🧱 Budget TOTAL du contexte d'une requête (en CARACTÈRES) : work + schémas
+# d'outils + template. Les schémas natifs (function-calling « auto ») sont
+# envoyés HORS de `work` et comptaient donc dans les tokens sans être bornés
+# (partie 5a9b99c8 : work 40 k chars + 39 schémas 22 k chars = 21 058 tokens
+# pour un ctx de 20 224 → 400 « exceeds the available context size », et quand
+# llama.cpp tronque lui-même le prompt il coupe le début → system perdu →
+# narration courte et coupée). Le tokenizer français Qwen coûte ~2,9
+# chars/token (mesuré : 62 k chars ≈ 21 058 tokens). Contexte llama.cpp porté
+# à 32 768 (`-c`, n_predict 2 048 réservé → ~30,7 k tokens de prompt, coût
+# VRAM mesuré +206 Mo seulement) : budget 68 000 chars ≈ 23,4 k tokens, large
+# marge sous les 30,7 k disponibles. `_borner_work` réserve en plus la place
+# des schémas d'outils natifs (envoyés hors de `work`).
+_REQ_BUDGET_CHARS = 68_000
+# Plancher : même si les schémas sont énormes, on garde au moins ça pour le
+# system + les derniers échanges (sinon le modèle raisonne à l'aveugle).
+_WORK_BUDGET_MIN_CHARS = 14_000
 _TRONC_MARQUEUR = (
     "…[les échanges les plus anciens de CE tour ont été retirés pour tenir "
     "dans le contexte du modèle — les résultats d'outils ESSENTIELS "
@@ -240,19 +250,25 @@ _TRONC_MARQUEUR = (
 )
 
 
-def _borner_work(work: list[Message]) -> list[Message]:
+def _borner_work(work: list[Message], reserve_chars: int = 0) -> list[Message]:
     """Borne la taille totale de `work` : retire les messages intermédiaires
     les plus anciens (en gardant le system et les plus récents) tant que le
-    total dépasse `_WORK_BUDGET_CHARS`. Non destructif pour l'appelant :
-    renvoie une NOUVELLE liste tronquée (le `work` de la boucle reste vivant
-    pour les itérations suivantes, on ne le mute pas)."""
+    total dépasse le budget. Non destructif pour l'appelant : renvoie une
+    NOUVELLE liste tronquée (le `work` de la boucle reste vivant pour les
+    itérations suivantes, on ne le mute pas).
+
+    `reserve_chars` = place réservée pour ce qui est envoyé HORS de `work`
+    (schémas d'outils natifs, template) : le budget effectif devient
+    `_REQ_BUDGET_CHARS - reserve_chars` (plancher `_WORK_BUDGET_MIN_CHARS`),
+    pour que le TOKEN TOTAL de la requête reste sous le ctx du serveur."""
+    budget = max(_WORK_BUDGET_MIN_CHARS, _REQ_BUDGET_CHARS - reserve_chars)
     total = sum(len(m.content or "") for m in work)
-    if total <= _WORK_BUDGET_CHARS:
+    if total <= budget:
         return work
     garde_tete = 1 if (work and work[0].role == "system") else 0
     # Conserve depuis la FIN tant que le budget n'est pas atteint.
     gardes: list[Message] = []
-    reste = _WORK_BUDGET_CHARS - sum(
+    reste = budget - sum(
         len(m.content or "") for m in work[:garde_tete]
     )
     for m in reversed(work[garde_tete:]):
@@ -269,8 +285,10 @@ def _borner_work(work: list[Message]) -> list[Message]:
         sortie = [Message(role="user", content=_TRONC_MARQUEUR)]
     sortie = sortie + gardes
     _log.info(
-        "work borné : %d → %d chars (%d messages conservés)",
-        total, sum(len(m.content or "") for m in sortie), len(gardes),
+        "work borné : %d → %d chars (budget %d, réserve %d, %d messages "
+        "conservés)",
+        total, sum(len(m.content or "") for m in sortie), budget,
+        reserve_chars, len(gardes),
     )
     return sortie
 
@@ -2026,6 +2044,10 @@ class Orchestrator:
                 break
         if not dernier_user.strip():
             return []
+        # Consigne corrective (rejeu serveur) : ce n'est PAS une action du
+        # joueur — la décision doit laisser la main à la boucle de rejeu.
+        if "instruction INTERNE du moteur de jeu" in dernier_user:
+            return []
         etat, contexte = self._contexte_decision(ctx)
         phase = str(etat.get("phase") or "").strip().lower()
         if phase not in _PHASES_DECISION:
@@ -2323,8 +2345,16 @@ class Orchestrator:
             # itérations — en combat, le prompt a atteint 18 709 tokens pour
             # un ctx de 20 000 (n_predict 2 048) et llama.cpp renvoyait 400
             # « exceeds the available context size » → « problème technique »
-            # (partie a6d11005). On borne le total AVANT chaque appel.
-            work = _borner_work(work)
+            # (partie a6d11005). On borne le total AVANT chaque appel, en
+            # RÉSERVANT la place des schémas d'outils natifs (envoyés hors
+            # de `work`) pour ne jamais dépasser le ctx du serveur.
+            reserve = 0
+            if use_native and tools_arg:
+                try:
+                    reserve = len(json.dumps(tools_arg, ensure_ascii=False))
+                except (TypeError, ValueError):
+                    reserve = 0
+            work = _borner_work(work, reserve_chars=reserve)
             chat = await self.client.chat(
                 work, tools=tools_arg,
                 tool_choice="auto" if use_native else None,
@@ -2644,12 +2674,23 @@ class Orchestrator:
                     if m.role == "user":
                         dernier_user = m.content or ""
                         break
+                # Les consignes correctives du serveur (rejeus) arrivent en
+                # message `user` et citent souvent les MOTS de l'intention
+                # (« REPOS », « soigner », « descendre »...) : elles ne sont
+                # PAS une demande du joueur. Sans ce filtre, le rattrapage
+                # « soin/repos narrés » (5quater-d) réinjectait sa propre
+                # consigne et le garde forçait un repos_long de 8 h au
+                # milieu de la scène d'ouverture (partie 5a9b99c8).
+                dernier_user_correctif = (
+                    "instruction INTERNE du moteur de jeu" in dernier_user
+                )
                 repos_deja_appele = any(
                     tc.get("name") == "repos_long"
                     for tc in result.tool_calls_trace
                 )
                 if (
                     dernier_user
+                    and not dernier_user_correctif
                     and _INTENT_REPOS_RE.search(dernier_user)
                     and not repos_deja_appele
                 ):
@@ -3247,13 +3288,20 @@ class Orchestrator:
     def _intention_escalier(work: list[Message]) -> Optional[str]:
         """Détecte dans le DERNIER message joueur une intention « monter »
         ou « descendre » un escalier. Renvoie "monter" | "descendre" | None
-        (None si absent ou ambigu — les deux directions détectées)."""
+        (None si absent ou ambigu — les deux directions détectées).
+
+        Les consignes correctives du serveur (messages `user` marqués
+        « instruction INTERNE du moteur de jeu ») ne sont PAS un message
+        joueur : une consigne citant « descendre » ne doit jamais forcer un
+        changement d'étage."""
         dernier_user = ""
         for m in reversed(work):
             if m.role == "user":
                 dernier_user = m.content or ""
                 break
         if not dernier_user:
+            return None
+        if "instruction INTERNE du moteur de jeu" in dernier_user:
             return None
         descendre = bool(_INTENT_DESCENDRE_RE.search(dernier_user))
         monter = bool(_INTENT_MONTER_RE.search(dernier_user))

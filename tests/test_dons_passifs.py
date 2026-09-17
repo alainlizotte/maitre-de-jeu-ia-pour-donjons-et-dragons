@@ -189,6 +189,83 @@ def test_calculer_initiative_dons_pj() -> None:
 
 
 # --------------------------------------------------------------------------- #
+#  resume_inventaire + récap minimal (bug « pas de fiole de guérison »)
+# --------------------------------------------------------------------------- #
+def test_resume_inventaire_quantites_et_charges() -> None:
+    from server.persos import resume_inventaire
+    fiche = {
+        "nom": "Utturgut",
+        "inventaire": [
+            {"nom": "Hache à deux mains", "qte": 1},
+            {"nom": "fiole de guérison", "qte": 4},
+            {"nom": "Kit premiers secours", "qte": 1, "charges": 8},
+        ],
+    }
+    r = resume_inventaire(fiche)
+    assert r.startswith("Sac : ")
+    assert "fiole de guérison ×4" in r
+    assert "Kit premiers secours (8 charges)" in r
+    # Objet à qte 1 : pas de « ×1 ».
+    assert "Hache à deux mains," in r and "Hache à deux mains ×1" not in r
+
+
+def test_resume_inventaire_repli_equipement_et_plafond() -> None:
+    from server.persos import resume_inventaire
+    assert resume_inventaire({"nom": "X"}) == ""
+    assert resume_inventaire({"nom": "X", "inventaire": []}) == ""
+    # Repli sur `equipement` (fiches anciennes sans inventaire structuré).
+    r = resume_inventaire({"equipement": [{"nom": "Dague", "qte": 2}]})
+    assert "Dague ×2" in r
+    # Plafond : au-delà de max_items, on signale le reste.
+    gros = {"inventaire": [{"nom": f"objet {i}", "qte": 1} for i in range(40)]}
+    r2 = resume_inventaire(gros, max_items=5)
+    assert r2.count("objet ") == 5
+    assert "+35 autres" in r2
+
+
+def test_recap_exploration_inclut_le_sac_du_pj() -> None:
+    """Le récap MINIMAL (utilisé en exploration) doit lister le contenu du
+    sac : sinon le MJ nie des objets pourtant portés (bug « tu n'as pas de
+    fiole de guérison » alors que le PJ en a 4)."""
+    from server.config import load_config
+    from server.game.state import PartyState
+    from server.llm.prompt_builder import PromptBuilder
+
+    tmp = tempfile.mkdtemp()
+    fiche = dict(FICHE_GROTH)
+    fiche["inventaire"] = [{"nom": "fiole de guérison", "qte": 4}]
+    _ecrire_fiche(tmp, fiche)
+    etat = {
+        "meta": {"titre": "T"},
+        "phase": "exploration",
+        "pj": [{"nom": "Groth", "race": "Nain", "classe": "Guerrier",
+                "niveau": 1, "pv": 8, "pv_max": 10, "ca": 15,
+                "conditions": []}],
+        "quete": {"titre": "Q", "pitch": "p"},
+    }
+    PartyState(data_dir=tmp, partie_id="t_sac").save(etat)
+    cfg = load_config()
+    cfg = replace_paths(cfg, tmp)
+    recap = PromptBuilder(cfg).build_recap(
+        PartyState(data_dir=tmp, partie_id="t_sac").load()
+    )
+    assert "fiole de guérison ×4" in recap
+    assert "contenu OFFICIEL de l'inventaire" in recap
+    # PV/CA utiles au MJ, eux aussi absents de l'entrée `pj` détaillée.
+    assert "PV 8/10" in recap and "CA 15" in recap
+
+
+def replace_paths(cfg, data_dir: str):
+    from dataclasses import replace
+    from server.config import PathsConfig
+    return replace(cfg, paths=PathsConfig(
+        data_dir=data_dir,
+        prompts_dir=str(cfg.paths.prompts_dir),
+        sections_dir=str(cfg.paths.sections_dir),
+    ))
+
+
+# --------------------------------------------------------------------------- #
 #  Runner intégré (pytest absent)
 # --------------------------------------------------------------------------- #
 if __name__ == "__main__":

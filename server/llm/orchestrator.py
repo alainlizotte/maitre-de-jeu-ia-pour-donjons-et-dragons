@@ -1779,6 +1779,7 @@ _BUDGET_OUTILS_TOUR: dict[str, int] = {
     "lancer_sauvegarde": 6,
     "lancer_d20": 8,
     "etat_partie_get": 3,
+    "terminer_mon_tour": 1,          # un SEUL par tour (anti-spam rounds)
 }
 _BUDGET_DEFAUT = 6
 

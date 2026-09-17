@@ -17,6 +17,21 @@ from .base import ToolContext, ToolResult, tool
 
 _log = logging.getLogger("dnd35.state")
 
+# 🔒 Un SEUL `terminer_mon_tour` par tour de joueur (même `tour_id`) : le petit
+# modèle enchaînait 4 appels dans un MÊME message (partie 5a9b99c8) → la
+# rotation sautait Utturgut → Goule (2) → Goule → Utturgut → Goule (2), jouant
+# PLUSIEURS rounds d'un coup et court-circuitant le rattrapage « action
+# déclarée sans jet » (le combattant courant n'était plus le PJ actif). Vide
+# hors tour (tests/REST) → verrou inactif.
+_TERMINER_TOUR: dict[str, str] = {}  # partie_id -> tour_id déjà terminé
+
+_TERMINER_TOUR_REFUS = (
+    "🚫 Ton tour est DÉJÀ terminé pour ce message : le serveur joue les "
+    "monstres et passe au combattant suivant AUTOMATIQUEMENT. N'appelle "
+    "`terminer_mon_tour` qu'UNE seule fois par tour — narre la suite à partir "
+    "des résultats officiels déjà fournis."
+)
+
 
 def _party(ctx: ToolContext) -> PartyState:
     return PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
@@ -1187,6 +1202,11 @@ async def terminer_mon_tour(ctx: ToolContext) -> ToolResult:
     etat = state.load()
     if etat.get("phase") != "combat" or not etat.get("initiative"):
         return ToolResult(text="❌ Aucun combat en cours.")
+    # 🔒 Anti-spam : un seul terminer_mon_tour par tour de joueur (même
+    # `tour_id`) — cf. `_TERMINER_TOUR`.
+    _tour_id = str(getattr(ctx, "tour_id", "") or "").strip()
+    if _tour_id and _TERMINER_TOUR.get(ctx.partie_id) == _tour_id:
+        return ToolResult(text=_TERMINER_TOUR_REFUS)
     courant = str(etat.get("courant_tour_pour") or "")
     # Sécurité : seul le joueur du personnage courant peut terminer son tour
     # (best effort — un monstre n'a pas de joueur).
@@ -1221,6 +1241,8 @@ async def terminer_mon_tour(ctx: ToolContext) -> ToolResult:
     err = state.save(etat)
     if err:
         return ToolResult(text=err)
+    if _tour_id:
+        _TERMINER_TOUR[ctx.partie_id] = _tour_id
     return ToolResult(
         text=(
             f"➡️ Tour de {courant} terminé — au tour de "

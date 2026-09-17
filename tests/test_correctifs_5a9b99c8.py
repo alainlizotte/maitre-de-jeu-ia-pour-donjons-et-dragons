@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server.game.state import PartyState  # noqa: E402
 from server.llm.client import ChatResult, Message  # noqa: E402
 from server.llm.orchestrator import Orchestrator  # noqa: E402
-from server.tools.base import ToolContext  # noqa: E402
+from server.tools.base import ToolContext, invoke_tool  # noqa: E402
 from server.tools.registry import discover_tools  # noqa: E402
 
 PID = "test_5a9b99c8"
@@ -189,3 +189,117 @@ def test_directive_debut_aventure_eteinte_des_que_histoire_non_vide():
     assert bool(etat_ouvert.get("histoire")) is True
     # (le sens réel : `not histoire` == False → directive non injectée)
     assert not (not (etat_ouvert.get("histoire") or []))
+
+
+# --------------------------------------------------------------------------- #
+# 3. Tour 2 (msg 30→31) : le MJ a narré « jet 24 — touché / 11 dégâts / goule
+#    hors de combat » SANS aucun outil d'attaque, et a appelé
+#    `terminer_mon_tour` 4× dans le MÊME message → la rotation a défilé
+#    Utturgut → Goule (2) → Goule → Utturgut → Goule (2) (plusieurs rounds)
+#    pendant que `monstres_combat` restait à 16/16. Garde-fous : un seul
+#    `terminer_mon_tour` par tour (`tour_id`), budget 1, prompt durci.
+# --------------------------------------------------------------------------- #
+def _setup_combat(d: str, pid: str) -> None:
+    PartyState(data_dir=d, partie_id=pid).save({
+        "meta": {"titre": "test combat"},
+        "phase": "combat",
+        "tour": 2,
+        "pj": [{"nom": "Utturgut", "pv": 5, "pv_max": 16, "joueur": "alain"}],
+        "pnj": [],
+        "histoire": [],
+        "initiative": [
+            {"nom": "Utturgut", "init": 14},
+            {"nom": "Goule", "init": 12},
+        ],
+        "courant_tour_pour": "Utturgut",
+        "monstres_combat": [
+            {"nom": "Goule", "pv": 16, "pv_max": 16, "ca": 12,
+             "conditions": []},
+        ],
+    })
+
+
+def test_terminer_mon_tour_une_seule_fois_par_tour():
+    """Un 2e `terminer_mon_tour` avec le MÊME `tour_id` est refusé : sinon la
+    rotation sautait plusieurs combattants d'un coup (partie 5a9b99c8)."""
+    from server.tools.state import _TERMINER_TOUR, _TERMINER_TOUR_REFUS
+
+    d = tempfile.mkdtemp(prefix="dnd35_5a9b_term_")
+    pid = PID + "_term1"
+    _setup_combat(d, pid)
+    tools = discover_tools()
+    _TERMINER_TOUR.pop(pid, None)
+    ctx = ToolContext(partie_id=pid, joueur="alain", data_dir=d,
+                      tour_id="tour-unique-1")
+    r1 = asyncio.run(invoke_tool(tools["terminer_mon_tour"], ctx, {}))
+    assert "Goule" in r1.text                       # rotation faite UNE fois
+    r2 = asyncio.run(invoke_tool(tools["terminer_mon_tour"], ctx, {}))
+    assert r2.text == _TERMINER_TOUR_REFUS
+    etat = PartyState(data_dir=d, partie_id=pid).load()
+    assert etat["courant_tour_pour"] == "Goule"      # pas re-avancé
+    assert etat["tour"] == 2
+
+
+def test_terminer_mon_tour_nouveau_tour_autorise():
+    """Un NOUVEAU tour (tour_id différent) peut de nouveau être terminé :
+    le verrou ne doit pas bloquer définitivement le joueur."""
+    from server.tools.state import _TERMINER_TOUR, _TERMINER_TOUR_REFUS
+
+    d = tempfile.mkdtemp(prefix="dnd35_5a9b_term2_")
+    pid = PID + "_term2"
+    _setup_combat(d, pid)
+    tools = discover_tools()
+    _TERMINER_TOUR.pop(pid, None)
+    ctx1 = ToolContext(partie_id=pid, joueur="alain", data_dir=d,
+                       tour_id="t1")
+    asyncio.run(invoke_tool(tools["terminer_mon_tour"], ctx1, {}))
+    ctx2 = ToolContext(partie_id=pid, joueur="alain", data_dir=d,
+                       tour_id="t2")
+    r = asyncio.run(invoke_tool(tools["terminer_mon_tour"], ctx2, {}))
+    assert r.text != _TERMINER_TOUR_REFUS
+
+
+def test_terminer_mon_tour_hors_tour_sans_tour_id_inactif():
+    """Sans `tour_id` (REST/tests), le verrou est inactif : non-régression."""
+    d = tempfile.mkdtemp(prefix="dnd35_5a9b_term3_")
+    pid = PID + "_term3"
+    _setup_combat(d, pid)
+    tools = discover_tools()
+    ctx = ToolContext(partie_id=pid, joueur="alain", data_dir=d)
+    r1 = asyncio.run(invoke_tool(tools["terminer_mon_tour"], ctx, {}))
+    r2 = asyncio.run(invoke_tool(tools["terminer_mon_tour"], ctx, {}))
+    assert "DÉJÀ terminé" not in r1.text
+    assert "DÉJÀ terminé" not in r2.text
+
+
+def test_budget_terminer_mon_tour_un_par_tour():
+    from server.llm.orchestrator import _BUDGET_OUTILS_TOUR
+
+    assert _BUDGET_OUTILS_TOUR.get("terminer_mon_tour") == 1
+
+
+def test_prompt_combat_interdit_invention_et_spam():
+    """Le récap de combat doit rappeler : résolution par outils obligatoire
+    (jamais `lancer_d20` pour une attaque), aucune invention de dé/dégâts/
+    mort, une attaque et un `terminer_mon_tour` au plus par tour."""
+    from dataclasses import replace
+
+    from server.config import PathsConfig, load_config
+    from server.llm.prompt_builder import PromptBuilder
+
+    d = tempfile.mkdtemp(prefix="dnd35_5a9b_recap_")
+    pid = PID + "_recap"
+    _setup_combat(d, pid)
+    cfg = load_config()
+    cfg = replace(cfg, paths=PathsConfig(
+        data_dir=d,
+        prompts_dir=str(cfg.paths.prompts_dir),
+        sections_dir=str(cfg.paths.sections_dir),
+    ))
+    etat = PartyState(data_dir=d, partie_id=pid).load()
+    recap = PromptBuilder(cfg).build_recap(etat)
+    assert "OUTILS DE RÉSOLUTION OBLIGATOIRES" in recap
+    assert "JAMAIS `lancer_d20` pour une attaque" in recap
+    assert "UNE SEULE attaque par tour" in recap
+    assert "`terminer_mon_tour` : AU PLUS" in recap
+

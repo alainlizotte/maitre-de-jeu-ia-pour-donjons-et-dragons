@@ -784,6 +784,21 @@ class PromptBuilder:
                     "sont gérées automatiquement par le serveur — n'appelle "
                     "ni tour_suivant_combat ni finir_combat."
                 )
+                lignes.append(
+                    "OUTILS DE RÉSOLUTION OBLIGATOIRES : une attaque armée se "
+                    "résout par `lancer_attaque` puis, si touché, `lancer_degats` "
+                    "(JAMAIS `lancer_d20` pour une attaque). N'annonce JAMAIS un "
+                    "jet, un « touché », un montant de dégâts ni une mort "
+                    "(« s'effondre », « hors de combat ») sans que l'outil "
+                    "correspondant ait produit ce résultat — n'invente aucun dé."
+                )
+                lignes.append(
+                    "UNE SEULE attaque par tour (sauf attaques multiples "
+                    "explicitement accordées par la fiche/niveau) : n'appelle "
+                    "`lancer_attaque` qu'une fois. `terminer_mon_tour` : AU PLUS "
+                    "une fois par tour, et seulement si le joueur renonce "
+                    "explicitement à agir — ne le spamme jamais."
+                )
             # ⚔️ Ennemis engagés : SANS ce bloc, le MJ ne connaissait pas les
             # combattants réels (PV/conditions) et en INVENTAIT (« squelette
             # géant » inexistant, partie fa4e7366) ou attaquait des cadavres —

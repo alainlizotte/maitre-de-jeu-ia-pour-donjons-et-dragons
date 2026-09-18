@@ -643,17 +643,53 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     # pour avancer, pas `carte_donjon_entrer` (qui ré-initialiserait la
     # grille et annulerait toute l'exploration déjà faite).
     donjon_existant = etat.get("donjon") or {}
-    if donjon_existant and donjon_existant.get("id") == donjon_id:
-        pos = donjon_existant.get("courant", [0, 0])
-        x, y = (pos[0], pos[1]) if len(pos) >= 2 else (0, 0)
-        url = _url_for(_svg_path(ctx, "donjon"), ctx.data_dir)
-        return ToolResult(
-            text=(
-                f"ℹ️ Vous êtes déjà dans **{donjon_id}** (salle actuelle : "
-                f"({x},{y})). Pour avancer, utilise `carte_donjon_explorer` "
-                f"avec une direction (nord/sud/est/ouest).\n\n🖼️ Carte : {url}"
-            ),
+    _id_actif = str(donjon_existant.get("id") or "").strip()
+    _id_demande = str(donjon_id or "").strip()
+    if donjon_existant and _id_actif:
+        _meme_norm = _norm_nom_donjon(_id_actif) == _norm_nom_donjon(
+            _id_demande
         )
+        # Même manifeste de scénario ? `_manifest_pour` priorise le
+        # scénario de la quête : un id « libre » (« Grotte de Nulentok »)
+        # pendant la quête « The Crown Of Mystra » reconstruisait le MÊME
+        # donjon en effaçant toute l'exploration (partie 4d4b4557 : 3
+        # réinitialisations — le groupe revenait en salle (0,0), la Tour
+        # de l'Équilibre, alors que la narration le plaçait déjà dans la
+        # grotte ; d'où re-narration du prologue et fiole re-offerte à
+        # chaque tour).
+        _meme_scena = False
+        if not _meme_norm:
+            try:
+                _man_dem = _manifest_pour(ctx, _id_demande)
+                _meme_scena = bool(_man_dem) and str(
+                    (_man_dem or {}).get("donjon_id") or ""
+                ).strip() == _id_actif
+            except Exception:                                    # noqa: BLE001
+                _meme_scena = False
+        if _meme_norm or _meme_scena:
+            pos = donjon_existant.get("courant", [0, 0])
+            x, y = (pos[0], pos[1]) if len(pos) >= 2 else (0, 0)
+            url = _url_for(_svg_path(ctx, "donjon"), ctx.data_dir)
+            return ToolResult(
+                text=(
+                    f"ℹ️ Vous êtes déjà dans **{_id_actif}** (salle actuelle : "
+                    f"({x},{y})). Pour avancer, utilise `carte_donjon_explorer` "
+                    f"avec une direction (nord/sud/est/ouest).\n\n🖼️ Carte : {url}"
+                ),
+            )
+        # Donjon VRAIMENT différent : archiver l'actif AVANT la
+        # reconstruction (progrès conservé, comme `carte_donjon_sortir`).
+        if donjon_existant.get("grille"):
+            etat.setdefault("donjons_exploreres", {})[_id_actif] = {
+                "id": _id_actif,
+                "grille": donjon_existant.get("grille", []),
+                "salles_visitees": donjon_existant.get("salles_visitees", []),
+                "portes_bloquees": donjon_existant.get("portes_bloquees", []),
+                "courant": donjon_existant.get("courant", [0, 0]),
+                "etage": donjon_existant.get("etage", 0),
+                "etages": donjon_existant.get("etages", {}),
+            }
+            etat["donjon"] = {}
     # Vérifier si ce donjon a déjà été exploré dans cette partie.
     # (Le garde-fou « déjà dans ce donjon » ci-dessus est un no-op : il ne
     # déplace personne et ne consomme donc pas le quota de déplacement.)

@@ -48,6 +48,43 @@ def _norm(s: Any) -> str:
     return s
 
 
+# Objets désignés sous PLUSIEURS noms par le modèle : la même potion était
+# ajoutée 3× sous 3 libellés (« fiole de guérison », « fiole de soins
+# légers », « potion de soins légers » — partie 4d4b4557 : inventaire
+# pollué, fioles ×5). Clé = `_norm(libellé)` → nom canonique de fusion.
+# NB : `_norm` ne retire que le « s » FINAL (« ...soins legers » →
+# « ...soins leger ») : les variantes avec/sans « s » interne sont listées.
+_OBJETS_SYNONYMES: dict[str, str] = {
+    # Potions de soins (cures légères).
+    "potion de soins leger": "potion de soins legers",
+    "potion de soin leger": "potion de soins legers",
+    "potion de soin": "potion de soins legers",
+    "potion de guerison": "potion de soins legers",
+    "fiole de soins leger": "potion de soins legers",
+    "fiole de soin leger": "potion de soins legers",
+    "fiole de soin": "potion de soins legers",
+    "fiole de guerison": "potion de soins legers",
+    "flacon de soins leger": "potion de soins legers",
+    "flacon de soin leger": "potion de soins legers",
+    "flacon de soin": "potion de soins legers",
+    "flacon de guerison": "potion de soins legers",
+    "potion de cure light wound": "potion de soins legers",
+    "potion of cure light wound": "potion de soins legers",
+    # Potions de soins modérés.
+    "potion de soins modere": "potion de soins moderes",
+    "potion de soin modere": "potion de soins moderes",
+    "fiole de soins modere": "potion de soins moderes",
+    "fiole de soin modere": "potion de soins moderes",
+    "potion de cure moderate wound": "potion de soins moderes",
+}
+
+
+def _cle_objet(nom: Any) -> str:
+    """Clé de fusion d'un objet : synonymes d'abord, `_norm` sinon."""
+    n = _norm(nom)
+    return _OBJETS_SYNONYMES.get(n, n)
+
+
 def _chemin_fiche(ctx: ToolContext, nom: str) -> Optional[str]:
     """Chemin vers la fiche (résolution PJ/pseudo-joueur comme dans fiches.py)."""
     try:
@@ -569,10 +606,10 @@ async def inventaire_ajouter(
         )
 
     inv = _inventaire(fiche)
-    cible = _norm(objet)
+    cible = _cle_objet(objet)
     fusionne = False
     for e in inv:
-        if _norm(e.get("nom")) == cible:
+        if _cle_objet(e.get("nom")) == cible:
             neuf = int(e.get("qte", 1) or 1) + qte
             e["qte"] = neuf
             if e.get("poids") is None:
@@ -621,11 +658,11 @@ async def inventaire_retirer(
     if err:
         return err
     qte = max(1, int(quantite or 1))
-    cible = _norm(objet)
+    cible = _cle_objet(objet)
     inv = _inventaire(fiche)
     trouve = None
     for e in inv:
-        if _norm(e.get("nom")) == cible:
+        if _cle_objet(e.get("nom")) == cible:
             trouve = e
             break
     if trouve is None:

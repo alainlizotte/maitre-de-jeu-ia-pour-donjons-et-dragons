@@ -88,6 +88,17 @@ _ACTION_ATTAQUE_RE = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
+# Déclaration d'ATTAQUE par le JOUEUR (son message) : déclencheur élargi du
+# rattrapage 5ter. Partie 4d4b4557 : « J'attaque le loup avec ma hache » est
+# resté 100 % prose (le MJ n'a narre « bondit sur vous » — variante absente
+# des marqueurs — et aucun dégât chiffré), alors que le loup gris EST au
+# bestiaire : aucun engager_combat, aucun dé, PV intacts. Volontairement
+# SANS « lance » (« je lance un sort » n'est pas une attaque armée).
+_ATTAQUE_JOUEUR_RE = _re_mod.compile(
+    r"\b(?:attaqu\w*|frapp\w*|ass[ée]n\w*|hach\w*|transpers\w*|tir\w*)\b",
+    _re_mod.IGNORECASE,
+)
+
 # Détection d'une INTENTION DE SOINS déclarée par le joueur : si le LLM
 # narrer « vous avez récupéré 3 PV » SANS appeler fiche_perso_soigner, le
 # rattrapage 5bis-c-long applique le montant déclaré à la fiche. Séparé de
@@ -183,6 +194,22 @@ _MOVE_INTENT_RE = _re_mod.compile(
     r"\s*(nord|sud|est|ouest)\s*[.!?]*\s*$",
     _re_mod.IGNORECASE,
 )
+# Intention de RETOUR (« je retourne dans la salle précédente ») : le chemin
+# en arrière est la porte par laquelle le groupe est entré
+# (`donjon.arrivee_par`), pas une direction inventée.
+_INTENT_RETOUR_RE = _re_mod.compile(
+    r"\b(retourn\w*|revien\w*|reven\w*|rebrouss\w*|salle\s+pr[ée]c[ée]dente?"
+    r"|pi[èe]ce\s+pr[ée]c[ée]dente?|en\s+arri[èe]re|recul\w*|repart\s+d'où)"
+    r"\b",
+    _re_mod.IGNORECASE,
+)
+# Intention de VOYAGE hors donjon (« je me dirige a pied vers la grotte ») :
+# destination explicite (« vers X », « jusqu'à X »). Utilisé HORS donjon
+# uniquement (le bloc donjon actif est traité avant).
+_INTENT_VOYAGE_RE = _re_mod.compile(
+    r"\bvers\s+(?:la\s|le\s|les\s|l'|une?\s|d')?[a-zà-ÿ]|\bjusqu",
+    _re_mod.IGNORECASE,
+)
 
 # Détection d'ENTRÉE dans un lieu à cartographier (partie 8a7c1f92 : le MJ
 # narre « Vous vous dirigez vers l'entrée des catacombes… Vous entrez dans
@@ -214,6 +241,92 @@ def _entree_donjon_narree(narration: str) -> bool:
         and _DONJON_ENTREE_RE.search(narration)
     )
 
+
+def _suggestion_outil_explo(etat: dict[str, Any], txt: str) -> Optional[str]:
+    """L'outil de déplacement à suggérer au MJ selon la scène, ou None quand
+    AUCUN outil ne doit être forcé.
+
+    Parties 4d4b4557 + 6746fc6c :
+    - 4d4b4557 : le correctif suggérait `carte_donjon_entrer` pour un simple
+      VOYAGE Silverymoon→grotte ; le manifeste du scénario primait sur l'id
+      demandé et le donjon était réinitialisé en salle (0,0).
+    - 6746fc6c : « je me dirige au centre de la salle » (AUCUNE direction)
+      déclenchait un rejeu qui faisait appeler `carte_donjon_explorer(est)` —
+      le groupe changeait de salle sans l'avoir décidé. Un mouvement DANS la
+      salle ne doit forcer AUCUN outil.
+
+    - donjon actif + direction explicite → `carte_donjon_explorer(direction=)`
+    - donjon actif + intention de retour → la porte par laquelle on est entré
+      (`donjon.arrivee_par`)
+    - donjon actif + mouvement interne (centre, examine…) → None
+    - seuil d'un lieu clos narré → `carte_donjon_entrer`
+    - hors donjon + direction/retour/destination → `voyage_demarrer`
+    """
+    _id_dj = str(((etat.get("donjon") or {}).get("id")) or "").strip()
+    _dir = _direction_intention(txt)
+    _retour = bool(_INTENT_RETOUR_RE.search(txt or ""))
+    if _id_dj:
+        if _dir:
+            return (
+                f"`carte_donjon_explorer(direction='{_dir}')` — le joueur "
+                f"veut aller au {_dir} ; n'appelle PAS "
+                "`carte_donjon_entrer` (il réinitialiserait l'exploration)"
+            )
+        if _retour:
+            _arr = str(
+                (etat.get("donjon") or {}).get("arrivee_par") or ""
+            ).strip().lower()
+            if _arr in ("nord", "est", "sud", "ouest"):
+                return (
+                    f"`carte_donjon_explorer(direction='{_arr}')` — le "
+                    "groupe RETOURNE dans la salle d'où il vient : c'est la "
+                    f"porte {_arr.upper()} par laquelle il est entré ici"
+                )
+            return (
+                "`carte_donjon_explorer(direction=…)` vers la salle "
+                "VISITÉE adjacente reliée par une porte (celle d'où le "
+                "groupe vient) — l'outil refusera toute direction sans "
+                "passage réel"
+            )
+        # Mouvement DANS la salle (centre, approche, examen…) : la prose
+        # suffit, aucun changement de salle ne doit être forcé.
+        return None
+    if _entree_donjon_narree(txt):
+        return (
+            "`carte_donjon_entrer(donjon_id=…)` — le groupe franchit le "
+            "seuil d'un lieu clos à cartographier"
+        )
+    if _dir or _retour or _INTENT_VOYAGE_RE.search(txt or ""):
+        return (
+            "`voyage_demarrer(destination=…, distance_km=…, "
+            "mode='lent'/'marche'/'rapide'/'cheval', terrain=…)` — un "
+            "déplacement HORS donjon (route, ville→site, plusieurs jours) "
+            "passe TOUJOURS par lui ; JAMAIS `carte_donjon_entrer` hors "
+            "franchissement du seuil d'un lieu clos"
+        )
+    return None
+
+
+def _direction_intention(txt: str) -> Optional[str]:
+    """Direction EXPLICITE demandée par le joueur (« Je vais au est »), ou
+    None (« je me dirige au centre de la salle » n'en exprime aucune)."""
+    m = _MOVE_INTENT_RE.match((txt or "").strip())
+    return m.group(1).lower() if m else None
+
+
+def _rejeu_inventaire_necessaire(text: str, narration: str) -> bool:
+    """True si le rattrapage 5quater-c doit tourner : acquisition déclarée
+    par le JOUEUR, ou acquisition ANCRÉE (verbe + déterminant indéfini +
+    nom) dans la narration — mais JAMAIS sur une simple mention de
+    possession (« la fiole glisse dans votre sac »)."""
+    if _ITEM_ACQUISITION_RE.search(text or ""):
+        return True                     # le joueur déclare lui-même
+    if not (narration or "").strip():
+        return False
+    if _POSSESSION_SAC_RE.search(narration):
+        return False                    # possession narrée, pas acquisition
+    return bool(_ACQUISITION_ANCRE_RE.search(narration))
+
 # Détection d'un combat narré EN PROSE par le LLM (le petit modèle écrit
 # parfois « Le combat commence ! Le zombie charge… » et enchaîne jets/dégâts
 # dans la narration SANS appeler `engager_combat`). Le serveur rattrape alors
@@ -222,9 +335,12 @@ def _entree_donjon_narree(narration: str) -> bool:
 _COMBAT_PROSE_MARKERS = (
     "le combat commence", "le combat éclate", "le combat s'engage",
     "le combat est lancé", "combat engagé", "les hostilités",
-    "charge vers vous", "se jette sur vous", "se précipite sur vous",
-    "bondit vers vous", "vous attaque", "attaque toi",
-    "t'attaque", "vous agresse", "se rue sur vous",
+    "charge vers vous", "charge sur vous", "charge sur toi",
+    "se jette sur vous", "se jette sur toi", "se précipite sur vous",
+    "se précipite sur toi", "bondit vers vous", "bondit sur vous",
+    "bondit sur toi", "vous attaque", "attaque toi",
+    "t'attaque", "vous agresse", "t'agresse", "se rue sur vous",
+    "se rue sur toi",
     "prend son tour", "c'est au tour de",
 )
 # Prose de DÉGÂTS infligés (attaque portée en narration) : un montant de
@@ -288,7 +404,7 @@ _EXPLO_PROSE_END_MARKERS = (
 # l'exploration a été correctement enregistrée côté serveur.
 _EXPLORATION_TOOLS = {
     "carte_donjon_entrer", "carte_donjon_explorer", "carte_donjon_etage",
-    "monstre_consulter", "carte_donjon_voir",
+    "monstre_consulter", "carte_donjon_voir", "voyage_demarrer",
 }
 
 # Outils qui valident la phase d'ouverture (le chargement du scénario choisi).
@@ -317,8 +433,28 @@ _INVENTAIRE_TOOLS = {
 _ITEM_ACQUISITION_RE = _re_mod.compile(
     r"\b(ramass\w*|récup\w*|récupèr\w*|trouv\w*|obtien?t|obtenir|acquis\w*"
     r"|pill\w*|prise au|je prend|il prend|elle prend|gagne\w* un|obtient un"
-    r"|ajout\w* à mon inventaire|dans mon inventaire|au trésor|butin|loot\w*"
+    r"|butin|loot\w*"
     r"|donne\w* à|offre\w* à|cède\w* à)\b",
+    _re_mod.IGNORECASE,
+)
+# Acquisition ANCRÉE : verbe + déterminant INDÉFINI + nom (« vous trouvez
+# une clé », « il vous donne une lettre »). Les articles définis sont
+# exclus : « vous trouvez le passage / la sortie » ne concerne pas
+# l'inventaire.
+_ACQUISITION_ANCRE_RE = _re_mod.compile(
+    r"\b(?:ramass|trouv|r[ée]cup|obtien|pill|acquis|gagne|donn|offr|c[èe]d)"
+    r"[a-zà-ÿ]*\w\s+(?:une?\s|des\s|plusieurs\s|\d+\s)"
+    r"[a-zà-ÿœæ]",
+    _re_mod.IGNORECASE,
+)
+# Mention de POSSESSION déjà enregistrée (« glisse dans votre sac », « déjà
+# rangé ») : ce n'est PAS une acquisition. Partie 6746fc6c : le rejeu
+# inventaire a tourné sur 6 tours sur 8 (la narration tissait le contenu du
+# sac rappelé par le récap), ré-ajoutant une fiole au passage.
+_POSSESSION_SAC_RE = _re_mod.compile(
+    r"(d[ée]j[à]\s+(?:dans|rang|pr[ée]sent)|dans\s+(?:votre|son|mon|leur)\s+sac"
+    r"|dans\s+(?:votre|son|mon)\s+équipement|glisse\s+dans|referm\w*"
+    r"|rang[ée]e?e?\s+dans|poids\s+(?:dans\s+)?(?:votre|son|mon)\s+inventaire)",
     _re_mod.IGNORECASE,
 )
 
@@ -3112,7 +3248,12 @@ async def _attaque_pj_sans_jet(
     return note
 
 
-def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any]) -> list[str]:
+def _detecter_combat_prose(
+    data_dir: str,
+    text: str,
+    etat_avant: dict[str, Any],
+    forcer_declencheur: bool = False,
+) -> list[str]:
     """Repère les monstres du bestiaire mentionnés dans une narration qui
     relate un combat SANS avoir appelé `engager_combat`.
 
@@ -3120,6 +3261,11 @@ def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any])
     bondit… », puis enchaîne jets et dégâts dans la prose, oubliant d'appeler
     l'outil. Le serveur engage alors la phase officielle pour que l'ordre
     d'initiative, le suivi des PV et la rotation restent conformes.
+
+    :param forcer_declencheur: ignore la porte marqueurs/dégâts (le JOUEUR a
+        lui-même déclaré une attaque armée — cf. `_ATTAQUE_JOUEUR_RE` —, ce
+        qui suffit à vouloir la mécanique officielle). Les marqueurs de FIN
+        (victoire/fuite narrée) restent bloquants dans tous les cas.
 
     Renvoie la liste des noms de type de monstres détectés ([] si aucun).
     Précondition : `etat_avant.phase != "combat"` (sinon rien à rattraper).
@@ -3134,6 +3280,7 @@ def _detecter_combat_prose(data_dir: str, text: str, etat_avant: dict[str, Any])
     if not (
         any(m in bas for m in _COMBAT_PROSE_MARKERS)
         or bool(_DEGATS_PROSE_RE.search(bas))
+        or forcer_declencheur
     ):
         return []
     # Si la narration indique déjà que le combat est TERMINÉ (victoire,
@@ -4514,10 +4661,21 @@ async def _handle_say(
                 ).load()
                 if etat_detect.get("phase") != "combat":
                     try:
+                        # Déclencheurs élargis : prose du MJ (marqueurs /
+                        # dégâts chiffrés) OU attaque armée DÉCLARÉE par le
+                        # joueur (partie 4d4b4557 : « J'attaque le loup avec
+                        # ma hache » est resté 100 % prose — « bondit sur
+                        # vous » absent des marqueurs, aucun dégât chiffré —
+                        # alors que le loup gris est au bestiaire : aucun
+                        # engager_combat, aucun dé, loup intouchable).
+                        _attaque_joueur_5t = bool(
+                            _ATTAQUE_JOUEUR_RE.search(text or "")
+                        )
                         _types = _detecter_combat_prose(
                             str(cfg.abs(cfg.paths.data_dir)),
                             result.narration or "",
                             etat_detect,
+                            forcer_declencheur=_attaque_joueur_5t,
                         )
                         if _types:
                             from .tools.base import (
@@ -4564,6 +4722,150 @@ async def _handle_say(
                                         f"[dnd35] Combat prose rattrapé : "
                                         f"engager_combat({', '.join(resolus)})"
                                     )
+                                    # Le joueur avait DÉCLARÉ une attaque
+                                    # armée : résous-la déterministement si
+                                    # c'est déjà son tour d'initiative
+                                    # (sinon le bandeau « au tour de » du
+                                    # prochain tour re-prendra la déclaration
+                                    # via 5bis-a). Sinon, l'attaque déclarée
+                                    # resterait en prose sans effet (4d4b4557 :
+                                    # deux attaques au loup, PV intacts).
+                                    if _attaque_joueur_5t:
+                                        _etat_att = PartyState(
+                                            data_dir=str(
+                                                cfg.abs(cfg.paths.data_dir)),
+                                            partie_id=partie_id,
+                                        ).load()
+                                        _pjs_att = _etat_att.get("pj") or []
+                                        _nom_pj_att = next(
+                                            (
+                                                str(_p.get("nom") or "")
+                                                for _p in _pjs_att
+                                                if str(
+                                                    _p.get("joueur") or ""
+                                                ).strip().lower()
+                                                == str(
+                                                    ctx.joueur or ""
+                                                ).strip().lower()
+                                            ),
+                                            "",
+                                        )
+                                        if not _nom_pj_att and len(
+                                            _pjs_att
+                                        ) == 1:
+                                            _nom_pj_att = str(
+                                                (_pjs_att[0] or {}).get("nom")
+                                                or ""
+                                            )
+                                        if (
+                                            _nom_pj_att
+                                            and str(
+                                                _etat_att.get(
+                                                    "courant_tour_pour"
+                                                ) or ""
+                                            ) == _nom_pj_att
+                                        ):
+                                            _note_att = await _attaque_pj_sans_jet(
+                                                orch, ctx, on_event, result,
+                                                _nom_pj_att,
+                                            )
+                                            if _note_att:
+                                                result.narration += (
+                                                    "\n\n⚙️ _Attaque déclarée "
+                                                    "résolue par le "
+                                                    "serveur :_\n\n"
+                                                    + _note_att
+                                                )
+                                                print(
+                                                    "[dnd35] Attaque PJ "
+                                                    f"{_nom_pj_att} résolue "
+                                                    "(régularisation 5ter)."
+                                                )
+                                                # L'action du PJ est
+                                                # consommée : avance la
+                                                # rotation et joue les tours
+                                                # (monstres, incapables)
+                                                # jusqu'au prochain PJ — le
+                                                # moteur post-tour est déjà
+                                                # passé (phase exploration à
+                                                # ce moment-là).
+                                                try:
+                                                    _res_att = (
+                                                        await _boucle_combat(
+                                                            ctx,
+                                                            force_avance=(
+                                                                True
+                                                            ),
+                                                            timeout_secondes=(
+                                                                cfg.game.combat_turn_timeout_seconds
+                                                            ),
+                                                        )
+                                                    )
+                                                    if _res_att.events:
+                                                        result.narration += (
+                                                            "\n\n⚔️ _Résolution "
+                                                            "automatique du "
+                                                            "tour :_\n\n"
+                                                            + "\n\n".join(
+                                                                _res_att.events
+                                                            )
+                                                        )
+                                                    if _res_att.patches:
+                                                        result.state_patches.extend(
+                                                            _res_att.patches
+                                                        )
+                                                    _etat_fin_att = PartyState(
+                                                        data_dir=str(
+                                                            cfg.abs(
+                                                                cfg.paths.data_dir
+                                                            )
+                                                        ),
+                                                        partie_id=partie_id,
+                                                    ).load()
+                                                    if _etat_fin_att.get(
+                                                        "phase"
+                                                    ) == "combat":
+                                                        _suiv_att = str(
+                                                            _etat_fin_att.get(
+                                                                "courant_tour_pour"
+                                                            ) or ""
+                                                        )
+                                                        _pj_suiv = next(
+                                                            (
+                                                                _p
+                                                                for _p in (
+                                                                    _etat_fin_att.get(
+                                                                        "pj"
+                                                                    ) or []
+                                                                )
+                                                                if str(
+                                                                    _p.get(
+                                                                        "nom"
+                                                                    ) or ""
+                                                                ) == _suiv_att
+                                                            ),
+                                                            None,
+                                                        )
+                                                        if (
+                                                            _pj_suiv
+                                                            is not None
+                                                            and _suiv_att
+                                                        ):
+                                                            result.narration += (
+                                                                f"\n\n⚔️ **Au tour "
+                                                                f"de {_suiv_att}** "
+                                                                f"(joueur "
+                                                                f"{_pj_suiv.get('joueur')}) "
+                                                                "de décider une "
+                                                                "action."
+                                                            )
+                                                except Exception as e_att:
+                                                    print(
+                                                        "[dnd35] Rotation "
+                                                        "post-attaque 5ter "
+                                                        f"échouée (ignoré) : "
+                                                        f"{e_att}"
+                                                    )
                                 elif tr is not None:
                                     # Refus (ex. rencontre écrasante, monstre
                                     # refusé) : NE PAS avaler l'échec en
@@ -4760,28 +5062,37 @@ async def _handle_say(
                 explo_pas_appele = not (_outils_appeles & _EXPLORATION_TOOLS)
                 if phase_explo and explo_pas_appele and _estnarration_explo(
                         (text or "") + " " + (result.narration or "")):
-                    _obj_explo = (
-                        "⚠️ ERREUR système : le groupe se déplace / "
-                        "explore mais aucun outil de déplacement n'a été "
-                        "appelé. Utilise MAINTENANT l'outil approprié : "
-                        "`carte_donjon_explorer(direction='est')` si un "
-                        "donjon est actif, sinon `carte_donjon_entrer` "
-                        "(s'il existe un donjon) ou mets à jour "
-                        "`etat_partie_patch` (lieu) si la scène se passe "
-                        "en ville. NE te contente PAS de narrer : appelle "
-                        "l'outil puis narre le résultat."
+                    _outil_qb = _suggestion_outil_explo(
+                        _etat_rejouer,
+                        (text or "") + " " + (result.narration or ""),
                     )
-                    await _rejoue_correctif(orch, messages, ctx, result,
-                                            on_event, _obj_explo,
-                                            "exploration donjon")
+                    # None = mouvement DANS la salle / prose sans intention
+                    # spatiale : la narration du MJ est correcte, ne force
+                    # RIEN (partie 6746fc6c : « centre de la salle »
+                    # provoquait un changement de salle vers l'est).
+                    if _outil_qb:
+                        _obj_explo = (
+                            "⚠️ ERREUR système : le groupe se déplace / "
+                            "explore mais aucun outil de déplacement n'a été "
+                            f"appelé. Utilise MAINTENANT {_outil_qb}. NE te "
+                            "contente PAS de narrer : appelle l'outil puis "
+                            "narre le résultat d'après sa sortie officielle."
+                        )
+                        await _rejoue_correctif(orch, messages, ctx, result,
+                                                on_event, _obj_explo,
+                                                "exploration donjon")
 
                 # --- 5quater-c. Acquisition d'objet non enregistrée.
                 # Le MJ (ou le joueur) annonce la récupération/le don d'un
                 # objet mais n'appelle aucun outil d'inventaire → l'objet reste
                 # introuvable côté serveur/side panel. On ré-invoque une fois.
+                # ⚠️ PAS sur une simple mention de possession : la narration
+                # tisse le contenu du sac rappelé par le récap (« la fiole
+                # glisse dans votre sac ») et le rejeu tournait 6 tours sur 8,
+                # ré-ajoutant des objets (partie 6746fc6c : fiole ×6).
                 inv_pas_appele = not (_outils_appeles & _INVENTAIRE_TOOLS)
-                if inv_pas_appele and _ITEM_ACQUISITION_RE.search(
-                        (text or "") + " " + (result.narration or "")):
+                if inv_pas_appele and _rejeu_inventaire_necessaire(
+                        text or "", result.narration or ""):
                     _obj_inv = (
                         "⚠️ ERREUR système : l'objet gagné/récupéré/donné "
                         "n'a pas été enregistré. Appelle MAINTENANT "

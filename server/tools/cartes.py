@@ -635,7 +635,9 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     une salle d'entrée (0,0). Appel avant d'explorer. Met à jour
     `etat_partie.donjon` et bascule `etat_partie.phase` en "exploration".
 
-    :param donjon_id (str): identifiant libre ("Donjon de Khundrukar", etc.).
+    :param donjon_id (str): nom du lieu clos à cartographier, tel que narré
+        par le scénario en cours — n'invente PAS un nom absent de la
+        narration (jamais de donjon « d'exemple » : utilise le nom du module).
     """
     etat = _charger_etat(ctx)
     # Garde-fou : si un donjon est déjà ouvert avec le même id, on refuse
@@ -1039,10 +1041,14 @@ def _manifest_pour(ctx: ToolContext, donjon_id: str) -> Optional[dict[str, Any]]
                 continue
             data["_chemin"] = chemin
             cands.append(data)
-    # 1) Scénario courant.
+    # 1) Scénario courant. `scenario` peut être un id unique ou une liste
+    # (campagne découpée en chapitres : le même donjon couvre plusieurs
+    # scénarios, ex. la forteresse de Cryptejardin en 2 chapitres).
     if sid:
         for m in cands:
-            if str(m.get("scenario") or "") == sid:
+            scen = m.get("scenario")
+            ids = scen if isinstance(scen, list) else [scen]
+            if sid in {str(x).strip() for x in ids if x}:
                 return m
     # 2) Nom de donjon demandé.
     cible = _norm_nom_donjon(donjon_id)

@@ -1,6 +1,11 @@
 {
   "id": "divers_crypts_kelemvor_donjon",
-  "scenario": "divers_crypts_kelemvor",
+  "scenario": [
+    "divers_crypts_kelemvor",
+    "divers_crypts_kelemvor_ch01",
+    "divers_crypts_kelemvor_ch02",
+    "divers_crypts_kelemvor_ch03"
+  ],
   "donjon_id": "divers_crypts_kelemvor",
   "titre": "Les Cryptes de Kelemvor",
   "source": "The Crypts of Kelemvor (Dragon+ n°18, de Thomas Foss et Scott Fitzgerald Gray) — one-shot D&D pour personnages de niveau 3 à 5, adapté d'une quête de Neverwinter Online. Les héros doivent rallumer les brasiers de l'équilibre et rapporter les sceaux brisés pour contenir la horde de morts-vivants du liche Idris.",

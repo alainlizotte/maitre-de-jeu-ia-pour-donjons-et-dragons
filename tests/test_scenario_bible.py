@@ -77,7 +77,8 @@ def test_bible_edition_avertissement_3_5():
         # Partie marquée 3.5
         st = PartyState(data_dir=d, partie_id=PID)
         st.save({"meta": {"regles": "D&D 3.5"}, "phase": "exploration", "quete": {}})
-        tr = asyncio.run(scenarios_laelith_charger(_ctx(d), "divers_dues_for_the_dead"))
+        tr = asyncio.run(scenarios_laelith_charger(
+            _ctx(d), "divers_dues_for_the_dead_ch01"))
         bible = tr.state_patch["quete"]["bible"]
         assert bible["edition_detectee"] == "5e"
         assert "3.5" in bible["edition_partie"]
@@ -97,10 +98,11 @@ def test_bible_persistee_dans_etat():
     try:
         st = PartyState(data_dir=d, partie_id=PID)
         st.save({"meta": {"regles": "D&D 3.5"}, "phase": "exploration", "quete": {}})
-        asyncio.run(scenarios_laelith_charger(_ctx(d), "divers_dues_for_the_dead"))
+        asyncio.run(scenarios_laelith_charger(
+            _ctx(d), "divers_dues_for_the_dead_ch01"))
         etat = PartyState(data_dir=d, partie_id=PID).load()
         bible = (etat.get("quete") or {}).get("bible") or {}
-        assert bible.get("titre") == "Dues For The Dead"
+        assert str(bible.get("titre", "")).startswith("Dues For The Dead")
         assert "edition_detectee" in bible
         assert "etapes" in bible and "etape_courante" in bible
     finally:

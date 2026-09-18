@@ -123,8 +123,16 @@ export function ScenarioPicker({ partieId, onSelected }: ScenarioPickerProps) {
                     <span className="text-emerald-400 text-[10px]" title="PDF complet disponible">PDF</span>
                   )}
                 </div>
-                {(s.niveau || s.joueurs) && (
-                  <div className="flex gap-2 text-[10px] mb-1">
+                {(s.niveau || s.joueurs || (s.chapitre_total ?? 0) > 1) && (
+                  <div className="flex gap-2 text-[10px] mb-1 flex-wrap">
+                    {s.chapitre_total !== undefined && s.chapitre_total > 1 && (
+                      <span
+                        className="text-fuchsia-300/90"
+                        title="Campagne découpée en plusieurs parties qui s'enchaînent automatiquement au fil de la partie"
+                      >
+                        📖 {s.chapitre_total} parties
+                      </span>
+                    )}
                     {s.niveau && (
                       <span className="text-amber-400/80">⭐ Niv. {s.niveau}</span>
                     )}

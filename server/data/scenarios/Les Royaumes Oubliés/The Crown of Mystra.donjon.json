@@ -1,6 +1,12 @@
 {
   "id": "ro_the_crown_of_mystra_donjon",
-  "scenario": "ro_the_crown_of_mystra",
+  "scenario": [
+    "ro_the_crown_of_mystra",
+    "ro_the_crown_of_mystra_ch01",
+    "ro_the_crown_of_mystra_ch02",
+    "ro_the_crown_of_mystra_ch03",
+    "ro_the_crown_of_mystra_ch04"
+  ],
   "donjon_id": "La Couronne de Mystra",
   "titre": "La Couronne de Mystra — la quête des huit gemmes",
   "source": "The Crown of Mystra (AD&D, Michael P. Brock) — appendices A à K : Tour de l'Équilibre (silvermoon), Groove/Caverne de Nulentok (App. B), Phare de Sarr (App. C), Boutique de Sergental à Aluarim (App. D), Oasis d'Olomaa et QG Zhentarim (App. E/F), Manoir de Rineen à Calimport (App. G), Temple ruiné de Farouk à Chult (App. H), Fosse de Shakkak sur le Grand Glacier (App. I), Tour de Mortagne à Luskan (App. J), Château de Meredoth à Surthay (App. K).",

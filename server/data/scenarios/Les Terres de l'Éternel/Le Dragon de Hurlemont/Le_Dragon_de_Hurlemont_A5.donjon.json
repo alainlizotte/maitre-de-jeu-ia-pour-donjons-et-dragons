@@ -1,6 +1,12 @@
 {
   "id": "terres_dragon_hurlemont_donjon",
-  "scenario": "terres_dragon_hurlemont",
+  "scenario": [
+    "terres_dragon_hurlemont",
+    "terres_dragon_hurlemont_ch01",
+    "terres_dragon_hurlemont_ch02",
+    "terres_dragon_hurlemont_ch03",
+    "terres_dragon_hurlemont_ch04"
+  ],
   "donjon_id": "Le Dragon de Hurlemont — la vallée",
   "titre": "Le Dragon de Hurlemont — la vallée, le Monastère et les sommets",
   "source": "Le Dragon de Hurlemont (Les Terres de l'Éternelle, livret d'initiation — Gnomous & Bradbur, 2026, terresdeleternelle.fr) : module sandbox sans plan fixe, cartographié en zones de jeu (porte du bourg, enquête, Monastère et crypte, tanière de Vrakendur).",

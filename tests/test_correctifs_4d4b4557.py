@@ -333,9 +333,121 @@ def test_inventaire_fusionne_fiole_et_potion():
     assert len(potions) == 1 and potions[0]["qte"] == 2
 
 
-def _norm_nom(s) -> str:
-    from server.tools.inventaire import _norm
-    return _norm(s)
+# --------------------------------------------------------------------------- #
+# 8. Inventaire de quête par partie (bb4c4fb9) : un PJ réutilisé dans
+#    plusieurs parties garde l'inventaire de quête de CHACUNE.
+# --------------------------------------------------------------------------- #
+def _fiche_min(d: str) -> None:
+    fiches_dir = os.path.join(d, "fiches")
+    os.makedirs(fiches_dir, exist_ok=True)
+    with open(os.path.join(fiches_dir, "fiche_utturgut.json"), "w",
+              encoding="utf-8") as f:
+        json.dump({"nom": "Utturgut", "pv": 16, "pv_max": 16, "niveau": 1,
+                   "classe": "Barbare", "conditions": [],
+                   "equipement": [], "inventaire": []},
+                  f, ensure_ascii=False)
+
+
+def _lire_inventaire(d: str) -> list[dict]:
+    with open(os.path.join(d, "fiches", "fiche_utturgut.json"),
+              encoding="utf-8") as f:
+        return json.load(f).get("inventaire") or []
+
+
+def test_portee_auto_classification():
+    from server.tools.inventaire import _portee_auto
+
+    assert _portee_auto("Hache à deux mains") == "permanent"
+    assert _portee_auto("Armure d'écailles") == "permanent"
+    assert _portee_auto("gemme de Beljuril") == "permanent"
+    assert _portee_auto("fiole de guérison") == "quete"
+    assert _portee_auto("clé de fer") == "quete"
+    assert _portee_auto("carte de la grotte") == "quete"
+    assert _portee_auto("lettre de recommandation") == "quete"
+
+
+def test_inventaire_quete_isole_par_partie():
+    """Deux parties utilisent le même PJ : chaque partie voit (et consomme)
+    UNIQUEMENT son inventaire de quête ; l'autre reste intacte."""
+    d = tempfile.mkdtemp(prefix="dnd35_quete_multi_")
+    _fiche_min(d)
+    ctx_a = ToolContext(partie_id="partie_A", joueur="alain", data_dir=d)
+    ctx_b = ToolContext(partie_id="partie_B", joueur="alain", data_dir=d)
+
+    # Thukmuul donne une fiole dans CHAQUE partie (portée quête par défaut).
+    asyncio.run(invoke_tool(TOOLS["inventaire_ajouter"], ctx_a, {
+        "nom": "Utturgut", "objet": "fiole de guérison", "quantite": 1,
+        "poids": 0.1}))
+    asyncio.run(invoke_tool(TOOLS["inventaire_ajouter"], ctx_b, {
+        "nom": "Utturgut", "objet": "fiole de guérison", "quantite": 2,
+        "poids": 0.1}))
+
+    inv = _lire_inventaire(d)
+    quetes = [e for e in inv if e.get("portee") == "quete"]
+    assert len(quetes) == 2, inv
+    par_partie = {e["partie"]: e["qte"] for e in quetes}
+    assert par_partie == {"partie_A": 1, "partie_B": 2}
+
+    # Consommation dans A : la fiole de B reste intacte.
+    r = asyncio.run(invoke_tool(TOOLS["inventaire_retirer"], ctx_a, {
+        "nom": "Utturgut", "objet": "fiole de guérison", "quantite": 1}))
+    assert "🗑️" in r.text
+    inv = _lire_inventaire(d)
+    par_partie = {e["partie"]: e["qte"] for e in inv
+                  if e.get("portee") == "quete"}
+    assert par_partie == {"partie_B": 2}, inv
+
+    # Le récap de chaque partie ne montre QUE son inventaire de quête.
+    from server.persos import resume_inventaire
+    with open(os.path.join(d, "fiches", "fiche_utturgut.json"),
+              encoding="utf-8") as f:
+        fiche = json.load(f)
+    recap_a = resume_inventaire(fiche, partie_id="partie_A")
+    recap_b = resume_inventaire(fiche, partie_id="partie_B")
+    assert "partie_A" not in recap_a and "partie_B" not in recap_a
+    assert "Inventaire de quête" not in recap_a  # fiole A consommée
+    assert "Inventaire de quête" in recap_b and "×2" in recap_b
+
+
+def test_inventaire_permanent_survis_aux_parties():
+    """Achat/arme (portee permanent) : une seule ligne, visible dans toutes
+    les parties, jamais taguée quête."""
+    d = tempfile.mkdtemp(prefix="dnd35_quete_perm_")
+    _fiche_min(d)
+    ctx_a = ToolContext(partie_id="partie_A", joueur="alain", data_dir=d)
+    asyncio.run(invoke_tool(TOOLS["inventaire_ajouter"], ctx_a, {
+        "nom": "Utturgut", "objet": "hache", "quantite": 1}))
+    inv = _lire_inventaire(d)
+    haches = [e for e in inv if "hache" in _cle_objet(e["nom"])]
+    assert len(haches) == 1 and haches[0].get("portee") != "quete"
+    ctx_b = ToolContext(partie_id="partie_B", joueur="alain", data_dir=d)
+    asyncio.run(invoke_tool(TOOLS["inventaire_ajouter"], ctx_b, {
+        "nom": "Utturgut", "objet": "hache", "quantite": 1}))
+    inv = _lire_inventaire(d)
+    haches = [e for e in inv if "hache" in _cle_objet(e["nom"])]
+    assert len(haches) == 1 and haches[0]["qte"] == 2  # fusion permanente
+
+
+def test_retirer_auto_consume_quete_dabord():
+    """portee=auto : le don de PNJ est consommé avant l'équipement durable."""
+    d = tempfile.mkdtemp(prefix="dnd35_quete_auto_")
+    _fiche_min(d)
+    ctx = ToolContext(partie_id="partie_A", joueur="alain", data_dir=d)
+    asyncio.run(invoke_tool(TOOLS["inventaire_ajouter"], ctx, {
+        "nom": "Utturgut", "objet": "potion de soins", "quantite": 1,
+        "poids": 0.1, "portee": "quete"}))
+    asyncio.run(invoke_tool(TOOLS["inventaire_ajouter"], ctx, {
+        "nom": "Utturgut", "objet": "potion de soins", "quantite": 3,
+        "poids": 0.1, "portee": "permanent"}))
+    asyncio.run(invoke_tool(TOOLS["inventaire_retirer"], ctx, {
+        "nom": "Utturgut", "objet": "potion de soins", "quantite": 1}))
+    inv = _lire_inventaire(d)
+    quete = [e for e in inv if e.get("portee") == "quete"]
+    perm = [e for e in inv if e.get("portee") != "quete"
+            and "potion" in _cle_objet(e.get("nom"))]
+    assert quete == []  # le don de PNJ part en premier
+    assert len(perm) == 1 and perm[0]["qte"] == 3
+
 
 
 # --------------------------------------------------------------------------- #
@@ -397,3 +509,41 @@ def test_bloc_donjon_interdit_invention():
     bloc = _donjon_bloc(etat)
     assert "SEULE réalité de la salle" in bloc
     assert "NI clé" in bloc
+
+
+# --------------------------------------------------------------------------- #
+# 7. Ouverture : ancre du lieu de départ canonique (c1f4e547 — ouverture
+#    improvisée dans le « donjon de Khundrukar »)
+# --------------------------------------------------------------------------- #
+def test_lieu_depart_canonique_ancree_la_scene():
+    from server.llm.prompt_builder import _lieu_depart_canonique
+
+    etat = {
+        "histoire": [],
+        "donjon": {
+            "id": "La Couronne de Mystra",
+            "grille": [{"x": 0, "y": 0, "type": "entrée",
+                        "description": "La salle d'audience de la Tour "
+                                       "de l'Équilibre, à Silverymoon.",
+                        "visitee": True,
+                        "portes": {"est": True}}],
+            "courant": [0, 0],
+        },
+    }
+    ancre = _lieu_depart_canonique(etat)
+    assert "LIEU DE DÉPART CANONIQUE" in ancre
+    assert "Tour de l'Équilibre" in ancre
+    assert "N'invente AUCUN autre lieu" in ancre
+
+
+def test_lieu_depart_canonique_absent_si_histoire_non_vide():
+    from server.llm.prompt_builder import _lieu_depart_canonique
+
+    etat = {
+        "histoire": [{"evenement": "Début de l'aventure"}],
+        "donjon": {"id": "D", "grille": [{"x": 0, "y": 0,
+                                          "description": "x",
+                                          "visitee": True}]},
+    }
+    assert _lieu_depart_canonique(etat) == ""
+    assert _lieu_depart_canonique({"histoire": []}) == ""

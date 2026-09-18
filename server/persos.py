@@ -958,7 +958,8 @@ def resume_dons_competences(fiche: dict[str, Any]) -> str:
     return " · ".join(parties)
 
 
-def resume_inventaire(fiche: dict[str, Any], max_items: int = 30) -> str:
+def resume_inventaire(fiche: dict[str, Any], max_items: int = 30,
+                      partie_id: str = "") -> str:
     """Résumé compact « Sac : objet ×qte, … » de l'inventaire d'une fiche.
 
     Sert au récapitulatif injecté dans le prompt du MJ : sans lui, l'IA ne
@@ -967,6 +968,12 @@ def resume_inventaire(fiche: dict[str, Any], max_items: int = 30) -> str:
     porte 4). Les quantités et charges de kit sont incluses ; la liste est
     plafonnée à `max_items` entrées pour ne pas gonfler le prompt.
 
+    Portées (demande utilisateur, partie bb4c4fb9) : les objets tagués
+    `portee="quete"` (dons de PNJ : potions, cartes, clés, or donné…)
+    n'apparaissent que s'ils appartiennent à la partie `partie_id` ; les
+    objets tagués d'une AUTRE partie sont masqués (ils seront purgés).
+    Sans tag = équipement permanent du PJ.
+
     Renvoie une chaîne vide si la fiche n'a pas d'inventaire.
     """
     inv = fiche.get("inventaire")
@@ -974,32 +981,54 @@ def resume_inventaire(fiche: dict[str, Any], max_items: int = 30) -> str:
         inv = fiche.get("equipement") or []
     if not isinstance(inv, list):
         return ""
-    items: list[str] = []
-    for e in inv:
-        if not isinstance(e, dict):
-            continue
+
+    def _portee(e: dict[str, Any]) -> str:
+        return ("quete" if str(e.get("portee") or "") == "quete"
+                else "permanent")
+
+    perm_items: list[str] = []
+    quest_items: list[str] = []
+
+    def _libelle(e: dict[str, Any]) -> str:
         nom = str(e.get("nom") or "").strip()
-        if not nom:
-            continue
         try:
             qte = int(e.get("qte", 1) or 1)
         except (TypeError, ValueError):
             qte = 1
-        libelle = f"{nom} ×{qte}" if qte > 1 else nom
+        lbl = f"{nom} ×{qte}" if qte > 1 else nom
         charges = e.get("charges")
         if charges is not None:
             try:
-                libelle += f" ({int(charges)} charges)"
+                lbl += f" ({int(charges)} charges)"
             except (TypeError, ValueError):
                 pass
-        items.append(libelle)
-    if not items:
-        return ""
-    reste = len(items) - max_items
-    txt = ", ".join(items[:max_items])
-    if reste > 0:
-        txt += f", … (+{reste} autres)"
-    return "Sac : " + txt
+        return lbl
+
+    for e in inv:
+        if not isinstance(e, dict):
+            continue
+        if not str(e.get("nom") or "").strip():
+            continue
+        if _portee(e) == "quete":
+            # Inventaire de quête : UNIQUEMENT celui de la partie en cours.
+            if partie_id and str(e.get("partie") or "") == partie_id:
+                quest_items.append(_libelle(e))
+            continue
+        perm_items.append(_libelle(e))
+
+    parties: list[str] = []
+    if perm_items:
+        reste = len(perm_items) - max_items
+        txt = ", ".join(perm_items[:max_items])
+        if reste > 0:
+            txt += f", … (+{reste} autres)"
+        parties.append("Sac (permanent) : " + txt)
+    if quest_items:
+        parties.append(
+            "Inventaire de quête (cette partie, perdu à sa fin) : "
+            + ", ".join(quest_items)
+        )
+    return " · ".join(parties)
 
 
 def _meme_compte(a: Any, b: Any) -> bool:

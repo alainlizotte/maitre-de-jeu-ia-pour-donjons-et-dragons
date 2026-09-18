@@ -303,6 +303,14 @@ def _construire_bible(
         "etapes": [],              # étapes du scénario (voir scenario_etape)
         "etape_courante": "",
         "objectifs": [],           # objectifs/enjeux principaux
+        # Campagne découpée en chapitres (champ `chapitre_suivant` du
+        # catalogue) : réinjectés au MJ à chaque tour pour enchaîner les
+        # chapitres dans la MÊME partie via `scenarios_laelith_charger`.
+        "campagne": str(s.get("campagne") or ""),
+        "chapitre": int(s["chapitre"]) if s.get("chapitre") else None,
+        "chapitre_total": int(s["chapitre_total"]) if s.get("chapitre_total") else None,
+        "chapitre_suivant": str(s.get("chapitre_suivant") or ""),
+        "chapitres_precedents": [],  # rempli au chargement du chapitre suivant
     }
     # Avertissement d'édition : un scénario clairement d'une AUTRE édition
     # que la partie risque de produire des monstres/difficultés incohérents.
@@ -522,6 +530,12 @@ async def scenarios_laelith_lister(ctx: ToolContext) -> ToolResult:
             if s.get("objets"): assets.append(f"{len(s['objets'])} objets")
             if s.get("enigmes"): assets.append(f"{len(s['enigmes'])} énigmes")
             if s.get("annexes"): assets.append(f"{len(s['annexes'])} annexes")
+            # Campagne en chapitres : marque la place dans la série.
+            if s.get("chapitre"):
+                chap = f"chapitre {s['chapitre']}"
+                if s.get("chapitre_total"):
+                    chap += f"/{s['chapitre_total']}"
+                assets.append(chap)
             extra = f" [{', '.join(assets)}]" if assets else ""
             lignes.append(f"- **[{s.get('id','?')}] {s.get('titre','?')}**{pdf}{extra}")
             if s.get("pitch"):
@@ -582,6 +596,18 @@ async def scenarios_laelith_charger(
     except Exception:                                            # noqa: BLE001
         pass
     bible = _construire_bible(s, texte, edition_partie)
+    # Chapitre suivant (campagne découpée) : résout le TITRE du chapitre
+    # suivant pour un enchaînement limpide au MJ.
+    _suivant_id = str(s.get("chapitre_suivant") or "").strip()
+    _suivant_titre = ""
+    if _suivant_id:
+        _nxt = next(
+            (x for x in flat if str(x.get("id", "")) == _suivant_id), None
+        )
+        if _nxt:
+            _suivant_titre = str(_nxt.get("titre") or "")
+            if not bible.get("campagne"):
+                bible["campagne"] = str(_nxt.get("campagne") or "")
     # Ennemis du scénario : monstres du bestiaire détectés dans le texte du
     # PDF — injectés à chaque tour (fidélité des rencontres au module).
     if texte:
@@ -602,6 +628,29 @@ async def scenarios_laelith_charger(
     )
     if bible.get("avertissement"):
         champs.append(f"\n{bible['avertissement']}")
+    # ── Campagne en chapitres : cadre l'enchaînement automatique ──
+    if bible.get("chapitre"):
+        _total = bible.get("chapitre_total") or "?"
+        _campagne = bible.get("campagne") or ""
+        champs.append(
+            f"\n### 📌 Chapitre {bible['chapitre']}/{_total} "
+            f"de la campagne « {_campagne} »"
+        )
+        if _suivant_id:
+            champs.append(
+                f"→ CHAPITRE SUIVANT : quand l'objectif de ce chapitre est "
+                f"atteint (scène conclusive jouée), enchaîne SANS reset dans "
+                f"la MÊME partie en appelant "
+                f"`scenarios_laelith_charger(scenario_id=\"{_suivant_id}\")` "
+                f"(chapitre {int(bible['chapitre']) + 1}/{_total} : "
+                f"« {_suivant_titre or _suivant_id} »). Ne le charge PAS "
+                f"avant que ce chapitre soit terminé."
+            )
+        else:
+            champs.append(
+                "→ DERNIER CHAPITRE de la campagne : concluez l'histoire "
+                "(pas de chapitre suivant à charger)."
+            )
     # Assets
     for label, cle in [("Cartes", "cartes"), ("Objets", "objets"),
                        ("Énigmes", "enigmes")]:
@@ -646,6 +695,33 @@ async def scenarios_laelith_charger(
             etat = st.load()
             mem = etat.setdefault("memoire", {})
             mem.setdefault("missions", [])
+            # ── Enchaînement de chapitres : continuité + clôture ──
+            _ancienne_bible = ((etat.get("quete") or {}).get("bible") or {})
+            _campagne = str(bible.get("campagne") or "")
+            if (
+                _ancienne_bible.get("chapitre")
+                and _campagne
+                and str(_ancienne_bible.get("campagne") or "") == _campagne
+            ):
+                # a) Le chapitre précédent devient un résumé injecté au MJ
+                #    (la nouvelle bible remplace l'ancienne : on préserve le
+                #    fil de la campagne, titres + étapes accomplies).
+                _prec = list(bible.get("chapitres_precedents") or [])
+                _prec.append({
+                    "titre": str(_ancienne_bible.get("titre") or ""),
+                    "chapitre": _ancienne_bible.get("chapitre"),
+                    "etapes": list(_ancienne_bible.get("etapes_terminees") or [])[-10:],
+                    "avancement": str(_ancienne_bible.get("avancement") or "")[:300],
+                })
+                bible["chapitres_precedents"] = _prec[-8:]
+                # b) La mission du chapitre précédent est clôturée.
+                _ancien_titre = str((etat.get("quete") or {}).get("titre") or "")
+                for _m in mem["missions"]:
+                    if (
+                        str(_m.get("titre", "")).lower() == _ancien_titre.lower()
+                        and _m.get("statut") == "active"
+                    ):
+                        _m["statut"] = "terminée"
             # Mission active (la quête du scénario devient la mission courante)
             titre_mission = str(quete.get("titre") or "").strip()
             if titre_mission and not any(

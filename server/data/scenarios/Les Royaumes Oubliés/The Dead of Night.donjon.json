@@ -1,6 +1,11 @@
 {
   "id": "ro_the_dead_of_night_donjon",
-  "scenario": "ro_the_dead_of_night",
+  "scenario": [
+    "ro_the_dead_of_night",
+    "ro_the_dead_of_night_ch01",
+    "ro_the_dead_of_night_ch02",
+    "ro_the_dead_of_night_ch03"
+  ],
   "donjon_id": "Les ruines oubliées de Kalthrax",
   "titre": "The Dead of Night — les ruines oubliées de Kalthrax",
   "source": "THE DEAD OF NIGHT (module AD&D de Derek Chapman, généré avec l'utilitaire DunGen de Steve Alvarez) — village massacré par les assassins doppelgangers de Braxius, catacombes et ruines oubliées de Kalthrax sous la bourgade.",

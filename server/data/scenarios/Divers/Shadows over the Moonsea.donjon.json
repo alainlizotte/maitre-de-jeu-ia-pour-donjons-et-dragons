@@ -1,6 +1,15 @@
 {
   "id": "divers_shadows_over_the_moonsea_donjon",
-  "scenario": "divers_shadows_over_the_moonsea",
+  "scenario": [
+    "divers_shadows_over_the_moonsea",
+    "divers_shadows_over_the_moonsea_ch01",
+    "divers_shadows_over_the_moonsea_ch02",
+    "divers_shadows_over_the_moonsea_ch03",
+    "divers_shadows_over_the_moonsea_ch04",
+    "divers_shadows_over_the_moonsea_ch05",
+    "divers_shadows_over_the_moonsea_ch06",
+    "divers_shadows_over_the_moonsea_ch07"
+  ],
   "donjon_id": "divers_shadows_over_the_moonsea",
   "titre": "Shadows over the Moonsea — l'île sans nom et le navire du culte",
   "source": "Shadows over the Moonsea (D&D Encounters — Tyranny of Dragons, Adventurers League, 2014), conception Greg Marks. Manifeste fidèle aux parties 3 à 5 : village de la Baie de la Tempête, Bois Sombre, autel infernal, assaut du culte de la Dragon et bataille navale contre l'Audacity.",

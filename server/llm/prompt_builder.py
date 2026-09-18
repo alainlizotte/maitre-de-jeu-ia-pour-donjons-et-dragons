@@ -189,6 +189,13 @@ def _donjon_bloc(etat: dict[str, Any]) -> str:
     edl = str(cur.get("etat_des_lieux") or "").strip()
     if edl:
         lignes.append(f"  État des lieux : {edl[:_MAX_DESC_BLOC]}")
+    # Partie 6746fc6c : le MJ inventait un PNJ masqué et une « première clé »
+    # absents du module. La description figée ci-dessus est EXHAUSTIVE.
+    lignes.append(
+        "  ⚠️ Ce qui précède est la SEULE réalité de la salle : n'invente NI "
+        "PNJ NI clé NI objet de quête NI créature absents de ce bloc et du "
+        "manifeste du scénario."
+    )
     lignes.append(
         "  Portes EXISTANTES : "
         + (", ".join(portes_cur) if portes_cur else "AUCUNE (cul-de-sac)")
@@ -880,6 +887,16 @@ class PromptBuilder:
                 "objet, appelle le tool (ex. `fiche_perso_soigner` avec "
                 "`source=\"<nom exact de l'objet listé>\"`) ; la quantité se "
                 "déduit toute seule.)"
+            )
+            # Partie 6746fc6c : ce rappel de sac était re-tissé dans CHAQUE
+            # narration (« votre kit est bien rangé… », « la fiole glisse
+            # dans votre sac ») — inventory-weaving sans rapport avec
+            # l'action du joueur.
+            lignes.append(
+                "  (Ce rappel de sac sert de VÉRIFICATION, pas de sujet : "
+                "n'inventorie PAS l'équipement dans ta narration — le "
+                "panneau du joueur l'affiche déjà. Ne mentionne un objet du "
+                "sac QUE s'il sert l'action en cours.)"
             )
 
         pnjs = etat.get("pnj", []) or []

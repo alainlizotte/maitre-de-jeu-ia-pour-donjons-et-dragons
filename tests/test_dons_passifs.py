@@ -202,7 +202,7 @@ def test_resume_inventaire_quantites_et_charges() -> None:
         ],
     }
     r = resume_inventaire(fiche)
-    assert r.startswith("Sac : ")
+    assert r.startswith("Sac (permanent) : ")
     assert "fiole de guérison ×4" in r
     assert "Kit premiers secours (8 charges)" in r
     # Objet à qte 1 : pas de « ×1 ».

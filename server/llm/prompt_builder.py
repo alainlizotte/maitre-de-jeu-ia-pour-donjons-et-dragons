@@ -42,16 +42,49 @@ _PHASE_SECTIONS: dict[str, list[str]] = {
 # du pitch) et interdit rencontre/image de monstre au premier tour.
 _DEBUT_AVENTURE = (
     "⚠️ DÉBUT DE L'AVENTURE — aucun événement d'histoire enregistré. Ce "
-    "tour-ci est la SCÈNE D'OUVERTURE : narre la mise en contexte complète "
-    "selon le pitch de la quête ci-dessus (décor, ambiance, PNJ présents, "
-    "objectif immédiat, situation de départ des héros), en 2-4 paragraphes, "
-    "puis invite les joueurs à agir. INTERDIT ce tour : engager un combat, "
-    "faire surgir un monstre, générer une image de monstre, lancer une "
-    "rencontre."
+    "tour-ci est la SCÈNE D'OUVERTURE : pose le décor AVANT toute "
+    "sollicitation, en 4 à 6 paragraphes immersifs — le lieu de départ "
+    "(avec le lieu canonique ci-dessus s'il existe : décor, sons, "
+    "odeurs), la situation des héros à cet instant, le PNJ principal et "
+    "son attitude, la mission avec ses enjeux et son urgence, la remise "
+    "d'un objet via l'outil d'inventaire le cas échéant — puis termine "
+    "par une invitation OUVERTE à agir (jamais une question fermée "
+    "« acceptez-vous ? »). INTERDIT ce tour : combat, monstre, rencontre, "
+    "image de monstre, mise en contexte expédiée en trois lignes."
 )
 
 _MAX_SALLES_BLOC = 40       # plafond de salles listées dans le bloc donjon
 _MAX_DESC_BLOC = 400        # plafond de la description reprise par salle
+
+
+def _lieu_depart_canonique(etat: dict[str, Any]) -> str:
+    """Ligne d'ancrage « lieu de départ canonique » pour la scène d'ouverture.
+
+    Partie c1f4e547 : au premier tour, le petit modèle a improvisé
+    l'ouverture dans un donjon inventé (« donjon de Khundrukar », nom repris
+    de l'exemple du schéma d'outils) au lieu de suivre le pitch. Quand le
+    donjon du scénario est déjà initialisé, on ancre la scène d'ouverture
+    sur la salle canonique de départ (visitee=True du plan). Renvoie '' si
+    rien n'ancre (donjon absent, ou pas au premier tour)."""
+    if etat.get("histoire"):
+        return ""
+    donjon = etat.get("donjon") or {}
+    if not (donjon.get("id") and donjon.get("grille")):
+        return ""
+    s0 = next(
+        (s for s in (donjon.get("grille") or []) if s.get("visitee")),
+        None,
+    )
+    if not (s0 and str(s0.get("description") or "").strip()):
+        return ""
+    return (
+        "LIEU DE DÉPART CANONIQUE — la scène d'ouverture s'y déroule : "
+        f"{str(s0.get('type') or '?').strip()} "
+        f"({s0.get('x')},{s0.get('y')}) — « "
+        f"{str(s0.get('description')).strip()[:_MAX_DESC_BLOC]} » . "
+        "N'invente AUCUN autre lieu (pas de « donjon de… » absent d'ici) "
+        "et n'y entre PAS : c'est déjà où se trouve le groupe."
+    )
 
 
 def _portes_salle(salle: dict[str, Any]) -> list[str]:
@@ -389,6 +422,42 @@ def _scenario_bible_bloc(
             "Étapes accomplies : "
             + ", ".join(etapes_faites[-6:])
         )
+    # Campagne en chapitres : rappel du cadre + résumé des chapitres déjà
+    # joués + consigne d'enchaînement (réinjectés à CHAQUE tour — c'est ce
+    # qui fait suivre les chapitres automatiquement dans la même partie).
+    if bible.get("chapitre"):
+        _tot = bible.get("chapitre_total") or "?"
+        _camp = bible.get("campagne") or bible.get("titre") or "campagne"
+        lignes.append(
+            f"📌 CAMPAGNE « {_camp} » — chapitre "
+            f"{bible['chapitre']}/{_tot}. Reste sur le CONTENU de ce "
+            f"chapitre : n'anticipe pas les chapitres suivants."
+        )
+        _prec = bible.get("chapitres_precedents") or []
+        if _prec:
+            _recaps = []
+            for _p in _prec[-4:]:
+                _t = str(_p.get("titre") or "?")
+                _e = [_x for _x in (_p.get("etapes") or []) if _x][-3:]
+                _recaps.append(
+                    _t + (" (fait : " + ", ".join(map(str, _e)) + ")" if _e else "")
+                )
+            lignes.append(
+                "Continuité — chapitres déjà joués : " + " | ".join(_recaps)
+            )
+        _suiv = str(bible.get("chapitre_suivant") or "")
+        if _suiv:
+            lignes.append(
+                "→ FIN DE CHAPITRE ATTEINTE ? Dès que l'objectif de ce "
+                "chapitre est accompli (et seulement à ce moment), appelle "
+                f"`scenarios_laelith_charger(scenario_id=\"{_suiv}\")` pour "
+                "charger le chapitre suivant dans la MÊME partie."
+            )
+        else:
+            lignes.append(
+                "→ DERNIER chapitre de la campagne : joue le dénouement "
+                "jusqu'au bout (aucun chapitre suivant)."
+            )
     if not objectif and not etapes_faites:
         # 📌 Aucun suivi : la partie dérivait hors trame sans garde-fou
         # (partie 87b8f286 — zéro étape consignée, séquence du module rompue).
@@ -460,22 +529,27 @@ def _dons_competences_pj(data_dir: str, nom: str) -> str:
         return ""
 
 
-def _inventaire_pj(data_dir: str, nom: str) -> str:
+def _inventaire_pj(data_dir: str, nom: str, partie_id: str = "") -> str:
     """Résumé compact du sac d'un PJ, lu dans sa fiche sur disque — l'entrée
     `pj` de l'état ne transporte PAS l'inventaire. Sans cette ligne, le MJ
     ignore le contenu réel du sac et peut nier un objet pourtant porté
     (bug « tu n'as pas de fiole de guérison » alors que le PJ en a 4).
+    `partie_id` filtre l'inventaire de quête : seuls les objets de quête de
+    CETTE partie sont listés (une fiche réutilisée dans plusieurs parties
+    garde l'inventaire de quête de chacune).
     Renvoie '' si fiche absente ou sans inventaire (fail-safe)."""
     if not nom or not data_dir:
         return ""
     try:
         from ..persos import charger_fiche, resume_inventaire
-        return resume_inventaire(charger_fiche(data_dir, nom) or {})
+        return resume_inventaire(
+            charger_fiche(data_dir, nom) or {}, partie_id=partie_id
+        )
     except Exception:                                        # noqa: BLE001
         return ""
 
 
-def _fiche_pj_lignes(data_dir: str, nom: str) -> list[str]:
+def _fiche_pj_lignes(data_dir: str, nom: str, partie_id: str = "") -> list[str]:
     """Détails officiels d'un PJ lus dans sa fiche sur disque : sac,
     dons/compétences, sorts. L'entrée `pj` de l'état n'en transporte aucun.
     Renvoie une liste de lignes (préfixées par l'appelant), vide si fiche
@@ -483,7 +557,7 @@ def _fiche_pj_lignes(data_dir: str, nom: str) -> list[str]:
     if not nom or not data_dir:
         return []
     out: list[str] = []
-    sac = _inventaire_pj(data_dir, nom)
+    sac = _inventaire_pj(data_dir, nom, partie_id)
     if sac:
         out.append(sac)
     dons = _dons_competences_pj(data_dir, nom)
@@ -648,7 +722,9 @@ class PromptBuilder:
         return "\n\n---\n\n".join(blocs) if blocs else ""
 
     # ------------------------------------------------------------------ #
-    def build_recap(self, etat: dict[str, Any]) -> str:
+    def build_recap(
+        self, etat: dict[str, Any], partie_id: str = ""
+    ) -> str:
         """Construit le récapitulatif de l'état.
 
         En phase d'ouverture sans PJ créé, on produit un récap **minimal**
@@ -707,7 +783,9 @@ class PromptBuilder:
             # elles, le MJ ignore ce que porte réellement le PJ et peut nier
             # un objet pourtant présent (bug « pas de fiole de guérison » ×4).
             for p in pj:
-                det = _fiche_pj_lignes(data_dir, str(p.get("nom") or ""))
+                det = _fiche_pj_lignes(
+                    data_dir, str(p.get("nom") or ""), partie_id
+                )
                 if det:
                     lignes.append(
                         f"  · {p.get('nom','?')} — " + " · ".join(det)
@@ -716,7 +794,9 @@ class PromptBuilder:
                 lignes.append(
                     "  (Sac listé = contenu OFFICIEL de l'inventaire : ne dis "
                     "JAMAIS qu'un objet listé est absent ; pour l'utiliser, "
-                    "appelle le tool avec `source=\"<nom exact listé>\"`.)"
+                    "appelle le tool avec `source=\"<nom exact listé>\"`. "
+                    "L'inventaire de quête listé n'existe que dans CETTE "
+                    "partie — n'apparaisse jamais dans une autre.)"
                 )
             if go:
                 lignes.append(_BLOC_GAME_OVER)
@@ -730,6 +810,9 @@ class PromptBuilder:
                 )
                 if not (etat.get("histoire") or []):
                     lignes.append(_DEBUT_AVENTURE)
+                    _ancre = _lieu_depart_canonique(etat)
+                    if _ancre:
+                        lignes.append(_ancre)
             bible_min = _scenario_bible_bloc(quete_min, etat=etat)
             if bible_min:
                 lignes.append(bible_min)
@@ -873,7 +956,7 @@ class PromptBuilder:
                 # Fiche PJ (valeurs officielles) : sac, dons/rangs, sorts —
                 # l'entrée `pj` de l'état n'en transporte aucune.
                 for detail in _fiche_pj_lignes(
-                    data_dir, str(p.get("nom") or "")
+                    data_dir, str(p.get("nom") or ""), partie_id
                 ):
                     lignes.append(f"    · {detail}")
             lignes.append(
@@ -886,7 +969,10 @@ class PromptBuilder:
                 "dis JAMAIS qu'un objet listé est absent. Pour utiliser un "
                 "objet, appelle le tool (ex. `fiche_perso_soigner` avec "
                 "`source=\"<nom exact de l'objet listé>\"`) ; la quantité se "
-                "déduit toute seule.)"
+                "déduit toute seule. « Sac (permanent) » = équipement durable "
+                "du PJ (reste d'une partie à l'autre) ; « Inventaire de "
+                "quête » = dons de PNJ et objets de l'aventure, propres à "
+                "CETTE partie — ils n'existent pas dans les autres parties.)"
             )
             # Partie 6746fc6c : ce rappel de sac était re-tissé dans CHAQUE
             # narration (« votre kit est bien rangé… », « la fiole glisse
@@ -951,6 +1037,9 @@ class PromptBuilder:
                 etat.get("histoire") or []
             ):
                 lignes.append(_DEBUT_AVENTURE)
+                _ancre_riche = _lieu_depart_canonique(etat)
+                if _ancre_riche:
+                    lignes.append(_ancre_riche)
             # Bible du scénario : la trame, les étapes et la difficulté,
             # réinjectées pour tenir le cap malgré l'improvisation.
             bible_bloc = _scenario_bible_bloc(quete, etat=etat)
@@ -989,7 +1078,7 @@ class PromptBuilder:
             max_history=self.cfg.game.max_history_events,
         )
         etat = state.load()
-        recap = self.build_recap(etat)
+        recap = self.build_recap(etat, partie_id=partie_id)
 
         # Détection du régime « ouverture court » : phase opening et aucun PJ.
         # Dans ce cas, on remplace le system prompt complet (~5 k tokens) par

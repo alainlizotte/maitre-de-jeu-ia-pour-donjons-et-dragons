@@ -85,6 +85,54 @@ def _cle_objet(nom: Any) -> str:
     return _OBJETS_SYNONYMES.get(n, n)
 
 
+# --------------------------------------------------------------------------- #
+#  Portée des objets (demande utilisateur, partie bb4c4fb9) :
+#  - PERMANENT : armes, armures, munitions, trésors, achats chez un marchand
+#    → restent au PJ d'une partie à l'autre ;
+#  - QUÊTE : dons de PNJ et objets de l'aventure (potions, fioles, or donné,
+#    cartes, clés, parchemins, lettres…) → liés à LA PARTIE en cours
+#    (tagués `portee="quete"` + `partie=<id>` dans la fiche, et purgés de la
+#    fiche dès qu'une AUTRE partie démarre — cf. purge dans main.py).
+# --------------------------------------------------------------------------- #
+_PORTEE_PERMANENT_RE = re.compile(
+    r"\b(arme|armes|epee|sabre|hache|marteau|dague|lance|arc|arbalete"
+    r"|fleche|carreau|balle de fronde"
+    r"|armure|armures|ecailles|cotte de mailles|bouclier|pavois|casque"
+    r"|heaume|gemme|joyau|diamant|rubis|emeraude|saphir|beljuril|jacinthe"
+    r"|tresor|magique|gauntlet|gantelet|bague|amulette|cape|baton|baguette)\b"
+)
+
+
+def _portee_auto(objet: str) -> str:
+    """Portée par défaut d'un objet selon sa nature : arme/armure/trésor →
+    permanent ; le reste (potions, cartes, clés, documents, or donné…) →
+    inventaire de quête."""
+    n = _norm(objet)
+    return "permanent" if _PORTEE_PERMANENT_RE.search(n) else "quete"
+
+
+def _portee_de(e: dict[str, Any]) -> str:
+    """Portée enregistrée d'une entrée d'inventaire (sans tag = permanent :
+    tout l'équipement antérieur au système reste au PJ)."""
+    return "quete" if str(e.get("portee") or "") == "quete" else "permanent"
+
+
+def _entree_portee_ok(e: dict[str, Any], portee: str, partie_id: str) -> bool:
+    """L'entrée `e` appartient-elle à la portée demandée ?
+
+    - "quete" : taguée quête ET taguée de LA partie courante (les quêtes
+      antérieures ne sont ni visibles ni consommables — elles sont purgées
+      à part) ;
+    - "permanent" : tout ce qui n'est pas un objet de quête ;
+    - "auto" : les deux (consommation : quête de la partie d'abord)."""
+    ep = _portee_de(e)
+    if portee == "quete":
+        return ep == "quete" and str(e.get("partie") or "") == partie_id
+    if portee == "permanent":
+        return ep == "permanent"
+    return True
+
+
 def _chemin_fiche(ctx: ToolContext, nom: str) -> Optional[str]:
     """Chemin vers la fiche (résolution PJ/pseudo-joueur comme dans fiches.py)."""
     try:
@@ -352,6 +400,12 @@ def _reparer_entree(e: dict[str, Any]) -> Optional[dict[str, Any]]:
             pass
     if e.get("description"):
         sortie["description"] = str(e["description"])
+    # Portée de l'objet (permanent / quête d'une partie donnée) : tag de jeu
+    # légitime, préservé au round-trip (sinon l'inventaire de quête perdait
+    # sa partie à CHAQUE lecture et redevenait permanent).
+    if str(e.get("portee") or "") == "quete":
+        sortie["portee"] = "quete"
+        sortie["partie"] = str(e.get("partie") or "")
     return sortie
 
 
@@ -485,22 +539,36 @@ def _finaliser(ctx: ToolContext, nom: str,
 
 
 def _format_inventaire(fiche: dict[str, Any], poids: float, cat: str,
-                       max_kg: int) -> str:
+                       max_kg: int, partie_id: str = "") -> str:
     lignes = [f"🧺 **Inventaire & charge de {fiche.get('nom', '?')}**"]
     inv = _inventaire(fiche)
     if not inv:
         lignes.append("- _(vide)_")
-    for e in inv:
+    quest = [
+        e for e in inv
+        if _portee_de(e) == "quete"
+        and (not partie_id or str(e.get("partie") or "") == partie_id)
+    ]
+    perm = [e for e in inv if _portee_de(e) == "permanent"]
+
+    def _ligne(e: dict[str, Any]) -> str:
         nom = e.get("nom", "?")
         qte = int(e.get("qte", 1) or 1)
         pu = _poids_unitaire(nom, e.get("poids"))
         if pu is None:
-            lignes.append(f"- {nom} ×{qte} — poids inconnu (fournir un poids)")
-        else:
-            lignes.append(
-                f"- {nom} ×{qte} — {round(pu * qte, 2)} kg "
-                f"({pu:.3f} kg / unité)"
-            )
+            return f"- {nom} ×{qte} — poids inconnu (fournir un poids)"
+        return (
+            f"- {nom} ×{qte} — {round(pu * qte, 2)} kg "
+            f"({pu:.3f} kg / unité)"
+        )
+
+    if quest:
+        lignes.append("📜 Inventaire de quête (cette partie) :")
+        lignes.extend(_ligne(e) for e in quest)
+        lignes.append("🎒 Équipement permanent (reste au PJ) :")
+        lignes.extend(_ligne(e) for e in perm)
+    else:
+        lignes.extend(_ligne(e) for e in inv)
     pc = int(fiche.get("or", 0) or 0)
     if pc:
         lignes.append(f"- Or : {pc} pc — {_taille_monnaie(pc)} kg")
@@ -549,7 +617,8 @@ async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     if err:
         return err
     poids, cat, max_kg = _recalculer_charge(fiche)
-    texte = _format_inventaire(fiche, poids, cat, max_kg)
+    texte = _format_inventaire(fiche, poids, cat, max_kg,
+                               partie_id=ctx.partie_id)
     # 🛠️ Nudge : les modèles n'utilisent JAMAIS spontanément les outils
     # d'écriture (observé en e2e : « je ramasse la clé » → 4× consulter,
     # inventaire jamais rempli). On rappelle leur existence et la syntaxe.
@@ -557,9 +626,13 @@ async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
         "\n\n🛠️ POUR MODIFIER cet inventaire, appelle l'un de ces outils "
         "(une consultation ne suffit pas) : `inventaire_ramasser(nom, "
         "objet, quantite?, poids?, source?)` pour ramasser · "
-        "`inventaire_ajouter(nom, objet, quantite?, poids?)` · "
-        "`inventaire_retirer(nom, objet, quantite?)` · "
-        "`inventaire_consommer_munition(nom, munition, quantite?)`."
+        "`inventaire_ajouter(nom, objet, quantite?, poids?, portee?)` · "
+        "`inventaire_retirer(nom, objet, quantite?, portee?)` · "
+        "`inventaire_consommer_munition(nom, munition, quantite?)`. "
+        "PORTÉE : don de PNJ / objet d'aventure (potion, fiole, or donné, "
+        "carte, clé, parchemin) → portee=\"quete\" (perdus à la fin de la "
+        "partie) ; achat en marchand, arme, armure, trésor → "
+        "portee=\"permanent\" (reste au PJ)."
     )
     return ToolResult(
         text=texte,
@@ -574,6 +647,7 @@ async def inventaire_ajouter(
     objet: str,
     quantite: int = 1,
     poids: Optional[float] = None,
+    portee: str = "auto",
 ) -> ToolResult:
     """
     Ajoute un objet à l'inventaire d'un personnage et recalcule la charge.
@@ -588,6 +662,12 @@ async def inventaire_ajouter(
     :param objet (str): nom de l'objet (ex. "flèche", "émeraude", "relique").
     :param quantite (int): nombre d'unités à ajouter (défaut 1).
     :param poids (float): poids en kg d'UNE unité (optionnel, sinon catalogue).
+    :param portee (str): "quete" — don d'un PNJ ou objet de l'aventure
+        (potion, fiole, or donné, carte, clé, parchemin, lettre) : lié à LA
+        PARTIE en cours, retiré de la fiche quand une autre partie démarre ·
+        "permanent" — achat chez un marchand, arme, armure, trésor : reste
+        au PJ d'une partie à l'autre · "auto" (défaut) : arme/armure/trésor
+        → permanent, le reste → quête.
     """
     fiche, err = _charger_fiche(ctx, nom)
     if err:
@@ -604,12 +684,18 @@ async def inventaire_ajouter(
                 "soit correctement comptée — sinon l'encombrement sera faux."
             )
         )
+    portee_n = _norm(portee)
+    if portee_n not in ("quete", "permanent"):
+        portee_n = _portee_auto(objet)
 
     inv = _inventaire(fiche)
     cible = _cle_objet(objet)
     fusionne = False
     for e in inv:
-        if _cle_objet(e.get("nom")) == cible:
+        if (
+            _cle_objet(e.get("nom")) == cible
+            and _entree_portee_ok(e, portee_n, ctx.partie_id)
+        ):
             neuf = int(e.get("qte", 1) or 1) + qte
             e["qte"] = neuf
             if e.get("poids") is None:
@@ -617,7 +703,11 @@ async def inventaire_ajouter(
             fusionne = True
             break
     if not fusionne:
-        inv.append({"nom": objet, "qte": qte, "poids": pu})
+        e = {"nom": objet, "qte": qte, "poids": pu}
+        if portee_n == "quete":
+            e["portee"] = "quete"
+            e["partie"] = ctx.partie_id
+        inv.append(e)
 
     fiche["inventaire"] = inv
     # Aligne le champ d'affichage legacy `equipement` sur l'inventaire.
@@ -627,11 +717,17 @@ async def inventaire_ajouter(
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:
         return err
+    portee_lbl = (
+        "📜 inventaire de quête (cette partie)" if portee_n == "quete"
+        else "🎒 équipement permanent"
+    )
     return ToolResult(
         text=(
             f"✅ **{qte} × {objet}** ajouté(s) à l'inventaire de "
-            f"{fiche.get('nom', nom)} ({round(pu * qte, 2)} kg).\n\n"
-            + _format_inventaire(fiche, poids, cat, max_kg)
+            f"{fiche.get('nom', nom)} ({round(pu * qte, 2)} kg) — "
+            f"portée : {portee_lbl}.\n\n"
+            + _format_inventaire(fiche, poids, cat, max_kg,
+                                 partie_id=ctx.partie_id)
         ),
         state_patch=patch,
     )
@@ -644,6 +740,7 @@ async def inventaire_retirer(
     objet: str,
     quantite: int = 1,
     poids: Optional[float] = None,
+    portee: str = "auto",
 ) -> ToolResult:
     """
     Retire un objet de l'inventaire d'un personnage (ou en réduit la quantité)
@@ -653,21 +750,39 @@ async def inventaire_retirer(
     :param objet (str): nom de l'objet à retirer.
     :param quantite (int): nombre d'unités à retirer (défaut 1).
     :param poids (float): poids en kg par unité (optionnel, sinon catalogue).
+    :param portee (str): "quete" (inventaire de quête de cette partie),
+        "permanent" (équipement durable du PJ) ou "auto" (défaut : consomme
+        l'inventaire de quête de la partie D'ABORD, sinon le permanent).
     """
     fiche, err = _charger_fiche(ctx, nom)
     if err:
         return err
     qte = max(1, int(quantite or 1))
     cible = _cle_objet(objet)
+    portee_n = _norm(portee)
+    if portee_n not in ("quete", "permanent"):
+        portee_n = "auto"
     inv = _inventaire(fiche)
-    trouve = None
-    for e in inv:
-        if _cle_objet(e.get("nom")) == cible:
-            trouve = e
-            break
+    candidates = [
+        e for e in inv
+        if _cle_objet(e.get("nom")) == cible
+        and _entree_portee_ok(e, portee_n, ctx.partie_id)
+    ]
+    if portee_n == "auto":
+        # Consomme l'inventaire de quête de la partie d'abord : les dons de
+        # PNJ sont faits pour être utilisés pendant la partie (et disparaître
+        # avec elle), avant de toucher au matériel durable du PJ.
+        candidates.sort(
+            key=lambda e: 0 if _portee_de(e) == "quete" else 1
+        )
+    trouve = candidates[0] if candidates else None
     if trouve is None:
+        ou = ("inventaire de quête de cette partie ni dans l'équipement "
+              "permanent" if portee_n == "auto" else
+              ("inventaire de quête de cette partie" if portee_n == "quete"
+               else "équipement permanent"))
         return ToolResult(
-            text=f"❌ « {objet} » n'est pas dans l'inventaire de {nom}."
+            text=f"❌ « {objet} » n'est ni dans l'{ou} de {nom}."
         )
     reste = int(trouve.get("qte", 1) or 1) - qte
     if reste > 0:
@@ -686,7 +801,8 @@ async def inventaire_retirer(
         text=(
             f"🗑️ **{qte} × {objet}** retiré(s) de l'inventaire de "
             f"{fiche.get('nom', nom)}.\n\n"
-            + _format_inventaire(fiche, poids, cat, max_kg)
+            + _format_inventaire(fiche, poids, cat, max_kg,
+                                 partie_id=ctx.partie_id)
         ),
         state_patch=patch,
     )
@@ -770,6 +886,7 @@ async def inventaire_ramasser(
     quantite: int = 1,
     poids: Optional[float] = None,
     source: str = "",
+    portee: str = "auto",
 ) -> ToolResult:
     """
     Ramasse un objet trouvé dans le donjon (trésor, butin, relique, monnaie…)
@@ -782,9 +899,11 @@ async def inventaire_ramasser(
     :param quantite (int): nombre d'unités (défaut 1).
     :param poids (float): poids en kg par unité si objet hors catalogue.
     :param source (str): d'où vient l'objet (ex. "salle du trésor", "gobelin 1").
+    :param portee (str): "quete" | "permanent" | "auto" (cf.
+        `inventaire_ajouter` ; butin de donjon = trésor → permanent).
     """
     return await inventaire_ajouter(
-        ctx, nom, objet, quantite=quantite, poids=poids
+        ctx, nom, objet, quantite=quantite, poids=poids, portee=portee
     )
 
 

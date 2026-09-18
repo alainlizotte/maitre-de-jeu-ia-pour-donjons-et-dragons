@@ -214,6 +214,11 @@ export interface Scenario {
   niveau?: string;
   joueurs?: string;
   pdf?: string | null;
+  /** Campagne découpée en chapitres : rang de ce cadre (= 1, le point de
+   *  départ) et nombre total de parties qui s'enchaîneront en partie. */
+  chapitre?: number;
+  chapitre_total?: number;
+  campagne?: string;
   cartes?: { nom: string; fichier: string }[];
   artwork?: {
     lieux?: { nom: string; fichier: string }[];

@@ -851,6 +851,59 @@ async def _narrer_mecaniques_serveur(
     return (res.content or "").strip()
 
 
+async def _renarrer_ouverture(
+    app: FastAPI,
+    lieu_titre: str,
+    lieu_desc: str,
+    quete_pitch: str = "",
+) -> str:
+    """Re-narre la SCÈNE D'OUVERTURE fidèlement au lieu de départ canonique.
+
+    Partie c1f4e547 : au premier tour, le petit modèle a improvisé
+    l'ouverture dans un donjon inventé (« donjon de Khundrukar » — nom
+    repris de l'exemple du schéma d'outils `carte_donjon_entrer`). Le
+    serveur a correctement initialisé le donjon du scénario, mais la prose
+    hallucinée restait. Ici, mécanique d'abord : l'entrée est enregistrée,
+    puis le LLM (SANS outils) re-narre l'ouverture à partir de la
+    description canonique de la salle de départ. Renvoie '' en cas d'échec
+    (la prose d'origine est conservée)."""
+    consignes = (
+        "Tu es le maître du jeu D&D 3.5. C'est la SCÈNE D'OUVERTURE de "
+        "l'aventure : pose le décor AVANT toute sollicitation du joueur, "
+        "en 4 à 6 paragraphes immersifs, à la 2ᵉ personne (« vous ») :\n"
+        "1. Le lieu de départ décrit ci-dessous (décor, atmosphère, "
+        "sensations : vue, sons, odeurs).\n"
+        "2. La situation des héros à cet instant précis.\n"
+        "3. Le PNJ principal présent et son attitude.\n"
+        "4. La mission, les enjeux, ce qui presse.\n"
+        "5. Termine par une invitation OUVERTE à agir — jamais une simple "
+        "question fermée (« acceptez-vous ? »).\n"
+        "RÈGLES ABSOLUES :\n"
+        "1. La scène se déroule EXCLUSIVEMENT au lieu de départ décrit "
+        "ci-dessous : n'invente AUCUN autre lieu, AUCUN « donjon de… », "
+        "AUCUNE porte absente de cette description.\n"
+        "2. N'appelle AUCUN outil : tout est déjà enregistré.\n"
+        "3. N'invente NI monstre NI combat NI rencontre : c'est "
+        "l'ouverture paisible de l'aventure.\n"
+        "4. Prose narrative uniquement : pas de titre, pas de liste, "
+        "aucune mention de serveur ou d'outils."
+    )
+    contenu = (
+        (("Pitch de la quête : " + quete_pitch.strip() + "\n\n")
+         if quete_pitch.strip() else "")
+        + "Lieu de départ officiel — " + (lieu_titre or "point de départ")
+        + " :\n« " + (lieu_desc or "").strip() + " »"
+    )
+    messages = [
+        Message(role="system", content=consignes),
+        Message(role="user", content=contenu),
+    ]
+    res = await app.state.client.chat(
+        messages, temperature=min(0.7, cfg.llm.temperature)
+    )
+    return (res.content or "").strip()
+
+
 # --------------------------------------------------------------------------- #
 #  Routes REST
 # --------------------------------------------------------------------------- #
@@ -1980,11 +2033,34 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
                 "url": c.get("fichier", ""),
             })
 
-    # Scénarios PDF (ancien format plat pour la RessourcesBar)
+    # Scénarios PDF (ancien format plat pour la RessourcesBar) — UN lien par
+    # scénario, pointant vers le DOCUMENT ORIGINAL complet. Les campagnes
+    # découpées en chapitres (`chapitre`/`chapitre_suivant`) exposent leur
+    # PDF original via l'annexe « …PDF original… » de leur chapitre 1 ; les
+    # chapitres découpés restent consultables depuis le sélecteur de quête.
     scenarios = []
     for u in cata.get("universes", []):
         for s in u.get("scenarios", []):
-            if s.get("pdf"):
+            if s.get("chapitre"):
+                if int(s.get("chapitre") or 0) != 1:
+                    continue
+                url = next(
+                    (
+                        a.get("fichier")
+                        for a in (s.get("annexes") or [])
+                        if "original" in str(a.get("nom", "")).lower()
+                    ),
+                    None,
+                )
+                if not url:
+                    continue
+                scenarios.append({
+                    "id": _re_mod.sub(r"_ch\d+.*$", "", str(s.get("id", ""))),
+                    "titre": str(s.get("campagne") or s.get("titre", "?")),
+                    "niveau": s.get("niveau", "?"),
+                    "url": url,
+                })
+            elif s.get("pdf"):
                 scenarios.append({
                     "id": s.get("id", ""),
                     "titre": s.get("titre", "?"),
@@ -2013,7 +2089,13 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
 async def list_scenarios(partie_id: Optional[str] = None) -> list[dict[str, Any]]:
     """Retourne la liste des univers, chacun contenant ses scénarios.
     Le frontend affiche d'abord la sélection univers, puis les scénarios
-    de l'univers choisi."""
+    de l'univers choisi.
+
+    Campagnes découpées en chapitres (`campagne`/`chapitre`/`chapitre_suivant`)
+    : UN SEUL cadre de sélection par campagne (le chapitre 1) — le titre
+    affiché est celui de la campagne et `chapitre_total` permet d'annoncer
+    le nombre de parties. Les chapitres suivants s'enchaînent automatiquement
+    en partie via `scenarios_laelith_charger` (consigne `chapitre_suivant`)."""
     from .tools.scenarios import charger_catalogue
     data_dir = cfg.abs(cfg.paths.data_dir)
     ctx = ToolContext(
@@ -2022,7 +2104,24 @@ async def list_scenarios(partie_id: Optional[str] = None) -> list[dict[str, Any]
         data_dir=str(data_dir),
     )
     cata = charger_catalogue(ctx)
-    return cata.get("universes", [])
+    universes: list[dict[str, Any]] = []
+    for u in cata.get("universes", []):
+        scen: list[dict[str, Any]] = []
+        for s in u.get("scenarios", []):
+            if s.get("chapitre") and int(s.get("chapitre") or 0) > 1:
+                continue          # chapitre 2..N : s'enchaîne en partie
+            sc = dict(s)
+            if s.get("chapitre") and s.get("campagne"):
+                sc["titre"] = str(s["campagne"])
+                # Retire le détail technique « (22k caracteres) » du pitch.
+                sc["pitch"] = _re_mod.sub(
+                    r"\s*\(\d+\s*k\s*caract[eè]res\)\s*", "", str(s.get("pitch") or "")
+                ).strip()
+            scen.append(sc)
+        u2 = dict(u)
+        u2["scenarios"] = scen
+        universes.append(u2)
+    return universes
 
 
 @app.post("/api/parties/{partie_id}/quest")
@@ -4128,6 +4227,18 @@ async def _handle_say(
                     _man = _manifest_pour(ctx, "")
                     _did = str((_man or {}).get("donjon_id") or "").strip()
                     if _did:
+                        # 🎬 Tour d'OUVERTURE ? (phase opening/load : la
+                        # partie vient de commencer) — si le MJ a « narré »
+                        # une entrée de donjon dès l'ouverture, sa prose
+                        # décrivait un lieu improvisé (c1f4e547 : ouverture
+                        # dans le « donjon de Khundrukar », nom repris de
+                        # l'exemple du schéma d'outils) : après l'entrée
+                        # forcée, la scène d'ouverture sera RE-NARRÉE depuis
+                        # la description canonique de la salle de départ.
+                        _tour_ouverture = str(
+                            _etat_ent.get("phase") or ""
+                        ).strip().lower() in ("opening", "opening_complete",
+                                              "load")
                         tr_ent = await orch.execute_tool_direct(
                             "carte_donjon_entrer", {"donjon_id": _did},
                             ctx, on_event, result,
@@ -4144,6 +4255,80 @@ async def _handle_say(
                                 f"carte_donjon_entrer({_did!r}) exécutée "
                                 "(serveur)."
                             )
+                            if _tour_ouverture:
+                                try:
+                                    _etat_ouv = PartyState(
+                                        data_dir=str(
+                                            cfg.abs(cfg.paths.data_dir)),
+                                        partie_id=partie_id,
+                                    ).load()
+                                    _salle0 = next(
+                                        (
+                                            s
+                                            for s in (
+                                                (
+                                                    _etat_ouv.get("donjon")
+                                                    or {}
+                                                ).get("grille") or []
+                                            )
+                                            if s.get("visitee")
+                                        ),
+                                        None,
+                                    )
+                                    if _salle0 and _salle0.get(
+                                        "description"
+                                    ):
+                                        _qb = (
+                                            _etat_ouv.get("quete") or {}
+                                        )
+                                        _pitch = str(
+                                            (_qb.get("bible") or {}).get(
+                                                "pitch"
+                                            )
+                                            or _qb.get("pitch") or ""
+                                        )
+                                        _nar_ouv = await asyncio.wait_for(
+                                            _renarrer_ouverture(
+                                                app,
+                                                (
+                                                    f"{_did} — "
+                                                    f"{str(_salle0.get('type') or 'point de départ').strip()} "
+                                                    f"({_salle0.get('x')},"
+                                                    f"{_salle0.get('y')})"
+                                                ),
+                                                str(
+                                                    _salle0.get(
+                                                        "description"
+                                                    ) or ""
+                                                ),
+                                                _pitch,
+                                            ),
+                                            timeout=90.0,
+                                        )
+                                        if _nar_ouv:
+                                            if on_event is not None:
+                                                try:
+                                                    await on_event({
+                                                        "type":
+                                                            "stream_reset"
+                                                    })
+                                                except Exception:  # noqa: BLE001
+                                                    pass
+                                            result.narration = (
+                                                _nar_ouv + "\n\n" + tr_ent.text
+                                            )
+                                            print(
+                                                "[dnd35] Ouverture re-narrée "
+                                                "depuis le lieu canonique "
+                                                "(5bis-f)."
+                                            )
+                                except (
+                                    asyncio.TimeoutError, Exception
+                                ) as e_ouv:                  # noqa: BLE001
+                                    print(
+                                        "[dnd35] Re-narration ouverture "
+                                        f"échouée (prose conservée) : {e_ouv}"
+                                    )
                         else:
                             print(
                                 "[dnd35] Entrée donjon forcée refusée par "
@@ -5097,9 +5282,13 @@ async def _handle_say(
                         "⚠️ ERREUR système : l'objet gagné/récupéré/donné "
                         "n'a pas été enregistré. Appelle MAINTENANT "
                         "`inventaire_ajouter` (nom d'un PJ, nom, quantité, "
-                        "description) pour persister l'objet, puis narre la "
-                        "suite. NE narrate PAS l'acquisition sans appeler "
-                        "l'outil d'inventaire."
+                        "poids, portee) pour persister l'objet, puis narre "
+                        "la suite. PORTÉE : don de PNJ ou objet de "
+                        "l'aventure (potion, fiole, or donné, carte, clé, "
+                        "parchemin, lettre) → portee=\"quete\" ; achat en "
+                        "marchand, arme, armure, trésor → "
+                        "portee=\"permanent\". NE narrate PAS "
+                        "l'acquisition sans appeler l'outil d'inventaire."
                     )
                     await _rejoue_correctif(orch, messages, ctx, result,
                                             on_event, _obj_inv,

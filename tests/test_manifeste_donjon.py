@@ -236,7 +236,10 @@ def test_manifeste_dues_for_the_dead_valide():
          / "Dues for the Dead.donjon.json")
     assert p.is_file(), "le manifeste de Dues for the Dead doit exister"
     man = json.loads(p.read_text(encoding="utf-8"))
-    assert man["scenario"] == "divers_dues_for_the_dead"
+    # `scenario` : id unique OU liste (campagne découpée en chapitres).
+    scen = man["scenario"]
+    ids_scen = scen if isinstance(scen, list) else [scen]
+    assert "divers_dues_for_the_dead" in ids_scen
     assert len(man["etages"]) == 2
     import re as _re
     from server.tools.scenarios import ennemis_du_resume  # monstres connus

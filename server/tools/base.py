@@ -140,6 +140,13 @@ def tool(func: Callable[..., Any]) -> Callable[..., Any]:
         resolved_hints=resolved,
     )
     _TOOL_REGISTRY[func.__name__] = spec
+    # Convention OpenWebUI pour les tests serveur : le tool est chamable via
+    # `outil.handler(ctx, **args)` — depuis la partie 263f82dc les tests
+    # importent directement `lancer_attaque` / `etat_partie_patch` et appellent
+    # `.handler`. On expose donc l'implémentation (appelable ctx+args) sous ce
+    # nom, SANS toucher au registre (l'orchestrateur continue d'utiliser
+    # `spec.func` via `invoke_tool`).
+    func.handler = func  # type: ignore[attr-defined]
     return func
 
 

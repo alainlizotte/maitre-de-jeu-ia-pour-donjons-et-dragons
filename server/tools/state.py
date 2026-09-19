@@ -222,6 +222,50 @@ async def etat_partie_save(ctx: ToolContext, nouveau_etat: str) -> ToolResult:
     return ToolResult(text=msg)
 
 
+# Champs mécaniques d'un PJ dont un patch `pj.<i>.<champ>` doit être
+# RÉPERCUTÉ sur la fiche (source des recoupements lancer_attaque/lancer_degats,
+# repos, XP…) — partie 263f82dc : PV 1 dans l'état mais 15 dans la fiche,
+# narrations « 4 sur 16 » contradictoires avec l'état réel.
+_MIROIR_FICHE_CHAMPS = frozenset({
+    "pv", "pv_max", "ca", "niveau", "xp", "conditions",
+    "race", "classe", "bab",
+})
+
+
+def _miroir_patch_fiche(ctx: ToolContext, chemin: str, valeur: str) -> None:
+    """Répercute un patch `pj.<i>.<champ>` (champ mécanique) sur la FICHE
+    du personnage. `etat_partie_patch` n'écrivait que l'état de partie :
+    la fiche restait désynchronisée (PV différents entre récap et recoupements).
+    Fail-safe : index invalide, fiche absente ou champ non mécanique →
+    aucun effet."""
+    try:
+        parts = chemin.split(".")
+        if len(parts) != 3 or parts[2] not in _MIROIR_FICHE_CHAMPS:
+            return
+        etat = _party(ctx).load()
+        pjs = etat.get("pj") or []
+        try:
+            idx = int(parts[1])
+            pj = pjs[idx]
+        except (ValueError, IndexError, TypeError):
+            return
+        nom = str(pj.get("nom") or "").strip()
+        if not nom:
+            return
+        try:
+            val = json.loads(valeur)
+        except (ValueError, TypeError):
+            val = valeur
+        from .fiches import _load_fiche, _save_fiche
+        fiche = _load_fiche(ctx, nom)
+        if fiche is None:
+            return
+        fiche[parts[2]] = val
+        _save_fiche(ctx, nom, fiche)
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
 @tool
 async def etat_partie_patch(ctx: ToolContext, chemin: str, valeur: str) -> ToolResult:
     """
@@ -236,8 +280,12 @@ async def etat_partie_patch(ctx: ToolContext, chemin: str, valeur: str) -> ToolR
     ok, msg = _party(ctx).patch(chemin, valeur)
     state_patch = None
     if ok:
-        # Si on a patché un chemin top-level connu du front, on synchronise UI.
+        # Miroir fiche : un patch mécanique sur un PJ doit aussi écrire SA
+        # fiche, sinon les deux sources de vérité divergent (partie 263f82dc).
         top = chemin.split(".")[0]
+        if top == "pj":
+            _miroir_patch_fiche(ctx, chemin, valeur)
+        # Si on a patché un chemin top-level connu du front, on synchronise UI.
         if top in ("phase", "tour", "courant_tour_pour", "initiative", "lieu", "quete"):
             try:
                 import json as _json

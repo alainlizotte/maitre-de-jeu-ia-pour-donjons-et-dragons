@@ -767,12 +767,49 @@ def _camps_du_combat(etat: dict) -> tuple[list[str], list[str]]:
     return heros, ennemis
 
 
+def _resume_plateau(etat: dict) -> str:
+    """Résumé FACTUEL du plateau (PV des héros, état vivant/détruit de
+    chaque ennemi) pour la narration des mécaniques serveur.
+
+    Partie 263f82dc : le narrateur inventait des PV (« votre vitalité
+    baissant à 4 sur 16 » pour 8/15 réels), faisait « ressusciter » des
+    squelettes détruits (« seul le squelette (5) reste debout » pendant
+    que (4) vivait) et en ré-engendrait dans la prose. Avec ce bloc, la
+    narration recopie la seule vérité du plateau."""
+    lignes: list[str] = []
+    for p in (etat.get("pj") or []):
+        if not isinstance(p, dict):
+            continue
+        conds = [c for c in (p.get("conditions") or []) if c]
+        lignes.append(
+            f"- {p.get('nom', '?')} : "
+            f"{p.get('pv', '?')}/{p.get('pv_max', '?')} PV"
+            + (f" — {', '.join(conds)}" if conds else "")
+        )
+    for m in (etat.get("monstres_combat") or []):
+        if not isinstance(m, dict):
+            continue
+        detruit = (
+            "Détruit" in (m.get("conditions") or [])
+            or int(m.get("pv", 1) or 0) <= 0
+        )
+        lignes.append(
+            f"- {m.get('nom', '?')} : "
+            f"{m.get('pv', '?')}/{m.get('pv_max', '?')} PV — "
+            + ("☠️ DÉTRUIT (ne peut plus agir, n'est plus une menace : "
+               "n'en parle plus comme d'un adversaire actif)"
+               if detruit else "vivant")
+        )
+    return "\n".join(lignes)
+
+
 async def _narrer_mecaniques_serveur(
     app: FastAPI,
     events: list[str],
     contexte: str = "",
     heros: Optional[list[str]] = None,
     ennemis: Optional[list[str]] = None,
+    plateau: str = "",
 ) -> str:
     """Narre les événements mécaniques DÉJÀ résolus par le moteur serveur
     (jets des monstres, coups de grâce, XP…) via un appel LLM SANS tools.
@@ -783,7 +820,10 @@ async def _narrer_mecaniques_serveur(
 
     `heros` / `ennemis` fixent les camps : sans eux, le LLM prenait les
     créatures des événements pour des compagnons des héros (partie
-    87b8f286 : « votre compagnon le magmatique »)."""
+    87b8f286 : « votre compagnon le magmatique »).
+    `plateau` = état factuel (PV vivants/détruits) : la narration recopie
+    ces totaux au lieu d'inventer (« 4 sur 16 ») ou de ressusciter des
+    ennemis détruits (partie 263f82dc)."""
     if not events:
         return ""
     roles = ""
@@ -833,11 +873,18 @@ async def _narrer_mecaniques_serveur(
         "puces, pas de section « mécanique ».\n"
         "7. Respecte les camps ci-dessus : les ennemis restent des "
         "adversaires (« la créature vous assaille »), jamais des "
-        "compagnons."
+        "compagnons.\n"
+        "8. L'« ÉTAT DU PLATEAU » ci-dessous est la SEULE vérité : si tu "
+        "mentionnes un total de PV, recopie EXACTEMENT celui de la liste "
+        "(jamais un chiffre inventé) ; une créature marquée ☠️ DÉTRUITE ne "
+        "peut plus agir ni menacer — ne la « ressuscite » pas et n'annonce "
+        "JAMAIS d'ennemi supplémentaire absent de la liste."
     )
     contenu = (
         (("Contexte : " + contexte.strip() + "\n\n") if contexte.strip() else "")
         + (roles + "\n" if roles else "")
+        + (("ÉTAT DU PLATEAU (source officielle) :\n" + plateau + "\n\n")
+           if plateau.strip() else "")
         + "Événements mécaniques à narler :\n\n"
         + "\n\n".join(events)
     )
@@ -2649,7 +2696,7 @@ def _extrait_arme_bonus(attaques: str) -> Optional[tuple[str, int]]:
 def _exces_degats_monstres(
     trace: list[dict[str, Any]],
     monstres: list[dict[str, Any]],
-) -> dict[str, int]:
+) -> dict[str, dict[str, int]]:
     """Détecte les dégâts APPLIQUÉS EN EXCÈS sur des monstres suivis.
 
     Le LLM appelle parfois `fiche_perso_infliger_degats` une seconde fois
@@ -2658,9 +2705,22 @@ def _exces_degats_monstres(
     5 dégâts). On compare, par monstre suivi, le total appliqué
     (`fiche_perso_infliger_degats` de la trace du tour) au total
     RÉELLEMENT JETÉ (`lancer_degats`) : tout excédent est restitué par
-    l'appelant (PV plafonnés à pv_max, « Détruit » levé si les PV
-    repassent au-dessus de 0). Les seuls appels du tour LLM sont lus —
-    les attaques automatiques du moteur serveur passent par ailleurs.
+    l'appelant. Les seuls appels du tour LLM sont lus — les attaques
+    automatiques du moteur serveur passent par ailleurs.
+
+    ⚠️ Alignement des CLÉS (partie 263f82dc) : les dégâts sont rattachés au
+    monstre RÉELLEMENT touché — nom résolu dans le résultat du tool
+    (« 💥 <nom> (monstre) subit … »), sinon libellé LLM résolu par
+    exact/préfixe contre les labels suivis (même logique que
+    `_infliger_degats_monstre`). L'ancien comptage par libellé brut
+    fabriquait des EXCÈS FANTÔMES (infliger "Squelette" frappant réellement
+    « Squelette (2) » compté sur « Squelette ») → PV restitués à un cadavre
+    qui « ressuscitait » (squelettes ré-engagés, « PV 3/3 — ☠️ DÉTRUIT »).
+
+    Renvoie `{nom_monstre: {"exces": N, "jetes": M}}` — `jetes` = total
+    légitimement jeté contre CE monstre ; l'appelant plafonne la
+    restauration à `pv_max - jetes` pour ne JAMAIS ressusciter une créature
+    détruite par les seuls dégâts jetés.
     """
     import unicodedata as _u2
 
@@ -2668,6 +2728,41 @@ def _exces_degats_monstres(
         n = _u2.normalize("NFKD", str(s or "").strip().lower())
         return "".join(c for c in n if not _u2.combining(c))
 
+    def _vivante(mo: dict[str, Any]) -> bool:
+        conds = mo.get("conditions") or []
+        return (
+            "Détruit" not in conds and "Detruit" not in conds
+            and int(mo.get("pv", 0) or 0) > 0
+        )
+
+    def _resolve_cle(label: str) -> str:
+        """Libellé LLM → nom normalisé du monstre RÉELLEMENT visé.
+
+        La résolution favorise les créatures **VIVANTES** (même politique que
+        le tool `lancer_degats` : vivant d'abord, préfixe autorisé), sur
+        l'EXACT comme sur le PRÉFIXE. C'est ce qui évite l'excès fantôme de
+        la partie 263f82dc : le libellé « Squelette » d'un `lancer_degats`
+        qui a RÉELLEMENT frappé « Squelette (2) » (vivant, préfixe) doit
+        s'aligner sur CETTE clé — pas sur le cadavre « Squelette » (Détruit)
+        qui correspondait par exact-match et épinglait l'excès sur le mauvais
+        monstre (« exces 15, jetes 0 » sur « Squelette (2) » → restauration
+        d'un monstre que les seuls dégâts jetés n'avaient jamais atteint).
+        L'exact d'un cadavre n'est utilisé qu'en dernier recours, quand
+        AUCUNE créature vivante ne correspond (monstre déjà détruit suivi)."""
+        nl = _nn(label)
+        for pool in ([m for m in monstres if _vivante(m)], monstres):
+            for mo in pool:                       # a) exact — vivant d'abord
+                if _nn(str(mo.get("nom") or "")) == nl:
+                    return nl
+            for mo in pool:                       # b) préfixe — comme le tool
+                mn = _nn(str(mo.get("nom") or ""))
+                if nl and len(nl) >= 4 and mn.startswith(nl):
+                    return mn
+                if len(mn) >= 4 and nl.startswith(mn):
+                    return mn
+        return nl
+
+    re_resolu = _re_mod.compile(r"💥\s*(.+?)\s*\(monstre\)\s*subit")
     jetes: dict[str, int] = {}
     appliques: dict[str, int] = {}
     for tc in trace or []:
@@ -2675,26 +2770,36 @@ def _exces_degats_monstres(
             continue
         nom_tc = tc.get("name")
         if nom_tc == "lancer_degats":
-            c = _nn(str((tc.get("args") or {}).get("cible") or ""))
+            c = _resolve_cle(
+                str((tc.get("args") or {}).get("cible") or ""))
             m_total = _re_mod.search(
                 r"[Dd]égâts infligés\s*:\s*(\d+)", tc.get("text") or "")
             if c and m_total:
                 jetes[c] = jetes.get(c, 0) + int(m_total.group(1))
         elif nom_tc == "fiche_perso_infliger_degats":
-            c = _nn(str((tc.get("args") or {}).get("nom") or ""))
             try:
                 d = int((tc.get("args") or {}).get("degats") or 0)
             except (TypeError, ValueError):
                 continue
-            if c and d > 0:
-                appliques[c] = appliques.get(c, 0) + d
-    exces: dict[str, int] = {}
+            if d <= 0:
+                continue
+            m_res = re_resolu.search(tc.get("text") or "")
+            if m_res:
+                c = _resolve_cle(m_res.group(1))
+            else:
+                c = _resolve_cle(
+                    str((tc.get("args") or {}).get("nom") or ""))
+            appliques[c] = appliques.get(c, 0) + d
+    exces: dict[str, dict[str, int]] = {}
     for mo in monstres or []:
         nom = str(mo.get("nom") or "").strip()
         cle = _nn(nom)
         surplus = appliques.get(cle, 0) - jetes.get(cle, 0)
         if nom and surplus > 0:
-            exces[nom] = surplus
+            exces[nom] = {
+                "exces": surplus,
+                "jetes": jetes.get(cle, 0),
+            }
     return exces
 
 
@@ -3619,6 +3724,29 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
         print(f"[dnd35] Rejeu {tag} failed: {e}")
 
 
+def _coupe_narration_evenement(narration: str, limite: int = 300) -> str:
+    """Coupe une narration pour un événement d'histoire SANS casser le
+    texte : à la fin de la dernière phrase COMPLÈTE tenant dans `limite`,
+    sinon à la fin du dernier mot complet (+ « … »).
+
+    L'ancienne coupe brute à 300 caractères tronquait en pleine phrase
+    (partie 263f82dc : « …les murmures des marchands et les cris des
+    enfants de la ville libre, mais ici, dans la »)."""
+    texte = " ".join((narration or "").split())
+    if len(texte) <= limite:
+        return texte
+    fenetre = texte[:limite]
+    # Dernière phrase complète (., !, ?, …) suffisamment ample (≥ 100
+    # caractères) pour ne pas jeter les 2/3 du récit.
+    derniere = -1
+    for m in _re_mod.finditer(r"[.!?…](?=\s)", fenetre):
+        derniere = m.end()
+    if derniere >= 100:
+        return fenetre[:derniere].strip()
+    coupe = fenetre.rsplit(" ", 1)[0].rstrip(",;: ")
+    return coupe + "…"
+
+
 def _journaliser_ouverture_si_besoin(etat: dict[str, Any], narration: str) -> bool:
     """Premier tour narré de la partie → consigne l'ouverture dans
     `histoire`. Renvoie True si l'événement a été ajouté.
@@ -3636,7 +3764,8 @@ def _journaliser_ouverture_si_besoin(etat: dict[str, Any], narration: str) -> bo
     etat.setdefault("histoire", []).append({
         "ts": _dt.now().isoformat(),
         "tour": "",
-        "evenement": "Début de l'aventure : " + " ".join(narration.split())[:300],
+        "evenement": "Début de l'aventure : "
+        + _coupe_narration_evenement(narration),
     })
     return True
 
@@ -4486,9 +4615,17 @@ async def _handle_say(
                     if _exces:
                         _corrections: list[str] = []
                         for _mo in _mc_dd:
-                            _e = _exces.get(str(_mo.get("nom") or ""))
-                            if not _e:
+                            _info = _exces.get(str(_mo.get("nom") or ""))
+                            if not _info:
                                 continue
+                            try:
+                                _e = int(_info.get("exces", 0))
+                            except (TypeError, ValueError):
+                                _e = 0
+                            try:
+                                _jetes_c = int(_info.get("jetes", 0))
+                            except (TypeError, ValueError):
+                                _jetes_c = 0
                             try:
                                 _pv_max = int(_mo.get("pv_max") or 0)
                             except (TypeError, ValueError):
@@ -4497,7 +4634,17 @@ async def _handle_say(
                                 _pv = int(_mo.get("pv", 0) or 0)
                             except (TypeError, ValueError):
                                 _pv = 0
-                            _pv = min(_pv + _e, _pv_max or (_pv + _e))
+                            # Plafond de restauration : l'état LÉGITIME est
+                            # pv_max − dégâts RÉELLEMENT jetés. On rend les
+                            # dégâts comptés deux fois, mais JAMAIS au point
+                            # de ressusciter une créature détruite par les
+                            # seuls jets (partie 263f82dc : « PV 3/3 — ☠️
+                            # DÉTRUIT », squelettes ré-engagés).
+                            if _pv_max > 0 and _jetes_c > 0:
+                                _plafond = _pv_max - _jetes_c
+                            else:
+                                _plafond = _pv_max or (_pv + _e)
+                            _pv = min(_pv + _e, _plafond)
                             _mo["pv"] = _pv
                             if _pv > 0:
                                 _mo["conditions"] = [
@@ -4602,16 +4749,27 @@ async def _handle_say(
                             # cette limite le tour restait figé « en réflexion »
                             # après un combat. Au-delà de 90 s : repli bloc brut.
                             try:
-                                _heros_p, _ennemis_p = _camps_du_combat(apres)
+                                # État POST-moteur : la narration doit
+                                # refléter le plateau APRÈS la boucle
+                                # (PV courants, ennemis détruits) —
+                                # partie 263f82dc : narré d'après un
+                                # snapshot périmé → ennemis « ressuscités ».
+                                _etat_nar = PartyState(
+                                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                    partie_id=partie_id,
+                                ).load()
+                                _heros_p, _ennemis_p = _camps_du_combat(
+                                    _etat_nar)
                                 nar_post = await asyncio.wait_for(
                                     _narrer_mecaniques_serveur(
                                         app,
                                         res_post.events,
                                         contexte=str(
-                                            (apres.get("lieu") or {}).get("nom") or ""
+                                            (_etat_nar.get("lieu") or {}).get("nom") or ""
                                         ),
                                         heros=_heros_p,
                                         ennemis=_ennemis_p,
+                                        plateau=_resume_plateau(_etat_nar),
                                     ),
                                     timeout=90.0,
                                 )

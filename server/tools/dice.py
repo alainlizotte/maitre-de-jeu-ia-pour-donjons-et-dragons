@@ -355,6 +355,59 @@ async def lancer_attaque(
             )
         )
 
+    # --- Cible déjà DÉTRUITE → redirection auto (partie 263f82dc) ----------
+    # Le LLM attaquait des cadavres (« le squelette 3 » détruit au round
+    # précédent) : le jet se résolvait contre un ennemi hors jeu, la
+    # narration contredisait l'état et les tours se perdaient. Quand la
+    # cible demandée ne correspond qu'à des créatures DÉTRUITES du combat
+    # en cours (exact/préfixe), l'attaque est redirigée vers la première
+    # créature VIVANTE correspondante — avec note explicite.
+    cible_renote = ""
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        _etat_c = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id
+        ).load()
+        _mc = [m for m in (_etat_c.get("monstres_combat") or [])
+               if isinstance(m, dict)]
+        if _mc:
+            def _nn2(s: str) -> str:
+                return "".join(
+                    c for c in unicodedata.normalize(
+                        "NFKD", str(s or "").strip().lower()
+                    ) if not unicodedata.combining(c)
+                )
+
+            def _vivante(m: dict) -> bool:
+                conds = m.get("conditions") or []
+                return (
+                    "Détruit" not in conds and "Detruit" not in conds
+                    and int(m.get("pv", 0) or 0) > 0
+                )
+
+            _nc = _nn2(nom_cible)
+            _matches = [m for m in _mc if _nn2(m.get("nom")) == _nc]
+            if not _matches and _nc:
+                _matches = [
+                    m for m in _mc
+                    if (len(_nc) >= 4
+                        and _nn2(m.get("nom")).startswith(_nc))
+                    or (len(_nn2(m.get("nom"))) >= 4
+                        and _nc.startswith(_nn2(m.get("nom"))))
+                ]
+            if _matches and not any(_vivante(m) for m in _matches):
+                _vivantes = [m for m in _mc if _vivante(m)]
+                if _vivantes:
+                    _nouvelle = _vivantes[0]
+                    cible_renote = (
+                        f"↪️ **Cible déjà DÉTRUITE** ({nom_cible}) — attaque "
+                        f"redirigée vers **{_nouvelle.get('nom')}** "
+                        "(seule cible valide encore debout)."
+                    )
+                    nom_cible = str(_nouvelle.get("nom") or nom_cible)
+    except Exception:                                           # noqa: BLE001
+        pass  # hors combat / état indisponible → cible fournie
+
     # --- CA officielle de la cible ------------------------------------------
     # Un petit LLM « arrange » parfois la CA pour faire toucher. On impose la
     # valeur des données officielles quand la cible est connue.
@@ -376,6 +429,7 @@ async def lancer_attaque(
     bonus_final = bonus_attaque
     note_bonus = ""
     note_ammo = ""
+    note_degats = ""
     try:
         from .fiches import _chemin  # pylint: disable=import-outside-toplevel
         import os as _os                             # noqa: I001
@@ -400,6 +454,31 @@ async def lancer_attaque(
                     f"\n- ⚠️ Bonus ajusté {bonus_attaque:+d} → {bonus_final:+d} "
                     f"(fiche de {nom_attaquant} : BBA {bab:+d}, {cle_car} "
                     f"{val_car} ({mod_car:+d}) + marge +3 max pour bonus divers)."
+                )
+            # 💪 Bonus de dégâts OFFICIEL (partie 263f82dc : le LLM passait
+            # +4 puis +6 pour le MÊME attaquant — bonus improvisé au lieu du
+            # calcul 3.5). Mêlée = mod. FOR, ×1,5 (arrondi vers le bas) pour
+            # une arme à deux mains ; distance = +0 (mod. DEX ne s'applique
+            # pas aux dégâts). Le LLM recopie CE bonus dans lancer_degats.
+            if not a_distance:
+                deux_mains = any(
+                    m in arme_l for m in ("deux mains", "2 mains")
+                )
+                bonus_deg_off = mod_car * 3 // 2 if deux_mains else mod_car
+                detail_deg = (
+                    f"FOR {val_car} ({mod_car:+d})"
+                    + (" ×1,5 arme à deux mains" if deux_mains else "")
+                )
+                note_degats = (
+                    f"\n- 💪 **Bonus dégâts officiel : {bonus_deg_off:+d}** "
+                    f"({detail_deg}) — recopie CE bonus dans `lancer_degats` "
+                    "(jamais un bonus improvisé)."
+                )
+            else:
+                note_degats = (
+                    "\n- 💪 **Bonus dégâts officiel : +0** (arme à distance : "
+                    "le mod. DEX ne s'applique pas aux dégâts) — recopie CE "
+                    "bonus dans `lancer_degats`."
                 )
             # 🏹 Munition auto (a6d11005, règles d'usage) : chaque tir à
             # distance déduit 1 projectile de l'inventaire du PJ — sans
@@ -439,6 +518,10 @@ async def lancer_attaque(
         f"- Bonus total : {bonus_final:+d}" + note_bonus + note_ca + note_ammo,
         f"- **Total attaque : {total}**",
     ]
+    if cible_renote:
+        lignes.append(cible_renote)
+    if note_degats:
+        lignes.append(note_degats.strip().lstrip("\n"))
     if jet == 20:
         lignes.append(
             "- ⭐ **20 naturel** → toucher automatique + menace de critique "

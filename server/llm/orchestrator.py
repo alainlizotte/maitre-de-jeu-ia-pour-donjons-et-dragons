@@ -541,6 +541,19 @@ _GAIN_PROSE_PATTERNS = [
 # serveur : la narration ne peut QUE reformuler un événement injecté en
 # pre-run — désactivé quand `trust_damage_prose` (des événements serveur avec
 # « dégâts » viennent d'être injectés : la reformulation est légitime).
+# Nombres ÉCRITS EN LETTRES que le narrateur utilise pour les PV
+# (« votre vitalité à douze ») — partie 263f82dc.
+_PV_NOMBRES_MOTS = (
+    r"un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize"
+    r"|quatorze|quinze|seize|dix-sept|dix-huit|dix-neuf|vingt"
+)
+# Suite interdite après « à N » : une mesure/tempo, pas des PV
+# (« tombe à 3 mètres », « chute à 12 km »…).
+_PV_PAS_UN_PV = (
+    r"(?!\s*(?:m\b|m[èe]tres?\b|km\b|kilom[èe]tres?\b|pi[èe]ces?\b|or\b"
+    r"|minutes?\b|secondes?\b|heures?\b|jours?\b|m[ée]tres\s+carr[ée]s?\b))"
+)
+
 _PJ_DEGATS_PROSE_PATTERNS = [
     # « (vous avez été) touché/touchée/touchez pour 8 dégâts / 6 PV ».
     re.compile(
@@ -555,18 +568,35 @@ _PJ_DEGATS_PROSE_PATTERNS = [
         r"(?:points?\s+de\s+)?(?:d[ée]g[âa]ts|dégats|PV)\b",
         re.IGNORECASE,
     ),
-    # « votre vie chute/tombe/descend/baissé », « vos PV tombent ».
+    # « votre vie chute/tombe/descend/baissé », « vos PV tombent »,
+    # « votre vitalité baissant… » (partie 263f82dc : « vitalité » absent
+    # de l'ancienne liste de noms, « baissant » du verbe → jetait passer).
     re.compile(
-        r"\b(?:votre|ta|vos|tes)\s+(?:sant[ée]|vie|points?\s+de\s+vie|PV)\s*"
-        r"[,:\s]+(?:descend|chute|tombe|s['']?effondre|baiss[ée])\b",
+        r"\b(?:votre|ta|vos|tes)\s+(?:sant[ée]|vie|vitalit[ée]"
+        r"|points?\s+de\s+vie|PV)\s*"
+        r"[,:\s]+(?:descend\w*|chut\w*|tombe\w*|s['']?effondre\w*"
+        r"|baiss\w*|r[ée]duis\w*|n'est\s+plus\s+que)\b",
         re.IGNORECASE,
     ),
-    # « (il) chute/chutant à 12 (sur 17) », « vous tombez à 12 PV » —
-    # l'état d'un PJ affirmé sans événement mécanique (5f3e31c9 : le LLM
-    # écrivait « chutant à 12 sur 17 » pour 3/17 réels).
+    # « (il) chute/chutant/baissant/réduisant à 12 (sur 17) », « vous tombez
+    # à 12 PV », « …à douze » (nombre en lettres) — l'état d'un PJ affirmé
+    # sans événement mécanique (5f3e31c9 : « chutant à 12 sur 17 » pour
+    # 3/17 réels ; 263f82dc : « votre vitalité baissant à 4 sur 16 »,
+    # « réduisant votre vitalité à douze » pour 8/15 réels).
     re.compile(
-        r"\b(?:chut\w*|tombez?)\s+[àa]\s+(?:\*\*)?\d{1,3}(?:\*\*)?"
-        r"\s*(?:sur\b|PV\b)?",
+        r"\b(?:chut\w*|tombez?|baiss\w*|descend\w*|r[ée]dui\w*"
+        r"|n'est\s+plus\s+que)\s+[àa]\s+(?:\*\*)?(?:\d{1,3}|"
+        + _PV_NOMBRES_MOTS + r")(?:\*\*)?"
+        r"\s*(?:sur\s+(?:\d{1,3}|" + _PV_NOMBRES_MOTS + r"))?\s*" + _PV_PAS_UN_PV,
+        re.IGNORECASE,
+    ),
+    # « votre vitalité à N », « vie à N (sur M) » — nom de PV suivi
+    # immédiatement d'un total (« réduisant votre vitalité à douze »).
+    re.compile(
+        r"\b(?:votre|ta|sa|leur)?\s*(?:vitalit[ée]|vie|sant[ée]"
+        r"|points?\s+de\s+vie|PV)\s+[àa]\s+(?:\*\*)?(?:\d{1,3}|"
+        + _PV_NOMBRES_MOTS + r")(?:\*\*)?"
+        r"\s*(?:sur\s+(?:\d{1,3}|" + _PV_NOMBRES_MOTS + r"))?",
         re.IGNORECASE,
     ),
 ]
@@ -579,6 +609,34 @@ def _norm_nom_outil(s: Any) -> str:
     import unicodedata as _uni
     n = _uni.normalize("NFKD", str(s or "").strip().lower())
     return "".join(c for c in n if not _uni.combining(c))
+
+
+def _pv_officiels_ligne(ctx: Any) -> str:
+    """Ligne « PV OFFICIELS » injectée dans les correctifs quand le LLM
+    invente des PV de héros (« votre vitalité baissant à 4 sur 16 » pour
+    8/15 réels, partie 263f82dc) : la relance recopie alors les valeurs
+    serveur au lieu de ré-improviser un total. Renvoie '' sans état."""
+    try:
+        etat = PartyState(
+            data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+        ).load()
+        pjs = [p for p in (etat.get("pj") or []) if isinstance(p, dict)]
+        if not pjs:
+            return ""
+        parts: list[str] = []
+        for p in pjs:
+            lbl = f"{p.get('nom', '?')} {p.get('pv', '?')}/{p.get('pv_max', '?')} PV"
+            conds = [c for c in (p.get("conditions") or []) if c]
+            if conds:
+                lbl += f" ({', '.join(conds)})"
+            parts.append(lbl)
+        return (
+            "PV OFFICIELS (source serveur — les SEULES valeurs valides : "
+            "recopie-les EXACTEMENT si tu mentionnes un total de PV, "
+            "n'invente JAMAIS un chiffre) : " + " ; ".join(parts) + "."
+        )
+    except Exception:                                        # noqa: BLE001
+        return ""
 
 
 def looks_like_simulation(
@@ -666,6 +724,18 @@ def _bigrammes_fenetres(mots: list[str], fenetre: int = 4) -> set[tuple[str, str
     }
 
 
+def _paragraphes_norm(texte: str) -> list[str]:
+    """Paragraphes NORMALISÉS d'un texte (découpe sur les sauts de ligne).
+    Sert à l'écho au niveau paragraphe : un paragraphe entier recyclé
+    verbatim dans une narration par ailleurs nouvelle échappe à la
+    comparaison globale (les bigrammes du reste diluent le recouvrement)."""
+    return [
+        _normalise_pour_compare(p)
+        for p in re.split(r"\n+", texte or "")
+        if p.strip()
+    ]
+
+
 def trouve_repetition(
     narration: str,
     historique: list["Message"],
@@ -674,12 +744,18 @@ def trouve_repetition(
     """Renvoie un extrait de la narration précédente que `narration` répète,
     ou None si la narration est nouvelle.
 
-    Deux critères (le premier atteint suffit) :
+    Trois critères (le premier atteint suffit) :
     - le préfixe normalisé de la narration apparaît tel quel dans un message
       assistant récent (copie quasi verbatim) ;
     - chevauchement des bigrammes fenêtrés de mots ≥ `seuil` (paraphrase qui
       reprend la scène, même en comprimant/réordonnant ; les narrations
-      inédites restent ≪ seuil).
+      inédites restent ≪ seuil) ;
+    - Écho au niveau PARAGRAPHE : un paragraphe entier de la nouvelle
+      narration recopie (verbatim ou ≥ seuil) un paragraphe d'un message
+      assistant récent — partie 263f82dc : l'intro de rencontre « un second
+      squelette surgit des ombres, suivi d'un troisième… » re-collée à
+      l'identique à chaque round alors que le reste du texte changeait, la
+      comparaison globale restait sous le seuil.
     Les messages système/tool/user et les narrations très courtes sont ignorés.
 
     `seuil` : en COMBAT, les rounds rejouent la même action (« j'attaque à la
@@ -695,10 +771,18 @@ def trouve_repetition(
         m.content for m in historique
         if m.role == "assistant" and (m.content or "").strip()
     ][-_REPET_FENETRE:]
+    # Paragraphes normalisés pré-calculés (critère 3).
+    paras_cand = [
+        p for p in _paragraphes_norm(narration)
+        if len(p) >= _REPET_MIN_CANDIDAT
+    ]
+    refs: list[tuple[str, list[str]]] = []
     for ancien in reversed(assistant_recents):
         ref = _normalise_pour_compare(ancien)
         if len(ref) < _REPET_MIN_CANDIDAT:
             continue
+        refs.append((ref, [p for p in _paragraphes_norm(ancien)
+                           if len(p) >= _REPET_MIN_CANDIDAT]))
         if prefixe and prefixe in ref:
             return ref[:120]
         bigrams_ref = _bigrammes_fenetres(ref.split())
@@ -706,6 +790,20 @@ def trouve_repetition(
             overlap = len(bigrams_cand & bigrams_ref) / len(bigrams_cand)
             if overlap >= seuil:
                 return ref[:120]
+    # Critère 3 : écho de paragraphe.
+    for para_c in paras_cand:
+        bigrams_para = _bigrammes_fenetres(para_c.split())
+        if not bigrams_para:
+            continue
+        for ref, paras_ref in refs:
+            for para_r in paras_ref:
+                if para_c in para_r or para_r in para_c:
+                    return para_c[:120]
+                b_r = _bigrammes_fenetres(para_r.split())
+                if b_r and (
+                    len(bigrams_para & b_r) / len(bigrams_para) >= seuil
+                ):
+                    return para_c[:120]
     return None
 
 
@@ -2824,6 +2922,8 @@ class Orchestrator:
                                 "résous SON attaque avec `lancer_attaque` "
                                 "puis `lancer_degats` et narre le résultat "
                                 "officiel, SANS inventer de riposte adverse."
+                                + ("\n" + _pv_officiels_ligne(ctx)
+                                   if _pv_officiels_ligne(ctx) else "")
                                 + _CORRECTIF_INTERNE
                             )
                         elif any(
@@ -2999,6 +3099,8 @@ class Orchestrator:
                                 "joueur, avec SEUL le résultat officiel de "
                                 "SON action (lancer_attaque/lancer_degats) "
                                 "et les événements déjà fournis."
+                                + ("\n" + _pv_officiels_ligne(ctx)
+                                   if _pv_officiels_ligne(ctx) else "")
                                 + _CORRECTIF_INTERNE
                             ),
                         ))

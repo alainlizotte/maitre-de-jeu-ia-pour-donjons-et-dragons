@@ -880,7 +880,12 @@ class PromptBuilder:
                     "(JAMAIS `lancer_d20` pour une attaque). N'annonce JAMAIS un "
                     "jet, un « touché », un montant de dégâts ni une mort "
                     "(« s'effondre », « hors de combat ») sans que l'outil "
-                    "correspondant ait produit ce résultat — n'invente aucun dé."
+                    "correspondant ait produit ce résultat — n'invente aucun dé. "
+                    "Le bonus de DÉGÂTS à passer à `lancer_degats` est celui "
+                    "affiché « 💪 Bonus dégâts officiel » par `lancer_attaque` : "
+                    "recopie-le TEL QUEL (jamais un bonus improvisé), et ne "
+                    "change JAMAIS le total de PV d'un personnage en prose — "
+                    "recopie les PV des événements serveur à l'identique."
                 )
                 lignes.append(
                     "UNE SEULE attaque par tour (sauf attaques multiples "

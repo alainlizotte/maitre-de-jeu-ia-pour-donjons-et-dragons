@@ -227,6 +227,21 @@ _OUTILS_DECISION = frozenset({
 # la boucle narrative normale).
 _MAX_OUTILS_DECISION = 2
 
+# Outils MÉCANIQUES prioritaires (« recommandation outil ») : quand le
+# plafond `max_tools_exposed` réduit l'ensemble présenté, ces outils restent
+# exposés en priorité (après ceux déjà exécutés ce tour). Ils ne font pas
+# partie du choix contraint de `_OUTILS_DECISION` (attaque, dégâts,
+# sauvegarde, fin de tour) : sans ce précis, un plafond les filtrerait en
+# combat et le modèle ne pourrait physiquement pas résoudre son action.
+_COMBAT_PRIORITAIRES = frozenset({
+    "lancer_attaque", "lancer_degats", "lancer_sauvegarde", "lancer_des",
+    "incanter_sort", "terminer_mon_tour",
+    "fiche_perso_infliger_degats", "fiche_perso_soigner",
+    "fiche_perso_condition", "fiche_perso_niveau_negatif",
+    "inventaire_consommer_munition", "retraite_combat",
+    "combat_ajouter_combattant",
+})
+
 # 🧱 Budget TOTAL du contexte d'une requête (en CARACTÈRES) : work + schémas
 # d'outils + template. Les schémas natifs (function-calling « auto ») sont
 # envoyés HORS de `work` et comptaient donc dans les tokens sans être bornés
@@ -1858,6 +1873,35 @@ _INTENT_REPOS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Intention MÉCANIQUE du joueur — relance « outil requis mais non appelé »
+# en mode natif (recommandation « température tool-calling » + retry
+# forcé) : quand l'action demandée exige un outil (attaque, jet, soin,
+# sort, fin de tour, création de fiche) et que le modèle répond en pur
+# récit SANS rien appeler, on relance une fois avec tool_choice="required".
+# Bords de mots STRICTS pour éviter les faux positifs ( « tirade » ne
+# matche pas `tir\w*`, « couple » pas `coup\w*`, « sortir » pas `sort\w*`).
+_INTENT_MECANIQUE_RE = re.compile(
+    r"(?<!m['’])\battaqu\w*\b"                           # j'attaque / je l'attaquais
+    r"|\bfrapp\w*\b"                                     # frapper / frappe
+    r"|\btir(?:e|es|ez|er|[ée][es]?)\b"                  # tirer / je tire
+    r"|\bcoups?\b"                                       # un coup / des coups
+    r"|\btouch(?:e|es|ez|ons|er|ant|[ée][es]?)\b"        # toucher / je touche
+    r"|\bripost\w*\b"                                    # riposter
+    r"|\blanc(?:e|es|ez|ons)\b[^^\n]{0,40}?\bsorts?\b"   # lance un sort
+    r"|\bincant\w*\b"                                    # incanter
+    r"|\bpr[ée]par(?:e|es|ez|ons|er)\b[^^\n]{0,40}?\bsorts?\b"
+    r"|\bsoign\w*\b|\bsoin(?:s)?\b|\bpotion\w*\b|\bgu[ée]ri\w*\b"
+    r"|\bsauvegarde\w*\b"                                # jet de sauvegarde
+    r"|\bjet\s+de\b"                                     # jet de (caractéristique)
+    r"|\bcr[ée](?:e|es|er|ons|z)\b[^^\n]{0,40}?\b(?:personnage|fiche)\b"
+    r"|\bcréation\w*\b[^^\n]{0,40}?\b(?:personnage|fiche)\b"
+    r"|\b(?:jette|jettes|jetons|jetez|jeter|fasse|fais)\b[^^\n]{0,30}?"
+    r"\b\d{0,3}d(?:4|6|8|10|12|20|100)\b"
+    r"|\b(?:termine|terminez|passe|passes|fin\w*)\b[^^\n]{0,20}?\btour\b"
+    r"|\bterminer\s+mon\s+tour\b",
+    re.IGNORECASE,
+)
+
 # 💰 Budget d'appels par OUTIL et par TOUR de joueur : au-delà, `_run_one_tool`
 # refuse l'exécution (le modèle bouclait 17-32× sur `fiche_perso_mettre_a_jour`
 # ou `inventaire_consulter`, brûlant des minutes et saturant num_ctx).
@@ -1947,6 +1991,12 @@ class Orchestrator:
         detect_simulation: bool = True,
         max_iterations: int = 10,
         decision_phase: bool = True,
+        # Plafond d'outils exposés au LLM dans la boucle narrative (0 =
+        # aucun plafond). Appliqué aux schémas natifs + documentation
+        # compacte, PAS à la phase de décision (enum complète).
+        max_tools_exposed: int = 0,
+        # Température dédiée au tool-calling (itérations mécaniques).
+        tool_temperature: float = 0.2,
     ):
         self.client = client
         self.tools = tools
@@ -1954,6 +2004,8 @@ class Orchestrator:
         self.detect_simulation = detect_simulation
         self.max_iterations = max_iterations
         self.decision_phase = decision_phase
+        self.max_tools_exposed = max_tools_exposed
+        self.tool_temperature = tool_temperature
 
     # ------------------------------------------------------------------ #
     def _filter_tools_by_phase(
@@ -2006,6 +2058,52 @@ class Orchestrator:
         # Garde-fou : si on n'obtient rien (ex. config cassée), on retombe sur
         # l'ensemble complet pour ne jamais brider la discussion.
         return filtered or all_tools
+
+    # ------------------------------------------------------------------ #
+    #  Recommandation outil : plafond d'outils exposés à la narration
+    # ------------------------------------------------------------------ #
+    def _sous_ensemble_prioritaire(
+        self,
+        filtered: dict[str, ToolSpec],
+        result: OrchestratedResult,
+    ) -> dict[str, ToolSpec]:
+        """Réduit l'ensemble exposé au plafond `max_tools_exposed` sans
+        jamais perdre les outils MÉCANIQUES du tour.
+
+        - `max_tools_exposed <= 0` : aucun plafond → `filtered` renvoyé TEL
+          QUEL, sans réordonner (les tests d'exposition s'appuient sur
+          l'ordre du registre).
+        - Sinon, priorité stable :
+            1. outils déjà exécutés ce tour (result.tool_calls_trace) ;
+            2. outils mécaniques/combat (_COMBAT_PRIORITAIRES) puis outils
+               du choix contraint (_OUTILS_DECISION) — ils doivent rester
+               appelables par la narration ;
+            3. le reste, dans l'ordre d'origine de `filtered`.
+        Le filtrage est transparent : tout outil reste exécutable par les
+        parsers de secours ; seul le set présenté change.
+        """
+        if self.max_tools_exposed <= 0:
+            return filtered
+        deja_vus: list[str] = []
+        for tc in result.tool_calls_trace:
+            nom = tc.get("name")
+            if nom and nom not in deja_vus:
+                deja_vus.append(nom)
+        prioritaires: list[str] = []
+        for n in (
+            deja_vus
+            + sorted(_COMBAT_PRIORITAIRES)
+            + sorted(_OUTILS_DECISION)
+        ):
+            if n in filtered and n not in prioritaires:
+                prioritaires.append(n)
+        exposes: list[str] = []
+        for n in prioritaires + list(filtered):
+            if len(exposes) >= self.max_tools_exposed:
+                break
+            if n in filtered and n not in exposes:
+                exposes.append(n)
+        return {n: filtered[n] for n in exposes}
 
     # ------------------------------------------------------------------ #
     #  🎯 Phase de décision contrainte (json_schema → grammaire llama.cpp)
@@ -2165,7 +2263,7 @@ class Orchestrator:
         try:
             res = await self.client.chat(
                 messages_dec,
-                temperature=0.1,
+                temperature=0.0,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -2288,8 +2386,13 @@ class Orchestrator:
         # tools utiles à la phase courante. Le filtrage se détermine par la
         # dernière partie état disponible sur disque via ctx.
         filtered = self._filter_tools_by_phase(self.tools, ctx)
-        schemas = tools_schemas_all(filtered)
-        tool_section = tools_prompt_section(filtered)
+        # Plafond d'outils exposés (recommandation « réduction du zoo
+        # d'outils ») : la phase de décision garde l'énumération COMPLÈTE
+        # (filtered) ; seuls les schémas natifs + la documentation compacte
+        # de la boucle narrative passent par le sous-ensemble prioritaire.
+        exposes = self._sous_ensemble_prioritaire(filtered, result)
+        schemas = tools_schemas_all(exposes)
+        tool_section = tools_prompt_section(exposes)
 
         # En mode "prompt", on documente les balises <tool ...> au system
         # message (Gemma/Qwen tool-calling natif fragile sans schémas).
@@ -2303,8 +2406,8 @@ class Orchestrator:
                     role="system",
                     content=work[0].content + "\n\n" + tool_section,
                 )
-            elif self.tool_mode == "auto" and filtered:
-                compact = tools_prompt_compact(filtered)
+            elif self.tool_mode == "auto" and exposes:
+                compact = tools_prompt_compact(exposes)
                 work[0] = Message(
                     role="system",
                     content=work[0].content + "\n\n" + compact,
@@ -2313,6 +2416,9 @@ class Orchestrator:
         # OpenAI impose : si tools non vides, tool_choice = "auto" sauf si
         # l'on veut forcer un appel. On laisse "auto".
         corrections_vues = -1
+        # 🎯 Relance « outil requis mais non appelé » : au plus UNE fois par
+        # tour (montée par le hook A3ter avec tool_choice="required").
+        retry_requis_envoye = False
         # Narrations INVALIDES ajoutées à `work` au fil des corrections
         # (simulation en prose…) : elles servent de contexte au modèle mais
         # ne doivent PAS compter comme références anti-répétition — sinon la
@@ -2381,16 +2487,20 @@ class Orchestrator:
             # physiquement pas résoudre ses attaques — il les simulait en
             # prose, 3 corrections puis abandon, dégâts jamais appliqués.
             filtered = self._filter_tools_by_phase(self.tools, ctx)
+            # Plafond ré-appliqué à CHAQUE itération (rés. prioritaire):
+            # les outils exécutés ce tour restent exposés (ceux qu'on vient
+            # d'utiliser doivent rester rappelables pour la narration).
+            exposes = self._sous_ensemble_prioritaire(filtered, result)
             if cles_filtre_prec is not None and set(filtered) != cles_filtre_prec:
-                outils_noms = ", ".join(sorted(filtered))
+                outils_noms = ", ".join(sorted(exposes))
                 _log.info(
                     "phase changée en cours de tour : outils réinjectés (%s)",
                     outils_noms,
                 )
                 section_maj = (
-                    tools_prompt_section(filtered)
+                    tools_prompt_section(exposes)
                     if self.tool_mode == "prompt"
-                    else tools_prompt_compact(filtered)
+                    else tools_prompt_compact(exposes)
                 )
                 work.append(Message(
                     role="system",
@@ -2403,7 +2513,7 @@ class Orchestrator:
                     ),
                 ))
             cles_filtre_prec = set(filtered)
-            schemas = tools_schemas_all(filtered)
+            schemas = tools_schemas_all(exposes)
             tools_arg = schemas if use_native else None
             # ⚡ Blocage anti-boucle budget : le modèle (Q4 en particulier) a
             # re-tenté ≥3 fois des outils refusés par le quota. On retire les
@@ -2439,6 +2549,19 @@ class Orchestrator:
             # (répétitions observées en e2e avec Qwen standard).
             temp_relance = 0.35 if result.corrections > corrections_vues else None
             corrections_vues = result.corrections
+            # 🎯 Température dédiée au tool-calling (recommandation) : les
+            # itérations MÉCANIQUES (combat, ou outils déjà appelés ce tour)
+            # partent À BASSE température — à 0.75 le sampling Qwen 9B narre
+            # au lieu de formater l'appel. Les tours de pure narration
+            # gardent la température narrative (temp_relance si correction,
+            # sinon None → température du client).
+            mecanique = phase_combat or bool(result.tool_calls_trace)
+            if temp_relance is not None:
+                temp_effet = temp_relance
+            elif mecanique:
+                temp_effet = self.tool_temperature
+            else:
+                temp_effet = None
             # 🧱 Borne de contexte : les résultats d'outils (≤ 4 000 chars
             # chacun) et les correctifs s'accumulent dans `work` au fil des
             # itérations — en combat, le prompt a atteint 18 709 tokens pour
@@ -2454,11 +2577,31 @@ class Orchestrator:
                 except (TypeError, ValueError):
                     reserve = 0
             work = _borner_work(work, reserve_chars=reserve)
-            chat = await self.client.chat(
-                work, tools=tools_arg,
-                tool_choice="auto" if use_native else None,
-                temperature=temp_relance,
+            # tool_choice effacé après la relance A3ter : un seul appel forcé.
+            tool_choice_effectif = (
+                "required"
+                if (use_native and retry_requis_envoye)
+                else ("auto" if use_native else None)
             )
+            try:
+                chat = await self.client.chat(
+                    work, tools=tools_arg,
+                    tool_choice=tool_choice_effectif,
+                    temperature=temp_effet,
+                )
+            except Exception as exc:                        # noqa: BLE001
+                if tool_choice_effectif != "required":
+                    raise
+                # Certains backends rejettent `tool_choice="required"` :
+                # repli sur "auto" (la consigne correctif reste dans `work`).
+                _log.warning(
+                    "tool_choice='required' rejeté (%s) → repli auto", exc,
+                )
+                chat = await self.client.chat(
+                    work, tools=tools_arg,
+                    tool_choice="auto" if use_native else None,
+                    temperature=temp_effet,
+                )
 
             # --- Bter2. Troncature de dégénérescence intra-réponse -------
             # Le modèle boucle sur ses propres phrases : on coupe AVANT tout
@@ -2981,6 +3124,86 @@ class Orchestrator:
                         ))
                         continue
                     # 2 corrections déjà : on continue avec le reste (best effort).
+
+            # --- A3ter. Relance « outil requis mais non appelé » -----------
+            # Recommandation « température tool-calling » : le modèle native
+            # (Qwen 9B en particulier) narre une action MÉCANIQUE du joueur
+            # en pur récit (« vous abattez la hache sur la goule ») sans
+            # AUCUN appel d'outil — dégâts/PV jamais appliqués. Quand le
+            # message du joueur exige un outil et que la réponse ne contient
+            # QUE de la prose (ni appels naturels, ni zone mécanique), on
+            # relance le tour UNE seule fois avec `tool_choice="required"`
+            # + température de relance (0.35) : le backend est contraint de
+            # produire un appel, impossible de re-narrer.
+            if (
+                use_native
+                and tools_arg
+                and not result.narration_forcee
+                and not retry_requis_envoye
+                and result.corrections < 3
+                and not chat.tool_calls
+                and not result.tool_calls_trace
+            ):
+                dernier_user = ""
+                for m in reversed(work):
+                    if m.role == "user":
+                        dernier_user = m.content or ""
+                        break
+                # Une consigne interne (rejeu 5quater-d, correction budget)
+                # arrive en message `user` : elle n'est PAS une action du
+                # joueur (cf. correctif 5a9b99c8) — on ne relance pas dessus.
+                _phase_a3 = ""
+                if (
+                    dernier_user
+                    and "instruction INTERNE du moteur de jeu" not in dernier_user
+                    and _INTENT_MECANIQUE_RE.search(dernier_user)
+                ):
+                    try:
+                        _etat_a3 = PartyState(
+                            data_dir=str(ctx.data_dir),
+                            partie_id=ctx.partie_id,
+                        ).load()
+                        _phase_a3 = str(
+                            _etat_a3.get("phase") or ""
+                        ).strip().lower()
+                    except Exception:                     # noqa: BLE001
+                        _phase_a3 = ""
+                # Exploration/voyage/roleplay sont DEJA couverts par la
+                # phase de décision contrainte : la relance ne concerne que
+                # combat / opening / opening_complete (où l'action demandée
+                # est mécanique et aucun choix contraint ne tourne).
+                if _phase_a3 and _phase_a3 not in _PHASES_DECISION:
+                    retry_requis_envoye = True
+                    result.corrections += 1
+                    _log.warning(
+                        "outil requis mais non appelé (prose seule) → "
+                        "relance avec tool_choice='required' "
+                        "(phase %r)", _phase_a3,
+                    )
+                    work.append(Message(
+                        role="assistant",
+                        content=(chat.content or "").strip(),
+                    ))
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "ℹ️ SYSTÈME : l'action du joueur exige un appel "
+                            "d'outil MÉCANIQUE que tu n'as pas émis — ta "
+                            "réponse était en pur récit. Appelle MAINTENANT "
+                            "l'outil adéquat : attaque → `lancer_attaque` "
+                            "puis `lancer_degats` ; sauvegarde → "
+                            "`lancer_sauvegarde` ; jet → `lancer_des` / "
+                            "`lancer_d20` ; soin → `fiche_perso_soigner` ; "
+                            "potion → `inventaire_consommer_munition` ; "
+                            "sort → `incanter_sort` ; les dégâts subis par "
+                            "les personnages sont joués par le serveur "
+                            "(événements à narrer, jamais à inventer) ; fin "
+                            "du tour → `terminer_mon_tour`. Ne narre le "
+                            "résultat qu'APRÈS le retour officiel du tool."
+                            + _CORRECTIF_INTERNE
+                        ),
+                    ))
+                    continue
 
             # --- D. Réponse finale (narration) ------------------------------
             # Aucun appel d'outil à effectuer ⇒ narration complète du MJ.

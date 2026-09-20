@@ -683,6 +683,8 @@ def _orchestrator(app: FastAPI) -> Orchestrator:
         tool_mode=cfg.llm.tool_mode,
         detect_simulation=cfg.llm.detect_simulation,
         max_iterations=cfg.llm.max_tool_iterations,
+        max_tools_exposed=cfg.llm.max_tools_exposed,
+        tool_temperature=cfg.llm.tool_temperature,
         decision_phase=getattr(cfg.game, "decision_phase", True),
     )
 

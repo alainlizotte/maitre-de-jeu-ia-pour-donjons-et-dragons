@@ -51,6 +51,20 @@ class LLMConfig:
     tool_mode: str = "prompt"        # "native" | "prompt" | "auto"
     detect_simulation: bool = True
     max_tool_iterations: int = 10
+    # Plafond du nombre d'outils EXPOSÉS au LLM dans la boucle narrative
+    # (schémas natifs + documentation compacte). 0 = aucun plafond (tous les
+    # outils de la phase). La phase de décision contrainte garde TOUJOURS
+    # l'énumération complète (le choix reste contraint, le plafond ne
+    # s'applique qu'à la narration) — correctifs « recommandation outil » :
+    # 39 outils en exploration saturait le Qwen3.5-9B (hallucinations,
+    # narration prose sans appel).
+    max_tools_exposed: int = 0
+    # Température dédiée au tool-calling : appliquée aux itérations MÉCANIQUES
+    # (combat ou outils déjà appelés ce tour) — le sampling chaud fait
+    # « narrer au lieu d'appeler » (Qwen 9B). Les tours de pure narration
+    # gardent la température narrative (génerale) ; les relances de
+    # correction utilisent temp_relance (0.35).
+    tool_temperature: float = 0.2
     think: bool = False              # désactive le thinking/réflexion (Gemma 4, Qwen3…)
     # Format d'appel d'outils demandé au modèle via `chat_template_kwargs`
     # (template Qwen corrigé froggeric v22.5, monté dans llamacpp) :

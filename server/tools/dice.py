@@ -11,10 +11,77 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import unicodedata
 from typing import Optional
 
 from .base import ToolContext, ToolResult, tool
+
+
+def _norm_arme(s: str) -> str:
+    n = unicodedata.normalize("NFKD", str(s or "").strip().lower())
+    n = "".join(c for c in n if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^a-z0-9 ]+", " ", n).split())
+
+
+# Mots-clés de SORTS/effets : un « nom d'arme » qui en contient un n'est PAS
+# une arme du catalogue — la validation de dé doit alors être désactivée
+# (un sort inflige ses propres dés, ex. Boule de feu 5d6).
+_MOTS_SORT = (
+    "sort", "sphere", "boule", "trait", "rayon", "projectile", "souffle",
+    "eclair", "cone", "nuage", "flamme", "explosion", "tempete",
+    "invocation", "doigt", "orbe", "malediction", "mot", "cri",
+)
+
+_ARMES_CATALOGUE: Optional[dict] = None
+
+
+def _armes_catalogue() -> dict:
+    """Cache local du catalogue d'armes (nom normalisé → entrée)."""
+    global _ARMES_CATALOGUE
+    if _ARMES_CATALOGUE is None:
+        try:
+            from ..catalogue import ARMES  # pylint: disable=import-outside-toplevel
+            _ARMES_CATALOGUE = {_norm_arme(a.get("nom")): a for a in ARMES}
+        except Exception:                                    # noqa: BLE001
+            _ARMES_CATALOGUE = {}
+    return _ARMES_CATALOGUE
+
+
+def _de_arme_catalogue(nom: str) -> Optional[tuple[int, int, str]]:
+    """(nb_des, faces, nom_canonique) des dégâts de base d'une arme du
+    catalogue, ou None si `nom` ne désigne pas une arme (sort, objet…).
+
+    Tolère les seuls qualificatifs de fabrication/matière (« de maître »,
+    « +1 », « en argent ») : tout autre mot restant après retrait du nom
+    d'arme (« Dague de glace » → « glace ») désactive la validation, car il
+    s'agit alors d'un sort ou d'une créature, pas de l'arme du catalogue."""
+    cible = _norm_arme(nom)
+    if not cible:
+        return None
+    if any(re.search(r"(?:^|\s)" + re.escape(m) + r"(?:\s|$)", cible)
+           for m in _MOTS_SORT):
+        return None
+    cible = re.sub(r"\b(?:de maitre|masterwork|magique|enchant\w*)\b", " ", cible)
+    cible = re.sub(r"\b\d+\b", " ", cible)      # bonus magique (+1 → « 1 »)
+    cible = " ".join(cible.split())
+    _stop = {"de", "du", "la", "le", "les", "d", "a", "au", "aux", "en",
+             "acier", "fer", "argent", "adamantium", "mithral", "bois", "chene"}
+    for an, arme in _armes_catalogue().items():
+        if not an:
+            continue
+        if not re.search(r"(?:^|\s)" + re.escape(an) + r"(?:\s|$)", cible):
+            continue
+        reste = [w for w in cible.replace(an, " ", 1).split()
+                 if w and w not in _stop]
+        if reste:
+            continue                    # mots étrangers → pas cette arme
+        m = re.match(r"(\d+)\s*d\s*(\d+)", str(arme.get("degats") or ""))
+        if not m:
+            return None
+        return int(m.group(1)), int(m.group(2)), str(arme.get("nom"))
+    return None
+
 
 
 def _mod(c: int) -> int:
@@ -565,6 +632,20 @@ async def lancer_degats(
     bonus = _as_int(bonus)
     if faces not in (2, 3, 4, 6, 8, 10, 12, 20, 100):
         return ToolResult(text=f"⚠️ Type de dé {faces} non standard en D&D 3.5.")
+    # Conformité au catalogue : si `arme_ou_sort` désigne une arme connue, la
+    # formule NdF doit correspondre à ses dégâts de base (partie 4b529064 : la
+    # « Hache à deux mains » — 1d12 au catalogue — fut résolue en 1d20+4).
+    _arme = _de_arme_catalogue(arme_ou_sort)
+    if _arme is not None:
+        _nb, _fa, _nom_canon = _arme
+        if (nb_des, faces) != (_nb, _fa):
+            return ToolResult(text=(
+                f"⛔ **Formule de dégâts non conforme au catalogue** : "
+                f"« {arme_ou_sort} » inflige {_nb}d{_fa} (D&D 3.5, "
+                f"« {_nom_canon} »), pas {nb_des}d{faces}.\n"
+                f"Relance `lancer_degats` avec nb_des={_nb}, faces={_fa} "
+                f"(le bonus de Force reste inchangé)."
+            ))
     jets = [random.randint(1, faces) for _ in range(nb_des)]
     total = max(0, sum(jets) + bonus)  # jamais de dégâts négatifs (min 0)
     lignes = [

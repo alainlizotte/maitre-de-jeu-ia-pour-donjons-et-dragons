@@ -1327,6 +1327,35 @@ def lancer_portrait_background(data_dir: str, fiche: dict[str, Any]) -> None:
 # --------------------------------------------------------------------------- #
 #  Enregistrement du PJ dans l'état de partie (à la connexion WS)
 # --------------------------------------------------------------------------- #
+def _purger_quete_autres_parties(fiche: dict[str, Any], partie_id: str) -> bool:
+    """Retire de la fiche les objets de quête tagués d'une AUTRE partie.
+
+    Les dons de PNJ (`portee="quete"`) sont « perdus à la fin de leur partie »
+    (cf. `inventaire.py`, `resume_inventaire`) : on purge donc de la fiche
+    partagée les entrées dont `partie` est renseignée ET différente de la
+    partie en cours. Sans cette purge effective, un objet tagué d'une partie
+    supprimée (ex. « Protection contre les sorts », partie 9d9ae378) restait
+    à jamais dans la fiche — masqué du récapitulatif mais toujours présent.
+    Les entrées sans `partie` sont laissées telles quelles (ambiguës/legacy).
+    Renvoie True si la fiche a été modifiée.
+    """
+    inv = fiche.get("inventaire")
+    if not isinstance(inv, list) or not inv:
+        return False
+    garde: list[Any] = []
+    purge = False
+    for e in inv:
+        if isinstance(e, dict) and str(e.get("portee") or "") == "quete":
+            p = str(e.get("partie") or "")
+            if p and p != partie_id:
+                purge = True
+                continue
+        garde.append(e)
+    if purge:
+        fiche["inventaire"] = garde
+    return purge
+
+
 def enregistrer_personnage_partie(
     data_dir: str, partie_id: str, nom_personnage: str, joueur: str
 ) -> Optional[dict[str, Any]]:
@@ -1346,6 +1375,16 @@ def enregistrer_personnage_partie(
         return None
     if not proprio and joueur_fiche and joueur_fiche.lower() != joueur.strip().lower():
         return None
+
+    # 🧹 Purge des objets de quête d'AUTRES parties (dons de PNJ « perdus à la
+    # fin de leur partie ») — cf. `_purger_quete_autres_parties`.
+    try:
+        if _purger_quete_autres_parties(fiche, partie_id):
+            with open(chemin_fiche(data_dir, fiche.get("nom", nom_personnage)),
+                      "w", encoding="utf-8") as f:
+                json.dump(fiche, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
 
     # Rattachement progressif : une fiche sans propriétaire (créée avant le
     # multi-comptes, ou par les tools avant le correctif) est attribuée au
@@ -1386,6 +1425,16 @@ def enregistrer_personnage_partie(
         pv_max_entree = existant.get("pv_max", fiche.get("pv_max", 0))
         conditions_entree = existant.get("conditions", [])
         xp_entree = existant.get("xp", fiche.get("xp", 0))
+        # Encombrement VÉCU dans la partie (charge_max, poids_transporte,
+        # etat_encumbrance) : reconstruit depuis la fiche à chaque rejoin, le
+        # remplacement `pj_list[i] = entree` ci-dessous les perdait — la barre
+        # de charge disparaissait et l'état de surcharge était oublié (partie
+        # 4b529064, point 2).
+        charge_existant = {
+            k: existant.get(k)
+            for k in ("charge_max", "poids_transporte", "etat_encumbrance")
+            if k in existant and existant.get(k) is not None
+        }
     else:
         # Nouvelle partie = nouveau départ : le perso entre à PLEINE SANTÉ
         # (la fiche est aussi soignée, car des tools comme repos_long ou
@@ -1420,7 +1469,12 @@ def enregistrer_personnage_partie(
         "bab": fiche.get("bab", 0),
         "conditions": conditions_entree,
         "alignement": fiche.get("alignement", ""),
+        "charge_max": fiche.get("charge_max"),
+        "poids_transporte": fiche.get("poids_transporte"),
+        "etat_encumbrance": fiche.get("etat_encumbrance"),
     }
+    if existant is not None:
+        entree.update(charge_existant)
     remplace = False
     for i, p in enumerate(pj_list):
         if str(p.get("nom", "")).lower() == entree["nom"].lower():

@@ -56,6 +56,22 @@ llm:
   detect_simulation: true
   max_tool_iterations: 6      # borne la boucle tool-call / responde
 
+  # Plafond du nombre d'outils EXPOSÉS au LLM dans la boucle narrative
+  # (schémas natifs + documentation compacte). 0 = aucun plafond (comportement
+  # historique). 39 outils en exploration saturaient le Qwen3.5-9B
+  # (hallucinations, narration en prose sans appel) ; les outils MÉCANIQUES
+  # du tour (attaque, dégâts, sauvegarde, soin, déplacement…) restent
+  # prioritaires. La phase de décision contrainte garde TOUJOURS son
+  # énumération complète.
+  max_tools_exposed: 0
+
+  # Température dédiée au tool-calling : appliquée aux itérations MÉCANIQUES
+  # (combat, ou outils déjà appelés ce tour) — le sampling chaud fait
+  # « narrer au lieu d'appeler ». Les tours de pure narration gardent la
+  # température narrative (`temperature`) ; les relances de correction
+  # utilisent la température de relance (0.35).
+  tool_temperature: 0.2
+
   # Déchargement du modèle après le tour du MJ :
   #   true  = comportement historique : la VRAM est libérée dès la fin du
   #           dernier tour (partage du GPU avec ComfyUI).

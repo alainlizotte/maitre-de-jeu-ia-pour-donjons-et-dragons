@@ -616,11 +616,11 @@ async def test_rattrapage_somme_detouches_en_un_appel():
         # L'exces du LLM (somme rejouee) est restitue par la de-duplication.
         exces = _exces_degats_monstres(
             result.tool_calls_trace, _etat(d)["monstres_combat"])
-        assert exces == {"Ogre": sum(totaux)}, exces
+        assert exces == {"Ogre": {"exces": sum(totaux), "jetes": sum(totaux)}}, exces
         _st = PartyState(data_dir=d, partie_id=PID)
         _et = _st.load()
         _mo = _et["monstres_combat"][0]
-        _mo["pv"] = min(_mo["pv"] + exces["Ogre"], _mo["pv_max"])
+        _mo["pv"] = min(_mo["pv"] + exces["Ogre"]["exces"], _mo["pv_max"])
         _st.save(_et)
         assert _etat(d)["monstres_combat"][0]["pv"] == 22 - sum(totaux)
     finally:
@@ -656,11 +656,11 @@ async def test_rattrapage_deux_touches_un_seul_infliger():
         # L'infliger du LLM (t1 rejoue) est un exces -> restitue.
         exces = _exces_degats_monstres(
             result.tool_calls_trace, _etat(d)["monstres_combat"])
-        assert exces == {"Ogre": totaux[0]}, exces
+        assert exces == {"Ogre": {"exces": totaux[0], "jetes": sum(totaux)}}, exces
         _st = PartyState(data_dir=d, partie_id=PID)
         _et = _st.load()
         _mo = _et["monstres_combat"][0]
-        _mo["pv"] = min(_mo["pv"] + exces["Ogre"], _mo["pv_max"])
+        _mo["pv"] = min(_mo["pv"] + exces["Ogre"]["exces"], _mo["pv_max"])
         _st.save(_et)
         assert _etat(d)["monstres_combat"][0]["pv"] == 22 - sum(totaux)
     finally:

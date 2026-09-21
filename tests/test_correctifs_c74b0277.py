@@ -309,7 +309,7 @@ def test_exces_degats_detecte_le_double_application():
     ]
     monstres = [{"nom": "Zombie", "pv": -4, "pv_max": 5, "conditions": []}]
     exces = _exces_degats_monstres(trace, monstres)
-    assert exces == {"Zombie": 5}, exces
+    assert exces == {"Zombie": {"exces": 5, "jetes": 4}}, exces
 
 
 def test_exces_degats_aucun_faux_positif_sur_application_normale():

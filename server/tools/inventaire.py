@@ -675,6 +675,41 @@ async def inventaire_ajouter(
     if not objet or not _norm(objet):
         return ToolResult(text="❌ Donne un nom d'objet valide.")
     qte = max(1, int(quantite or 1))
+    portee_n = _norm(portee)
+    if portee_n not in ("quete", "permanent"):
+        portee_n = _portee_auto(objet)
+
+    inv = _inventaire(fiche)
+    cible = _cle_objet(objet)
+    portee_lbl = (
+        "📜 inventaire de quête (cette partie)" if portee_n == "quete"
+        else "🎒 équipement permanent"
+    )
+    # Déduplication (portée QUÊTE uniquement) : un objet de l'aventure DÉJÀ
+    # enregistré pour CETTE partie avec la MÊME quantité est une
+    # RE-PERSISTATION (ré-jeu inventaire, boucle du LLM — partie 5b4e2bbe :
+    # carte ×2 alors qu'une seule carte existe dans le module). Les objets
+    # uniques du scénario ne se cumulent pas. Les objets permanents restent
+    # cumulables : butin légitime (5 gobelins = 5 épées courbes) et survie
+    # inter-parties (hache gagnée dans chaque partie, test 4d4b4557).
+    # AVANT la validation du poids : refuser une ré-acquisition ne requiert
+    # pas de connaître le poids de l'objet.
+    if portee_n == "quete":
+        for e in inv:
+            if (
+                _cle_objet(e.get("nom")) == cible
+                and _entree_portee_ok(e, portee_n, ctx.partie_id)
+                and int(e.get("qte", 1) or 1) == qte
+            ):
+                return ToolResult(
+                    text=(
+                        f"ℹ️ **{qte} × {objet}** est DÉJÀ enregistré dans "
+                        f"l'inventaire de {fiche.get('nom', nom)} "
+                        f"({portee_lbl}) — objet unique de l'aventure, rien "
+                        "à ajouter (déduplication d'une ré-acquisition déjà "
+                        "persistée)."
+                    )
+                )
     pu = _poids_unitaire(objet, poids)
     if pu is None:
         return ToolResult(
@@ -684,12 +719,6 @@ async def inventaire_ajouter(
                 "soit correctement comptée — sinon l'encombrement sera faux."
             )
         )
-    portee_n = _norm(portee)
-    if portee_n not in ("quete", "permanent"):
-        portee_n = _portee_auto(objet)
-
-    inv = _inventaire(fiche)
-    cible = _cle_objet(objet)
     fusionne = False
     for e in inv:
         if (
@@ -717,10 +746,6 @@ async def inventaire_ajouter(
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:
         return err
-    portee_lbl = (
-        "📜 inventaire de quête (cette partie)" if portee_n == "quete"
-        else "🎒 équipement permanent"
-    )
     return ToolResult(
         text=(
             f"✅ **{qte} × {objet}** ajouté(s) à l'inventaire de "

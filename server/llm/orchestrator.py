@@ -1812,6 +1812,16 @@ _RE_FAUX_DEGATS_PROSE = re.compile(
     r"[ \t]*(?:\*{0,2})\s*D[ée]g[âa]ts inflig[ée]s\s*:?\s*\*{0,2}[^\n]*",
     re.IGNORECASE,
 )
+# « Jet de dégâts : … = ? » — invention du LLM dont la résolution n'a jamais
+# été calculée (partie 5b4e2bbe msg [28]) ; contrairement au vrai jet, elle ne
+# doit pas être montrée, l'officielle arrive après.
+_RE_FAUX_JET_DEGATS_PROSE = re.compile(
+    r"[ \t]*(?:\*{0,2})\s*Jet\s+de\s+d[ée]g[âa]ts\s*:?\s*\*{0,2}[^\n]*",
+    re.IGNORECASE,
+)
+_RE_FORMULE_INCOMPLETE = re.compile(
+    r"[ \t]*(?:\*{0,2})[^\n]*?(?:\d+[dD]\d+\s*(?:\+\s*\d+)?|[1-9]\d*\s*[dD]\d+\s*\+\s*[1-9]\d*)\s*=\s*\?\s*[^\n]*",
+)
 
 
 def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None) -> str:
@@ -1852,6 +1862,8 @@ def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None)
     # mécanique officielle arrive après, on ne garde jamais la copie du LLM.
     out = _RE_FAUX_JET_PROSE.sub("", out)
     out = _RE_FAUX_DEGATS_PROSE.sub("", out)
+    out = _RE_FAUX_JET_DEGATS_PROSE.sub("", out)
+    out = _RE_FORMULE_INCOMPLETE.sub("", out)
     out = _tidy_empty_lines(out)
     return out.strip()
 
@@ -1969,6 +1981,12 @@ class OrchestratedResult:
     state_patches: list[dict[str, Any]] = field(default_factory=list)
     iterations: int = 0
     corrections: int = 0
+    # Corrections d'ÉCHO (scène déjà narrée, D1ter) : budget DÉDIÉ, délibérément
+    # indépendant de `corrections`. Partie 5b4e2bbe : la simulation (D1bis)
+    # consomme `corrections` (3 max) puis se désactive ; l'anti-répétition
+    # partageait le même budget → l'écho [46]==[44] n'était jamais purgé et
+    # rebouclait à l'identique. L'écho a son propre plafond.
+    corrections_echo: int = 0
     simulation_attempted: bool = False
     # Trace lisible des appels d'outils effectifs — diagnostic & logs.
     # Liste de dicts {name, args, ok, text} alimentée par _run_one_tool.
@@ -3411,7 +3429,7 @@ class Orchestrator:
             # partie réelle) : l'action est perdue et le fil de l'histoire
             # casse. On relance avec un correctif qui re-cite l'action du
             # joueur — les deltas déjà streamés sont remplacés par le dm final.
-            if narration.strip() and result.corrections < 3:
+            if narration.strip() and result.corrections_echo < 3:
                 # EXCEPTION : re-visite d'une salle à description FIGÉE. Le
                 # tool `carte_donjon_explorer` ordonne alors explicitement de
                 # re-narrer À L'IDENTIQUE (« Description enregistrée » /
@@ -3448,6 +3466,7 @@ class Orchestrator:
                 )
                 if echo:
                     result.corrections += 1
+                    result.corrections_echo += 1
                     # (c) L'aperçu streamé est une répétition périmée : reset
                     # client avant la relance (même logique que D1bis).
                     if on_delta is not None and on_event is not None:

@@ -244,6 +244,32 @@ def _resolved_type(spec: ToolSpec, pname: str) -> Any:
     return p.annotation if p else inspect.Parameter.empty
 
 
+def _stringify_str_arg(value: Any) -> Any:
+    """Aplati une valeur structurée du LLM en chaîne pour un paramètre `str`.
+
+    Le petit modèle renvoie parfois une LISTE d'objets là où le schéma attend
+    une chaîne (partie 5b4e2bbe : `engager_combat(monstres=[{"nom": "Gobelin",
+    "pv": 8, ...}])` → `'list' object has no attribute 'split'` — le combat
+    n'était jamais engagé et restait en prose). On récupère le nom usuel des
+    dicts et on joint les éléments par « , » (format attendu par les tools
+    `engager_combat`/`combat_ajouter_combattant`).
+
+    Les scalaires non-str (int/bool/None) sont laissés TELS QUELS : les tools
+    existants gèrent déjà ce cas et on ne veut pas changer ce comportement.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("nom", "name", "monstre", "monstres", "valeur",
+                    "value", "texte", "text"):
+            if key in value:
+                return _stringify_str_arg(value[key])
+        return ", ".join(_stringify_str_arg(v) for v in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return ", ".join(_stringify_str_arg(v) for v in value)
+    return value
+
+
 def _coerce_arg(value: Any, hint: Any) -> Any:
     """Coerce une valeur reçue du LLM vers le type Python attendu.
 
@@ -299,6 +325,8 @@ def _coerce_arg(value: Any, hint: Any) -> Any:
             return bool(value)
         except Exception:
             return value
+    if hint is str:
+        return _stringify_str_arg(value)
     return value
 
 

@@ -99,6 +99,22 @@ _ATTAQUE_JOUEUR_RE = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
+# Hostilité IMMINENTE narrée par le MJ alors que le joueur n'a pas encore
+# déclaré d'attaque. Partie 5b4e2bbe : « Le Gobelin s'arrête à quelques
+# mètres, arme levée, prêt à attaquer. Que souhaitez-vous faire ? » — aucune
+# attaque joueur, aucun marqueur de combat → la scène restait 100 % prose et
+# il fallait attaquer à nouveau pour déclencher la phase combat. Une créature
+# du bestiaire qui s'apprête à frapper suffit à vouloir la mécanique
+# officielle (initiative, rotation, PV suivis).
+_HOSTILITE_IMMINENTE_RE = _re_mod.compile(
+    r"\b(?:pr[êéèe]t(?:e|es|s)?\s+(?:à|a)\s+(?:attaqu\w*|frapp\w*|charg\w*)|"
+    r"s['’]appr[eêè]te?\s+(?:à|a)\s+(?:attaqu\w*|frapp\w*|charg\w*)|"
+    r"vous\s+vise|vous\s+menace|fond\s+sur\s+vous|bondit\s+vers\s+vous|"
+    r"charg[eêé]\s+vers\s+vous|arme\s+lev[ée]e?|glai?ve\s+lev[ée]e?|"
+    r"armes?\s+point[ée]e?s?|vous\s+d[ée]fie|vous\s+guette)\b",
+    _re_mod.IGNORECASE,
+)
+
 # Détection d'une INTENTION DE SOINS déclarée par le joueur : si le LLM
 # narrer « vous avez récupéré 3 PV » SANS appeler fiche_perso_soigner, le
 # rattrapage 5bis-c-long applique le montant déclaré à la fiche. Séparé de
@@ -698,6 +714,93 @@ def _narration_prose_seule(narration: str) -> str:
     if m:
         narration = narration[:m.start()]
     return narration.strip()
+
+
+# ⚙️ Harmonisation de l'état narré sur l'état SERVEUR. Le petit modèle local
+# écrit des chiffres plausibles mais FAUX — partie 5b4e2bbe : fiche officielle
+# « pv 2 / pv_max 16 » pendant que la narration affichait « PV Barkrur : 13/17 »
+# trois fois dans la même scène. La valeur SERVEUR, finale du tour, fait foi.
+# On réécrit chaque bloc « PV <nom> : a/b » et « CA <nom> : n » vers les
+# valeurs officielles : PJ depuis l'état de partie, monstres depuis
+# monstres_combat (détruit → « détruit »), entité inconnue → bloc supprimé.
+_RE_PV_BLOC_NARRE = _re_mod.compile(
+    r"(?:\*\*\s*)?PV\s+(?P<nom>[A-Za-zÀ-ÿŒœ][^\n:*，,]{0,40}?)\s*"
+    r"[:：]\s*\*{0,2}\s*\d{1,3}\s*/\s*\d{1,3}\s*\*{0,2}(?:\s*\([^)]*\))?",
+    _re_mod.IGNORECASE,
+)
+_RE_CA_BLOC_NARRE = _re_mod.compile(
+    r"(?:\*\*\s*)?CA\s+(?P<nom>[A-Za-zÀ-ÿŒœ][^\n:*，,]{0,40}?)\s*"
+    r"[:：]\s*\*{0,2}\s*\d{1,3}\*{0,2}",
+    _re_mod.IGNORECASE,
+)
+
+
+def _to_int_fiable(v: Any) -> Optional[int]:
+    try:
+        return int(v) if v is not None and str(v).strip() not in ("", "None") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _harmoniser_statut_serveur(
+    narration: str,
+    pj: list[dict],
+    monstres: list[dict],
+) -> str:
+    """Réécrit les blocs « PV <nom> : a/b » / « CA <nom> : n » de la narration
+    sur les valeurs officielles FINALES du tour (state_patch appliqué)."""
+    if not narration:
+        return narration
+    pj_map: dict[str, dict] = {
+        _norm_nom_objet(p.get("nom")): p for p in pj if isinstance(p, dict)
+    }
+    mon_map: dict[str, dict] = {
+        _norm_nom_objet(m.get("nom")): m for m in monstres if isinstance(m, dict)
+    }
+
+    def _remplace_pv(m: re.Match) -> str:
+        cle = _norm_nom_objet(m.group("nom"))
+        if cle in mon_map:
+            _mo = mon_map[cle]
+            _label = str(_mo.get("nom") or m.group("nom"))
+            _pv = _to_int_fiable(_mo.get("pv"))
+            _pm = _to_int_fiable(_mo.get("pv_max"))
+            if _pv is not None and _pm and _pv <= 0:
+                return f"**PV {_label} :** détruit"
+            if _pv is not None and _pm:
+                return f"**PV {_label} :** {_pv}/{_pm}"
+            return ""
+        if cle in pj_map:
+            _p = pj_map[cle]
+            _label = str(_p.get("nom") or m.group("nom"))
+            _pv = _to_int_fiable(_p.get("pv"))
+            _pm = _to_int_fiable(_p.get("pv_max"))
+            if _pv is not None and _pm:
+                return f"**PV {_label} :** {_pv}/{_pm}"
+            return ""
+        return ""
+
+    def _remplace_ca(m: re.Match) -> str:
+        cle = _norm_nom_objet(m.group("nom"))
+        if cle in mon_map:
+            _mo = mon_map[cle]
+            _label = str(_mo.get("nom") or m.group("nom"))
+            _ca = _to_int_fiable(_mo.get("ac"))
+            if _ca is not None:
+                return f"**CA {_label} :** {_ca}"
+            return ""
+        if cle in pj_map:
+            _p = pj_map[cle]
+            _label = str(_p.get("nom") or m.group("nom"))
+            _ca = _to_int_fiable(_p.get("ca"))
+            if _ca is not None:
+                return f"**CA {_label} :** {_ca}"
+            return ""
+        return ""
+
+    _nar = _RE_PV_BLOC_NARRE.sub(_remplace_pv, narration)
+    _nar = _RE_CA_BLOC_NARRE.sub(_remplace_ca, _nar)
+    return _nar.strip()
 
 
 def _dedupliquer_phrases(narration: str, seuil: int = 25) -> str:
@@ -5236,8 +5339,14 @@ async def _handle_say(
             # monstre non suivi partaient dans le vide) — seuls
             # `engager_combat`/`combat_ajouter_combattant` prouvent que le
             # combat EST officiel.
+            # Seul un engagement RÉUSSI prouve que le combat est officiel :
+            # un appel EN ERREUR (partie 5b4e2bbe : `engager_combat` a planté
+            # — « 'list' object has no attribute 'split' » — sans engager de
+            # combat) ne doit PAS désarmer ce rattrapage, sinon la rencontre
+            # reste 100 % prose (phase exploration, aucun PV suivi).
             if not any(
                 tc.get("name") in ("engager_combat", "combat_ajouter_combattant")
+                and tc.get("ok")
                 for tc in result.tool_calls_trace
             ):
                 etat_detect = PartyState(
@@ -5256,11 +5365,23 @@ async def _handle_say(
                         _attaque_joueur_5t = bool(
                             _ATTAQUE_JOUEUR_RE.search(text or "")
                         )
+                        # Fix engagement auto : hostilité imminente narrée par
+                        # le MJ (« prêt à attaquer », « vous vise »… cf.
+                        # _HOSTILITE_IMMINENTE_RE) — le joueur n'a pas encore
+                        # frappé mais la créature s'apprête à agresser : on
+                        # engage la mécanique officielle au lieu d'attendre
+                        # une deuxième attaque (partie 5b4e2bbe).
+                        _menace_imminente_5t = bool(
+                            _HOSTILITE_IMMINENTE_RE.search(
+                                result.narration or "")
+                        )
                         _types = _detecter_combat_prose(
                             str(cfg.abs(cfg.paths.data_dir)),
                             result.narration or "",
                             etat_detect,
-                            forcer_declencheur=_attaque_joueur_5t,
+                            forcer_declencheur=(
+                                _attaque_joueur_5t or _menace_imminente_5t
+                            ),
                         )
                         if _types:
                             from .tools.base import (
@@ -5778,6 +5899,51 @@ async def _handle_say(
                     await _rejoue_correctif(orch, messages, ctx, result,
                                             on_event, _obj_soin, "soins")
 
+                # --- 5quater-d-bis. 💚 Soin NARRÉ PAR LE MJ appliqué au
+                # serveur (hors combat, hors résurrection). La narration
+                # décrit une guérison (« vos blessures se referment, vous
+                # récupérez 5 points de vie ») mais AUCUN outil de soin n'a
+                # été appelé — l'anti-simulation D1bis rejoue la scène à
+                # budget limité SANS jamais persister les PV (partie
+                # 5b4e2bbe : talisman +5 PV narré, fiche restée 2/16). On
+                # applique le MONTANT ANNONCÉ via le registre d'outils.
+                try:
+                    if (not _soin_global_appele
+                            and str(etat_avant.get("phase")) != "combat"
+                            and not (etat_avant.get("game_over") or False)
+                            and "Soin appliqué par le serveur" not in
+                            (result.narration or "")
+                            and "Soin résolu par le serveur" not in
+                            (result.narration or "")):
+                        _nar_s = result.narration or ""
+                        _pj_s = [
+                            p for p in (etat_avant.get("pj") or [])
+                            if isinstance(p, dict)
+                        ]
+                        _nom_cite = next(
+                            (str(p.get("nom")) for p in _pj_s
+                             if p.get("nom")
+                             and _norm_nom_objet(str(p.get("nom")))
+                             in _norm_nom_objet(_nar_s)),
+                            "",
+                        )
+                        if not _nom_cite and len(_pj_s) == 1:
+                            _nom_cite = str(_pj_s[0].get("nom") or "")
+                        if not _nom_cite:
+                            _nom_cite = str(actif_avant or "")
+                        if _nom_cite:
+                            _txt_s = await _appliquer_soins_oublies(
+                                orch, result, ctx, on_event, _nom_cite)
+                            if _txt_s:
+                                result.narration += "\n\n" + _txt_s
+                                print(
+                                    "[dnd35] Soins narrés (MJ) appliqués "
+                                    "automatiquement (tools serveur).")
+                except Exception as e_s:                            # noqa: BLE001
+                    print(
+                        "[dnd35] Rattrapage soins narrés échoué "
+                        f"(ignoré) : {e_s}")
+
                 # --- 5quater-e. ✨ Résurrection narrée SANS tool. Après un
                 # GAME OVER, le MJ narre le retour à la vie (« repos long,
                 # 16 PV sur 17 ») mais AUCUN tool ne peut lever « Mort »
@@ -5892,6 +6058,31 @@ async def _handle_say(
                     pass
             except Exception as e:                                     # noqa: BLE001
                 print(f"[dnd35] 5quater rattrapage échoué (ignoré) : {e}")
+
+            # 5quater-h. ⚙️ Harmonisation FINALE de l'état narré sur l'état
+            # SERVEUR. Exécutée EN DERNIER (après 5bis-c-bis, 5quater… et les
+            # rejeux correctifs) : tout bloc « PV <nom> : a/b » / « CA <nom> : n »
+            # restant est réécrit aux valeurs officielles finales du tour. Un
+            # tour rejoué via _rejoue_correctif a pu être vérifié ici aussi, car
+            # l'harmonisation relit l'état de partie persisté à l'instant T.
+            try:
+                _st_h = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                )
+                _etat_h = _st_h.load()
+                _nar_h = _harmoniser_statut_serveur(
+                    result.narration or "",
+                    (_etat_h.get("pj") if isinstance(_etat_h, dict) else []) or [],
+                    (_etat_h.get("monstres_combat")
+                     if isinstance(_etat_h, dict) else []) or [],
+                )
+                if _nar_h != result.narration:
+                    result.narration = _nar_h
+                    print("[dnd35] 5quater-h : état narré harmonisé sur "
+                          "l'état serveur (PV/CA officiels).")
+            except Exception as e_h:                                   # noqa: BLE001
+                print(f"[dnd35] 5quater-h harmonisation échouée (ignoré) : {e_h}")
 
             # 5. On ajoute la narration finale à l'historique de la session.
             # 🧹 PROSE SEULE : les blocs mécaniques serveur (initiative, jets,

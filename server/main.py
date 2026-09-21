@@ -224,9 +224,18 @@ _DONJON_LIEU_RE = _re_mod.compile(
 )
 _DONJON_ENTREE_RE = _re_mod.compile(
     r"vous\s+(?:entrez\b|p[ée]n[ée]trez\b|descendez\b|franchissez\b"
-    r"|vous\s+enfoncez\b|dirigez\s+vers\s+l['']entr[ée]e)"
+    r"|vous\s+enfoncez\b|vous\s+engagez\b|dirigez\s+vers\s+l['']entr[ée]e)"
     r"|l['']entr[ée]e\s+(?:des?\b|du\b|de\s+la\b)"
-    r"|\bfranchis\w+\s+le\s+seuil\b|\bau\s+seuil\b",
+    r"|\bfranchi\w+\s+le\s+seuil\b|\bau\s+seuil\b"
+    r"|descend\w*\s+dans\s+(?:la\s|le\s|les\s|l[''])"
+    # Franchissement narré EN PROSE par le LLM : « Le combat s'engage dans la
+    # pénombre de la grotte », « vous vous engagez dans les entrailles »,
+    # « à l'intérieur de la caverne… » — le groupe est DÉJÀ dans le lieu clos
+    # alors qu'aucun verbe d'entrée n'est employé (partie 4b529064 : combat
+    # engagé « dans la pénombre de la grotte » sans `carte_donjon_entrer`).
+    r"|s['']engage\w*(?:\s+dans)?\b"
+    r"|à\s+l['']int[ée]rieur\s+de\b"
+    r"|p[ée]n[ée]tre\w*(?:\s+[\wéèêâ-]+){0,2}\s+dans\b",
     _re_mod.IGNORECASE,
 )
 
@@ -314,10 +323,113 @@ def _direction_intention(txt: str) -> Optional[str]:
     return m.group(1).lower() if m else None
 
 
-def _rejeu_inventaire_necessaire(text: str, narration: str) -> bool:
+def _norm_nom_objet(s: str) -> str:
+    """Normalise un nom d'objet pour comparaison (minuscules, sans accents,
+    sans ponctuation)."""
+    import unicodedata as _u, re as _re
+    s = _u.normalize("NFKD", str(s or "").lower())
+    s = "".join(c for c in s if not _u.combining(c))
+    return _re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+def _objet_present_inventaire(ctx: Any, etat: Any, nom: str) -> bool:
+    """True si `nom` figure déjà dans l'inventaire d'un PJ de la partie.
+
+    Sert à ne PAS rejouer l'enregistrement d'un objet clé déjà persisté (sinon
+    la simple re-narration de sa possession re-déclencherait le rattrapage à
+    chaque tour)."""
+    cible = _norm_nom_objet(nom)
+    if not cible or ctx is None or not isinstance(etat, dict):
+        return False
+    try:
+        from .tools.fiches import _load_fiche
+    except Exception:                                        # noqa: BLE001
+        return False
+    for p in etat.get("pj") or []:
+        nom_pj = str((p or {}).get("nom") or "").strip()
+        if not nom_pj:
+            continue
+        try:
+            fiche = _load_fiche(ctx, nom_pj)
+        except Exception:                                    # noqa: BLE001
+            fiche = None
+        if not isinstance(fiche, dict):
+            continue
+        inv = fiche.get("inventaire") or fiche.get("equipement") or []
+        if not isinstance(inv, list):
+            continue
+        for e in inv:
+            if not isinstance(e, dict):
+                continue
+            n = _norm_nom_objet(str(e.get("nom") or ""))
+            if n and (cible in n or n in cible):
+                return True
+    return False
+
+
+# Noms génériques qui ne sont PAS des objets d'inventaire : évite qu'une
+# « remise »/« possession » narrée sur une partie du corps ou un lieu
+# (« il vous tend la main », « la sortie est entre vos mains ») ne déclenche
+# le rattrapage inventaire (normalisés : minuscules sans accents).
+_MOTS_NON_OBJETS = {
+    "main", "mains", "pied", "pieds", "pas", "regard", "doigt", "doigts",
+    "tete", "bras", "jambe", "jambes", "oeil", "yeux", "voix", "souffle",
+    "route", "chemin", "passage", "sortie", "entree", "porte", "direction",
+    "parole", "paroles", "coup", "coups", "tour", "initiative",
+}
+
+# Remise d'un objet NOMMÉ par un PNJ / transfert explicite, sans article
+# indéfini (donc absent de `_ACQUISITION_ANCRE_RE`) : « il vous remet la
+# couronne », « vous vous emparez du sceptre », « il vous confie la gemme ».
+_RE_TRANSFERT_OBJET_RE = _re_mod.compile(
+    r"\b(?:vous\s+)?(?:remet|remets|remettent|confie|confient|tend|tendent|"
+    r"transmet|transmettent|empoche\w*|empare\w*|saisi\w*)\s+"
+    r"(?:de\s+la\s+|de\s+l['’]|du\s+|des\s+|de\s+)?"
+    r"(?:la|le|les|l['’])?\s*"
+    r"([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\-]*(?:\s+[A-Za-zÀ-ÿ'’\-]+){0,4})",
+    _re_mod.IGNORECASE,
+)
+
+# Possession explicite d'un objet NOMMÉ : « la couronne de Mystra est
+# maintenant entre vos mains », « le sceptre est désormais en votre possession »,
+# « la clé est dans votre inventaire ».
+_RE_POSSESSION_MAINS_RE = _re_mod.compile(
+    r"(?:la|le|les|l['’])\s+"
+    r"([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\-]*(?:\s+[A-Za-zÀ-ÿ'’\-]+){0,4})"
+    r"\s+(?:est|sont|se\s+trouve|se\s+trouvent)\s+"
+    r"(?:maintenant\s+|d[ée]sormais\s+)?"
+    r"(?:entre\s+(?:vos|tes|ses)\s+mains|en\s+(?:votre|ta|sa)\s+possession"
+    r"|dans\s+(?:votre|ton|son)\s+(?:inventaire|sac|besace|sacoche))",
+    _re_mod.IGNORECASE,
+)
+
+
+def _objet_revendique_nom(narration: str) -> str:
+    """Extrait le nom d'un objet revendiqué dans la narration (footer « Objet
+    clé », remise explicite ou possession nommée) — "" si aucun candidat.
+
+    Indépendant du scénario : les trois motifs couvrent aussi bien le footer
+    du side panel que la prose libre du MJ (« la couronne est entre vos
+    mains »)."""
+    for motif in (_OBJET_CLE_RE, _RE_TRANSFERT_OBJET_RE,
+                  _RE_POSSESSION_MAINS_RE):
+        m = motif.search(narration or "")
+        if not m:
+            continue
+        nom = m.group(1).strip(" *_•·-–—")
+        if nom and _norm_nom_objet(nom) not in _MOTS_NON_OBJETS:
+            return nom
+    return ""
+
+
+def _rejeu_inventaire_necessaire(
+    text: str, narration: str,
+    ctx: Any = None, etat: Any = None,
+) -> bool:
     """True si le rattrapage 5quater-c doit tourner : acquisition déclarée
-    par le JOUEUR, ou acquisition ANCRÉE (verbe + déterminant indéfini +
-    nom) dans la narration — mais JAMAIS sur une simple mention de
+    par le JOUEUR, acquisition ANCRÉE (verbe + déterminant indéfini + nom) dans
+    la narration, ou OBJET NOMMÉ revendiqué (footer « Objet clé », remise,
+    possession) mais absent de la fiche — mais JAMAIS sur une simple mention de
     possession (« la fiole glisse dans votre sac »)."""
     if _ITEM_ACQUISITION_RE.search(text or ""):
         return True                     # le joueur déclare lui-même
@@ -325,7 +437,19 @@ def _rejeu_inventaire_necessaire(text: str, narration: str) -> bool:
         return False
     if _POSSESSION_SAC_RE.search(narration):
         return False                    # possession narrée, pas acquisition
-    return bool(_ACQUISITION_ANCRE_RE.search(narration))
+    if _ACQUISITION_ANCRE_RE.search(narration):
+        return True
+    # Objet NOMMÉ revendiqué (footer « Objet clé : Couronne de Mystra (dans
+    # votre inventaire) », « il vous remet la couronne », « la couronne est
+    # maintenant entre vos mains ») sans aucun outil d'inventaire : partie
+    # 4b529064, la couronne n'a jamais été persistée. On ne déclenche que si
+    # l'objet est réellement ABSENT des fiches — sinon le simple rappel de
+    # possession rejouerait le rattrapage à chaque tour. Ce test est
+    # FICHE-AWARE et donc valable pour TOUS les scénarios.
+    nom = _objet_revendique_nom(narration)
+    if nom and not _objet_present_inventaire(ctx, etat, nom):
+        return True
+    return False
 
 # Détection d'un combat narré EN PROSE par le LLM (le petit modèle écrit
 # parfois « Le combat commence ! Le zombie charge… » et enchaîne jets/dégâts
@@ -457,6 +581,14 @@ _POSSESSION_SAC_RE = _re_mod.compile(
     r"|rang[ée]e?e?\s+dans|poids\s+(?:dans\s+)?(?:votre|son|mon)\s+inventaire)",
     _re_mod.IGNORECASE,
 )
+# Objet clé revendiqué par le MJ dans son footer (« 🎒 **Objet clé :**
+# Couronne de Mystra (dans votre inventaire) ») : signal fort que l'objet
+# DEVRAIT être dans l'inventaire. S'il est absent des fiches, on rejoue
+# l'enregistrement (partie 4b529064 : couronne jamais persistée).
+_OBJET_CLE_RE = _re_mod.compile(
+    r"objet\s+cl[ée]\s*[:*]*\s*([^\n(*（]+)",
+    _re_mod.IGNORECASE,
+)
 
 # Détection d'une demande de SOIN / guérison ou de REPOS (hors combat aussi) :
 # le petit modèle 9B narre « Je lance les dés et soigne X » ou « vous vous
@@ -508,6 +640,47 @@ _RE_CHARGE_STRIP = _re_mod.compile(
     r"|(?:[ \t]*[^.\n]*?\bencombrement\s*:[^.\n]*?\.)",
     _re_mod.IGNORECASE,
 )
+
+# Footer mécanique recopié par le LLM depuis le side panel (« 📍 **Position
+# actuelle :** … 🎒 **Objet clé :** … 🏰 **Destination :** … ») : ces repères
+# sont DÉJÀ affichés par l'interface, le MJ ne doit pas les remettre dans sa
+# narration (partie 4b529064 : le MJ recopiait « Objet clé : Couronne de
+# Mystra (dans votre inventaire) »). Retrait segment par segment (le footer
+# tient souvent sur une seule ligne, chaque segment s'arrête au repère suivant).
+_RE_FOOTER_MECANIQUE_STRIP = _re_mod.compile(
+    r"[ \t]*(?:📍|🎒|🏰|🗺️|🧭)\s*\*{0,2}\s*"
+    r"(?:Position actuelle|Objet cl[ée]|Destination|Lieu(?: actuel)?|"
+    r"Itin[ée]raire)\s*:?\*{0,2}\s*[^📍🎒🏰🗺️🧭\n]*",
+    _re_mod.IGNORECASE,
+)
+
+
+def _dedupliquer_phrases(narration: str, seuil: int = 25) -> str:
+    """Retire les lignes/phrases CONSÉCUTIVES identiques de la narration.
+
+    Le petit modèle local répète parfois verbatim la même phrase ou le même
+    paragraphe (partie 4b529064 : « Barkrur pose le parchemin sur une pierre
+    près de l'entrée de la grotte, puis l'ajoute à son inventaire pour qu'il
+    soit enregistré. » narré DEUX fois de suite). Le doublon strict
+    n'apporte aucune information — on n'en garde qu'un. La comparaison
+    normalise espaces, casse et ponctuation finale, et ne porte que sur les
+    lignes assez longues (`seuil`) : les lignes courtes (titres, listes
+    mécaniques) ne sont jamais touchées. Les lignes vides sont conservées
+    telles quelles mais n'interrompent PAS la comparaison : un paragraphe
+    recopié après un saut de ligne reste détecté.
+    """
+    if not narration:
+        return narration
+    sortie: list[str] = []
+    derniere_cle = ""
+    for ligne in narration.split("\n"):
+        cle = " ".join(ligne.split()).strip().lower().rstrip(".!?…:;,»\"'")
+        if cle and len(cle) >= seuil and cle == derniere_cle:
+            continue
+        sortie.append(ligne)
+        if cle and len(cle) >= seuil:
+            derniere_cle = cle
+    return "\n".join(sortie)
 
 
 # Tools qui CONSOMMENT l'action standard du personnage courant : dès que le
@@ -2249,13 +2422,17 @@ async def combat_engager(partie_id: str, payload: dict[str, Any]) -> dict[str, A
     spec = _TOOL_REGISTRY.get("engager_combat")
     if spec is None:
         raise HTTPException(status_code=500, detail="tool engager_combat absent.")
-    tr = await invoke_tool(spec, ctx, {"monstres": monstres})
-    res_boucle = await _boucle_combat(
-        ctx, timeout_secondes=cfg.game.combat_turn_timeout_seconds
-    )
-    etat = PartyState(
-        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
-    ).load()
+    # 🔒 Même verrou par partie que le tour WS : sérialise les mutations
+    # d'état de combat (sinon une écriture concurrente peut réinjecter un
+    # `phase=combat` périmé après une clôture — partie 4b529064).
+    async with sessions.get(partie_id).turn_lock:
+        tr = await invoke_tool(spec, ctx, {"monstres": monstres})
+        res_boucle = await _boucle_combat(
+            ctx, timeout_secondes=cfg.game.combat_turn_timeout_seconds
+        )
+        etat = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
     return {
         "ok": not tr.text.startswith("⛔") and not tr.text.startswith("❌"),
         "text": tr.text,
@@ -2275,19 +2452,21 @@ async def combat_boucle(partie_id: str, payload: dict[str, Any] | None = None) -
     payload = payload or {}
     joueur = str(payload.get("joueur") or "")
     ctx = _ctx(partie_id, joueur)
-    etat_avant = PartyState(
-        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
-    ).load()
-    if etat_avant.get("phase") != "combat":
-        return {"ok": False, "detail": "Aucun combat en cours.", "events": []}
-    res = await _boucle_combat(
-        ctx,
-        force_avance=bool(payload.get("force")),
-        timeout_secondes=cfg.game.combat_turn_timeout_seconds,
-    )
-    etat = PartyState(
-        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
-    ).load()
+    # 🔒 Même verrou par partie que le tour WS (cf. `combat_engager`).
+    async with sessions.get(partie_id).turn_lock:
+        etat_avant = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
+        if etat_avant.get("phase") != "combat":
+            return {"ok": False, "detail": "Aucun combat en cours.", "events": []}
+        res = await _boucle_combat(
+            ctx,
+            force_avance=bool(payload.get("force")),
+            timeout_secondes=cfg.game.combat_turn_timeout_seconds,
+        )
+        etat = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
     return {
         "ok": True,
         "events": res.events,
@@ -2311,86 +2490,90 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
     fiche si absents)."""
     from .tools.base import _TOOL_REGISTRY, invoke_tool
 
-    etat_avant = PartyState(
-        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
-    ).load()
-    if etat_avant.get("phase") != "combat":
-        raise HTTPException(status_code=400, detail="Aucun combat en cours.")
-    attaquant = str(payload.get("attaquant") or etat_avant.get("courant_tour_pour") or "")
-    cible = str(payload.get("cible") or "").strip()
-    if not attaquant or not cible:
-        raise HTTPException(status_code=400, detail="attaquant et cible requis.")
-    joueur = str(payload.get("joueur") or attaquant)
-    ctx = _ctx(partie_id, joueur)
+    # 🔒 Même verrou par partie que le tour WS (cf. `combat_engager`).
+    async with sessions.get(partie_id).turn_lock:
+        etat_avant = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
+        if etat_avant.get("phase") != "combat":
+            raise HTTPException(status_code=400, detail="Aucun combat en cours.")
+        attaquant = str(
+            payload.get("attaquant") or etat_avant.get("courant_tour_pour") or ""
+        )
+        cible = str(payload.get("cible") or "").strip()
+        if not attaquant or not cible:
+            raise HTTPException(status_code=400, detail="attaquant et cible requis.")
+        joueur = str(payload.get("joueur") or attaquant)
+        ctx = _ctx(partie_id, joueur)
 
-    arme = str(payload.get("arme") or "arme improvisée")
-    nb_des = int(payload.get("nb_des") or 1)
-    faces = int(payload.get("faces") or 6)
-    bonus_degats = int(payload.get("bonus") or 0)
+        arme = str(payload.get("arme") or "arme improvisée")
+        nb_des = int(payload.get("nb_des") or 1)
+        faces = int(payload.get("faces") or 6)
+        bonus_degats = int(payload.get("bonus") or 0)
 
-    # Bonus d'attaque depuis la fiche (BBA + mod FOR/DEX) si non fourni.
-    bonus_attaque = payload.get("bonus_attaque")
-    if bonus_attaque is None:
-        bonus_attaque = 0
-        try:
-            from .tools.fiches import _load_fiche
-            fiche = _load_fiche(ctx, attaquant)
-            if fiche:
-                caracs = fiche.get("carac") or {}
-                arme_l = arme.lower()
-                a_distance = any(
-                    m in arme_l for m in
-                    ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard")
-                )
-                cle = "DEX" if a_distance else "FOR"
-                mod = (int(caracs.get(cle, 10) or 10) - 10) // 2
-                bonus_attaque = int(fiche.get("bab") or 0) + mod
-        except Exception:                                        # noqa: BLE001
+        # Bonus d'attaque depuis la fiche (BBA + mod FOR/DEX) si non fourni.
+        bonus_attaque = payload.get("bonus_attaque")
+        if bonus_attaque is None:
             bonus_attaque = 0
-
-    # CA de la cible depuis l'état de combat.
-    ca = 10
-    for mo in etat_avant.get("monstres_combat") or []:
-        if str(mo.get("nom") or "").lower() == cible.lower():
             try:
-                ca = int(mo.get("ca") or 10)
-            except (TypeError, ValueError):
-                ca = 10
-            break
+                from .tools.fiches import _load_fiche
+                fiche = _load_fiche(ctx, attaquant)
+                if fiche:
+                    caracs = fiche.get("carac") or {}
+                    arme_l = arme.lower()
+                    a_distance = any(
+                        m in arme_l for m in
+                        ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard")
+                    )
+                    cle = "DEX" if a_distance else "FOR"
+                    mod = (int(caracs.get(cle, 10) or 10) - 10) // 2
+                    bonus_attaque = int(fiche.get("bab") or 0) + mod
+            except Exception:                                        # noqa: BLE001
+                bonus_attaque = 0
 
-    events: list[str] = []
-    async def _run(name: str, args: dict[str, Any]):
-        spec = _TOOL_REGISTRY.get(name)
-        if spec is None:
-            return None
-        tr = await invoke_tool(spec, ctx, args)
-        events.append(tr.text)
-        return tr
+        # CA de la cible depuis l'état de combat.
+        ca = 10
+        for mo in etat_avant.get("monstres_combat") or []:
+            if str(mo.get("nom") or "").lower() == cible.lower():
+                try:
+                    ca = int(mo.get("ca") or 10)
+                except (TypeError, ValueError):
+                    ca = 10
+                break
 
-    tr_atk = await _run("lancer_attaque", {
-        "nom_attaquant": attaquant, "arme": arme,
-        "bonus_attaque": int(bonus_attaque), "nom_cible": cible,
-        "ca_cible": ca,
-    })
-    touche = tr_atk is not None and (
-        "✅ **Touché**" in tr_atk.text or "⭐ **20 naturel**" in tr_atk.text
-    )
-    if touche:
-        tr_dm = await _run("lancer_degats", {
-            "nb_des": nb_des, "faces": faces, "bonus": bonus_degats,
-            "arme_ou_sort": arme, "cible": cible,
+        events: list[str] = []
+        async def _run(name: str, args: dict[str, Any]):
+            spec = _TOOL_REGISTRY.get(name)
+            if spec is None:
+                return None
+            tr = await invoke_tool(spec, ctx, args)
+            events.append(tr.text)
+            return tr
+
+        tr_atk = await _run("lancer_attaque", {
+            "nom_attaquant": attaquant, "arme": arme,
+            "bonus_attaque": int(bonus_attaque), "nom_cible": cible,
+            "ca_cible": ca,
         })
-        m_total = _re_mod.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr_dm.text)
-        if m_total:
-            await _run("fiche_perso_infliger_degats", {
-                "nom": cible, "degats": int(m_total.group(1)),
+        touche = tr_atk is not None and (
+            "✅ **Touché**" in tr_atk.text or "⭐ **20 naturel**" in tr_atk.text
+        )
+        if touche:
+            tr_dm = await _run("lancer_degats", {
+                "nb_des": nb_des, "faces": faces, "bonus": bonus_degats,
+                "arme_ou_sort": arme, "cible": cible,
             })
+            m_total = _re_mod.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr_dm.text)
+            if m_total:
+                await _run("fiche_perso_infliger_degats", {
+                    "nom": cible, "degats": int(m_total.group(1)),
+                })
 
-    res = await _boucle_combat(ctx, force_avance=True)
-    events.extend(res.events)
-    etat = PartyState(
-        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
-    ).load()
+        res = await _boucle_combat(ctx, force_avance=True)
+        events.extend(res.events)
+        etat = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
     return {
         "ok": True, "touche": touche, "events": events,
         "patches": res.patches, "phase": etat.get("phase"),
@@ -5437,7 +5620,8 @@ async def _handle_say(
                 # ré-ajoutant des objets (partie 6746fc6c : fiole ×6).
                 inv_pas_appele = not (_outils_appeles & _INVENTAIRE_TOOLS)
                 if inv_pas_appele and _rejeu_inventaire_necessaire(
-                        text or "", result.narration or ""):
+                        text or "", result.narration or "",
+                        ctx, _etat_rejouer):
                     _obj_inv = (
                         "⚠️ ERREUR système : l'objet gagné/récupéré/donné "
                         "n'a pas été enregistré. Appelle MAINTENANT "
@@ -5609,6 +5793,29 @@ async def _handle_say(
                         r"\n{3,}", "\n\n",
                         _RE_CHARGE_STRIP.sub(
                             "", result.narration or "").strip(),
+                    )
+                except Exception:                                  # noqa: BLE001
+                    pass
+
+                # --- 5quater-g2-bis. 🧹 Footer mécanique recopié (Position /
+                # Objet clé / Destination) : déjà affiché par l'interface.
+                try:
+                    result.narration = _re_mod.sub(
+                        r"\n{3,}", "\n\n",
+                        _RE_FOOTER_MECANIQUE_STRIP.sub(
+                            "", result.narration or "").strip(),
+                    )
+                except Exception:                                  # noqa: BLE001
+                    pass
+
+                # --- 5quater-g3. 🔁 Phrases/paragraphes recopiés à l'identique
+                # d'affilée par le petit modèle (partie 4b529064 : la phrase du
+                # parchemin narrée DEUX fois de suite). Retrait déterministe,
+                # toutes phases confondues — un doublon strict n'apporte rien.
+                try:
+                    result.narration = _re_mod.sub(
+                        r"\n{3,}", "\n\n",
+                        _dedupliquer_phrases(result.narration or "").strip(),
                     )
                 except Exception:                                  # noqa: BLE001
                     pass

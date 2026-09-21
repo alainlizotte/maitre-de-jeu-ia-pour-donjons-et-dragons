@@ -223,7 +223,8 @@ def test_lancer_degats_placeholders():
         # Le tool signale le dé non standard (N → défaut 6 serait acceptable
         # aussi) : dans tous les cas PAS de crash et un résultat clair.
         tr = r.tool_calls_trace[0]
-        assert tr["ok"] or "non standard" in tr["text"]
+        assert (tr["ok"] or "non conforme" in tr["text"]
+                or "non standard" in tr["text"])
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

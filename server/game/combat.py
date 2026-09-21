@@ -568,6 +568,16 @@ async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
     """Clôture officielle du combat : XP, mémoire, journal, reset état."""
     state = _party(ctx)
     etat = state.load()
+    # 🔒 IDEMPOTENCE / ANTI-ÉCRITURE CONCURRENTE (partie 4b529064) : une
+    # clôture tardive ne doit JAMAIS réécraser un état déjà fermé. L'état
+    # observé portait une seule entrée `histoire` alors que DEUX clôtures
+    # avaient été imprimées — preuve qu'une écriture concurrente (read-modify-
+    # write d'un tour/outil) avait réinjecté `phase=combat` après la 1re
+    # clôture, déclenchant une 2e « victoire » fantôme à 0 XP. Si l'état n'est
+    # plus en combat, on considère la clôture déjà faite et on ne réécrit rien.
+    if str(etat.get("phase") or "") != "combat":
+        res.combat_termine = None
+        return
     if raison == "victoire":
         await _distribuer_xp(ctx, res, etat)
         # Recharge l'état : _distribuer_xp a écrit les XP/niveaux dans la

@@ -224,7 +224,9 @@ function Field({ label, value }: { label: string; value: unknown }) {
 }
 
 /** Entrée d'inventaire de la fiche : {nom, quantite|qte, poids_kg|poids,
- *  description} — armes, armures, équipement et sac (inventaire). */
+ *  description, portee, partie} — armes, armures, équipement et sac.
+ *  `portee === "quete"` distingue l'inventaire de QUÊTE (lié à la partie
+ *  courante) de l'équipement permanent (reste au PJ d'une partie à l'autre). */
 interface ItemFiche {
   nom?: string;
   name?: string;
@@ -232,6 +234,9 @@ interface ItemFiche {
   qte?: number | string;
   poids_kg?: number | string;
   description?: string;
+  portee?: string;
+  partie?: string;
+  charges?: number | string;
 }
 
 /** Lisible : « cle_fer » → « Cle fer » (les slugs ne sont pas des noms). */
@@ -252,12 +257,16 @@ function ItemListe({ items }: { items: ItemFiche[] }) {
         return (
           <li key={`${it.nom ?? it.name}-${i}`} className="text-xs leading-snug">
             <span className="text-stone-200">
+              {it.portee === "quete" && <span title="Objet de quête">📜 </span>}
               {nomLisible(it.nom ?? it.name ?? "")}
               {qte > 1 ? ` ×${qte}` : ""}
             </span>
             {poids && <span className="text-stone-500"> — {poids}</span>}
             {it.description ? (
               <span className="text-stone-500 italic"> — {it.description}</span>
+            ) : null}
+            {it.portee === "quete" && it.partie ? (
+              <span className="text-emerald-400/70"> — partie {it.partie}</span>
             ) : null}
           </li>
         );
@@ -266,8 +275,9 @@ function ItemListe({ items }: { items: ItemFiche[] }) {
   );
 }
 
-/** Bloc inventaire de la fiche : équipement porté + sac. Les armes,
- *  armures et objets du personnage y sont consultables en jeu. */
+/** Bloc inventaire de la fiche : équipement porté + sac, SÉPARÉS entre
+ *  inventaire de QUÊTE (objets de l'aventure en cours, `portee="quete"`) et
+ *  équipement PERMANENT (reste au PJ d'une partie à l'autre). */
 function InventaireBloc({ fiche }: { fiche: Record<string, unknown> }) {
   const liste = (v: unknown): ItemFiche[] =>
     Array.isArray(v)
@@ -276,6 +286,11 @@ function InventaireBloc({ fiche }: { fiche: Record<string, unknown> }) {
   const equipement = liste(fiche.equipement);
   const inventaire = liste(fiche.inventaire);
   const armes = liste(fiche.armes);
+  const estQuete = (it: ItemFiche) => it.portee === "quete";
+  // Inventaire de quête : objets tagués `portee="quete"` (dons de PNJ, objets
+  // d'aventure). Affichés prioritairement, marqués de la partie d'origine.
+  const quete = inventaire.filter(estQuete);
+  const permanent = inventaire.filter((it) => !estQuete(it));
   // Déduplication : les tools d'inventaire miroient TOUT l'inventaire dans
   // `equipement` ET `inventaire` — sans filtre, chaque objet s'affichait
   // deux fois (« Porté / équipé » + « Sac »). On ne montre sous
@@ -284,10 +299,20 @@ function InventaireBloc({ fiche }: { fiche: Record<string, unknown> }) {
     `${(it.nom ?? it.name ?? "").trim().toLowerCase()}|${Number(it.quantite ?? it.qte ?? 1)}`;
   const clesSac = new Set(inventaire.map(cleItem));
   const porteSeul = equipement.filter((it) => !clesSac.has(cleItem(it)));
-  if (!porteSeul.length && !inventaire.length && !armes.length) return null;
+  const aQuete = quete.length > 0;
+  const aBase = armes.length > 0 || porteSeul.length > 0 || permanent.length > 0;
+  if (aQuete === false && aBase === false) return null;
   return (
     <div className="mt-2 rounded bg-stone-800/40 border border-stone-800 p-2">
       <div className="text-xs text-stone-500 mb-1">Inventaire</div>
+      {aQuete && (
+        <div className="mb-1.5">
+          <div className="text-[11px] text-emerald-300/80 mb-0.5">
+            📜 Inventaire de quête
+          </div>
+          <ItemListe items={quete} />
+        </div>
+      )}
       {armes.length > 0 && (
         <div className="mb-1.5">
           <div className="text-[11px] text-amber-300/80 mb-0.5">Armes</div>
@@ -300,10 +325,12 @@ function InventaireBloc({ fiche }: { fiche: Record<string, unknown> }) {
           <ItemListe items={porteSeul} />
         </div>
       )}
-      {inventaire.length > 0 && (
+      {permanent.length > 0 && (
         <div>
-          <div className="text-[11px] text-amber-300/80 mb-0.5">Sac</div>
-          <ItemListe items={inventaire} />
+          <div className="text-[11px] text-amber-300/80 mb-0.5">
+            🎒 Sac — équipement permanent
+          </div>
+          <ItemListe items={permanent} />
         </div>
       )}
     </div>

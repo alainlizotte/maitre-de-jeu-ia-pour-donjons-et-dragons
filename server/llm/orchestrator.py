@@ -1799,6 +1799,21 @@ def _safe_stream_split(buf: str) -> tuple[str, str]:
     return buf, ""
 
 
+# Faux jets/dégâts « bricolés » par le LLM dans sa prose : partie 5b4e2bbe, le
+# modèle a écrit « **Jet d'attaque :** 18 (réussite) / **Dégâts infligés :** 0 »
+# alors que la résolution OFFICIELLE était un ÉCHEC (total 8 vs CA 15). La
+# mécanique officielle est ajoutée par le serveur APRÈS ce nettoyage : toute
+# ligne de jet/dégâts en prose est une invention → retirée.
+_RE_FAUX_JET_PROSE = re.compile(
+    r"[ \t]*(?:\*{0,2})\s*Jet d'attaque\s*:?\s*\*{0,2}[^\n]*",
+    re.IGNORECASE,
+)
+_RE_FAUX_DEGATS_PROSE = re.compile(
+    r"[ \t]*(?:\*{0,2})\s*D[ée]g[âa]ts inflig[ée]s\s*:?\s*\*{0,2}[^\n]*",
+    re.IGNORECASE,
+)
+
+
 def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None) -> str:
     """Nettoie la narration finale de toute trace de mécanique d'appel :
 
@@ -1833,6 +1848,10 @@ def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None)
     out = re.sub(r"</?tool(?=[\s/>])[^>]*>", "", out)
     for pat in _PROSE_PLACEHOLDER_RES:
         out = pat.sub("", out)
+    # Faux jets/dégâts inventés en prose (cf. _RE_FAUX_JET_PROSE) : la
+    # mécanique officielle arrive après, on ne garde jamais la copie du LLM.
+    out = _RE_FAUX_JET_PROSE.sub("", out)
+    out = _RE_FAUX_DEGATS_PROSE.sub("", out)
     out = _tidy_empty_lines(out)
     return out.strip()
 

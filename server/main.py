@@ -654,6 +654,51 @@ _RE_FOOTER_MECANIQUE_STRIP = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
+# Consignes destinées au LLM qui fuient dans la narration via la
+# régularisation 5ter (le texte BRUT des outils est concaténé au message
+# joueur, partie 5b4e2bbe) : ligne d'instruction « 🎭 TA NARRATION… », rappel
+# de rotation nommant l'outil `terminer_mon_tour`, et incises « recopie CE
+# bonus dans `lancer_degats` ». Ces éléments ne doivent JAMAIS être montrés.
+_RE_CONSIGNES_LLM_STRIP = _re_mod.compile(
+    r"[ \t]*🎭\s*TA NARRATION[^\n]*"
+    r"|[ \t]*_⚙️ Rotation gérée par le SERVEUR[^\n]*"
+    r"|[ \t]*—\s*recopie CE bonus dans `lancer_degats`[^.\n]*\.?"
+    r"|[ \t]*—?\s*Relance `lancer_degats`[^.\n]*\.?"
+    r"|[ \t]*\((?:inventaire_ajouter|inventaire_consommer_munition)\)"
+    r"\s*:[^.\n]*\.?",
+    _re_mod.IGNORECASE,
+)
+
+# En-têtes des blocs mécaniques ajoutés par le SERVEUR en fin de tour
+# (initiative, résolutions, dégâts auto, victoire…). Sert à isoler la PROSE
+# du MJ de la mécanique avant de la stocker comme contexte : le petit modèle
+# recopiait ensuite ces blocs dans sa prose (partie 5b4e2bbe).
+_RE_BLOC_MECANIQUE_SERVEUR = _re_mod.compile(
+    r"(?:^|\n)[ \t]*(?:"
+    r"⚙️\s*_"
+    r"|⚔️\s*_(?:Résolution automatique|Tous les ennemis)"
+    r"|⚔️\s*\*\*(?:Au tour de|Combat engagé)"
+    r"|⚖️\s*_"
+    r"|🎲\s*\*\*Initiative du combat"
+    r"|🏆\s*\*\*Victoire"
+    r")"
+)
+
+
+def _narration_prose_seule(narration: str) -> str:
+    """Retourne la PROSE du MJ seule, sans les blocs mécaniques ajoutés par le
+    serveur en fin de tour. Ces blocs (initiative, jets, résolutions, victoire)
+    sont destinés à l'affichage mais NE doivent PAS être stockés comme contexte
+    du tour suivant : le petit modèle les recopiait ensuite dans sa prose
+    (partie 5b4e2bbe). Les blocs sont toujours ajoutés APRÈS la prose ; on
+    tronque donc au premier en-tête mécanique rencontré."""
+    if not narration:
+        return narration
+    m = _RE_BLOC_MECANIQUE_SERVEUR.search(narration)
+    if m:
+        narration = narration[:m.start()]
+    return narration.strip()
+
 
 def _dedupliquer_phrases(narration: str, seuil: int = 25) -> str:
     """Retire les lignes/phrases CONSÉCUTIVES identiques de la narration.
@@ -4771,16 +4816,19 @@ async def _handle_say(
             # C5 : ne réafficher QUE les notes dont l'état PV n'est PAS
             # déjà cité dans la narration du MJ (le chiffre PV serait en
             # double et lirait comme une « correction » contradictoire).
+            _bloc_degats_auto = ""
             if getattr(result, "notes_mecaniques", None):
                 notes_visibles = [
                     n for n in result.notes_mecaniques
                     if not _note_mecanique_deja_narree(result.narration, n)
                 ]
                 if notes_visibles:
-                    result.narration = (
-                        result.narration + "\n\n⚖️ _Dégâts appliqués "
-                        "automatiquement :_\n\n"
+                    _bloc_degats_auto = (
+                        "\n\n⚖️ _Dégâts appliqués automatiquement :_\n\n"
                         + "\n".join(notes_visibles)
+                    )
+                    result.narration = (
+                        result.narration + _bloc_degats_auto
                     ).strip()
 
             # 5bis-c2. 💥 Dé-duplication des dégâts de monstres : tout excès
@@ -4971,6 +5019,15 @@ async def _handle_say(
                                 "\n\n⚔️ _Résolution automatique du tour :_\n\n"
                                 + "\n\n".join(res_post.events)
                             )
+                    # 🧹 À la CLÔTURE, le bloc « Dégâts appliqués
+                    # automatiquement » ferait doublon avec la clôture
+                    # (victoire/XP + « tous les ennemis à terre ») et
+                    # répéterait « ☠️ DÉTRUIT » (partie 5b4e2bbe : tour de
+                    # mort trop long). On le retire.
+                    if res_post.combat_termine and _bloc_degats_auto:
+                        if _bloc_degats_auto in result.narration:
+                            result.narration = result.narration.replace(
+                                _bloc_degats_auto, "").strip()
                     if res_post.patches:
                         result.state_patches.extend(res_post.patches)
                     if res_post.combat_termine:
@@ -5808,6 +5865,20 @@ async def _handle_say(
                 except Exception:                                  # noqa: BLE001
                     pass
 
+                # --- 5quater-g2-ter. 🧹 Consignes destinées au LLM recopiées
+                # dans la narration (🎭 TA NARRATION…, rotation nommant
+                # `terminer_mon_tour`, « recopie CE bonus dans
+                # `lancer_degats` »). Elles fuient via la régularisation 5ter
+                # qui concatène le texte BRUT des outils (partie 5b4e2bbe).
+                try:
+                    result.narration = _re_mod.sub(
+                        r"\n{3,}", "\n\n",
+                        _RE_CONSIGNES_LLM_STRIP.sub(
+                            "", result.narration or "").strip(),
+                    )
+                except Exception:                                  # noqa: BLE001
+                    pass
+
                 # --- 5quater-g3. 🔁 Phrases/paragraphes recopiés à l'identique
                 # d'affilée par le petit modèle (partie 4b529064 : la phrase du
                 # parchemin narrée DEUX fois de suite). Retrait déterministe,
@@ -5823,8 +5894,13 @@ async def _handle_say(
                 print(f"[dnd35] 5quater rattrapage échoué (ignoré) : {e}")
 
             # 5. On ajoute la narration finale à l'historique de la session.
-            if result.narration:
-                session.remember_assistant(result.narration)
+            # 🧹 PROSE SEULE : les blocs mécaniques serveur (initiative, jets,
+            # résolutions, victoire) et les consignes LLM sont destinés à
+            # l'affichage, PAS au contexte du tour suivant — sinon le petit
+            # modèle les recopie dans sa prose (partie 5b4e2bbe).
+            _narration_prose = _narration_prose_seule(result.narration or "")
+            if _narration_prose:
+                session.remember_assistant(_narration_prose)
 
             # 5ter-h. 📓 Auto-mémorisation serveur de la narration du tour.
             # Le LLM n'appelait jamais `set_derniere_narration` (abd81275 :
@@ -5841,8 +5917,12 @@ async def _handle_say(
                     _et_nar = _st_nar.load()
                     if "_erreur" not in _et_nar:
                         _changed = False
+                        # Contexte = PROSE SEULE (sans blocs mécaniques) :
+                        # recopier « ⚖️ Dégâts appliqués… »/« ⚔️ Résolution
+                        # automatique… » apprenait au LLM à émettre de la
+                        # mécanique (partie 5b4e2bbe).
                         _nar_courte = " ".join(
-                            (result.narration or "").split()
+                            (_narration_prose or result.narration or "").split()
                         )[:1200]
                         if _et_nar.get("derniere_narration") != _nar_courte:
                             _et_nar["derniere_narration"] = _nar_courte

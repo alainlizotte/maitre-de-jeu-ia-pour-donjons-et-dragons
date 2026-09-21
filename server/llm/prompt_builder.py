@@ -413,6 +413,37 @@ def _scenario_bible_bloc(
             "Ennemis/monstres DU SCÉNARIO (à utiliser EN PRIORITÉ pour toute "
             "rencontre) : " + ", ".join(ennemis)
         )
+    # ⚠️ CRÉATURES DÉJÀ AFFRONTÉES — le petit modèle (9B) retombe sur le même
+    # monstre générique du bestiaire pour « remplir » les tours de rencontre
+    # (partie 5b4e2bbe : 6 Gobelins d'affilée après le Squelette du module,
+    # monstres_combattus témoigne). Rappeler les affrontements passés empêche
+    # la table d'embrayer sur une énième copie carbone du même combat.
+    if etat is not None:
+        _mcomb = (etat.get("memoire") or {}).get("monstres_combattus") or []
+        if isinstance(_mcomb, list):
+            _vus: dict[str, int] = {}
+            for _ec in _mcomb:
+                if not isinstance(_ec, dict):
+                    continue
+                _ns = _ec.get("noms") or []
+                for _n in _ns if isinstance(_ns, list) else [_ns]:
+                    if isinstance(_n, str) and _n.strip():
+                        _cle_v = str(_n).strip().lower()
+                        _vus[_cle_v] = _vus.get(_cle_v, 0) + 1
+            if _vus:
+                _deja_txt = ", ".join(
+                    f"{_k.capitalize()} (×{_c})"
+                    for _k, _c in sorted(_vus.items())
+                )
+                lignes.append(
+                    "⚠️ CRÉATURES DÉJÀ AFFRONTÉES dans CETTE partie : "
+                    + _deja_txt + ". Ne RELANCE PAS la table dans une "
+                    "énième rencontre identique contre ces combattants pour "
+                    "« remplir » un tour : fais AVANCER la trame (PNJ, "
+                    "indice, épreuve, découverte, retournement — le module "
+                    "en regorge). Un rencontre originale ponctuelle reste "
+                    "possible, mais plus jamais le même monstre répété."
+                )
     objectif = bible.get("objectif") or bible.get("etape_courante") or ""
     if objectif:
         lignes.append(f"Objectif courant (étape en cours) : {objectif}")

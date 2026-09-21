@@ -22,6 +22,11 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # est monté en volumes au runtime, cf. docker-compose.yml.
 COPY server/ ./server/
 
+# Config pytest (asyncio_mode=auto) — nécessaire aux runs de tests montés
+# (docker run -v tests:/app/tests) pour que pytest-asyncio collecte les
+# tests async sans marqueurs.
+COPY pytest.ini .
+
 # Cartes de référence (Faerûn, Outreterre, Toril) — copiées au démarrage vers
 # server/data/cartes/ pour être servies sous /data/cartes/ (montage ro possible
 # dans docker-compose.yml pour les modifier sans rebuild).

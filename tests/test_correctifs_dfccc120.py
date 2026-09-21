@@ -310,7 +310,7 @@ def test_dedup_exces_apres_auto_application():
     ]
     mons = [{"nom": "Ombre", "pv": 7, "pv_max": 19}]
     exces = _exces_degats_monstres(trace, mons)
-    assert exces == {"Ombre": 6}, exces
+    assert exces == {"Ombre": {"exces": 6, "jetes": 6}}, exces
 
 
 # --------------------------------------------------------------------------- #

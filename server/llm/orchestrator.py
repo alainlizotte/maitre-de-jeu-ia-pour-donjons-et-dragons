@@ -3484,6 +3484,20 @@ class Orchestrator:
                         "correction %d) — relance orientée sur l'action joueur",
                         echo[:80], result.corrections,
                     )
+                    # Escalade : dès la 2e correction echo, la consigne se
+                    # durcit (le modèle ré-échoisait jusqu'à 4× d'affilée —
+                    # partie 2ca691ec) : borne la longueur, bannit l'amorce
+                    # copiée et exige un fait NOUVEAU.
+                    durcissement = ""
+                    if result.corrections >= 2:
+                        amorce = " ".join(echo.split()[:8])
+                        durcissement = (
+                            " ⛔ DERNIER AVERTISSEMENT : LIMITE ta réponse à "
+                            "DEUX PHRASES. Ne commence PAS par « "
+                            f"{amorce}… ». Écris UNE conséquence NOUVELLE "
+                            "et concrète de l'action (son, odeur, dégât, "
+                            "réaction, découverte) puis ARRÊTE."
+                        )
                     work.append(Message(
                         role="system",
                         content=(
@@ -3497,6 +3511,7 @@ class Orchestrator:
                             "découvertes ou dangers), en t'appuyant sur "
                             "l'état actuel et les résultats d'outils — "
                             "jamais en recopiant un texte précédent."
+                            + durcissement
                             + _CORRECTIF_INTERNE
                         ),
                     ))

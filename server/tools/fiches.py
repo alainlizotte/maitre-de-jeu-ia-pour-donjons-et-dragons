@@ -1467,6 +1467,33 @@ async def fiche_perso_soigner(
     est_magie = any(
         k in source_n for k in ("sort", "magie", "priere", "divin", "invocation")
     )
+    # ⛔ Garde anti contournement (partie 2ca691ec) : `incanter_sort` applique
+    # LUI-MÊME les soins magiques. Un `fiche_perso_soigner(source="sort…")`
+    # du LLM est donc soit un DOUBLON (sort déjà appliqué), soit une
+    # FALSIFICATION (soin inventé après un refus d'incantation). Seul un soin
+    # magique réellement résolu ce tour autorise ce chemin — et l'appel
+    # interne d'incanter_sort, lui, passe sans `source`.
+    if est_magie and ctx.tour_id and s > 0:
+        from .sorts import _soin_magique_du_tour
+        deja = _soin_magique_du_tour(ctx, nom)
+        if deja is None:
+            return ToolResult(
+                text=(
+                    f"⛔ **Aucun sort de soins réussi CE TOUR sur {nom}** — "
+                    "un refus d'`incanter_sort` (sort non préparé, "
+                    "emplacement épuisé) ne se contourne PAS avec "
+                    "`fiche_perso_soigner` : passe par `preparer_sorts` puis "
+                    "`incanter_sort`, ou soigne avec une potion/le kit "
+                    "(source = objet réel de l'inventaire)."
+                )
+            )
+        return ToolResult(
+            text=(
+                f"♻️ Le sort de soins a DÉJÀ été appliqué mécaniquement ce "
+                f"tour à {nom} (+{deja} PV) — ne ré-applique pas : narre "
+                "seulement le résultat."
+            )
+        )
     if source and not est_magie:
         if est_kit:
             ok, charges = _consommer_charge_kit(fiche)

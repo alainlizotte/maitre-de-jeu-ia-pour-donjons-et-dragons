@@ -322,3 +322,88 @@ def test_piege_exploreur_persiste_le_flag_via_grille():
     salles = _grille_vers_dict(donjon["grille"])
     salles[(0, -1)]["piege_declenche"] = True
     assert donjon["grille"][0].get("piege_declenche") is True
+
+
+# --------------------------------------------------------------------------- #
+# 4. Anti contournement : un refus d'incanter_sort ne se « rachète » pas avec
+#    fiche_perso_soigner(source="sort…") — soin magique déjà appliqué = doublon
+# --------------------------------------------------------------------------- #
+def test_soin_magique_sans_incantation_reussie_refuse():
+    from server.tools.sorts import _SOINS_MAGIQUES_TOUR
+    _SOINS_MAGIQUES_TOUR.clear()
+    d = _fresh_dir()
+    _setup_fiche_utturgut(d, pv=5)
+    ctx = ToolContext(partie_id=PID, joueur="test", data_dir=d,
+                      tour_id="tour-S")
+    r = asyncio.run(invoke_tool(
+        TOOLS["fiche_perso_soigner"], ctx,
+        {"nom": "Utturgut", "soin": 5, "source": "sort de soins"}))
+    assert "Aucun sort de soins réussi" in r.text, r.text
+    assert _pv_utturgut(d) == 5                     # soin fictif refusé
+
+
+def test_soin_magique_deja_applique_signale():
+    from server.tools.sorts import _SOINS_MAGIQUES_TOUR, _marquer_soin_magique
+    _SOINS_MAGIQUES_TOUR.clear()
+    d = _fresh_dir()
+    _setup_fiche_utturgut(d, pv=5)
+    ctx = ToolContext(partie_id=PID, joueur="test", data_dir=d,
+                      tour_id="tour-S2")
+    _marquer_soin_magique(ctx, "Utturgut", 7)       # incanter_sort a soigné
+    r = asyncio.run(invoke_tool(
+        TOOLS["fiche_perso_soigner"], ctx,
+        {"nom": "Utturgut", "soin": 7, "source": "sort de soins"}))
+    assert "DÉJÀ été appliqué" in r.text, r.text
+    assert _pv_utturgut(d) == 5                     # pas de double soin
+
+
+def test_soin_potion_non_magique_inchange():
+    """Non-régression : le garde ne touche PAS aux potions/kit (est_magie
+    faux) — le chemin potion reste fonctionnel."""
+    d = _fresh_dir()
+    fiches_dir = os.path.join(d, "fiches")
+    os.makedirs(fiches_dir, exist_ok=True)
+    with open(os.path.join(fiches_dir, "fiche_utturgut.json"), "w",
+              encoding="utf-8") as f:
+        json.dump({"nom": "Utturgut", "pv": 5, "pv_max": 16, "niveau": 1,
+                   "classe": "Barbare", "conditions": [],
+                   "inventaire": [{"nom": "potion de soins légers",
+                                   "qte": 1, "poids": 0.5}]},
+                  f, ensure_ascii=False)
+    ctx = ToolContext(partie_id=PID, joueur="test", data_dir=d,
+                      tour_id="tour-P3")
+    r = asyncio.run(invoke_tool(
+        TOOLS["fiche_perso_soigner"], ctx,
+        {"nom": "Utturgut", "soin": 6, "source": "potion de soins légers"}))
+    assert "récupère 6 PV" in r.text, r.text
+    assert _pv_utturgut(d) == 11
+
+
+# --------------------------------------------------------------------------- #
+# 5. Poids normalisés : « potion de soins légers » ne doit plus déclencher
+#    « poids inconnu » (_norm retire le « s » final → clé sans « s » requise)
+# --------------------------------------------------------------------------- #
+def test_poids_potion_normalisee_reconnue():
+    from server.tools.inventaire import _poids_unitaire
+    assert _poids_unitaire("potion de soins légers", None) is not None
+    assert _poids_unitaire("potion de soins légers", None) \
+        == _poids_unitaire("potion de soins legers", None)
+    assert _poids_unitaire("kit premiers secours", None) is not None
+    assert _poids_unitaire("cle d'argent", None) is not None
+
+
+# --------------------------------------------------------------------------- #
+# 6. Pénalités anti-dégénérescence : le payload doit porter les pénalités
+#    configurées (cause racine des boucles intra-réponse du 9B)
+# --------------------------------------------------------------------------- #
+def test_payload_llm_porte_les_penalites():
+    from server.config import LLMConfig
+    from server.llm.client import _payload_base
+    cfg = LLMConfig(presence_penalty=0.3, repetition_penalty=1.07)
+    payload = _payload_base(cfg, [], stream=False)
+    assert payload["presence_penalty"] == 0.3
+    assert payload["repetition_penalty"] == 1.07
+    # Défauts neutres (aucun changement de comportement si non configuré).
+    payload_n = _payload_base(LLMConfig(), [], stream=False)
+    assert payload_n["presence_penalty"] == 0.0
+    assert payload_n["repetition_penalty"] == 1.0

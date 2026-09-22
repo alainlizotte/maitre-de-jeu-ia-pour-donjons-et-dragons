@@ -146,7 +146,10 @@ async def incanter_sort(
     # 5) Consommation ----------------------------------------------------------
     etat_sorts["depenses"][str(lvl)] = depense + 1
     if not spontane:
-        etat_sorts["prepares"][sort["nom"]] = restants_prep - 1
+        # ⛔ Clamp ≥ 0 (partie 2ca691ec) : un compteur de préparation est
+        # passé à -1 (décréments successifs sur fiche non configurée),
+        # rendant tout preparer_sorts ultérieur inopérant côté lectures.
+        etat_sorts["prepares"][sort["nom"]] = max(0, restants_prep - 1)
     fiche["sorts"] = etat_sorts
     _save_fiche(ctx, nom_personnage, fiche)
 

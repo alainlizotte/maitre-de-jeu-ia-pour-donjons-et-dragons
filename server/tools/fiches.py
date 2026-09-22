@@ -1145,6 +1145,24 @@ def _verrou_incarnation(ctx: ToolContext, nom: str, joueur: str) -> Optional[Too
     return None
 
 
+# ♻️ Anti sur-application (partie 2ca691ec) : (partie, tour, cible, montant)
+# des dégâts DÉJÀ appliqués CE TOUR. La re-narration du même coup par le
+# petit modèle ré-appliquait un montant identique (piège serveur 1d6=5 suivi
+# de 3 appels LLM « 5 dégâts » → cleresse 8 PV passée de 3 à -10, morte).
+# Le rattrapage serveur corrige les SOUS-applications ; ce garde couvre le
+# miroir. Inactif sans `tour_id` (REST / appels internes → clés vides).
+_DEDUP_DEGATS: dict[tuple, bool] = {}
+
+
+def _marquer_degats(cle: tuple) -> None:
+    """Enregistre un (partie, tour, cible, montant) appliqué et purge les
+    clés des autres tours (la dédup ne vaut que pour le tour en cours)."""
+    partie, tour = cle[0], cle[1]
+    for k in [k for k in _DEDUP_DEGATS if k[0] != partie or k[1] != tour]:
+        _DEDUP_DEGATS.pop(k, None)
+    _DEDUP_DEGATS[cle] = True
+
+
 def _infliger_degats_monstre(
     ctx: ToolContext, nom: str, d: int
 ) -> Optional[ToolResult]:
@@ -1235,6 +1253,11 @@ def _infliger_degats_monstre(
         note = " — ☠️ **DÉTRUIT** (0 PV ou moins)."
     elif "Détruit" in conds:
         note = " — ☠️ déjà détruit."
+    if ctx.tour_id:
+        _marquer_degats(
+            (ctx.partie_id, ctx.tour_id,
+             str(cible.get("nom") or "").strip().casefold(), d)
+        )
     err = st.save(etat)
     if err:
         return ToolResult(text=f"❌ {err}")
@@ -1273,6 +1296,23 @@ async def fiche_perso_infliger_degats(
                 "lancer_degats)."
             )
         )
+    # ♻️ Garde anti sur-application : un montant IDENTIQUE sur la même
+    # cible dans le MÊME tour est une re-narration, pas un nouveau coup —
+    # refusé (voir _DEDUP_DEGATS). Le premier appel, lui, passe toujours.
+    if ctx.tour_id:
+        cle_dedup = (ctx.partie_id, ctx.tour_id,
+                     str(nom or "").strip().casefold(), d)
+        if _DEDUP_DEGATS.get(cle_dedup):
+            return ToolResult(
+                text=(
+                    f"♻️ **Doublon ignoré** : « {nom} » a DÉJÀ subi "
+                    f"exactement {d} dégâts CE TOUR (re-narration "
+                    "détectée). L'état est déjà à jour — narre la suite "
+                    "sans tool supplémentaire, ou frappe une AUTRE cible / "
+                    "un montant DIFFÉRENT si un vrai nouveau coup le "
+                    "justifie."
+                )
+            )
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         r = _infliger_degats_monstre(ctx, nom, d)
@@ -1282,6 +1322,22 @@ async def fiche_perso_infliger_degats(
             text=(
                 f"❌ Aucune fiche trouvée pour '{nom}' (ni monstre suivi par "
                 f"le combat en cours — engager_combat initialise les PV)."
+            )
+        )
+    # ☠️ Garde acharnement (2ca691ec) : une créature MORTE ne subit plus
+    # rien — les relances « 5 dégâts » sur une cleresse déjà à -10 n'ont
+    # aucun sens mécanique et polluent la narration.
+    conds_avant = [str(c) for c in (fiche.get("conditions") or [])]
+    try:
+        pv_actuels = int(fiche.get("pv", 0) or 0)
+    except (TypeError, ValueError):
+        pv_actuels = 0
+    if "Mort" in conds_avant or pv_actuels <= -10:
+        return ToolResult(
+            text=(
+                f"☠️ **{nom}** est déjà MORT — plus aucun dégât mécanique "
+                "possible. Narre la scène en PROSE (sans tool) ou change "
+                "d'action."
             )
         )
     # D&D 3.5 (Injury and Death) : les PV peuvent descendre sous 0 ;
@@ -1318,6 +1374,11 @@ async def fiche_perso_infliger_degats(
             "stabilisation 1d20 ≥ 10 par round (1 naturel = -1 PV)."
         )
     try:
+        if ctx.tour_id:
+            _marquer_degats(
+                (ctx.partie_id, ctx.tour_id,
+                 str(nom or "").strip().casefold(), d)
+            )
         _save_fiche(ctx, nom, fiche)
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
@@ -1349,16 +1410,47 @@ async def fiche_perso_soigner(
         déjà décompté par incanter_sort). Vide + soin ≤ 4 PV = petit soin
         par le kit (1 charge déduite si un kit est porté).
     """
-    try:
-        s = max(0, int(float(str(soin).strip())))
-    except (TypeError, ValueError):
-        return ToolResult(
-            text=(
-                f"❌ Montant de soin invalide ({soin!r}) pour '{nom}' — "
-                "rappelle le tool avec soin=<nombre> (le total du jet de "
-                "soins)."
+    # 🧪 Auto-formule de potion (partie 2ca691ec) : « source="potion de
+    # soins légers" » SANS `soin` — le 9B omettait le montant et le soin
+    # était systématiquement refusé (deux mourants non soignés en partie
+    # réelle). Le serveur décide : il tire LUI-MÊME la formule de la
+    # potion connue (1d8+1 léger, 2d8+2 modéré…).
+    note_auto = ""
+    source_brute = str(source or "").strip()
+    soin_txt = str(soin).strip() if soin is not None else ""
+    s = 0
+    if not soin_txt and source_brute:
+        from .inventaire import _cle_objet as _cle_objet_potion
+        import random as _random_potion
+        cle_p = _cle_objet_potion(source_brute)
+        if "potion" in cle_p or "fiole" in cle_p or "flacon" in cle_p:
+            if "modere" in cle_p:
+                nb_p, faces_p, bonus_p = 2, 8, 2
+            elif "serieux" in cle_p:
+                nb_p, faces_p, bonus_p = 3, 8, 3
+            elif "critique" in cle_p:
+                nb_p, faces_p, bonus_p = 4, 8, 4
+            else:
+                nb_p, faces_p, bonus_p = 1, 8, 1        # soins légers (défaut)
+            s = sum(_random_potion.randint(1, faces_p)
+                    for _ in range(nb_p)) + bonus_p
+            note_auto = (
+                f"\n🎲 **Formule de la potion tirée par le serveur** : "
+                f"{nb_p}d{faces_p}+{bonus_p} = {s} PV."
             )
-        )
+    if not s:
+        try:
+            s = max(0, int(float(soin_txt)))
+        except (TypeError, ValueError):
+            if not note_auto:
+                return ToolResult(
+                    text=(
+                        f"❌ Montant de soin invalide ({soin!r}) pour '{nom}' — "
+                        "rappelle le tool avec soin=<nombre> (le total du jet de "
+                        "soins)."
+                    )
+                )
+            s = 0
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
@@ -1468,6 +1560,7 @@ async def fiche_perso_soigner(
             + (" (maximum atteint)" if nv == max_pv else "")
             + (" — conditions de blessure levées." if nettoye else "")
             + consomme_note
+            + note_auto
         ),
         state_patch=_patch_pj(nom, idx, {"pv": nv, "conditions": conds}),
     )

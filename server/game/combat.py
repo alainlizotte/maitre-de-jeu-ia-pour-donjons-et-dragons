@@ -472,6 +472,11 @@ def _verifier_fin(etat: dict) -> Optional[str]:
     if ennemis and all(
         "Détruit" in (m.get("conditions") or [])
         or "Detruit" in (m.get("conditions") or [])
+        # 🧟 Cohérence avec `_monstre_ennemi_vivant` (partie 2ca691ec) : un
+        # ennemi à 0 PV est mort MÊME si la condition « Détruit » manque
+        # (PV patchés à la main via etat_partie_patch par le LLM) — sinon
+        # le combat reste zombie en phase=combat à jamais.
+        or (int(m.get("pv", 0) or 0) <= 0 and not m.get("inconnu"))
         for m in ennemis
     ):
         return "victoire"
@@ -501,7 +506,10 @@ async def _distribuer_xp(ctx, res: ResultatBoucle, etat: dict) -> None:
         m for m in etat.get("monstres_combat") or []
         if not m.get("allie")
         and ("Détruit" in (m.get("conditions") or [])
-             or "Detruit" in (m.get("conditions") or []))
+             or "Detruit" in (m.get("conditions") or [])
+             # Même cohérence que _verifier_fin : 0 PV = vaincu (partie
+             # 2ca691ec — PV patchés sans la condition « Détruit »).
+             or (int(m.get("pv", 0) or 0) <= 0 and not m.get("inconnu")))
     ]
     if not vaincus:
         return

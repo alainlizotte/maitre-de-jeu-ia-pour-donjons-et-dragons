@@ -1951,6 +1951,13 @@ _BUDGET_OUTILS_TOUR: dict[str, int] = {
     "lancer_degats": 6,
     "lancer_sauvegarde": 6,
     "lancer_d20": 8,
+    # 🧪 Anti-spam sorts (partie 2ca691ec) : 1 action = 1 incantation ; le
+    # 9B bouclait 4-6× sur `incanter_sort` (emplacements épuisés) et
+    # 5× sur `preparer_sorts` en plein combat — chaque boucle coûtait
+    # 2-4 min de génération.
+    "incanter_sort": 3,
+    "preparer_sorts": 2,
+    "fiche_perso_soigner": 4,
     "etat_partie_get": 3,
     "terminer_mon_tour": 1,          # un SEUL par tour (anti-spam rounds)
 }

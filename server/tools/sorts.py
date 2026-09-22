@@ -149,7 +149,10 @@ async def incanter_sort(
             if sorts_configures:
                 return ToolResult(
                     text=(f"⛔ **{sort['nom']}** n'a pas été préparé aujourd'hui par "
-                          f"{nom_personnage} — utilise preparer_sorts (repos/méditation).")
+                          f"{nom_personnage} — utilise preparer_sorts (repos/méditation). "
+                          "Cite ce refus TEL QUEL dans ta narration : n'invente ni une "
+                          "autre raison (le sort existe bel et bien), ni une réussite, "
+                          "ni un soin/effet de remplacement.")
                 )
             etat_sorts["prepares"][sort["nom"]] = 1
 
@@ -161,7 +164,9 @@ async def incanter_sort(
         return ToolResult(
             text=(f"⛔ Plus aucun emplacement de niveau {lvl} pour "
                   f"{nom_personnage} ({depense}/{total} utilisés). "
-                  f"Un repos long les restaure.")
+                  f"Un repos long les restaure. Cite ce refus TEL QUEL : "
+                  "le sort EXISTE, ce sont les emplacements qui sont "
+                  "épuisés — n'annonce ni réussite ni effet de remplacement.")
         )
 
     # 5) Consommation ----------------------------------------------------------

@@ -407,3 +407,52 @@ def test_payload_llm_porte_les_penalites():
     payload_n = _payload_base(LLMConfig(), [], stream=False)
     assert payload_n["presence_penalty"] == 0.0
     assert payload_n["repetition_penalty"] == 1.0
+
+
+# --------------------------------------------------------------------------- #
+# 7. Compression des vieilles narrations dans le contexte (amorce de copie
+#    verbatim du 9B) : les 2 dernières restent pleines, les anciennes sont
+#    réduites ; user/tool intacts ; session.history jamais modifiée.
+# --------------------------------------------------------------------------- #
+def test_compression_narrations_anciennes():
+    from dataclasses import dataclass, field as dc_field
+
+    @dataclass
+    class Msg:
+        role: str
+        content: str = ""
+
+    from server.main import _compresser_narrations_anciennes
+    longue1 = "mot " * 120          # ~480 chars
+    longue2 = "histoire " * 100    # ~800 chars
+    longue3 = "recit " * 100      # ~600 chars
+    fenetre = [
+        Msg("user", "je regarde autour"),
+        Msg("assistant", longue1),
+        Msg("tool", "résultat mécanique"),
+        Msg("assistant", longue2),
+        Msg("user", "je continue"),
+        Msg("assistant", longue3),
+    ]
+    copie_historique = [m.content for m in fenetre]
+    out = _compresser_narrations_anciennes(fenetre)
+    # Les 2 dernières narrations restent intégrales…
+    assert out[5].content == longue3
+    assert out[3].content == longue2
+    # …la plus ancienne est compressée.
+    assert out[1].content.endswith("[…]")
+    assert len(out[1].content) < len(longue1)
+    # User et tool intacts ; l'entrée d'origine n'est PAS mutée.
+    assert out[0].content == "je regarde autour"
+    assert out[2].content == "résultat mécanique"
+    assert copie_historique[1] == longue1
+    # Moins de 2 narrations : rien n'est touché.
+    petit = [Msg("assistant", longue1)]
+    assert _compresser_narrations_anciennes(petit)[0].content == longue1
+
+
+def test_budget_anti_spam_sorts():
+    from server.llm.orchestrator import _BUDGET_OUTILS_TOUR
+    assert _BUDGET_OUTILS_TOUR.get("preparer_sorts") == 2
+    assert _BUDGET_OUTILS_TOUR.get("incanter_sort") == 3
+    assert _BUDGET_OUTILS_TOUR.get("fiche_perso_soigner") == 4

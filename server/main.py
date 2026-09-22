@@ -4103,6 +4103,35 @@ def _journaliser_ouverture_si_besoin(etat: dict[str, Any], narration: str) -> bo
     return True
 
 
+# 📉 Compression des vieilles narrations (partie 2ca691ec) : le 9B copie
+# ses propres proses précédentes présentes dans le contexte (écho), et le
+# budget de caractères part en vieilles proses au lieu de l'utile. On garde
+# INTÉGRALES les N dernières narrations assistant (continuité immédiate) et
+# on réduit les plus anciennes à leurs premières lignes + « […] ». Les
+# messages user/tool ne sont pas touchés ; session.history reste complète.
+_NARR_GARDEES_PLEINES = 2
+_NARR_COMPRESSE_CHARS = 200
+
+
+def _compresser_narrations_anciennes(
+    fenetre: list[Any],
+    garder: int = _NARR_GARDEES_PLEINES,
+    limite: int = _NARR_COMPRESSE_CHARS,
+) -> list[Any]:
+    """Renvoie la fenêtre d'historique avec les vieilles narrations
+    assistant compressées (les `garder` dernières restent intégrales)."""
+    from dataclasses import replace as _replace
+    idx = [i for i, m in enumerate(fenetre)
+           if getattr(m, "role", "") == "assistant"
+           and len(getattr(m, "content", "") or "") > limite]
+    for i in idx[:-garder] if garder else idx:
+        m = fenetre[i]
+        c = m.content
+        coupe = c[: limite - 4].rsplit(" ", 1)[0].rstrip(",;:")
+        fenetre[i] = _replace(m, content=coupe + " […]")
+    return fenetre
+
+
 async def _handle_say(
     initiator: WebSocket,
     session: PartySession,
@@ -4377,9 +4406,21 @@ async def _handle_say(
             if debut < len(hist) - 1:  # garde au moins le dernier message
                 print(f"[dnd35] Historique tronqué : {len(hist) - debut} messages "
                       f"anciens omis (budget {budget_hist} chars).")
+            fenetre = hist[debut:]
+
+            # 📉 Compression des vieilles narrations (partie 2ca691ec) : les
+            # longues proses assistant dans le contexte AMORCENT la copie
+            # verbatim (écho intra-contexte du 9B) et brûlent du budget. On
+            # garde les 2 dernières narrations INTÉGRALES (continuité) ; les
+            # plus anciennes sont réduites à ~200 chars. L'état mécanique
+            # VRAI vient du bloc système + état de partie, jamais de ces
+            # vieilleries — la table, elle, lit l'historique complet à
+            # l'écran (session.history n'est pas modifiée).
+            fenetre = _compresser_narrations_anciennes(fenetre)
+
             messages = [__import__("server.llm.client", fromlist=["Message"]).Message(
                 role="system", content=system_text
-            )] + hist[debut:]
+            )] + fenetre
 
             # 4. Boucle d'orchestration : LLM ↔ tools → narration + events + patches.
             ctx = _ctx(partie_id, player)

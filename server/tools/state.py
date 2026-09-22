@@ -32,6 +32,13 @@ _TERMINER_TOUR_REFUS = (
     "des résultats officiels déjà fournis."
 )
 
+# ♻️ Anti re-engagement immédiat (partie 2ca691ec) : le petit modèle
+# ré-engageait la rencontre tout juste clôturée (« Faucon » ré-engagé 4
+# tours de suite → « Faucon (2)…(4) » empilés dans `monstres_combat`).
+# Fenêtre (secondes) pendant laquelle une rencontre IDENTIQUE (mêmes
+# créatures, mêmes quantités) ne peut pas être re-ouverte.
+_FENETRE_RE_ENGAGEMENT_S = 120
+
 
 def _party(ctx: ToolContext) -> PartyState:
     return PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
@@ -484,6 +491,43 @@ async def engager_combat(
                 "utilisez `combat_ajouter_combattant`."
             ))
 
+    # ── GARDE ANTI RE-ENGAGEMENT IMMÉDIAT (2ca691ec) ────────────────────
+    # Une rencontre IDENTIQUE (mêmes créatures résolues, mêmes quantités)
+    # ré-ouverte moins de `_FENETRE_RE_ENGAGEMENT_S` après la précédente
+    # est refusée : empiler des vagues fantômes n'est pas de la fiction,
+    # c'est un doublon. Vrais renforts → `combat_ajouter_combattant`.
+    import time as _time
+    from collections import Counter as _Counter
+
+    _counts = _Counter(
+        str((m or {}).get("nom") or "").strip().casefold()
+        for m in monstres_ok
+    )
+    _sig = ",".join(f"{n}x{c}" for n, c in sorted(_counts.items()))
+    _maintenant = _time.time()
+    for _h in (etat.get("historique_engagements") or []):
+        if not isinstance(_h, dict) or _h.get("sig") != _sig:
+            continue
+        try:
+            _recemment = (
+                _maintenant - float(_h.get("ts") or 0)
+                < _FENETRE_RE_ENGAGEMENT_S
+            )
+        except (TypeError, ValueError):
+            continue
+        if _recemment:
+            _labels = ", ".join(f"{n} ×{c}"
+                                for n, c in sorted(_counts.items()))
+            return ToolResult(text=(
+                f"♻️ **Rencontre identique déjà résolue il y a quelques "
+                f"instants** ({_labels}) : la ré-engager à l'identique "
+                "empilerait des ennemis fantômes. Narre la SUITE de la "
+                "scène (dépouilles, fuite, silence, tension) ou engage "
+                "d'autres créatures si la fiction le justifie vraiment ; "
+                "pour de vrais renforts en cours de combat, utilise "
+                "`combat_ajouter_combattant`."
+            ))
+
     # ── GARDE DE DIFFICULTÉ (conformité DMG 3.5) ────────────────────────
     # Une créature dont le FP dépasse largement le niveau du groupe produit
     # des rencontres SANS ESPOIR (TPK) et, hors scénario, trahit la trame
@@ -730,6 +774,12 @@ async def engager_combat(
     etat["monstres_combat"] = monstres_combat
     from datetime import datetime as _dt
     etat["tour_depuis"] = _dt.now().isoformat()
+    # ♻️ Historique des engagements (voir garde anti re-engagement) :
+    # signature + horodatage, borné aux 8 dernières rencontres.
+    _hist = [h for h in (etat.get("historique_engagements") or [])
+             if isinstance(h, dict)]
+    _hist.append({"sig": _sig, "ts": _time.time()})
+    etat["historique_engagements"] = _hist[-8:]
     err = state.save(etat)
     if err:
         return ToolResult(text=err)

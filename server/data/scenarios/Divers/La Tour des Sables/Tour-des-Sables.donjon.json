@@ -1,0 +1,74 @@
+{
+  "id": "tour_des_sables_donjon",
+  "scenario": "tour_des_sables",
+  "donjon_id": "La Tour des Sables",
+  "titre": "La Tour des Sables — donjon de démonstration",
+  "source": "Scénario court fictif (session d'analyse de l'application)",
+  "note_convention": "Tour de guet abandonnée aux portes du désert, réoccupée par une bande de gobelins et leurs alliés orques. Deux pièges À SAUVEGARDE (dalle à fléchettes, fosse camouflée) sont résolus mécaniquement par le serveur à l'entrée dans la salle ; la serrure de la salle du trône porte un piège à COMPÉTENCE (crochetage) laissé à l'initiative du MJ.",
+  "etages": [
+    {
+      "nom": "Rez-de-chaussée",
+      "entree": [0, 0],
+      "salles": [
+        {
+          "x": 0, "y": 0, "type": "entrée",
+          "portes": { "nord": true, "sud": false, "est": false, "ouest": false },
+          "description": "Le vantail de bronze de la tour pend sur ses gonds. Derrière, un hall de grès sableux éclairé par des fentes du plafond : dalles carrées disjointes, colonnes moites, nids de rongeurs dans les angles. Un escalier condamné monte vers les étages ; la seule voie libre file vers le nord, dans une galerie plus sombre.",
+          "note": "Zone 1 — hall d'entrée : traces de pas gobelins fraîches dans le sable."
+        },
+        {
+          "x": 0, "y": -1, "type": "piège",
+          "portes": { "nord": true, "sud": true, "est": true, "ouest": false },
+          "description": "Galerie pavée de dalles carrées ; l'une d'elles, au centre du passage, est légèrement plus basse et cerclée d'une fine poussière différente. Des trous d'un pouce percent les murs à hauteur d'homme, alignés comme des gueules de tuyaux d'orgue.",
+          "piege": "Dalle à fléchettes : Réflexes DD 12 par personnage qui franchit la dalle, 1d6 dégâts perforants ; le cliquetis des ressorts fait un vacarme qui porte dans toute la tour.",
+          "note": "Zone 2 — piège X1. Perception DD 15 pour repérer la dalle avant d'y poser le pied."
+        },
+        {
+          "x": 1, "y": -1, "type": "cellules",
+          "portes": { "nord": false, "sud": false, "est": false, "ouest": true },
+          "description": "Petite alcôve d'écuyer : une paillasse détrempée, un banc renversé et, coincée sous le banc, une fiole étiquetée d'un glyphe rouge. Une bourse de cuir bouilli pend à un clou.",
+          "tresor": "Une potion de soins légers (1d8+1 pv) et une bourse de 15 po.",
+          "note": "Zone 3 — alcôve : butin facile, l'écuyer de l'ancien gardien a fui ici."
+        },
+        {
+          "x": 0, "y": -2, "type": "garde",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Salle de garde réoccupée : paillasses infectes, os rongés, deux javelines plantées dans un tonneau. Deux gobelins en armures de cuir claironnent des dés sur un bouclier retourné ; ils bondissent dès que la porte s'ouvre.",
+          "ennemis": ["Gobelin ×2"],
+          "tresor": "12 po dans un pot cassé ; deux javelines en bon état.",
+          "note": "Zone 4 — salle de garde : combat presque inévitable."
+        },
+        {
+          "x": 0, "y": -3, "type": "piège",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": true },
+          "description": "Couloir d'effondrement ancien : le plafond s'est abaissé et le pavé disparaît sous un tas de gravats volontairement ratissé, trop régulier pour être naturel. Une odeur d'humus montante s'en dégage.",
+          "piege": "Fosse camouflée sous les gravats : Réflexes DD 11 par personnage, chute de 3 m — 2d6 dégâts contondants ; la chute fait un vacarme sourd qui résonne dans les fondations.",
+          "note": "Zone 5 — piège X2. Les orques raclent les gravats pour masquer la fosse."
+        },
+        {
+          "x": -1, "y": -3, "type": "autel",
+          "portes": { "nord": false, "sud": false, "est": true, "ouest": false },
+          "description": "Sanctuaire d'un culte du soleil enseveli : une dalle-autel gravée d'un disque rayonnant, des chandeliers de bronze verdi, et derrière l'autel un squelette démoi dans une livrée de garde rouillée qui se relève, sabre d'os au poing, dès qu'un vivant franchit le seuil. Une clé d'argent pend à son cou.",
+          "ennemis": ["Squelette ×1"],
+          "tresor": "Clé d'argent sur une chaînette (ouvre la porte du seigneur), trois blocs d'encens (5 po pièce).",
+          "note": "Zone 6 — sanctuaire : le squelette ne quitte jamais la salle, même pour un vacarme."
+        },
+        {
+          "x": 0, "y": -4, "type": "porte",
+          "portes": { "nord": true, "sud": true, "est": false, "ouest": false },
+          "description": "Un double vantail de chêne clouté barre le fond de la tour, fermé par une serrure de laiton verdie. Des éclats de hache témoignent d'essais d'enfoncement avortés : le bois tient bon.",
+          "piege": "Serrure robuste : crochetage DD 14 (outils de voleur) ; sinon forçage (Force DD 16) — la clé d'argent du sanctuaire l'ouvre sans effort.",
+          "note": "Zone 7 — porte du seigneur : piège à COMPÉTENCE (crochetage), à résoudre à l'initiative du MJ."
+        },
+        {
+          "x": 0, "y": -5, "type": "salle du trône",
+          "portes": { "nord": false, "sud": true, "est": false, "ouest": false },
+          "description": "La salle du seigneur de la tour, saccagée puis réaménagée : un siège de pierre recouvert d'un tapis décoloré sert de trône à un orque massif armé d'une hache d'arme, tandis qu'un second bouge le coffre de pillage contre le mur. Des bannières déchirées tapissent les murs.",
+          "ennemis": ["Orque ×2"],
+          "tresor": "Coffre : 90 po, une potion de soins légers, une bague d'argent gravée d'un soleil (25 po).",
+          "note": "Zone 8 — salle du trône : combat final de la tour ; l'orque du coffre protège le butin corps et âme."
+        }
+      ]
+    }
+  ]
+}

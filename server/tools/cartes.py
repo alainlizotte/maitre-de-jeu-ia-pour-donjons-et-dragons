@@ -1253,6 +1253,12 @@ def _bloc_contenu_salle(salle: dict[str, Any]) -> str:
         )
     if piege:
         lignes.append(f"🪤 Piège : {piege}")
+        if salle.get("piege_declenche"):
+            lignes.append(
+                "🪤 (DÉJÀ DÉCLENCHÉ ici : le piège est CONSOMMÉ — ne le "
+                "re-narre pas, ne le re-résous pas, ne relance aucune "
+                "sauvegarde)"
+            )
     if tresor:
         lignes.append(f"💰 Trésor : {tresor}")
     if note:
@@ -1355,6 +1361,15 @@ async def _resoudre_piege_salle(
     piege = _parser_piege_mecanique(str(salle.get("piege") or ""))
     if piege is None:
         return "", {}
+    # 🪤 Anti re-déclenchement (partie 2ca691ec) : un piège mécanique DÉJÀ
+    # fait ne se rejoue plus (fléchettes consommées, fosse repérée) —
+    # chaque repassage dans la salle re-résolvait sauvegardes + dégâts et
+    # re-narrait le piège à l'infini (dalle à fléchettes déclenchée 2×).
+    # Le flag est posé sur le dict salle, qui vit dans `donjon["grille"]`
+    # → persisté par le state_patch du caller.
+    if salle.get("piege_declenche"):
+        return "", {}
+    salle["piege_declenche"] = True
     etat = _charger_etat(ctx)
     pjs = [
         p for p in (etat.get("pj") or [])

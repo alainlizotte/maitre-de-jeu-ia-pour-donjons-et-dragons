@@ -456,3 +456,39 @@ def test_budget_anti_spam_sorts():
     assert _BUDGET_OUTILS_TOUR.get("preparer_sorts") == 2
     assert _BUDGET_OUTILS_TOUR.get("incanter_sort") == 3
     assert _BUDGET_OUTILS_TOUR.get("fiche_perso_soigner") == 4
+
+
+# --------------------------------------------------------------------------- #
+# 8. Combat zombie : un ennemi à 0 PV SANS la condition « Détruit » (PV
+#    patchés à la main par le LLM) doit compter comme vaincu — sinon le
+#    combat reste en phase=combat à jamais (partie 2ca691ec, session 4).
+# --------------------------------------------------------------------------- #
+def test_verifier_fin_victoire_pv_zero_sans_condition():
+    from server.game.combat import _verifier_fin
+    etat = {
+        "phase": "combat",
+        "pj": [{"nom": "Utturgut", "pv": 9, "pv_max": 14}],
+        "monstres_combat": [
+            {"nom": "Gobelin", "pv": -2, "pv_max": 5,
+             "conditions": ["Détruit"]},
+            {"nom": "Gobelin (2)", "pv": 0, "pv_max": 5, "conditions": []},
+        ],
+    }
+    assert _verifier_fin(etat) == "victoire"
+    # Non-régression : un ennemi vivant bloque toujours la victoire.
+    etat["monstres_combat"][1]["pv"] = 2
+    assert _verifier_fin(etat) is None
+
+
+def test_distribution_xp_compte_pv_zero_sans_condition():
+    from server.game.combat import _verifier_fin, _monstre_ennemi_vivant
+    etat = {
+        "phase": "combat",
+        "monstres_combat": [
+            {"nom": "Gobelin", "pv": 0, "pv_max": 5, "conditions": []},
+        ],
+    }
+    # Cohérence des deux fonctions : le moteur considère déjà ce monstre
+    # comme mort ; la fin de combat doit le voir pareil.
+    assert _monstre_ennemi_vivant(etat) is None
+    assert _verifier_fin(etat) == "victoire"

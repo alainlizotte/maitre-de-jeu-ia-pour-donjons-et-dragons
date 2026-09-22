@@ -44,6 +44,27 @@ def _rouler_des(formule: str) -> int:
         return 0
 
 
+# ♻️ Soins magiques DÉJÀ appliqués ce tour (partie, tour, cible) → montant.
+# `incanter_sort` applique LUI-MÊME l'effet « soin » (appel interne à
+# fiche_perso_soigner) : un second appel manuel du LLM double le soin, et un
+# appel après REFUS de l'incantation invente un soin fictif (partie
+# 2ca691ec). Inactif sans `tour_id` (REST/tests).
+_SOINS_MAGIQUES_TOUR: dict[tuple, int] = {}
+
+
+def _marquer_soin_magique(ctx: ToolContext, cible: str, montant: int) -> None:
+    cle = (ctx.partie_id, ctx.tour_id, str(cible or "").strip().casefold())
+    for k in [k for k in _SOINS_MAGIQUES_TOUR if k[:2] != cle[:2]]:
+        _SOINS_MAGIQUES_TOUR.pop(k, None)
+    _SOINS_MAGIQUES_TOUR[cle] = montant
+
+
+def _soin_magique_du_tour(ctx: ToolContext, cible: str):
+    return _SOINS_MAGIQUES_TOUR.get(
+        (ctx.partie_id, ctx.tour_id, str(cible or "").strip().casefold())
+    )
+
+
 # --------------------------------------------------------------------------- #
 #  Tools
 # --------------------------------------------------------------------------- #
@@ -238,6 +259,8 @@ async def incanter_sort(
             lignes.append(f"- {tr_soin.text}")
             if tr_soin.state_patch:
                 patches_cibles.append(tr_soin.state_patch)
+            if ctx.tour_id:
+                _marquer_soin_magique(ctx, cible, total_soin)
     elif type_effet == "etat" and cible:
         from .fiches import fiche_perso_condition
         tr_cond = await fiche_perso_condition(ctx, cible, effet["condition"], True)

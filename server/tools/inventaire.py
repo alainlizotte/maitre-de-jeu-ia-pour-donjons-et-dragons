@@ -298,6 +298,22 @@ _POIDS_OFFICIELS: dict[str, dict[str, Any]] = {
     "composantes":  _kg(2.0),
     "potion de soins legers": _kg(0.5),
     "potion":       _kg(0.5),
+    # ⚠️ Variantes NORMALISÉES : `_norm` retire le « s » FINAL — les clés
+    # avec « s » final ci-dessus ne matchaient donc JAMAIS (« potion de
+    # soins légers » → « potion de soin leger ») : chaque ajout de potion
+    # déclenchait le warning « poids inconnu » (partie 2ca691ec).
+    "potion de soins leger": _kg(0.5),
+    "potion de soins modere": _kg(0.5),
+    "potion de soins serieux": _kg(0.5),
+    "potion de soins critique": _kg(0.5),
+    "fiole de soins leger": _kg(0.5),
+    "potion de guerison": _kg(0.5),
+    "fiole de guerison": _kg(0.5),
+    "kit premiers secour": _kg(1.0),
+    "trousse de soin": _kg(1.0),
+    "cle d argent": _kg(0.1),
+    "clef d argent": _kg(0.1),
+    "bandage":      _kg(1.0),
     "bandages":     _kg(1.0),
     "trousse de soins": _kg(1.0),
     "kit premiers secours": _kg(1.0),

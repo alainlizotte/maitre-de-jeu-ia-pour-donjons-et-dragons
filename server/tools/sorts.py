@@ -97,7 +97,7 @@ async def incanter_sort(
 
     classe = str(fiche.get("classe") or "")
     niveau = max(1, int(fiche.get("niveau") or 1))
-    sort = cat.sort_par_nom(nom_sort)
+    sort = cat.sort_par_nom(nom_sort, classe)
     if sort is None:
         return ToolResult(
             text=(f"❌ Sort inconnu : « {nom_sort} ». Consulte la liste "
@@ -180,14 +180,19 @@ async def incanter_sort(
     _save_fiche(ctx, nom_personnage, fiche)
 
     nls_lanceur = niveau  # pour les effets scalés
+    details = " — ".join(x for x in (
+        f"Temps d'incantation : {sort['incantation']}" if sort.get("incantation") else "",
+        f"Portée : {sort['portee']}" if sort.get("portee") else "",
+        f"Composantes : {sort['composantes']}" if sort.get("composantes") else "",
+        f"Durée : {sort['duree']}" if sort.get("duree") else "",
+    ) if x)
     lignes = [
         f"✨ **{sort['nom']}** (niv. {lvl}) lancé par {nom_personnage}"
         + (f" → **{cible}**" if cible else ""),
         f"- Emplacements niv.{lvl} : {depense + 1}/{total}",
-        f"- Temps d'incantation : {sort['incantation']} — Portée : "
-        f"{sort['portee']} — Composantes : {sort['composantes']} — "
-        f"Durée : {sort['duree']}",
     ]
+    if details:
+        lignes.append(f"- {details}")
 
     # 6) Effet mécanique -------------------------------------------------------
     effet = sort.get("effet") or {}
@@ -340,7 +345,7 @@ async def preparer_sorts(
 
     par_niveau: dict[int, int] = {}
     for nom, nb in preps.items():
-        s = cat.sort_par_nom(str(nom))
+        s = cat.sort_par_nom(str(nom), classe)
         if s is None:
             return ToolResult(text=f"❌ Sort inconnu : « {nom} ».")
         if classe not in s["classes"]:
@@ -398,6 +403,7 @@ async def repos_long(
     from .. import sorts as cat
     from .fiches import _load_fiche, _save_fiche, _sync_pj, _patch_pj
     from ..game.state import PartyState
+    from .marche import consommer_marqueur_auberge  # noqa: PLC0415
     from datetime import datetime as _dt
 
     # ── Garde anti-repos-spam ────────────────────────────────────────────
@@ -448,30 +454,48 @@ async def repos_long(
             continue
         niveau = max(1, int(f.get("niveau") or 1))
         classe = str(f.get("classe") or "")
+        # 0) Auberge (règle-maison du projet) : une nuitée de « bonne
+        #    qualité » au lieu du repos → le repos soigne +ceil(niveau/2) PV
+        #    et retire « fatigue »/« épuisé ». Le marqueur est CONSOMMÉ ici
+        #    (une nuitée n'opère qu'AU PROCHAIN repos long, pas en boucle).
+        bonus_auberge, _ville_nuit = consommer_marqueur_auberge(f)
+        conds = [c for c in (f.get("conditions") or [])]
+        if bonus_auberge:
+            conds = [c for c in conds
+                     if str(c).lower() not in ("fatigue", "épuisé")]
         # 1) Emplacements de sorts restaurés.
         if cat.est_lanceur(classe):
             s = cat.sorts_de_fiche(f)
             if s["depenses"]:
                 s["depenses"] = {}
                 f["sorts"] = s
-        # 2) Récupération naturelle : +1 PV/niveau (plafonné à pv_max).
+        # 2) Récupération naturelle : +1 PV/niveau (plafonné à pv_max),
+        #    majoré du bonus d'auberge « bonne qualité » le cas échéant.
         try:
             pv_max = int(f.get("pv_max") or 0)
             pv = int(f.get("pv") or 0)
         except (TypeError, ValueError):
             pv, pv_max = 0, 0
+        soin = niveau + bonus_auberge
+        old_pv = int(f.get("pv") or 0)
         if 0 <= pv < pv_max:
-            f["pv"] = min(pv_max, pv + niveau)
+            f["pv"] = min(pv_max, pv + soin)
+        f["conditions"] = conds
         _save_fiche(ctx, nom, f)
-        detail = f"**{nom}** — PV {f['pv']}/{pv_max}"
+        detail = f"**{nom}** — PV {old_pv} → {f['pv']}/{pv_max}"
+        if bonus_auberge:
+            detail += (
+                f" · +{bonus_auberge} PV grâce à la nuitée d'auberge "
+                "« bonne » (fatigue/épuisé retirés)")
         if cat.est_lanceur(classe):
             detail += " — emplacements de sorts restaurés" + (
                 " (re-mémorise via preparer_sorts)"
                 if cat.type_lancement(classe) == "préparé" else "")
         lignes.append(f"- {detail}")
-        idx = _sync_pj(ctx, nom, {"pv": f["pv"]})
+        idx = _sync_pj(ctx, nom, {"pv": f["pv"], "conditions": conds})
         if idx is not None:
             patches[f"pj.{idx}.pv"] = f["pv"]
+            patches[f"pj.{idx}.conditions"] = conds
     patches["pj_updated"] = ", ".join(cibles)
     # Horodate le dernier repos réussi (garde anti-repos-spam).
     try:

@@ -11,13 +11,15 @@ import { useParty } from "../store";
 import { SheetModal } from "../components/StateSidebar";
 import { XpBar } from "../components/Bars";
 import { slugify } from "../utils/slug";
+import { busteImage } from "../utils/imageBust";
 
 // --------------------------------------------------------------------------- //
 //  Portrait avec repli monogramme (pas de retry ComfyUI ici : fiche fraîche).
 // --------------------------------------------------------------------------- //
 function MiniPortrait({ perso }: { perso: FichePerso }) {
   const [erreur, setErreur] = useState(false);
-  if (!perso.portrait || erreur) {
+  const portrait = perso.portrait;
+  if (!portrait || erreur) {
     const initiales =
       perso.nom
         .split(/\s+/)
@@ -32,9 +34,11 @@ function MiniPortrait({ perso }: { perso: FichePerso }) {
   }
   // Cadre carré + object-contain : le portrait entier reste visible
   // (aucun rognage), centré dans son cadre.
+  // Cache-busting STABLE : un portrait régénéré (même URL) doit être
+  // rechargé, surtout quand le nom du personnage est réutilisé.
   return (
     <img
-      src={perso.portrait}
+      src={`${portrait}?t=${busteImage(portrait)}`}
       alt={perso.nom}
       className="aspect-square w-full object-contain bg-stone-950 rounded border border-stone-700"
       onError={() => setErreur(true)}

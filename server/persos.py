@@ -1070,19 +1070,45 @@ def lister_fiches(data_dir: str, proprietaire: Optional[str] = None) -> list[dic
     return resultats
 
 
-def url_portrait(data_dir: str, nom: str, proprietaire: str = "") -> Optional[str]:
-    """Retrouve l'URL du portrait d'un personnage (png généré ou placeholder svg)."""
+def resoudre_portrait(
+    data_dir: str,
+    nom: str,
+    proprietaire: str = "",
+    partie_id: str = "",
+) -> Optional[str]:
+    """URL canonique du portrait d'un personnage — partagée par TOUTES les vues
+    (page principale « Mes personnages », modal fiche PJ, sidebar de partie).
+
+    Un nom réutilisé (même nom de PJ recréé) produisait des portraits stockés
+    sous des noms de fichiers différents selon la source (`perso_<pseudo>_<slug>`
+    côté formulaire, `<partie_id>_<slug>` côté tools MJ) : la page principale et
+    la fiche chargeaient alors deux images DIFFÉRENTES. On résout donc toujours
+    LE MÊME fichier, dans cet ordre :
+      1. `<slug>`          — portrait canonique (sidebar de partie, fichier
+                             régénéré à chaque édition, copie des deux autres) ;
+      2. `perso_<pseudo>_<slug>` — variante rattachée au compte (création
+                             formulaire, avant copie vers le slug nu) ;
+      3. `<partie_id>_<slug>`    — variante propre à une partie (création en
+                             plein jeu par les tools MJ).
+    `.png` prioritaire, `.svg` (monogramme placeholder) en repli.
+    """
     slug = _slug(nom)
     dossier = os.path.join(data_dir, "portraits_cache")
-    candidats = []
+    candidats: list[str] = [slug]
     if proprietaire:
         candidats.append(f"perso_{_slug(proprietaire)}_{slug}")
-    candidats.append(slug)
+    if partie_id:
+        candidats.append(f"{partie_id}_{slug}")
     for base in candidats:
         for ext in (".png", ".svg"):
             if os.path.isfile(os.path.join(dossier, base + ext)):
                 return f"/data/portraits_cache/{base}{ext}"
     return None
+
+
+def url_portrait(data_dir: str, nom: str, proprietaire: str = "") -> Optional[str]:
+    """Retrouve l'URL du portrait d'un personnage (png généré ou placeholder svg)."""
+    return resoudre_portrait(data_dir, nom, proprietaire)
 
 
 # --------------------------------------------------------------------------- #
@@ -1301,14 +1327,15 @@ async def generer_portrait_async(data_dir: str, fiche: dict[str, Any]) -> Option
     prompt = construire_prompt_portrait(fiche)
     ecrit = await generer_si_dispo("portrait", prompt, dest)
 
-    # Copie « slug nu » pour la sidebar de partie (portraits_cache/<slug>.png),
-    # sans écraser un portrait déjà généré par une autre source.
+    # Copie « slug nu » pour la sidebar de partie et toutes les autres vues
+    # (portraits_cache/<slug>.png), TOUJOURS rafraîchie : un nom de personnage
+    # réutilisé doit afficher le même portrait partout, pas une version
+    # périmée conservée d'une création précédente.
     if ecrit:
         copie = os.path.join(cache_dir, f"{_slug(nom)}.png")
         try:
-            if not os.path.isfile(copie):
-                with open(dest, "rb") as src, open(copie, "wb") as dst:
-                    dst.write(src.read())
+            with open(dest, "rb") as src, open(copie, "wb") as dst:
+                dst.write(src.read())
         except OSError:
             pass
     return ecrit

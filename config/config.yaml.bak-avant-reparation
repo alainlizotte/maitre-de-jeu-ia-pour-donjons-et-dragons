@@ -1,0 +1,125 @@
+﻿# Configuration D&D 3.5 â€” MaÃ®tre du Jeu
+# Copiez ce fichier en config.yaml et ajustez selon votre installation.
+
+llm:
+  # Backend : "ollama" ou "llamacpp"
+  # â”€â”€ Ollama â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # backend: "ollama"
+  # base_url: "http://ollama:11434/v1"  # Docker rÃ©seau openwebui-net. Local : http://localhost:11434/v1
+  # api_key: "ollama"           # placeholder requis par le client OpenAI
+  # model: "igorls/gemma-4-12B-it-qat-q4_0-unquantized-heretic:latest"
+  # options:
+  #   num_ctx: 60000
+  #   top_k: 64
+  #   think: false
+
+  # â”€â”€ llama.cpp â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  backend: "llamacpp"
+  base_url: "http://llamacpp:8080/v1"
+  api_key: "none"
+  model: "Qwen3.5-9B-Q4_K_M"
+  think: false                     # dÃ©sactive le thinking (Gemma 4, Qwen3â€¦)
+  options: {}  # llama.cpp gÃ¨re ctx-size, KV cache, etc. via flags Docker.
+               # Flags alignÃ©s avec max_context_tokens / max_tokens ci-dessous
+               # (docker-compose.yml, service llamacpp) :
+               #   -ngl 99   : toutes les couches sur GPU (modÃ¨le entier en VRAM)
+               #   -c 32768  : ctx-size (= max_context_tokens ; docker-compose.yml)
+               #   -n 8192   : max tokens gÃ©nÃ©rÃ©s par rÃ©ponse (= max_tokens)
+
+  temperature: 0.75
+  top_p: 0.95
+  top_k: 20                      # reco Unsloth en mode non-thinking (le
+                                 # no-thinking est désormais réellement envoyé)
+  min_p: 0.05                    # défaut llama.cpp (ne pas baisser en tool-call)
+  presence_penalty: 0.3          # RESTAURÉ : presence 0.6 a déstabilisé le
+                                 # suivi d'outils en c1 (tours de monstre bloqués)         # pÃ©nalise les tokens dÃ©jÃ  prÃ©sents â€” rester
+                                # BAS : Ã  1.0+ Qwen boucle sans fin (tour figÃ©)
+  repetition_penalty: 1.05      # pÃ©nalitÃ© de rÃ©pÃ©tition (1.0 = neutre)
+  max_context_tokens: 16384    # llama.cpp : ctx-size (-c 32768, -ngl 99)
+  max_tokens: 2048             # budget max de tokens gÃ©nÃ©rÃ©s par rÃ©ponse (-n 2048).
+                                # Une narration lÃ©gitime fait < 800 tokens : 2048
+                                # plafonne le coÃ»t des boucles dÃ©gÃ©nÃ©rÃ©es.
+
+  # StratÃ©gie de function-calling.
+  tool_mode: "auto"
+  detect_simulation: true
+  max_tool_iterations: 6
+
+  # DÃ©chargement du modÃ¨le aprÃ¨s le tour du MJ :
+  #   true  = comportement historique : la VRAM est libÃ©rÃ©e dÃ¨s la fin du
+  #           dernier tour (partage du GPU avec ComfyUI).
+  #   false = le modÃ¨le reste chargÃ©, puis est dÃ©chargÃ© aprÃ¨s
+  #           `unload_delay_minutes` minutes d'inactivitÃ©. Pratique si de la
+  #           RAM est ajoutÃ©e ou un meilleur GPU achetÃ© : les tours
+  #           consÃ©cutifs n'ont plus Ã  recharger le modÃ¨le.
+  unload_after_turn: false
+  unload_delay_minutes: 5   # dÃ©lai d'inactivitÃ© (minutes) avant unload
+                            # quand unload_after_turn: false
+
+server:
+  host: "127.0.0.1"
+  port: 8000
+  cors_origins: ["http://localhost:5173", "http://127.0.0.1:8000"]
+
+paths:
+  # Racine des donnÃ©es runtime (parties, fiches, caches, ChromaDB).
+  data_dir: "./server/data"
+  prompts_dir: "./server/prompts"
+  sections_dir: "./server/prompts/sections"
+
+game:
+  default_title: "Partie D&D 3.5 â€” CÃ´te des Ã‰pÃ©es"
+  default_frame: "CÃ´te des Ã‰pÃ©es (FaerÃ»n)"
+  max_history_events: 50
+  max_recap_chars: 4000
+  stream_to_clients: false      # rÃ©ponses du MJ livrÃ©es EN BLOC (pas de
+                                # streaming token par token) ; la table voit
+                                # le statut (Â« Le MJ rÃ©flÃ©chit... Â») puis le
+                                # message complet
+  block_messages_during_think: true  # bloquer l'envoi de messages pendant que le MJ travaille
+
+image:
+  # GÃ©nÃ©ration d'images via ComfyUI (monstres, salles, portraits).
+  # DÃ©sactivÃ© par dÃ©faut â€” activez si ComfyUI est installÃ© et accessible.
+  enabled: true
+  # base_url: "http://comfyui:8188"   # Docker ; local : http://127.0.0.1:8188
+  # Portraits PJ via ComfyUI. CoupÃ© ici (GPU RTX 3060 Ti 8 Go : le LLM 9B et
+  # ComfyUI se disputent la VRAM). Les portraits PJ ne sont pas gÃ©nÃ©rÃ©s ; les
+  # monstres restent servis depuis leur cache PNG. RÃ©activer sur GPU >= 12 Go.
+  portraits_enabled: true
+  # Illustration des scÃ¨nes marquantes uniquement (outil illustration_scene).
+  # Basculable aussi Ã  chaud via le bouton de la galerie Â« ScÃ¨nes Â» (persistÃ©
+  # dans data/settings.json). Monstres, portraits et donjons restent gÃ©nÃ©rÃ©s.
+  # ActivÃ© : permet la prÃ©-gÃ©nÃ©ration en cache des scÃ¨nes de scÃ©nario
+  # (scripts/pregen_scenes.py) et leur affichage au fil de l'aventure.
+  scenes_enabled: true
+  # Toggles PAR CATÃ‰GORIE (gÃ©nÃ©ration + onglet de la galerie) : le bouton de
+  # la galerie en jeu est un interrupteur MAÃŽTRE qui coupe les trois d'un
+  # coup ; ces clÃ©s restent autoritaires (verrou par catÃ©gorie).
+  monstres_enabled: true     # portraits des monstres rencontrÃ©s
+  salles_enabled: true       # illustrations des piÃ¨ces de donjon
+  # scenes_enabled: true     # (ci-dessus) scÃ¨nes marquantes, PNJ, Ã©vÃ©nements
+
+rag:
+  # Base de connaissances RAG (Phase 2). DÃ©sactivÃ© par dÃ©faut ; passez Ã 
+  # `true` aprÃ¨s avoir exÃ©cutÃ© `py -m server.rag --ingest` une fois.
+  enabled: true
+  # Dossier racine du corpus Ã  ingÃ©rer (montÃ© sous /app/data/knowledge_import
+  # dans Docker ; local : ./knowledge_import Ã  la racine du projet).
+  source_dir: "/app/data/knowledge_import"
+  # Persistance du vector store ChromaDB embarquÃ©.
+  persist_dir: "./server/data/chroma"
+  # Serveur d'embeddings dÃ©diÃ© llama.cpp (conteneur llamaembed, CPU, port 8081).
+  # Vide â†’ retombe sur llm.base_url (inadaptÃ© : le chat gemma ne fait pas d'embeddings).
+  embedding_base_url: "http://llamaembed:8080/v1"
+  embedding_model: "embeddinggemma"   # GGUF dans ./models-embed/ (voir scripts/download_model.ps1)
+  chunk_size: 800             # tokens cibles par chunk. Le tokenizer rÃ©el
+                              # tourne Ã  ~2.9 chars/token (vs 5 estimÃ©s) : 800
+                              # cibles â‰ˆ 1400 rÃ©els, sous la limite de 2048 du
+                              # modÃ¨le d'embeddings nomic (GGUF clampÃ© Ã  2048).
+  chunk_overlap: 200          # tokens de chevauchement entre chunks consÃ©cutifs
+  top_k: 3                    # nombre d'extraits rÃ©cupÃ©rÃ©s par requÃªte
+  query_max_tokens: 800      # budget max injectÃ© dans le system prompt
+  # Filtrage par KB : `null` = interroge les 3 KB ; liste pour restreindre
+  # (ex: ["KB1_Manuels_de_base"] pour les rÃ¨gles en combat uniquement).
+  kb_filter: null

@@ -210,12 +210,12 @@ async def test_combat1_gobelins_homonymes():
                 assert ("❌ **Manqué**" in ra.text
                         or "❌ **1 naturel**" in ra.text)
                 continue
-            rd = await tool(d, "lancer_degats", nb_des=1, faces=8, bonus=3,
+            rd = await tool(d, "lancer_degats", nb_des=1, faces=12, bonus=3,
                             arme_ou_sort="Grande hache", cible="Gobelin (2)")
             m = RE_DEGATS.search(rd.text)
             assert m, f"total de dégâts absent : {rd.text}"
             total = int(m.group(1))
-            assert total >= 3  # 1d8 min 1 + 3
+            assert total >= 4  # 1d12 min 1 + 3 (formule catalogue)
             ri = await tool(d, "fiche_perso_infliger_degats",
                             nom="Gobelin (2)", degats=total)
             assert f"subit {total} dégâts" in ri.text
@@ -245,7 +245,7 @@ async def test_combat1_gobelins_homonymes():
                             ca_cible=15)
             if not any(m in ra.text for m in TOUCHE):
                 continue
-            rd = await tool(d, "lancer_degats", nb_des=1, faces=8, bonus=3,
+            rd = await tool(d, "lancer_degats", nb_des=1, faces=12, bonus=3,
                             arme_ou_sort="Grande hache", cible="Gobelin")
             total = int(RE_DEGATS.search(rd.text).group(1))
             await tool(d, "fiche_perso_infliger_degats",
@@ -570,7 +570,7 @@ async def test_rattrapage_ne_double_pas_si_deja_applique():
         orch = _orch(d)
         result = _result_avec_trace([])
         tr_roll = await orch.execute_tool_direct(
-            "lancer_degats", {"nb_des": 1, "faces": 8, "bonus": 3,
+            "lancer_degats", {"nb_des": 1, "faces": 12, "bonus": 3,
                               "arme_ou_sort": "Grande hache",
                               "cible": "Gobelin"}, _ctx(d), None, result)
         total = int(RE_DEGATS.search(tr_roll.text).group(1))
@@ -600,9 +600,10 @@ async def test_rattrapage_somme_detouches_en_un_appel():
         orch = _orch(d)
         result = _result_avec_trace([])
         totaux = []
+        random.seed(_seed_for_dice(2, 12, 14))  # t1+t2=20 < 22 PV → Ogre vivant
         for _ in range(2):
             tr = await orch.execute_tool_direct(
-                "lancer_degats", {"nb_des": 1, "faces": 8, "bonus": 3,
+                "lancer_degats", {"nb_des": 1, "faces": 12, "bonus": 3,
                                   "arme_ou_sort": "Grande hache",
                                   "cible": "Ogre"}, _ctx(d), None, result)
             totaux.append(int(RE_DEGATS.search(tr.text).group(1)))
@@ -640,9 +641,10 @@ async def test_rattrapage_deux_touches_un_seul_infliger():
         orch = _orch(d)
         result = _result_avec_trace([])
         totaux = []
+        random.seed(_seed_for_dice(2, 12, 14))  # t1+t2=20 < 22 PV → Ogre vivant
         for _ in range(2):
             tr = await orch.execute_tool_direct(
-                "lancer_degats", {"nb_des": 1, "faces": 8, "bonus": 3,
+                "lancer_degats", {"nb_des": 1, "faces": 12, "bonus": 3,
                                   "arme_ou_sort": "Grande hache",
                                   "cible": "Ogre"}, _ctx(d), None, result)
             totaux.append(int(RE_DEGATS.search(tr.text).group(1)))

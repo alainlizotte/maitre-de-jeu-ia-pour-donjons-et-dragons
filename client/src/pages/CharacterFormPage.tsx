@@ -17,6 +17,7 @@ import type {
   ClasseModele,
   DonModele,
   DieuModele,
+  EspeceModele,
   FichePerso,
   ModelePerso,
   ProficiencesClasse,
@@ -178,6 +179,7 @@ interface FormState {
   donsChoisis: string[];
   donsLibre: string;        // dons libres hérités / personnalisés
   sortsConnus: string[];    // sorts connus / grimoire (classes lanceuses)
+  familierEspece: string;   // espèce du familier / compagnon animal (PHB 3.5)
   competencesRangs: Record<string, number>;
   histoire: string;
   sexe: string;
@@ -207,6 +209,7 @@ const FORM_VIDE: FormState = {
   donsChoisis: [],
   donsLibre: "",
   sortsConnus: [],
+  familierEspece: "",
   competencesRangs: {},
   histoire: "",
   sexe: "",
@@ -325,6 +328,7 @@ export function CharacterFormPage() {
       donsChoisis,
       donsLibre: donsLibres.join("\n"),
       sortsConnus: [...(f.sorts?.connus ?? [])],
+      familierEspece: f.familier?.espece ?? "",
       competencesRangs: { ...(f.competences ?? {}) },
       histoire: f.histoire ?? "",
       sexe: f.apparence?.sexe ?? "",
@@ -505,6 +509,47 @@ export function CharacterFormPage() {
     return exces;
   }, [magie, form.sortsConnus, form.classe, form.niveau]);
 
+  // ---------------- Familier / compagnon animal (PHB 3.5) -----------------
+  // Espèces disponibles selon la classe/niveau : familier (Magicien/Sorcier,
+  // 10 espèces) ou compagnon animal (Druide niv.1, Rodeur niv.4 — hors-normes
+  // incluses quand le niveau de classe effectif suffit). null = pas de droit.
+  const especesCompagnon = useMemo<null | {
+    type: "familier" | "compagnon";
+    liste: EspeceModele[];
+  }>(() => {
+    const fml = modele.data?.familiers;
+    if (!fml) return null;
+    if (form.classe === "Magicien" || form.classe === "Sorcier")
+      return { type: "familier", liste: fml.familiers };
+    const nivMin = fml.niveau_min_compagnon?.[form.classe] ?? 99;
+    if (
+      (form.classe === "Druide" || form.classe === "Rodeur") &&
+      form.niveau >= nivMin
+    ) {
+      const nivEff =
+        form.classe === "Rodeur" ? Math.max(0, form.niveau - 3) : form.niveau;
+      const hors = fml.compagnons_hors_norme.filter(
+        (h) =>
+          form.niveau >= (h.niveau_min ?? 4) &&
+          nivEff - (h.reduction ?? 3) >= 1,
+      );
+      return { type: "compagnon", liste: [...fml.compagnons_animaux, ...hors] };
+    }
+    return null;
+  }, [modele.data, form.classe, form.niveau]);
+
+  // Espèce choisie plus valide (changement de classe/niveau) → désélection.
+  useEffect(() => {
+    if (
+      form.familierEspece &&
+      especesCompagnon &&
+      !especesCompagnon.liste.some((e) => e.nom === form.familierEspece)
+    ) {
+      set("familierEspece", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [especesCompagnon, form.familierEspece]);
+
   // ------------------- Disponibilités selon la classe --------------------- //
   const profClasse = form.classe ? modele.data?.proficiences?.[form.classe] : undefined;
   const armesDispo = useMemo(
@@ -567,7 +612,7 @@ export function CharacterFormPage() {
       }
       total += pu * (o.qte || 1);
     }
-    if (form.or) total += (Number(form.or) || 0) / 50 * 0.4536;
+    if (form.or) total += ((Number(form.or) || 0) * 10) / 50 * 0.4536;
     return { poids: Math.round(total * 100) / 100, inconnus };
   }, [modele.data, form.armesChoisies, form.armuresChoisies, form.equipChoisi, form.equipLibre, form.or]);
   const etatCharge = useMemo(() => {
@@ -743,7 +788,7 @@ export function CharacterFormPage() {
         gain_carac: form.gainCarac || undefined,
         alignement: form.alignement,
         dieu: form.dieu.trim(),
-        or: Number(form.or) || 0,
+        or: (Number(form.or) || 0) * 10,
         equipement: [
           ...form.armesChoisies.map((nom) => ({ nom, qte: 1 })),
           ...form.armuresChoisies.map((nom) => ({ nom, qte: 1 })),
@@ -767,6 +812,12 @@ export function CharacterFormPage() {
               prepares: {},
             }
           : undefined,
+        // Familier / compagnon animal : espèce choisie (optionnel). En jeu,
+        // le MJ l'appelle via le tool appeler_familier (rituel 100 po).
+        familier:
+          especesCompagnon && form.familierEspece
+            ? { type: especesCompagnon.type, espece: form.familierEspece }
+            : undefined,
         competences: Object.fromEntries(
           Object.entries(form.competencesRangs).filter(([, r]) => (r || 0) > 0),
         ),
@@ -1424,7 +1475,7 @@ export function CharacterFormPage() {
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4 space-y-5">
               <div className="flex flex-wrap items-end gap-3">
                 <div>
-                  <span className="text-stone-400 text-xs">Or de départ (po)</span>
+                  <span className="text-stone-400 text-xs">Or de départ (po — la fiche stocke en pc, ×10)</span>
                   <div
                     className="mt-0.5 w-36 bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm text-amber-100"
                     title="Déterminé uniquement par tirage (table PHB)"
@@ -1488,7 +1539,7 @@ export function CharacterFormPage() {
                           {a.distance ? " 🎯" : ""}
                           <span className="text-stone-500">
                             {" "}
-                            · {a.degats} · {a.groupe === "simple" ? "simple" : "martial"} ·{" "}
+                            · {a.degats} · {a.groupe === "simple" ? "simple" : a.groupe === "exotique" ? "exotique" : "martial"} ·{" "}
                             {fmtPo(a.cout)}
                             {a.poids !== undefined && ` · ${a.poids} kg`}
                           </span>
@@ -1767,6 +1818,101 @@ export function CharacterFormPage() {
                     {form.niveau} — décochez avant d'enregistrer.
                   </p>
                 )}
+              </section>
+            )}
+
+            {/* ------------------ Familier / compagnon ----------------------- */}
+            {especesCompagnon && (
+              <section className="bg-stone-800/40 border border-emerald-700/40 rounded-lg p-4 space-y-3">
+                <h2 className="font-serif text-lg text-emerald-200">
+                  {especesCompagnon.type === "familier"
+                    ? "Familier"
+                    : "Compagnon animal"}
+                  <span className="text-xs font-sans ml-2 text-stone-500">
+                    choix officiel PHB 3.5 (facultatif) — l'animal se lie au
+                    personnage et grandit avec lui
+                  </span>
+                </h2>
+                <p className="text-xs text-stone-400">
+                  {especesCompagnon.type === "familier" ? (
+                    <>
+                      Le familier du Magicien/Sorcier transmet une faculté
+                      spéciale à son maître et reçoit des pouvoirs selon le
+                      niveau (armure naturelle, Intelligence, lien
+                      télépathique…). En jeu, son appel exige un rituel d'une
+                      journée et 100 po de composantes — le MJ le matérialise
+                      via le tool <em>appeler_familier</em>.
+                    </>
+                  ) : (
+                    <>
+                      Le compagnon animal du{" "}
+                      {form.classe === "Rodeur" ? "Rodeur (niv. 4+)" : "Druide"}{" "}
+                      progresse avec le niveau de classe : DV supplémentaires,
+                      For/Dex, tours connus, pouvoirs (Lien, Esquive
+                      totale…). En jeu, le MJ le fait rejoindre le personnage
+                      via le tool <em>appeler_familier</em>.
+                    </>
+                  )}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1">
+                  <label
+                    className={`flex items-center gap-2 text-xs rounded px-1 py-0.5 ${
+                      form.familierEspece === "" ? "" : "opacity-70"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="accent-emerald-500"
+                      name="familier"
+                      checked={form.familierEspece === ""}
+                      onChange={() => set("familierEspece", "")}
+                    />
+                    <span className="text-stone-400 italic">
+                      Aucun {especesCompagnon.type === "familier" ? "familier" : "compagnon"}
+                    </span>
+                  </label>
+                  {especesCompagnon.liste.map((e) => {
+                    const coche = form.familierEspece === e.nom;
+                    const horsNorme = e.niveau_min !== undefined;
+                    return (
+                      <label
+                        key={e.nom}
+                        className={`flex items-start gap-2 text-xs rounded px-1 py-0.5 ${coche ? "" : "opacity-80"}`}
+                        title={`${e.nom} — PV ${e.pv ?? "?"} · CA ${e.ca ?? "?"} · DV ${e.dv ?? "?"}${
+                          horsNorme
+                            ? ` · hors-norme : niveau effectif −${e.reduction}`
+                            : ""
+                        }${e.faculte ? `\n${e.faculte}` : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          className="accent-emerald-500 mt-0.5"
+                          name="familier"
+                          checked={coche}
+                          onChange={() => set("familierEspece", e.nom)}
+                        />
+                        <span>
+                          {e.nom}
+                          {horsNorme && (
+                            <span className="text-amber-500/80">
+                              {" "}
+                              · hors-norme (−{e.reduction})
+                            </span>
+                          )}
+                          <span className="text-stone-500">
+                            {" "}
+                            · {e.pv ?? "?"} PV · CA {e.ca ?? "?"}
+                          </span>
+                          {e.faculte && (
+                            <span className="block text-[11px] text-stone-500">
+                              {e.faculte}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </section>
             )}
 

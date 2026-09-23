@@ -79,6 +79,16 @@
     "niveaux_negatifs": {"type": "integer", "description": "Niveaux negatifs cumules (energy drain). Niveau effectif = niveau - niveaux_negatifs ; mort si <= 0.", "minimum": 0, "default": 0},
     "alignement": {"type": "string", "description": "Alignement D&D, ex. 'Loyal Bon'."},
     "histoire": {"type": "string", "description": "Background roleplay libre."},
-    "conditions": {"type": "array", "items": {"type": "string"}, "description": "Conditions D&D 3.5 actives."}
+    "conditions": {"type": "array", "items": {"type": "string"}, "description": "Conditions D&D 3.5 actives."},
+    "familier": {
+      "type": "object",
+      "description": "Familier (Magicien/Sorcier, PHB p.60/64) ou compagnon animal (Druide/Rodeur, PHB p.48) choisi a la creation.",
+      "properties": {
+        "type": {"type": "string", "enum": ["familier", "compagnon"], "description": "Type de lien : familier (arcane) ou compagnon animal (nature)."},
+        "espece": {"type": "string", "description": "Nom canonique de l'espece (ex. « Chat », « Serpent venimeux (petit) »)."},
+        "invoque": {"type": "boolean", "description": "True une fois l'appel effectue en jeu (rituel 100 po / 24 h pour le familier)."}
+      },
+      "required": ["type", "espece"]
+    }
   }
 }

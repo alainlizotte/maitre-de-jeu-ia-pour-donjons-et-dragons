@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from .sorts_phb import ALIAS_NOMS, SORTS_SUPPLEMENTAIRES
+
 # --------------------------------------------------------------------------- #
 #  Classes lanceuses de sorts
 # --------------------------------------------------------------------------- #
@@ -148,7 +150,7 @@ R_ = "Rodeur"
 SORTS: list[dict[str, Any]] = [
     # ------------------------------ Niveau 0 ------------------------------ #
     {"nom": "Résistance", "niveau": 0, "ecole": "Abjuration",
-     "classes": [W_, S_, C_, B_], "incantation": "1 action simple",
+     "classes": [W_, S_, C_, B_, D_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, M", "duree": "1 minute",
      "sauvegarde": "", "effet": None,
      "description": "+1 aux jets de sauvegarde du porteur."},
@@ -173,7 +175,7 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "", "effet": None,
      "description": "Quatre lumières vacillantes éclairent ou signalent."},
     {"nom": "Éblouissement", "niveau": 0, "ecole": "Évocation",
-     "classes": [W_, S_, B_], "incantation": "1 action simple",
+     "classes": [W_, S_, B_, D_], "incantation": "1 action simple",
      "portee": "proche (7,50 m)", "composantes": "V", "duree": "instantanée",
      "sauvegarde": "non", "effet": None,
      "description": "Éclat de lumière qui éblouit une créature (-1 à l'attaque)."},
@@ -189,12 +191,12 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "", "effet": None,
      "description": "Petites illusions et tours de passe-passe inoffensifs."},
     {"nom": "Réparation", "niveau": 0, "ecole": "Transmutation",
-     "classes": [W_, S_, B_], "incantation": "1 action simple",
+     "classes": [W_, S_, B_, C_, D_], "incantation": "1 action simple",
      "portee": "3 m", "composantes": "V, S", "duree": "instantanée",
      "sauvegarde": "", "effet": None,
      "description": "Répare un petit objet brisé."},
     {"nom": "Lumière", "niveau": 0, "ecole": "Évocation",
-     "classes": [C_, D_, B_], "incantation": "1 action simple",
+     "classes": [C_, D_, B_, W_, S_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, M/F", "duree": "10 minutes",
      "sauvegarde": "Volonté annule", "effet": None,
      "description": "Illumine un objet comme une torche."},
@@ -210,12 +212,12 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "", "effet": None,
      "description": "+1 à un jet (attaque, compétence, sauvegarde) du sujet."},
     {"nom": "Vertu", "niveau": 0, "ecole": "Transmutation",
-     "classes": [C_], "incantation": "1 action simple",
+     "classes": [C_, D_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, M", "duree": "1 minute",
      "sauvegarde": "", "effet": None,
      "description": "+1 PV temporaires au sujet."},
     {"nom": "Message", "niveau": 0, "ecole": "Transmutation",
-     "classes": [B_], "incantation": "1 action simple",
+     "classes": [B_, W_, S_], "incantation": "1 action simple",
      "portee": "moyenne (30 m)", "composantes": "V, S, M/F", "duree": "10 rounds",
      "sauvegarde": "", "effet": None,
      "description": "Conversation chuchotée à distance."},
@@ -264,18 +266,18 @@ SORTS: list[dict[str, Any]] = [
      "effet": {"type": "buff"},
      "description": "1d4+1 de malus de FOR à la cible (jet d'attaque de toucher)."},
     {"nom": "Graisse", "niveau": 1, "ecole": "Conjuration",
-     "classes": [W_, S_], "incantation": "1 action simple",
+     "classes": [W_, S_, B_], "incantation": "1 action simple",
      "portee": "proche (7,50 m)", "composantes": "V, S, M", "duree": "1 round/niveau",
      "sauvegarde": "Réflexes annule",
      "effet": {"type": "etat", "condition": "À terre"},
      "description": "Sol glissant : chute, désarmement, évasion difficile."},
     {"nom": "Saut", "niveau": 1, "ecole": "Transmutation",
-     "classes": [W_, S_, D_], "incantation": "1 action simple",
+     "classes": [W_, S_, D_, R_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, M", "duree": "1 round/niveau",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "+10 au jet de Saut du sujet."},
     {"nom": "Compréhension des langues", "niveau": 1, "ecole": "Divination",
-     "classes": [W_, S_, B_], "incantation": "1 action simple",
+     "classes": [W_, S_, B_, C_], "incantation": "1 action simple",
      "portee": "personnelle", "composantes": "V, S, M", "duree": "10 minutes/niveau",
      "sauvegarde": "", "effet": {"type": "utilitaire"},
      "description": "Comprend toute langue parlée ou écrite."},
@@ -308,13 +310,13 @@ SORTS: list[dict[str, Any]] = [
      "effet": {"type": "soin", "des": "1d8", "par_niveau": 1, "max_des": 5},
      "description": "Restaure 1d8+1/niveau PV (max 5d8+5)."},
     {"nom": "Fléau", "niveau": 1, "ecole": "Nécromancie",
-     "classes": [C_], "incantation": "1 action simple",
+     "classes": [C_, B_, W_, S_], "incantation": "1 action simple",
      "portee": "moyenne (30 m)", "composantes": "V, S, DF", "duree": "1 round/niveau",
      "sauvegarde": "Volonté annule",
      "effet": {"type": "etat", "condition": "Effrayé"},
      "description": "Une créature de 5 DV ou moins fuit, tremblante."},
     {"nom": "Arme magique", "niveau": 1, "ecole": "Transmutation",
-     "classes": [C_, P_], "incantation": "1 action simple",
+     "classes": [C_, P_, W_, S_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S/DF", "duree": "1 minute/niveau",
      "sauvegarde": "Volonté annule (objet)",
      "effet": {"type": "buff"},
@@ -336,7 +338,7 @@ SORTS: list[dict[str, Any]] = [
      "effet": {"type": "etat", "condition": "Ordre suivi"},
      "description": "Impose une action simple (« tombe », « fuis », « halte »…)."},
     {"nom": "Alarme", "niveau": 1, "ecole": "Abjuration",
-     "classes": [R_], "incantation": "1 round",
+     "classes": [R_, B_, W_, S_], "incantation": "1 round",
      "portee": "proche (7,50 m)", "composantes": "V, S, M/F/DF", "duree": "2 heures/niveau",
      "sauvegarde": "", "effet": {"type": "utilitaire"},
      "description": "Zone d'alarme mentale ou sonore."},
@@ -353,7 +355,7 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "non", "effet": {"type": "buff"},
      "description": "Le sujet devient invisible (rompu par une action offensive)."},
     {"nom": "Image répétée", "niveau": 2, "ecole": "Illusion",
-     "classes": [W_, S_], "incantation": "1 action simple",
+     "classes": [W_, S_, B_], "incantation": "1 action simple",
      "portee": "personnelle", "composantes": "V, S", "duree": "1 round",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "1d4+1/niveau (max 8) duplicatas décalés : +4 en défense."},
@@ -379,17 +381,17 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "Vision dans le noir sur 18 m."},
     {"nom": "Force de taureau", "niveau": 2, "ecole": "Transmutation",
-     "classes": [C_, D_, W_, S_], "incantation": "1 action simple",
+     "classes": [C_, D_, W_, S_, P_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, M/DF", "duree": "1 minute/niveau",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "+4 de FOR au sujet."},
     {"nom": "Endurance de l'ours", "niveau": 2, "ecole": "Transmutation",
-     "classes": [C_, D_, W_, S_], "incantation": "1 action simple",
+     "classes": [C_, D_, W_, S_, R_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, M/DF", "duree": "1 minute/niveau",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "+4 de CON au sujet (+2 PV/niveau)."},
     {"nom": "Sagesse du hibou", "niveau": 2, "ecole": "Transmutation",
-     "classes": [C_, D_], "incantation": "1 action simple",
+     "classes": [C_, D_, W_, S_, P_, R_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, M/DF", "duree": "1 minute/niveau",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "+4 de SAG au sujet."},
@@ -399,20 +401,20 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "+4 de DEX au sujet."},
     {"nom": "Soins modérés", "niveau": 2, "ecole": "Conjuration",
-     "classes": [C_, D_, B_, P_, R_], "incantation": "1 action simple",
+     "classes": [C_, D_, B_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S", "duree": "instantanée",
      "sauvegarde": "Volonté annule (contre-soin)",
      "effet": {"type": "soin", "des": "2d8", "par_niveau": 1, "max_des": 10},
      "description": "Restaure 2d8+1/niveau PV (max 10d8+10)."},
     {"nom": "Restauration partielle", "niveau": 2, "ecole": "Conjuration",
-     "classes": [C_, D_, P_], "incantation": "3 rounds",
+     "classes": [C_, D_], "incantation": "3 rounds",
      "portee": "contact", "composantes": "V, S", "duree": "instantanée",
      "sauvegarde": "", "effet": {"type": "soin", "des": "1d4", "par_niveau": 0,
                                 "max_des": 0, "fixe": 0,
                                 "desc_special": "supprime 1d4 PV de dégâts d'attribut"},
      "description": "Supprime 1d4 de dégâts d'attribut ou un malus magique mineur."},
     {"nom": "Retardement du poison", "niveau": 2, "ecole": "Conjuration",
-     "classes": [C_, D_, P_, R_], "incantation": "1 action simple",
+     "classes": [C_, D_, P_, R_, B_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, DF", "duree": "1 heure/niveau",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "Le sujet résiste au poison pendant la durée (+4 de compétence)."},
@@ -423,7 +425,7 @@ SORTS: list[dict[str, Any]] = [
      "effet": {"type": "etat", "condition": "Réduit au silence"},
      "description": "Zone de 6 m où aucun son n'existe — bloque la magie verbale."},
     {"nom": "Résistance aux éléments", "niveau": 2, "ecole": "Abjuration",
-     "classes": [C_, D_, R_], "incantation": "1 action simple",
+     "classes": [C_, D_, R_, W_, S_, P_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S, DF", "duree": "1 minute/niveau",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "Le sujet encaisse chaleur ou froid extrêmes."},
@@ -441,7 +443,7 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "Volonté annule",
      "effet": {"type": "etat", "condition": "Charmé"},
      "description": "Impose un cours d'action raisonnable à une créature."},
-    {"nom": "Convocation des animaux I", "niveau": 2, "ecole": "Conjuration",
+    {"nom": "Convocation des animaux I", "niveau": 1, "ecole": "Conjuration",
      "classes": [D_, R_], "incantation": "1 round",
      "portee": "proche (7,50 m)", "composantes": "V, S, DF", "duree": "1 round/niveau",
      "sauvegarde": "", "effet": {"type": "utilitaire",
@@ -494,22 +496,22 @@ SORTS: list[dict[str, Any]] = [
                "element": "nécrotique", "soigne_lanceur": True},
      "description": "Toucher : 1d6/niveau dégâts, le lanceur récupère autant."},
     {"nom": "Lumière du jour", "niveau": 3, "ecole": "Évocation",
-     "classes": [C_, D_, R_], "incantation": "1 action simple",
+     "classes": [C_, D_, R_, B_, W_, S_, P_], "incantation": "1 action simple",
      "portee": "zone (rayon 18 m)", "composantes": "V, S", "duree": "10 minutes/niveau",
      "sauvegarde": "", "effet": {"type": "utilitaire"},
      "description": "Lumière vive — gêne les créatures des ténèbres."},
     {"nom": "Soins sérieux", "niveau": 3, "ecole": "Conjuration",
-     "classes": [C_, D_, B_], "incantation": "1 action simple",
+     "classes": [C_, B_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S", "duree": "instantanée",
      "sauvegarde": "Volonté annule (contre-soin)",
      "effet": {"type": "soin", "des": "3d8", "par_niveau": 1, "max_des": 15},
      "description": "Restaure 3d8+1/niveau PV (max 15d8+15)."},
     {"nom": "Prière", "niveau": 3, "ecole": "Enchantement",
-     "classes": [C_], "incantation": "1 action simple",
+     "classes": [C_, P_], "incantation": "1 action simple",
      "portee": "zone (rayon 12 m)", "composantes": "V, S, DF", "duree": "1 round",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "Alliés +1 (attaque/dégâts/sauves), ennemis -1."},
-    {"nom": "Convocation des animaux II", "niveau": 3, "ecole": "Conjuration",
+    {"nom": "Convocation des animaux II", "niveau": 2, "ecole": "Conjuration",
      "classes": [D_, R_], "incantation": "1 round",
      "portee": "proche (7,50 m)", "composantes": "V, S, DF", "duree": "1 round/niveau",
      "sauvegarde": "", "effet": {"type": "utilitaire",
@@ -531,7 +533,7 @@ SORTS: list[dict[str, Any]] = [
      "effet": {"type": "etat", "condition": "Paniqué"},
      "description": "Les créatures dans le cône s'enfuient en panique."},
     {"nom": "Porte dimensionnelle", "niveau": 4, "ecole": "Conjuration",
-     "classes": [W_, S_], "incantation": "1 action simple",
+     "classes": [W_, S_, B_], "incantation": "1 action simple",
      "portee": "longue (120 m)", "composantes": "V", "duree": "instantanée",
      "sauvegarde": "", "effet": {"type": "utilitaire"},
      "description": "Téléportation courte du lanceur (ou objet léger)."},
@@ -541,7 +543,7 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "Invisibilité qui ne rompt pas en attaquant."},
     {"nom": "Soins critiques", "niveau": 4, "ecole": "Conjuration",
-     "classes": [C_, D_, B_], "incantation": "1 action simple",
+     "classes": [C_, B_], "incantation": "1 action simple",
      "portee": "contact", "composantes": "V, S", "duree": "instantanée",
      "sauvegarde": "Volonté annule (contre-soin)",
      "effet": {"type": "soin", "des": "4d8", "par_niveau": 1, "max_des": 20},
@@ -558,7 +560,7 @@ SORTS: list[dict[str, Any]] = [
      "portee": "contact", "composantes": "V, S, M", "duree": "10 minutes/niveau",
      "sauvegarde": "", "effet": {"type": "buff"},
      "description": "Immunité à l'immobilisation, à la paralysie et aux entraves."},
-    {"nom": "Convocation des animaux III", "niveau": 4, "ecole": "Conjuration",
+    {"nom": "Convocation des animaux III", "niveau": 3, "ecole": "Conjuration",
      "classes": [D_, R_], "incantation": "1 round",
      "portee": "proche (7,50 m)", "composantes": "V, S, DF", "duree": "1 round/niveau",
      "sauvegarde": "", "effet": {"type": "utilitaire",
@@ -590,7 +592,7 @@ SORTS: list[dict[str, Any]] = [
      "sauvegarde": "Volonté annule",
      "effet": {"type": "etat", "condition": "Dominé"},
      "description": "Contrôle mental d'un humanoïde par télépathie."},
-    {"nom": "Résurrection", "niveau": 5, "ecole": "Conjuration",
+    {"nom": "Résurrection", "niveau": 7, "ecole": "Conjuration",
      "classes": [C_], "incantation": "1 minute",
      "portee": "contact", "composantes": "V, S, M, DF", "duree": "instantanée",
      "sauvegarde": "", "effet": {"type": "soin", "des": "0", "par_niveau": 0,
@@ -598,7 +600,7 @@ SORTS: list[dict[str, Any]] = [
                                 "desc_special": "ramène un mort (-1 niveau) à la vie avec 1 PV"},
      "description": "Rend la vie à une créature morte depuis moins d'une journée/niveau."},
     {"nom": "Colonne de feu", "niveau": 5, "ecole": "Évocation",
-     "classes": [C_, D_], "incantation": "1 action simple",
+     "classes": [C_], "incantation": "1 action simple",
      "portee": "moyenne (30 m)", "composantes": "V, S, DF", "duree": "instantanée",
      "sauvegarde": "Réflexes demi",
      "effet": {"type": "degats", "des": "1d6", "par_niveau": 1, "max_des": 15,
@@ -612,6 +614,14 @@ SORTS: list[dict[str, Any]] = [
                "masse": True},
      "description": "Soins légers sur toutes les créatures alliées d'un rayon de 9 m."},
 ]
+
+# --------------------------------------------------------------------------- #
+#  Complément officiel : listes PHB 3.5 complètes (tous niveaux, toutes
+#  classes) — voir sorts_phb.py. Les entrées curatées ci-dessus (avec effets
+#  mécaniques encodables) restent PRIORITAIRES : un sort n'est jamais dupliqué
+#  pour une même paire (classe, niveau de sort).
+# --------------------------------------------------------------------------- #
+SORTS.extend(SORTS_SUPPLEMENTAIRES)
 
 _SORTS_PAR_NOM: dict[str, dict[str, Any]] = {s["nom"].lower(): s for s in SORTS}
 
@@ -686,12 +696,34 @@ def sorts_pour(classe: str, niveau_sort_max_autorise: Optional[int] = None) -> l
     return res
 
 
-def sort_par_nom(nom: str) -> Optional[dict[str, Any]]:
-    """Recherche insensible casse/accents d'un sort par son nom."""
+def sort_par_nom(nom: str, classe: str = "") -> Optional[dict[str, Any]]:
+    """Recherche insensible casse/accents d'un sort par son nom.
+
+    Un même sort peut exister à des NIVEAUX différents selon les classes
+    (ex. « Soins sérieux » : barde/clerc 3, druide/paladin 4) : avec
+    `classe`, l'entrée correspondant à cette classe est privilégiée pour
+    la validation du niveau castable. Sans classe (ou si la classe n'a pas
+    le sort), la première entrée trouvée fait office de repli.
+    """
     cible = _norm(nom)
+    fallback: Optional[dict[str, Any]] = None
     for s in SORTS:
         if _norm(s["nom"]) == cible:
-            return s
+            if classe and classe in s["classes"]:
+                return s
+            if fallback is None:
+                fallback = s
+    if fallback is not None:
+        return fallback
+    # Recherche par alias (variantes de nom du site officiel : « Baiser du
+    # vampire » → « Vampirisation », « Invisibilité suprême » → « Invisibilité
+    # supérieure », « Convocation d’alliés naturels » → « Convocation des
+    # animaux »…). Les clés d'ALIAS_NOMS sont en forme compacte (sans
+    # espaces ni apostrophes) : on utilise _norm_dure pour matcher.
+    dure = _norm_dure(nom)
+    alias = ALIAS_NOMS.get(dure)
+    if alias:
+        return sort_par_nom(alias, classe)
     return None
 
 
@@ -699,6 +731,16 @@ def _norm(s: str) -> str:
     import unicodedata
     nf = unicodedata.normalize("NFKD", (s or "").lower())
     return "".join(c for c in nf if not unicodedata.combining(c)).strip()
+
+
+def _norm_dure(s: str) -> str:
+    """Forme compacte (minuscules, sans accents ni espaces ni apostrophes),
+    identique à la normalisation du script de fusion (clés d'ALIAS_NOMS)."""
+    import re
+    import unicodedata
+    nf = unicodedata.normalize("NFKD", (s or "").lower())
+    nf = "".join(c for c in nf if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "", nf)
 
 
 def sorts_de_fiche(fiche: dict[str, Any]) -> dict[str, Any]:
@@ -747,7 +789,7 @@ def depassement_connus(classe: str, niveau: int, connus: list[str]) -> dict[int,
     budget = sorts_connus_max(classe, niveau)
     exces: dict[int, int] = {}
     for s in connus:
-        sp = sort_par_nom(s) if isinstance(s, str) else None
+        sp = sort_par_nom(s, classe) if isinstance(s, str) else None
         if sp is None:
             continue
         lvl = sp["niveau"]

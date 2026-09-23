@@ -401,6 +401,9 @@ async def _attaque_auto(
         {
             "nb_des": nb_des, "faces": faces, "bonus": bonus_dmg,
             "arme_ou_sort": nom_arme, "cible": cible,
+            # La fiche du monstre attaquant fait foi pour les dés (tailles
+            # spéciales) — pas le catalogue du joueur (cf. dice.lancer_degats).
+            "attaquant": attaquant,
         },
         res,
     )

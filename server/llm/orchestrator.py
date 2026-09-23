@@ -112,6 +112,21 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "incanter_sort",
         "preparer_sorts",
         "repos_long",
+        # Familier (Magicien/Sorcier) / compagnon animal (Druide) : appel du
+        # compagnon choisi à la création (initiative si combat en cours) et
+        # renvoi (jet de Vigueur DD 15 + perte d'XP).
+        "appeler_familier",
+        "renvoyer_familier",
+        # Marché PHB 3.5 (D&D 3.5 + règles-maison) : consulter le marché
+        # local (types d'habitat, coefficients de prix), l'inventaire des
+        # marchands, ACHETER (débit de l'or) / VENDRE (crédit), catalogue
+        # officiel. L'auberge (repas/logement « bonne »…) est ici aussi.
+        "marche_consulter",
+        "marche_stock",
+        "marche_acheter",
+        "marche_vendre",
+        "equipement_catalogue",
+        "auberge_commander",
         # Transition exploration → combat : engager_combat déclenche la
         # rencontre (initiative officielle) ; TOUTE la suite (rotation,
         # attaques des monstres, clôture, XP) est gérée par le serveur.
@@ -152,6 +167,10 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_des",
         "incanter_sort",
         "combat_ajouter_combattant",
+        # Familier/compagnon animal : rappel en cours de mêlée → rejoint
+        # l'initiative comme allié (renvoi possible via renvoyer_familier).
+        "appeler_familier",
+        "renvoyer_familier",
         "fiche_perso_recuperer",
         "fiche_perso_infliger_degats",
         "fiche_perso_soigner",
@@ -218,6 +237,12 @@ _OUTILS_DECISION = frozenset({
     "inventaire_consommer_munition",
     # Magie 3.5
     "incanter_sort", "preparer_sorts",
+    # Familier / compagnon animal (appel lié à la fiche, renvoi)
+    "appeler_familier", "renvoyer_familier",
+    # Marché PHB/maison : achat (débit or), vente (crédit), auberge,
+    # catalogue — des décisions mécaniques comme le repos/les dégâts.
+    "marche_consulter", "marche_stock", "marche_acheter", "marche_vendre",
+    "equipement_catalogue", "auberge_commander",
     # Jets de dés isolés (jet de caractéristique, test de compétence…)
     "lancer_d20", "lancer_sauvegarde", "lancer_des",
 })
@@ -239,7 +264,7 @@ _COMBAT_PRIORITAIRES = frozenset({
     "fiche_perso_infliger_degats", "fiche_perso_soigner",
     "fiche_perso_condition", "fiche_perso_niveau_negatif",
     "inventaire_consommer_munition", "retraite_combat",
-    "combat_ajouter_combattant",
+    "combat_ajouter_combattant", "appeler_familier",
 })
 
 # 🧱 Budget TOTAL du contexte d'une requête (en CARACTÈRES) : work + schémas
@@ -1957,6 +1982,8 @@ _BUDGET_OUTILS_TOUR: dict[str, int] = {
     # 2-4 min de génération.
     "incanter_sort": 3,
     "preparer_sorts": 2,
+    "appeler_familier": 1,           # un appel de compagnon par tour max
+    "renvoyer_familier": 1,
     "fiche_perso_soigner": 4,
     "etat_partie_get": 3,
     "terminer_mon_tour": 1,          # un SEUL par tour (anti-spam rounds)

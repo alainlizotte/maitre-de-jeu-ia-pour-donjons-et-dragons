@@ -101,6 +101,49 @@ ARMES: list[dict[str, Any]] = [
     {"nom": "Arc long",               "groupe": "martiale", "distance": True,  "degats": "1d8",      "cout": 75,  "poids": 1.36},
     {"nom": "Arc court composite",    "groupe": "martiale", "distance": True,  "degats": "1d6",      "cout": 75,  "poids": 0.91},
     {"nom": "Arc long composite",     "groupe": "martiale", "distance": True,  "degats": "1d8",      "cout": 100, "poids": 1.36},
+    # Simples complémentaires (règles officielles)
+    {"nom": "Gantelet",               "groupe": "simple",   "distance": False, "degats": "1d3",      "cout": 2,   "poids": 0.5},
+    {"nom": "Dague coup-de-poing",    "groupe": "simple",   "distance": False, "degats": "1d4",      "cout": 2,   "poids": 0.5},
+    {"nom": "Gantelet clouté",        "groupe": "simple",   "distance": False, "degats": "1d4",      "cout": 5,   "poids": 0.5},
+    {"nom": "Épieu",                  "groupe": "simple",   "distance": True,  "degats": "1d6",      "cout": 1,   "poids": 1.5},
+    {"nom": "Gourdin",                "groupe": "simple",   "distance": False, "degats": "1d6",      "cout": 0,   "poids": 1.5},
+    {"nom": "Pique",                  "groupe": "simple",   "distance": False, "degats": "1d8",      "cout": 5,   "poids": 4.5},
+    # Martiales complémentaires
+    {"nom": "Kukri",                  "groupe": "martiale", "distance": False, "degats": "1d4",      "cout": 8,   "poids": 1.0},
+    {"nom": "Marteau léger",          "groupe": "martiale", "distance": True,  "degats": "1d4",      "cout": 1,   "poids": 1.0},
+    {"nom": "Pic de guerre léger",    "groupe": "martiale", "distance": False, "degats": "1d4",      "cout": 4,   "poids": 1.5},
+    {"nom": "Pic de guerre lourd",    "groupe": "martiale", "distance": False, "degats": "1d6",      "cout": 8,   "poids": 3.0},
+    {"nom": "Massue",                 "groupe": "martiale", "distance": False, "degats": "1d10",     "cout": 5,   "poids": 4.0},
+    {"nom": "Cimeterre",              "groupe": "martiale", "distance": False, "degats": "1d6",      "cout": 15,  "poids": 2.0},
+    {"nom": "Cimeterre à deux mains", "groupe": "martiale", "distance": False, "degats": "2d4",      "cout": 75,  "poids": 4.0},
+    {"nom": "Fléau d'armes léger",    "groupe": "martiale", "distance": False, "degats": "1d8",      "cout": 8,   "poids": 2.5},
+    {"nom": "Fléau d'armes lourd",    "groupe": "martiale", "distance": False, "degats": "1d10",     "cout": 15,  "poids": 5.0},
+    {"nom": "Corsèque",               "groupe": "martiale", "distance": False, "degats": "2d4",      "cout": 10,  "poids": 6.0},
+    {"nom": "Coutille",               "groupe": "martiale", "distance": False, "degats": "1d10",     "cout": 8,   "poids": 5.0},
+    {"nom": "Grande hache",           "groupe": "martiale", "distance": False, "degats": "1d12",     "cout": 20,  "poids": 6.0},
+    {"nom": "Lance d'arçon",          "groupe": "martiale", "distance": False, "degats": "1d8",      "cout": 10,  "poids": 5.0},
+    # Exotiques (groupe « exotique ») : AUCUNE classe ne les maîtrise (les
+    # groupes de maîtrise sont « simple »/« martiale » uniquement) → toujours
+    # grisées au formulaire de création (un don « Arme exotique » serait
+    # nécessaire en règles). Elles restent achetable chez les marchands.
+    {"nom": "Kama",                   "groupe": "exotique", "distance": False, "degats": "1d6",      "cout": 2,   "poids": 1.0},
+    {"nom": "Nunchaku",               "groupe": "exotique", "distance": False, "degats": "1d6",      "cout": 2,   "poids": 1.0},
+    {"nom": "Sai",                    "groupe": "exotique", "distance": False, "degats": "1d4",      "cout": 1,   "poids": 0.5},
+    {"nom": "Siangham",               "groupe": "exotique", "distance": False, "degats": "1d6",      "cout": 3,   "poids": 0.5},
+    {"nom": "Fouet",                  "groupe": "exotique", "distance": True,  "degats": "1d3",      "cout": 1,   "poids": 1.0},
+    {"nom": "Hache de guerre naine",  "groupe": "exotique", "distance": False, "degats": "1d10",     "cout": 30,  "poids": 4.0},
+    {"nom": "Chaîne cloutée",         "groupe": "exotique", "distance": False, "degats": "2d4",      "cout": 25,  "poids": 5.0},
+    {"nom": "Double-lame",            "groupe": "exotique", "distance": False, "degats": "1d8",      "cout": 100, "poids": 5.0},
+    {"nom": "Fléau double",           "groupe": "exotique", "distance": False, "degats": "1d8",      "cout": 90,  "poids": 5.0},
+    {"nom": "Hache double orque",     "groupe": "exotique", "distance": False, "degats": "1d8",      "cout": 60,  "poids": 7.5},
+    {"nom": "Marteau-piolet gnome",   "groupe": "exotique", "distance": False, "degats": "1d8",      "cout": 20,  "poids": 3.0},
+    {"nom": "Urgrosh nain",           "groupe": "exotique", "distance": False, "degats": "1d8",      "cout": 50,  "poids": 6.0},
+    {"nom": "Arbalète de poing",      "groupe": "exotique", "distance": True,  "degats": "1d4",      "cout": 100, "poids": 1.0},
+    {"nom": "Arbalète légère à répétition", "groupe": "exotique", "distance": True, "degats": "1d8", "cout": 250, "poids": 3.0},
+    {"nom": "Arbalète lourde à répétition", "groupe": "exotique", "distance": True, "degats": "1d10", "cout": 400, "poids": 6.0},
+    {"nom": "Bolas",                  "groupe": "exotique", "distance": True,  "degats": "1d4",      "cout": 5,   "poids": 1.0},
+    {"nom": "Filet",                  "groupe": "exotique", "distance": True,  "degats": "spécial", "cout": 20,  "poids": 3.0},
+    {"nom": "Shuriken (lot de 5)",    "groupe": "exotique", "distance": True,  "degats": "1d2",      "cout": 1,   "poids": 0.25},
 ]
 
 _ARMES_PAR_NOM = {a["nom"]: a for a in ARMES}

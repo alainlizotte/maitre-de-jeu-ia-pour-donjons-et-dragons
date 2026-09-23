@@ -34,9 +34,12 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth as auth_mod
 from . import catalogue as catalogue_mod
+from . import equipement_phb as equipement_phb_mod
+from . import familiers as familiers_mod
 from . import gpu as _gpu
 from . import persos as persos_mod
 from . import sorts as sorts_mod
+from . import villes as villes_mod
 from .config import AppConfig, get_config, set_config
 from .game.session import PartySession, registry as sessions
 from .game.state import PartyState, SCHEMA_PARTIE
@@ -1763,6 +1766,26 @@ async def persos_modele() -> dict[str, Any]:
         "sorts_connus_max": sorts_mod.CONNUS,
         "sorts_carac": sorts_mod.CARAC_INCANTATION,
         "sorts_prepare": sorted(sorts_mod.PREPARE),
+        # Marché & auberge : types de peuplement, marchands, tarifs.
+        # (les articles détaillés vivent côté tools : equipement_catalogue)
+        "villes": [
+            {
+                "nom": t, "rang": r,
+                "multiplicateur": villes_mod.multiplicateur(t),
+                "sorts_max": villes_mod.sorts_max_niveau(t),
+                "auberge_qualites": villes_mod.auberge_qualites(t),
+            }
+            for r, t in enumerate(villes_mod.RANGS)
+        ],
+        "marchands": [
+            {"nom": k, "description": v.get("description", ""),
+             "categories": v.get("categories", [])}
+            for k, v in equipement_phb_mod.MARCHANDS.items()
+        ],
+        "monnaie": {"1_po_en_pc": 10, "1_pa_en_pc": 1, "min_pc": 1},
+        # Familier (Magicien/Sorcier) et compagnon animal (Druide/Rodeur) :
+        # espèces + stats de base du bestiaire + tables de progression PHB.
+        "familiers": familiers_mod.modele_pour_client(str(_dossier_donnees())),
     }
 
 
@@ -2107,7 +2130,7 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
             )
         nls = sorts_mod.niveau_sort_max(classe_canon, niveau)
         for s in sorts_connus + list(sorts_prepares.keys()):
-            sp = sorts_mod.sort_par_nom(str(s))
+            sp = sorts_mod.sort_par_nom(str(s), classe_canon)
             if sp is None:
                 raise HTTPException(status_code=400, detail=f"Sort inconnu : « {s} ».")
             if classe_canon not in sp["classes"]:
@@ -2136,7 +2159,7 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
             )
             hors_tours = [
                 s for s in sorts_connus
-                if (sorts_mod.sort_par_nom(str(s)) or {}).get("niveau", 0) >= 1
+                if (sorts_mod.sort_par_nom(str(s), classe_canon) or {}).get("niveau", 0) >= 1
             ]
             if len(hors_tours) > budget_grimoire:
                 raise HTTPException(
@@ -2175,7 +2198,7 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
             budget_connus = sorts_mod.sorts_connus_max(classe_canon, niveau)
             comptes: dict[int, int] = {}
             for s in sorts_connus:
-                sp = sorts_mod.sort_par_nom(str(s))
+                sp = sorts_mod.sort_par_nom(str(s), classe_canon)
                 if sp and sp["niveau"] in budget_connus:
                     comptes[sp["niveau"]] = comptes.get(sp["niveau"], 0) + 1
             manquants = {
@@ -2199,6 +2222,29 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         "prepares": {str(k): max(1, int(v or 1)) for k, v in sorts_prepares.items()},
         "depenses": {},
     }
+
+    # ---------------- Familier / compagnon animal (PHB 3.5) ------------------
+    # Choix FACULTATIF : familier (Magicien/Sorcier) ou compagnon animal
+    # (Druide dès le niv.1, Rodeur dès le niv.4). Le lien est enregistré sur
+    # la fiche ; en jeu, le tool `appeler_familier` matérialise l'arrivée du
+    # compagnon (rituel 100 po / 24 h pour le familier).
+    fiche_familier = None
+    if payload.get("familier"):
+        try:
+            fiche_familier = familiers_mod.valider_choix(
+                payload["familier"], classe_canon, niveau
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        # L'état « invoqué » (rituel déjà accompli en jeu) survit à l'édition
+        # tant que l'espèce et le type restent identiques.
+        ancien = (existante or {}).get("familier")
+        if (
+            isinstance(ancien, dict)
+            and ancien.get("espece") == fiche_familier["espece"]
+            and ancien.get("type") == fiche_familier["type"]
+        ):
+            fiche_familier["invoque"] = bool(ancien.get("invoque"))
 
     # En édition, l'XP gagnée en jeu est conservée : elle n'évolue que par la
     # progression automatique (moteur de combat) et les tools MJ — jamais par
@@ -2253,6 +2299,10 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
     # Charge transportée (kg) et catégorie d'encombrement D&D 3.5, calculées
     # depuis le catalogue de poids PHB 3.5.
     fiche.update(_calculer_charge_equipement(equipement, fiche["charge_max"], fiche["or"]))
+    # Familier/compagnon : clé ABSENTE si aucun choix (jamais null — le
+    # schéma de fiche attend un objet).
+    if fiche_familier:
+        fiche["familier"] = fiche_familier
 
     chemin = persos_mod.chemin_fiche(data_dir, nom)
     try:
@@ -2314,22 +2364,16 @@ async def get_fiche(nom: str, partie_id: Optional[str] = None) -> dict[str, Any]
         fiche = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as e:
         raise HTTPException(status_code=500, detail=f"Fiche illisible : {e}")
-    portrait = None
-    portraits_dir = cfg.abs(cfg.paths.data_dir) / "portraits_cache"
-    # Cherche d'abord le portrait party_id-specific, puis le fallback generic.
-    # Extensions : .png en priorité, puis .svg (placeholder).
-    base_slugs = [f"{_slug(nom)}"]
-    if partie_id:
-        base_slugs.insert(0, f"{partie_id}_{_slug(nom)}")
-    for base in base_slugs:
-        for ext in (".png", ".svg"):
-            candidate = f"{base}{ext}"
-            png = portraits_dir / candidate
-            if png.is_file():
-                portrait = f"/data/portraits_cache/{candidate}"
-                break
-        if portrait:
-            break
+    # Résolution UNIQUE (même ordre et mêmes candidats que la page principale
+    # « Mes personnages ») : un même personnage affiche toujours LA même image,
+    # quel que soit le nom de fichier sous lequel son portrait a été généré.
+    data_dir = str(cfg.abs(cfg.paths.data_dir))
+    portrait = persos_mod.resoudre_portrait(
+        data_dir,
+        str(fiche.get("nom", "") or nom),
+        proprietaire=str(fiche.get("proprietaire", "")),
+        partie_id=partie_id or "",
+    )
     return {"fiche": fiche, "portrait": portrait}
 
 

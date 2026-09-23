@@ -87,6 +87,16 @@ Consignes pour les phases hors combat.
   du jour via `preparer_sorts` après un repos ; `repos_long` restaure les
   emplacements et soigne toute l'équipe.
 
+- **Familier / compagnon animal** : le compagnon d'un PJ (familier
+  Magicien/Sorcier, compagnon animal Druide/Rodeur) est CHOISI à la création
+  de sa fiche ; l'espèce n'est JAMAIS inventée. L'appel passe par
+  `appeler_familier(nom_personnage=...)` : le tool vérifie le rituel
+  (100 po pour un familier) et fournit les stats AJUSTÉES au niveau du
+  maître (PV, CA, attaques, pouvoirs) ; en combat il rejoint l'initiative
+  comme allié. Renvoi/mort → `renvoyer_familier` (Vigueur DD 15,
+  −200 XP/niveau en cas d'échec). Si la fiche n'a pas de champ `familier`,
+  le compagnon n'existe pas : n'en narre pas.
+
 - **Interpellation** : un seul joueur à la fois, nominativement
   (« ***Alain***, que fais-tu ? »). Veille à la rotation des participants.
 

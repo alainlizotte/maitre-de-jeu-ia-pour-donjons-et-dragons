@@ -309,6 +309,13 @@ export interface FichePerso {
     depenses?: Record<string, number>;
   };
   equipement?: { nom: string; qte: number; poids?: number }[];
+  /** Familier (Magicien/Sorcier) ou compagnon animal (Druide/Rodeur). */
+  familier?: {
+    type: "familier" | "compagnon";
+    espece: string;
+    /** true une fois l'appel accompli en jeu (tool appeler_familier). */
+    invoque?: boolean;
+  };
   or?: number;
   alignement?: string;
   dieu?: string;
@@ -360,7 +367,7 @@ export interface DieuModele {
 
 export interface ArmeModele {
   nom: string;
-  groupe: "simple" | "martiale";
+  groupe: "simple" | "martiale" | "exotique";
   distance: boolean;
   degats: string;
   cout: number;
@@ -400,7 +407,7 @@ export interface CompetenceModele {
 export interface ProficiencesClasse {
   armures: ("Legere" | "Moyenne" | "Lourde")[];
   boucliers: boolean;
-  groupes: ("simple" | "martiale")[];
+  groupes: ("simple" | "martiale" | "exotique")[];
   specifiques: string[];
 }
 
@@ -421,6 +428,47 @@ export interface SortModele {
   duree: string;
   sauvegarde: string;
   description: string;
+}
+
+/** Espèce de familier / compagnon animal (miroir de server/familiers.py). */
+export interface EspeceModele {
+  nom: string;
+  cle: string;
+  /** Faculté spéciale transmise au maître (familiers) / note hors-norme. */
+  faculte?: string;
+  /** Stats de base de l'espèce (bestiaire). */
+  pv?: number;
+  ca?: number;
+  degats?: string;
+  dv?: string;
+  /** Compagnons hors-normes uniquement : niveau de classe minimal requis. */
+  niveau_min?: number;
+  /** … et réduction du niveau effectif (ex. −3). */
+  reduction?: number;
+}
+
+/** Bloc familier/compagnon du modèle (server/familiers.modele_pour_client). */
+export interface FamiliersModele {
+  classes_familier: string[];
+  classes_compagnon: string[];
+  niveau_min_compagnon: Record<string, number>;
+  familiers: EspeceModele[];
+  compagnons_animaux: EspeceModele[];
+  compagnons_hors_norme: EspeceModele[];
+  progression_familier: {
+    niveaux: string;
+    aj_naturelle: number;
+    int: number;
+    pouvoirs: string[];
+  }[];
+  progression_compagnon: {
+    niveaux: string;
+    dv_sup: number;
+    aj_naturelle: number;
+    aj_for_dex: number;
+    tours: number;
+    pouvoirs: string[];
+  }[];
 }
 
 /** État de magie d'un personnage (calculé côté client depuis la fiche). */
@@ -454,4 +502,6 @@ export interface ModelePerso {
   sorts_connus_max?: Record<string, (number | 0)[][]>;
   sorts_carac?: Record<string, string>;
   sorts_prepare?: string[];
+  /** Familier (Magicien/Sorcier) et compagnon animal (Druide/Rodeur). */
+  familiers?: FamiliersModele;
 }

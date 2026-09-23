@@ -86,6 +86,15 @@ règles structurelles.
   le tool respecte l'économie d'actions (1 action standard/round pour un
   sort à « 1 action simple »).
 
+- **Familier / compagnon animal en combat** : le compagnon d'un PJ
+  (fiche avec champ `familier`) entre dans la mêlée via
+  `appeler_familier(nom_personnage=...)` — il est ajouté à l'initiative
+  comme ALLIÉ avec ses PV ajustés au niveau du maître (suivis
+  mécaniquement). N'invente JAMAIS de compagnon sans ce tool, et ne le
+  fais JAMAIS combattre s'il n'a pas été ajouté à l'initiative. Le compagnon
+  agit selon les ordres de son maître (action libre du maître pour un
+  compagnon animal doté du pouvoir « Lien »).
+
 0. **Illustration à l'annonce** : dès qu'un monstre apparaît pour la première
    fois (rencontre, embuscade, début de combat), appelle
    `monstre_consulter(nom=...)` pour afficher son portrait à la table.

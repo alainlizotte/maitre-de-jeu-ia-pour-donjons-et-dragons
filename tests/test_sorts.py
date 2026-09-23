@@ -289,6 +289,62 @@ def test_resume_sorts() -> None:
 
 
 # --------------------------------------------------------------------------- #
+#  Catalogue complet (PHB) : sort_par_nom classe-aware + alias du site
+# --------------------------------------------------------------------------- #
+def test_sort_par_nom_classe_aware() -> None:
+    # « Soins sérieux » : barde/clerc niv.3, druide/paladin/rôdeur niv.4.
+    assert cat.sort_par_nom("Soins sérieux", "Clerc")["niveau"] == 3
+    assert cat.sort_par_nom("Soins sérieux", "Paladin")["niveau"] == 4
+    # « Soins critiques » : druide niv.5 (pas niv.4/6).
+    assert cat.sort_par_nom("Soins critiques", "Druide")["niveau"] == 5
+    # « Convocation des animaux IV » : druide/rôdeur niv.4.
+    assert cat.sort_par_nom("Convocation des animaux IV", "Rodeur")["niveau"] == 4
+    # Sans classe : repli sur la première entrée (niv.3 pour Soins sérieux).
+    assert cat.sort_par_nom("Soins sérieux")["niveau"] in (3, 4)
+
+
+def test_sort_par_nom_alias_site() -> None:
+    # Variantes du site officiel → nom canonique du catalogue.
+    assert cat.sort_par_nom("Baiser du vampire", "Sorcier")["nom"] == "Vampirisation"
+    assert cat.sort_par_nom("Invisibilité suprême", "Barde")["nom"] == "Invisibilité supérieure"
+    assert cat.sort_par_nom("Image miroir")["nom"] == "Image répétée"
+    assert cat.sort_par_nom("Vision dans le noir")["nom"] == "Sombre vision"
+    assert cat.sort_par_nom("Convocation d'alliés naturels IV")["nom"] == "Convocation des animaux IV"
+    assert cat.sort_par_nom("Hébétement")["nom"] == "Étourdi"
+    # Inconnu → None.
+    assert cat.sort_par_nom("Sort inexistant 123") is None
+
+
+def test_catalogue_complet_classes() -> None:
+    # Couverture des classes lanceuses officielles (3.5) : magicien/sorcier
+    # 0-9, clerc/druide 0-9, barde 0-6, paladin/rôdeur 1-4.
+    attendu = {
+        "Magicien": {0: 19, 1: 40, 2: 50, 3: 42, 4: 41, 5: 43, 6: 43,
+                     7: 35, 8: 35, 9: 24},
+        "Sorcier": {0: 19, 1: 40, 2: 50, 3: 42, 4: 40, 5: 43, 6: 42,
+                    7: 35, 8: 35, 9: 24},
+        "Clerc": {0: 12, 1: 26, 2: 33, 3: 31, 4: 23, 5: 24, 6: 25,
+                  7: 18, 8: 17, 9: 11},
+        "Druide": {0: 13, 1: 21, 2: 28, 3: 23, 4: 17, 5: 19, 6: 18,
+                   7: 13, 8: 10, 9: 10},
+        "Barde": {0: 16, 1: 26, 2: 37, 3: 30, 4: 21, 5: 17, 6: 20,
+                  7: 0, 8: 0, 9: 0},
+        "Paladin": {0: 0, 1: 14, 2: 9, 3: 11, 4: 11,
+                    5: 0, 6: 0, 7: 0, 8: 0, 9: 0},
+        "Rodeur": {0: 0, 1: 18, 2: 14, 3: 15, 4: 7,
+                   5: 0, 6: 0, 7: 0, 8: 0, 9: 0},
+    }
+    for classe, att in attendu.items():
+        for niveau, nb in att.items():
+            n = len([s for s in cat.SORTS
+                     if classe in s["classes"] and s["niveau"] == niveau])
+            assert n == nb, f"{classe} niv.{niveau}: {n} != {nb}"
+    # Aucun doublon strict (nom, niveau, classe).
+    cles = {(s["nom"].lower(), s["niveau"], tuple(s["classes"])) for s in cat.SORTS}
+    assert len(cles) == len(cat.SORTS)
+
+
+# --------------------------------------------------------------------------- #
 #  Runner intégré (pytest absent)
 # --------------------------------------------------------------------------- #
 if __name__ == "__main__":

@@ -33,6 +33,18 @@ _MOTS_SORT = (
     "invocation", "doigt", "orbe", "malediction", "mot", "cri",
 )
 
+
+def _est_nom_de_sort(nom: str) -> bool:
+    """Vrai si `nom` contient un mot-clé de SORT/effet : son jet de dégâts
+    n'est soumis ni au catalogue ni à la fiche d'une arme (Boule de feu 5d6
+    n'a pas les dés d'arme de son porteur)."""
+    c = _norm_arme(nom)
+    return bool(c) and any(
+        re.search(r"(?:^|\s)" + re.escape(m) + r"(?:\s|$)", c)
+        for m in _MOTS_SORT
+    )
+
+
 _ARMES_CATALOGUE: Optional[dict] = None
 
 
@@ -59,8 +71,7 @@ def _de_arme_catalogue(nom: str) -> Optional[tuple[int, int, str]]:
     cible = _norm_arme(nom)
     if not cible:
         return None
-    if any(re.search(r"(?:^|\s)" + re.escape(m) + r"(?:\s|$)", cible)
-           for m in _MOTS_SORT):
+    if _est_nom_de_sort(nom):
         return None
     cible = re.sub(r"\b(?:de maitre|masterwork|magique|enchant\w*)\b", " ", cible)
     cible = re.sub(r"\b\d+\b", " ", cible)      # bonus magique (+1 → « 1 »)
@@ -81,6 +92,46 @@ def _de_arme_catalogue(nom: str) -> Optional[tuple[int, int, str]]:
             return None
         return int(m.group(1)), int(m.group(2)), str(arme.get("nom"))
     return None
+
+
+def _arme_fiche_monstre(
+    ctx: ToolContext, nom: str,
+) -> Optional[tuple[str, int, int]]:
+    """(nom d'arme, nb_des, faces) de l'arme du MONSTRE `nom` lus sur sa
+    fiche bestiaire, ou None si `nom` n'est pas un monstre connu (ou si ses
+    attaques sont illisibles).
+
+    La fiche du monstre prime sur le catalogue du joueur : les créatures de
+    taille G/TG manient des armes aux dés propres (Géant (froid) de taille
+    G — « grande hache » 3d6+13, alors que le catalogue n'a la Grande hache
+    qu'en 1d12, taille M). Valider ces jets contre le catalogue rejetait
+    l'attaque automatique du bestiaire et les dégâts n'étaient JAMAIS
+    appliqués. Recherche LECTURE SEULE : aucun monstre générique n'est créé
+    ici (contrairement au fallback de combat._attaque_auto)."""
+    if not str(nom or "").strip():
+        return None
+    try:
+        from .monstres import _find_monstre                # noqa: PLC0415
+        from ..game.combat import _arme_du_bestiaire       # noqa: PLC0415
+        m = _find_monstre(ctx, str(nom))
+        arme = _arme_du_bestiaire(m) if m else None
+    except Exception:                                      # noqa: BLE001
+        return None
+    if not arme:
+        return None
+    return str(arme[0]), int(arme[2]), int(arme[3])
+
+
+def _cite_arme(texte: str, nom_arme: str) -> bool:
+    """Vrai si `texte` désigne l'arme `nom_arme` (mots entiers, accents et
+    casse ignorés) : « grande hache du géant » cite « grande hache »."""
+    t = _norm_arme(texte)
+    a = _norm_arme(nom_arme)
+    if not t or not a:
+        return False
+    return t == a or bool(
+        re.search(r"(?:^|\s)" + re.escape(a) + r"(?:\s|$)", t)
+    )
 
 
 
@@ -616,6 +667,7 @@ async def lancer_degats(
     bonus: int,
     arme_ou_sort: str,
     cible: str,
+    attaquant: str = "",
 ) -> ToolResult:
     """
     Effectue le jet de dégâts D&D 3.5 selon la formule NdF + bonus. Renvoie les
@@ -626,26 +678,48 @@ async def lancer_degats(
     :param bonus (int): bonus de dégâts (mod. FOR, magie, etc.). Peut être négatif.
     :param arme_ou_sort (str): nom de l'arme ou du sort.
     :param cible (str): nom de la cible.
+    :param attaquant (str): nom du personnage ou du monstre ATTAQUANT
+        (optionnel). Si c'est un monstre du bestiaire, les dés de SON arme
+        sont validés contre sa fiche (tailles spéciales) ; sinon contre le
+        catalogue d'armes.
     """
     nb_des = max(1, _as_int(nb_des, 1))
     faces = _as_int(faces, 6)
     bonus = _as_int(bonus)
     if faces not in (2, 3, 4, 6, 8, 10, 12, 20, 100):
         return ToolResult(text=f"⚠️ Type de dé {faces} non standard en D&D 3.5.")
-    # Conformité au catalogue : si `arme_ou_sort` désigne une arme connue, la
-    # formule NdF doit correspondre à ses dégâts de base (partie 4b529064 : la
-    # « Hache à deux mains » — 1d12 au catalogue — fut résolue en 1d20+4).
-    _arme = _de_arme_catalogue(arme_ou_sort)
-    if _arme is not None:
-        _nb, _fa, _nom_canon = _arme
-        if (nb_des, faces) != (_nb, _fa):
-            return ToolResult(text=(
-                f"⛔ **Formule de dégâts non conforme au catalogue** : "
-                f"« {arme_ou_sort} » inflige {_nb}d{_fa} (D&D 3.5, "
-                f"« {_nom_canon} »), pas {nb_des}d{faces}.\n"
-                f"Relance `lancer_degats` avec nb_des={_nb}, faces={_fa} "
-                f"(le bonus de Force reste inchangé)."
-            ))
+    # Conformité des dés — deux sources de vérité, dans l'ordre :
+    # 1. la FICHE du monstre `attaquant`, quand `arme_ou_sort` nomme SON
+    #    arme (tailles spéciales : le Géant (froid) de taille G frappe en
+    #    « grande hache » 3d6 — pas 1d12 comme au catalogue, taille M) ;
+    # 2. à défaut, le CATALOGUE d'armes (partie 4b529064 : la « Hache à
+    #    deux mains » — 1d12 au catalogue — fut résolue en 1d20+4).
+    # Un nom de sort désactive les deux (Boule de feu 5d6 n'est pas une arme).
+    if not _est_nom_de_sort(arme_ou_sort):
+        _fiche = _arme_fiche_monstre(ctx, attaquant)
+        if _fiche is not None and _cite_arme(arme_ou_sort, _fiche[0]):
+            _nom_f, _nb_f, _fa_f = _fiche
+            if (nb_des, faces) != (_nb_f, _fa_f):
+                return ToolResult(text=(
+                    f"⛔ **Formule de dégâts non conforme à la fiche du "
+                    f"monstre** : « {attaquant} » inflige {_nb_f}d{_fa_f} "
+                    f"avec « {_nom_f} » (fiche bestiaire), pas "
+                    f"{nb_des}d{faces}.\n"
+                    f"Relance `lancer_degats` avec nb_des={_nb_f}, "
+                    f"faces={_fa_f} (le bonus reste inchangé)."
+                ))
+        else:
+            _arme = _de_arme_catalogue(arme_ou_sort)
+            if _arme is not None:
+                _nb, _fa, _nom_canon = _arme
+                if (nb_des, faces) != (_nb, _fa):
+                    return ToolResult(text=(
+                        f"⛔ **Formule de dégâts non conforme au catalogue** : "
+                        f"« {arme_ou_sort} » inflige {_nb}d{_fa} (D&D 3.5, "
+                        f"« {_nom_canon} »), pas {nb_des}d{faces}.\n"
+                        f"Relance `lancer_degats` avec nb_des={_nb}, "
+                        f"faces={_fa} (le bonus de Force reste inchangé)."
+                    ))
     jets = [random.randint(1, faces) for _ in range(nb_des)]
     total = max(0, sum(jets) + bonus)  # jamais de dégâts négatifs (min 0)
     lignes = [

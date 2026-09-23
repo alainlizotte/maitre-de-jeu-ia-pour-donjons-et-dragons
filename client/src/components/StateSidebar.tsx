@@ -43,6 +43,10 @@ function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
   const [retries, setRetries] = useState(0);
   const slug = slugify(nom);
   const url = `/data/portraits_cache/${slug}.png`;
+  // Cache-busting STABLE (même URL que la fiche et la page principale) :
+  // un portrait régénéré par le serveur doit être rechargé, même pour un
+  // nom de personnage réutilisé.
+  const urlBuste = `${url}?t=${busteImage(url)}`;
   const maxRetries = 5;
 
   // Retry loading the portrait image after a delay (in case ComfyUI is still generating)
@@ -60,7 +64,7 @@ function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
       return (
         <img
           key={`${slug}-${retries}`}
-          src={`${url}?t=${busteImage(url)}`}
+          src={urlBuste}
           alt={nom}
           className={`${size} w-full object-contain rounded border border-stone-700 opacity-50`}
           onError={() => setRetries((r) => r + 1)}
@@ -84,7 +88,7 @@ function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
   }
   return (
     <img
-      src={url}
+      src={urlBuste}
       alt={nom}
       className={`${size} w-full object-contain rounded border border-stone-700`}
       onError={() => {
@@ -495,6 +499,11 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
   const ca = (f.ca as number) ?? pj?.ca;
   const chargeMax = f.charge_max;
   const portraitUrl = ficheQuery.data?.portrait;
+  // Cache-busting STABLE : la fiche et la page principale chargent le MÊME
+  // fichier avec le même cache-buster → une seule entrée cache navigateur.
+  const portraitBuste = portraitUrl
+    ? `${portraitUrl}${portraitUrl.includes("?") ? "&" : "?"}t=${busteImage(portraitUrl)}`
+    : null;
   // Champs non rendus explicitement ci-dessous (extension libre de la fiche).
   const connus = new Set([
     "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
@@ -503,6 +512,18 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
     "sorts_connus", "charge_max", "apparence", "capacites",
   ]);
   const extras = Object.entries(f).filter(([k]) => !connus.has(k));
+  // Familier (Magicien/Sorcier) ou compagnon animal (Druide/Rodeur) : espèce
+  // + faculté transmise + stats de base (le profil ajusté au niveau est
+  // calculé en jeu par le tool appeler_familier).
+  const famInfo = f.familier as
+    | { type?: string; espece?: string; invoque?: boolean }
+    | undefined;
+  const fml = modeleQuery.data?.familiers;
+  const famEspece = famInfo?.espece
+    ? [...(fml?.familiers ?? []), ...(fml?.compagnons_animaux ?? []), ...(fml?.compagnons_hors_norme ?? [])].find(
+        (e) => e.nom === famInfo.espece,
+      )
+    : undefined;
   const apparence = (f.apparence ?? pj?.apparence) as
     | Record<string, unknown>
     | undefined;
@@ -531,9 +552,9 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
           </button>
         </div>
 
-        {portraitUrl && (
+        {portraitBuste && (
           <img
-            src={portraitUrl}
+            src={portraitBuste}
             alt={identite.nom}
             className="w-full max-h-44 object-contain rounded border border-stone-700 mb-3 cursor-zoom-in"
             title="Cliquer pour afficher en grand"
@@ -545,7 +566,7 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
         )}
 
         {/* Visionneuse plein écran du portrait (au-dessus de la fiche) */}
-        {portraitAgrandi && portraitUrl && (
+        {portraitAgrandi && portraitBuste && (
           <div
             className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center p-4 z-[60]"
             onClick={() => setPortraitAgrandi(false)}
@@ -566,7 +587,7 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
               </div>
               <div className="relative flex-1 min-h-0 rounded border border-stone-700 overflow-hidden bg-stone-950">
                 <img
-                  src={portraitUrl}
+                  src={portraitBuste}
                   alt={`Portrait : ${identite.nom}`}
                   draggable={false}
                   className="absolute inset-0 w-full h-full object-contain select-none"
@@ -668,6 +689,22 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {famInfo?.espece && (
+          <div className="mt-2 rounded bg-stone-800/40 border border-emerald-900/60 p-2">
+            <div className="text-xs text-emerald-300/80 mb-1">
+              {famInfo.type === "compagnon" ? "Compagnon animal" : "Familier"}
+              {famInfo.invoque ? " · lié à son maître" : " · non encore appelé"}
+            </div>
+            <div className="text-xs text-stone-200">{famInfo.espece}</div>
+            {famEspece && (
+              <div className="text-[11px] text-stone-500">
+                PV {famEspece.pv ?? "?"} · CA {famEspece.ca ?? "?"}
+                {famEspece.dv ? ` · ${famEspece.dv}` : ""}
+                {famEspece.faculte ? ` — ${famEspece.faculte}` : ""}
+              </div>
+            )}
           </div>
         )}
         <PanneauSorts

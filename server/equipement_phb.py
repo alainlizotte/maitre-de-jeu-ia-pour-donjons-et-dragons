@@ -309,6 +309,16 @@ def _articles_phb() -> list[dict[str, Any]]:
     E(_art("Vin de bonne qualité (bouteille)", "boisson", po=10, kg=0.75))
     E(_art("Banquet (par convive)", "service", po=10, kg=0.0))
 
+    # --- Potions (page 416) ---------------------------------------------------
+    # 🧪 F7 (audit eb46aeef) : « Potion de soins légers » officielle PHB —
+    # p. 416 (50 po) — pour que `fiche_perso_soigner(source="potion de soins
+    # légers")` ait une dose ACHETABLE en jeu (sinon aucun consommable de
+    # soin n'existait à l'achat et le MJ « inventait » des potions). Catégorie
+    # `substance` (pas `potion`) : aucune échoppe ne tient la catégorie
+    # « potion » — seul `substance` est vendu (apothicaire, marchand
+    # général, alchimiste), comme l'Antidote (500 pc) voisin.
+    E(_art("Potion de soins légers", "substance", po=50, kg=0.1))
+
     # --- Munitions -----------------------------------------------------------
     E(_art("Flèches (20)", "munition", po=1, kg=1.36))
     E(_art("Carreaux (10)", "munition", po=1, kg=0.45))

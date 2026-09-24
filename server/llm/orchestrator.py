@@ -1965,7 +1965,7 @@ _INTENT_MECANIQUE_RE = re.compile(
 _BUDGET_OUTILS_TOUR: dict[str, int] = {
     "fiche_perso_creer_rapide": 1,   # un seul personnage par tour
     "fiche_perso_creer": 1,
-    "fiche_perso_mettre_a_jour": 4,
+    "fiche_perso_mettre_a_jour": 2,   # ⛔ 4→2 (audit eb46aeef : le MJ écrasait les fiches — pv_max bloqué, on borne aussi)
     "fiche_perso_recuperer": 3,
     "inventaire_consulter": 2,
     "inventaire_ajouter": 3,
@@ -1980,13 +1980,18 @@ _BUDGET_OUTILS_TOUR: dict[str, int] = {
     # 9B bouclait 4-6× sur `incanter_sort` (emplacements épuisés) et
     # 5× sur `preparer_sorts` en plein combat — chaque boucle coûtait
     # 2-4 min de génération.
-    "incanter_sort": 3,
+    "incanter_sort": 2,            # ⛔ 3→2 (audit eb46aeef : 6 incantations dans un seul tour)
     "preparer_sorts": 2,
     "appeler_familier": 1,           # un appel de compagnon par tour max
     "renvoyer_familier": 1,
-    "fiche_perso_soigner": 4,
+    "fiche_perso_soigner": 3,       # ⛔ 4→3 (audit eb46aeef : le MJ s'auto-soignait +11/source absente — voir F1)
     "etat_partie_get": 3,
     "terminer_mon_tour": 1,          # un SEUL par tour (anti-spam rounds)
+    # ⛔ Anti-spam scénario (audit eb46aeef) : le MJ appelait scenario_etape
+    # 3-6× par tour et etat_partie_patch 3-4× (contournait d'autres tools) —
+    # 1 étape de scénario et 2 patches max par tour :
+    "scenario_etape": 1,
+    "etat_partie_patch": 2,
 }
 _BUDGET_DEFAUT = 6
 

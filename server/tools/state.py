@@ -491,6 +491,43 @@ async def engager_combat(
                 "utilisez `combat_ajouter_combattant`."
             ))
 
+    # ── GARDE ANTI RE-POPULATION (F3, audit eb46aeef) ──────────────────
+    # Une salle DÉJÀ NETTOYÉE (espèce enregistrée dans
+    # `donjon.salles_nettoyees`) ne se re-peuple pas : le MJ re-engageait des
+    # gobelins « fantômes » dans des salles vidées parce que l'état ne garde
+    # que `monstres_combat` (nettoyé à la clôture du combat). Seules des
+    # créatures DIFFÉRENTES (ou une vraie vague justifiée par la scène) se
+    # ré-engagent ici.
+    try:
+        _dj_f3 = etat.get("donjon") or {}
+        _cour_f3 = list(_dj_f3.get("courant") or [0, 0])
+        try:
+            _cle_f3 = f"{int(_cour_f3[0])},{int(_cour_f3[1])}"
+        except (TypeError, ValueError):
+            _cle_f3 = ""
+        _net_f3 = set(
+            (str(x) for x in
+             ((_dj_f3.get("salles_nettoyees") or {}).get(_cle_f3) or []))
+        )
+    except Exception:                                            # noqa: BLE001
+        _net_f3 = set()
+    if _net_f3:
+        from .fiches import _espece_cle  # lazy, même normaliseur
+        _deja_net = [
+            n for n in noms
+            if _espece_cle(n) in _net_f3
+        ]
+        if _deja_net:
+            return ToolResult(text=(
+                "⛔ **Salle déjà vidée** : "
+                + ", ".join(_deja_net[:5])
+                + " ont DÉJÀ été éliminés dans CETTE salle — pas de "
+                "re-population. Narre les cadavres/les traces de l'affrontement "
+                "précédent, ou engage d'AUTRES créatures JUSTIFIÉES par la "
+                "scène ; pour des renforts d'un combat en cours, "
+                "`combat_ajouter_combattant`."
+            ))
+
     # ── GARDE ANTI RE-ENGAGEMENT IMMÉDIAT (2ca691ec) ────────────────────
     # Une rencontre IDENTIQUE (mêmes créatures résolues, mêmes quantités)
     # ré-ouverte moins de `_FENETRE_RE_ENGAGEMENT_S` après la précédente
@@ -1027,6 +1064,32 @@ async def finir_combat(ctx: ToolContext) -> ToolResult:
     courant_tour_pour=None, tour=0.
     """
     state = _party(ctx)
+    # 🛡️ F4 (audit eb46aeef) : `finir_combat` clôture par décret et efface
+    # `monstres_combat` — si des créatures sont ENCORE VIVANTES, le MJ fait
+    # disparaître la rencontre sans XP ni règles → « finir_combat » pour une
+    # victoire TOTALE seulement ; fuite/capitulation → `retraite_combat`.
+    try:
+        _etat_f4 = state.load()
+        _vivants_f4 = [
+            str((mo or {}).get("nom") or "?")
+            for mo in (_etat_f4.get("monstres_combat") or [])
+            if int(mo.get("pv", 0) or 0) > 0
+            and not any(
+                c in (mo.get("conditions") or [])
+                for c in ("Détruit", "Detruit")
+            )
+        ]
+    except Exception:                                            # noqa: BLE001
+        _vivants_f4 = []
+    if _vivants_f4:
+        return ToolResult(text=(
+            "⛔ Combat NON terminé : encore en vie — "
+            + ", ".join(_vivants_f4[:6])
+            + ". `finir_combat` clôture une victoire TOTALE. Continue le "
+            "combat (tours normaux, `finir_combat` seulement si aucun "
+            "ennemi ne bouge), ou en cas de fuite/capitulation appelle "
+            "`retraite_combat`."
+        ))
     err = _clore_combat_etat(state, "résolu")
     if err:
         return ToolResult(text=err)

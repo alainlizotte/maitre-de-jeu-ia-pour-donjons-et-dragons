@@ -905,6 +905,7 @@ async def fiche_perso_mettre_a_jour(
     nom: str,
     champ: str,
     valeur: str,
+    interne: bool = False,
 ) -> ToolResult:
     """
     Met à jour un champ d'une fiche personnage persistante. Pour les champs
@@ -922,6 +923,17 @@ async def fiche_perso_mettre_a_jour(
             "PAS encore. Crée-le d'abord avec `fiche_perso_creer_rapide` "
             "(nom, race, classe, joueur, carac_texte), puis mets à jour ses "
             "champs."
+        ))
+    # 🛡️ F2 (audit eb46aeef) : le MJ écrasait `pv_max` via ce tool
+    # (Elara 5→1, Groth 14→10) — corruption de fiche irréversible en jeu.
+    # `pv_max` est un champ RÉSERVÉ (progression de niveau, gérée serveur).
+    if str(champ or "").strip().split(".")[0] == "pv_max" and not interne:
+        return ToolResult(text=(
+            "⛔ `pv_max` est un champ RÉSERVÉ : il ne se modifie pas à la "
+            "main (il évolue uniquement par la progression de niveau / la "
+            "pénalité de résurrection, gérées par le serveur). Pour faire "
+            "remonter les PV : `fiche_perso_soigner` ; pour les faire "
+            "baisser : `fiche_perso_infliger_degats`."
         ))
     ancien_nom = str(fiche.get("nom") or "").strip()
 
@@ -1068,6 +1080,14 @@ def _norm_nom_simple(s: Any) -> str:
     """Comparaison de noms insensible casse/accents (PJ ↔ monstres du combat)."""
     s = unicodedata.normalize("NFKD", str(s or "").strip().lower())
     return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def _espece_cle(s: Any) -> str:
+    """Clé d'ESPÈCE (F3) : comme `_norm_nom_simple` mais sans le suffixe
+    numérique de désambiguïsation (« Gobelin (2) » → « gobelin ») — sert à
+    mémoriser/reconnaître une espèce détruite indépendamment des doublons."""
+    base = _norm_nom_simple(s)
+    return re.sub(r"\s*\(\d+\)$", "", base).strip()
 
 
 _PLACEHOLDER_JOUEUR = re.compile(
@@ -1251,6 +1271,27 @@ def _infliger_degats_monstre(
     if nv <= 0 and "Détruit" not in conds:
         conds.append("Détruit")
         note = " — ☠️ **DÉTRUIT** (0 PV ou moins)."
+        # 🧠 F3 (audit eb46aeef) : mémoire des salles nettoyées. Quand une
+        # créature meurt dans la salle courante, on l'enregistre dans
+        # `donjon.salles_nettoyees[C,É]` — le MJ re-populait des salles
+        # déjà vidées avec les mêmes gobelins « fantômes » (l'état ne garde
+        # que `monstres_combat` du combat EN COURS, d'où l'oubli). Un
+        # ré-engagement de la même espèce dans la salle sera refusé.
+        try:
+            _dj = etat.get("donjon") or {}
+            try:
+                _cour = list(_dj.get("courant") or [0, 0])
+                _cle_f3 = f"{int(_cour[0])},{int(_cour[1])}"
+            except (TypeError, ValueError):
+                _cle_f3 = ""
+            _espece = _espece_cle(str(cible.get("nom") or ""))
+            if _cle_f3 and _espece:
+                _nettoyees = _dj.setdefault("salles_nettoyees", {}).setdefault(
+                    _cle_f3, [])
+                if _espece not in _nettoyees:
+                    _nettoyees.append(_espece)
+        except Exception:                                    # noqa: BLE001
+            pass
     elif "Détruit" in conds:
         note = " — ☠️ déjà détruit."
     if ctx.tour_id:
@@ -1393,7 +1434,8 @@ async def fiche_perso_infliger_degats(
 
 @tool
 async def fiche_perso_soigner(
-    ctx: ToolContext, nom: str, soin: int, source: str = ""
+    ctx: ToolContext, nom: str, soin: int, source: str = "",
+    interne: bool = False,
 ) -> ToolResult:
     """
     Soigne un personnage (restaure des PV, plafonnés à pv_max).
@@ -1409,6 +1451,9 @@ async def fiche_perso_soigner(
         source="sort de soins" (aucun consommable — l'emplacement est
         déjà décompté par incanter_sort). Vide + soin ≤ 4 PV = petit soin
         par le kit (1 charge déduite si un kit est porté).
+    :param interne (bool): True pour les appels SERVEUR légitimes
+        (incanter_sort, rattrapages) — contourne la garde anti-soin-
+        gratuit F1. Ne JAMAIS exposer au MJ.
     """
     # 🧪 Auto-formule de potion (partie 2ca691ec) : « source="potion de
     # soins légers" » SANS `soin` — le 9B omettait le montant et le soin
@@ -1481,6 +1526,21 @@ async def fiche_perso_soigner(
                 "gaspillage partie 120e9243). Rapporte simplement que le "
                 "PJ n'a rien perdu ce tour."
             ),
+        )
+    # 🛡️ F1 (audit eb46aeef) : le MJ s'auto-soignait +11 PV en appelant ce
+    # tool SANS source (aucun clerc dans le groupe !). Un soin > 4 PV sans
+    # origine nommée est un soin GRATUIT : refus. Les appels serveur
+    # légitimes (incanter_sort, rattrapages anti-simulation) passent via
+    # interne=True ; ≤ 4 PV sans source = convention kit (inchangée).
+    if not source and not interne and s > 4 and ctx.tour_id:
+        return ToolResult(
+            text=(
+                f"⛔ Soin de {s} PV REFUSÉ : aucune SOURCE nommée. Un soin "
+                "> 4 PV exige une origine réelle : `source=\"potion de "
+                "soins légers\"` (dose déduite de l'inventaire), un sort "
+                "de soins réellement lancé via `incanter_sort`, ou un "
+                "objet de soin réel. Pas de +N PV inventés."
+            )
         )
     # 📦 Consommable (a6d11005) : une potion bue se SOUSTRAIT de
     # l'inventaire — sans l'objet réel, pas de soin.

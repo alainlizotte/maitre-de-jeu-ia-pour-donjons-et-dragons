@@ -790,6 +790,18 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
                 f"🚪 Vous entrez dans **{donjon_id}** (rez-de-chaussée). "
                 f"Salle d'entrée (0,0). Portes visibles : nord, est, ouest."
             )
+    # 🧭 F6 (audit eb46aeef) : on mémorise la LOCALITÉ MONDE depuis laquelle
+    # le groupe a pénétré le donjon (`etat.lieu` restant la dernière position
+    # monde connue). À la sortie, `voyage_demarrer` y rattachera le départ —
+    # sinon aucune position monde n'est enregistrée et le MJ reste coincé
+    # (« Où êtes-vous ? »).
+    try:
+        _lieu_entree = str((etat.get("lieu") or {}).get("nom") or "").strip()
+        if _lieu_entree and _lieu_entree != str(donjon.get("id") or ""):
+            donjon["localite_entree"] = _lieu_entree
+        donjon.setdefault("localite_entree", "")
+    except Exception:                                            # noqa: BLE001
+        pass
     etat["donjon"] = donjon
     etat["phase"] = "exploration"
     # 📓 Auto-journalisation serveur de l'entrée (voir _journaliser_lieu).
@@ -2025,7 +2037,7 @@ async def carte_donjon_sortir(ctx: ToolContext) -> ToolResult:
     # (`etages`/`etage`) et les descriptions/états des salles portés par la
     # grille : le progrès ET la constance des salles survivent à la sortie.
     if donjon_id and donjon.get("grille"):
-        etat.setdefault("donjons_exploreres", {})[donjon_id] = {
+        _arch_f6 = {
             "id": donjon_id,
             "grille": donjon.get("grille", []),
             "salles_visitees": donjon.get("salles_visitees", []),
@@ -2034,6 +2046,34 @@ async def carte_donjon_sortir(ctx: ToolContext) -> ToolResult:
             "etage": donjon.get("etage", 0),
             "etages": donjon.get("etages", {}),
         }
+        # 🧭 F6 : on conserve localite_entree dans l'archive pour une
+        # ré-entrée FUTURE (refaire entrer → voyage) restaurera la localité.
+        _lle = str(donjon.get("localite_entree") or "").strip()
+        if _lle:
+            _arch_f6["localite_entree"] = _lle
+        etat.setdefault("donjons_exploreres", {})[donjon_id] = _arch_f6
+    # 🧭 F6 (audit eb46aeef) : à la SORTIE, on RÉTABLIT la localité monde
+    # d'entrée comme position — elle avait été remplacée par le donjon à
+    # l'entrée (etat.lieu était « grotte : salle (0,0) »), laissant le monde
+    # sans position (« Où êtes-vous ? »). Le voyage repart de là.
+    try:
+        _lle_sortie = str(donjon.get("localite_entree") or "").strip()
+        _lieu_avant = etat.get("lieu") or {}
+        if _lle_sortie and str(_lieu_avant.get("type") or "") == "donjon":
+            def _coord_valide(v: Any) -> float:
+                try:
+                    f = float(v)
+                    return f if 0 <= f <= 100 else ""
+                except (TypeError, ValueError):
+                    return ""
+            _posx_f6 = _coord_valide(_lieu_avant.get("position_x"))
+            _posy_f6 = _coord_valide(_lieu_avant.get("position_y"))
+            etat["lieu"] = {
+                "nom": _lle_sortie, "type": "localite", "description": "",
+                "position_x": _posx_f6, "position_y": _posy_f6,
+            }
+    except Exception:                                            # noqa: BLE001
+        pass
     etat["donjon"] = {"id": None, "salles_visitees": [], "portes_bloquees": [], "grille": []}
     etat["phase"] = "exploration"
     err = _sauver_etat(ctx, etat)

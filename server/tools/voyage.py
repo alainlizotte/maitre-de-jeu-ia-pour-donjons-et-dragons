@@ -281,6 +281,31 @@ async def voyage_demarrer(
         from ..game.state import PartyState   # lazy : évite tout cycle d'import
         ps = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
         etat = ps.load()
+        # 🧭 F6 (audit eb46aeef) : départ DEPUIS un donjon → on restaure la
+        # localité monde d'entrée (`localite_entree`) comme position de
+        # départ, sinon `lieu.nom` reste le donjon et le monde n'a plus de
+        # position (« Où êtes-vous ? ») — la navigation monde repart d'ici.
+        try:
+            _lieu_v = etat.get("lieu") or {}
+            _dj_v = etat.get("donjon") or {}
+            if str(_lieu_v.get("type") or "") == "donjon":
+                _loc_v = str(_dj_v.get("localite_entree") or "").strip()
+                if _loc_v:
+                    def _coord_v(v: Any) -> Any:
+                        try:
+                            f = float(v)
+                            return f if 0 <= f <= 100 else ""
+                        except (TypeError, ValueError):
+                            return ""
+                    etat["lieu"] = {
+                        "nom": _loc_v,
+                        "type": "localite",
+                        "description": "",
+                        "position_x": _coord_v(_lieu_v.get("position_x")),
+                        "position_y": _coord_v(_lieu_v.get("position_y")),
+                    }
+        except Exception:                                            # noqa: BLE001
+            pass
         etat["voyage"] = voyage_etat
         ps.save(etat)
     except Exception as e:                                       # noqa: BLE001

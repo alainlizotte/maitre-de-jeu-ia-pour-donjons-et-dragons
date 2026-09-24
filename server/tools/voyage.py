@@ -68,14 +68,30 @@ def _norm(s: str) -> str:
     return "".join(c for c in nf if not unicodedata.combining(c))
 
 
-def _garde_trame_voyage(etat: dict[str, Any], destination: str) -> Optional[str]:
+def _garde_trame_voyage(etat: dict[str, Any], destination: str,
+                        data_dir: str = "", partie_id: str = "") -> Optional[str]:
     """⛔ Garde de séquence : un voyage ne doit pas sauter une étape de la
     trame du scénario (partie 87b8f286 : départ vers la gemme de Sarr ALORS
     QUE la Couronne n'avait pas été récupérée (4,0) — prérequis du module).
 
-    La trame vient du manifeste de donjon (`donjon.etapes`) : la première
-    étape porteuse d'une `salle` non visitée est l'étape courante. Tant
-    qu'elle n'est pas accomplie, tout voyage est refusé (sauf `forcer`)."""
+    Deux étages de garde, selon l'enrichissement du manifeste :
+    - manifeste STRUCTURÉ (`requis`/`salles`/`type`) → `verrou_voyage` :
+      vérifie en plus les OBJETS REQUIS manquants (inventaire de quête de LA
+      PARTIE) et les salles à atteindre ;
+    - manifeste legacy → garde historique par `salle` non visitée (la
+      première étape à salle non accomplie bloque le voyage)."""
+    if data_dir:
+        try:
+            from ..game.objectifs import (  # pylint: disable=import-outside-toplevel
+                _trame_structuree, verrou_voyage,
+            )
+            if _trame_structuree(etat, data_dir):
+                refus = verrou_voyage(etat, data_dir, partie_id, destination)
+                if refus:
+                    return refus
+                return None
+        except Exception:                                        # noqa: BLE001
+            pass
     donjon = etat.get("donjon") or {}
     etapes = donjon.get("etapes") or []
     if not etapes:
@@ -180,7 +196,10 @@ async def voyage_demarrer(
             _etat_v = PartyState(
                 data_dir=ctx.data_dir, partie_id=ctx.partie_id
             ).load()
-            garde = _garde_trame_voyage(_etat_v, destination)
+            garde = _garde_trame_voyage(
+                _etat_v, destination,
+                data_dir=ctx.data_dir, partie_id=ctx.partie_id,
+            )
         except Exception:                                        # noqa: BLE001
             garde = None
         if garde:

@@ -809,6 +809,14 @@ async def scenario_etape(
         bible["objectif"] = str(objectif).strip()[:600]
     elif not bool(terminée):
         bible["objectif"] = etape[:600]
+    # 🎯 Objectifs de quête (requis objets, salles, événements) : à chaque
+    # clôture/avancement, recalcule les statuts pour l'onglet client et le
+    # bloc du prompt MJ (game/objectifs).
+    try:
+        from ..game.objectifs import actualiser_objectifs  # pylint: disable=import-outside-toplevel
+        actualiser_objectifs(etat, ctx.data_dir, partie_id=ctx.partie_id)
+    except Exception:                                        # noqa: BLE001
+        pass
     st.save(etat)
     texte = (
         f"📌 Étape scénario : « {etape} »"

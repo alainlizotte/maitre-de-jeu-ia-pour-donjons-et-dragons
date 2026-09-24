@@ -117,6 +117,19 @@ def _portee_de(e: dict[str, Any]) -> str:
     return "quete" if str(e.get("portee") or "") == "quete" else "permanent"
 
 
+def _requis_scenario(ctx: ToolContext) -> set[str]:
+    """Objets REQUIS par la trame en cours (manifeste `requis`), normalisés.
+    Sert à forcer `portee="quete"` pour les objets de l'aventure (gemmes,
+    couronnes, clés…) même quand l'heuristique les rangerait « permanent »."""
+    try:
+        from ..game.objectifs import requis_scenario_noms  # pylint: disable=import-outside-toplevel
+        from ..game.state import PartyState                # pylint: disable=import-outside-toplevel
+        etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+        return requis_scenario_noms(etat or {}, ctx.data_dir)
+    except Exception:                                       # noqa: BLE001
+        return set()
+
+
 def _entree_portee_ok(e: dict[str, Any], portee: str, partie_id: str) -> bool:
     """L'entrée `e` appartient-elle à la portée demandée ?
 
@@ -731,6 +744,13 @@ async def inventaire_ajouter(
     portee_n = _norm(portee)
     if portee_n not in ("quete", "permanent"):
         portee_n = _portee_auto(objet)
+        # ❤️ Objets REQUIS au scénario (manifeste `.donjon.json`, étapes
+        # structurées) : quel que soit leur nom (même une gemme, un joyau ou
+        # un trésor), ils doivent vivre dans l'inventaire de QUÊTE de LA
+        # PARTIE — la mécanique de déblocage (objectifs.py) les y cherche.
+        _requis_objets = _requis_scenario(ctx)
+        if _cle_objet(objet) in _requis_objets:
+            portee_n = "quete"
 
     inv = _inventaire(fiche)
     cible = _cle_objet(objet)

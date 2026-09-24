@@ -125,7 +125,8 @@ _HOSTILITE_IMMINENTE_RE = _re_mod.compile(
 # de soins déclarées (pas sur les attaques).
 _ACTION_SOIN_RE = _re_mod.compile(
     r"\b(?:soign\w*|soins|gu[ée]r\w*|pans\w*|bandag\w*"
-    r"|kit\s+(?:de\s+)?premiers\s+secours"
+    # 120e9243 : le joueur écrit aussi « kit de PREMIER secours » (singulier)
+    r"|kit\s+(?:de\s+)?premiers?\s+secours?"
     r"|r[ée]tabl\w*|r[ée]cup[ée]r\w*(?:\s+d['']?)?\s*(?:PV|points?\s+de\s+vie))\b",
     _re_mod.IGNORECASE,
 )
@@ -3309,6 +3310,7 @@ async def _appliquer_soins_oublies(
     ctx: ToolContext,
     on_event: Optional[Any],
     actif_avant: str,
+    texte_joueur: str = "",
 ) -> str:
     """Rattrapage mécanique des SOINS (miroir de `_appliquer_degats_oublies`) :
     quand le joueur actif a déclaré un soin (kit de premiers secours, potion,
@@ -3321,6 +3323,9 @@ async def _appliquer_soins_oublies(
 
     N'applique RIEN si aucun montant chiffré n'est annoncé près du verbe de
     soin (on n'invente pas de gain) et ne touche pas aux soins déjà résolus.
+
+    `texte_joueur` = message du joueur CE tour : il alimente la porte
+    « soin déclaré » du chemin kit C6bis (partie 120e9243).
 
     Renvoie le texte mécanique à ajouter à la narration ("" si rien à faire).
     """
@@ -3346,7 +3351,7 @@ async def _appliquer_soins_oublies(
         # effet — sinon le joueur croit avoir agi, attend le timeout et
         # meurt au tour du monstre (partie 5f3e31c9, msg 20).
         return await _soin_kit_sans_montant(
-            orch, ctx, on_event, result, actif_avant)
+            orch, ctx, on_event, result, actif_avant, texte_joueur)
     m_soin = _re_mod.search(r"(\d{1,3})(?:\*\*)?\s*(?:PV\b|points?\s+de\s+vie)",
                             m_annonce.group(0))
     if not m_soin:
@@ -3377,6 +3382,7 @@ async def _soin_kit_sans_montant(
     on_event: Any,
     result: Any,
     actif_avant: str,
+    texte_joueur: str = "",
 ) -> str:
     """Résout un soin DÉCLARÉ (kit de premiers secours en main) que le LLM
     a narré SANS montant ni appel à `fiche_perso_soigner` : le serveur
@@ -3384,6 +3390,17 @@ async def _soin_kit_sans_montant(
     sans effet et sans rotation (le joueur croit avoir agi, attend le
     timeout, puis subit le tour du monstre ; partie 5f3e31c9, msg 20).
     Renvoie la note mécanique, ou '' si le PJ n'a aucun objet de soin."""
+    # 🩹 Porte « soin déclaré » (partie 120e9243, points 1 et 7) : ce
+    # rattrapage n'existe que pour un soin DÉCLARÉ PAR LE JOUEUR que le
+    # LLM a narré sans montant ni tool. Sans déclaration, on ne soigne
+    # PAS — avant, chaque tour d'exploration sans tool de soin d'un PJ
+    # blessé portant un kit pompait 1 charge (+1d4 PV) : déplacements
+    # (« Je sort de la fosse », « Je vais a l'est ») et même le pansement
+    # narré sur le CADAVRE de Zendar ont vidé le kit de 10 à 0 charges
+    # (dont ~2 légitimes). La prose du MJ seule ne suffit pas : elle peut
+    # décrire un soin sur un PNJ/monstre, pas sur le PJ actif.
+    if not (texte_joueur and _ACTION_SOIN_RE.search(texte_joueur or "")):
+        return ""
     from .tools.fiches import _chemin  # pylint: disable=import-outside-toplevel
 
     path = _chemin(ctx, actif_avant)
@@ -3393,6 +3410,16 @@ async def _soin_kit_sans_montant(
         with open(path, "r", encoding="utf-8") as f:
             fiche = json.load(f)
     except Exception:                                            # noqa: BLE001
+        return ""
+    # 🛡️ Garde anti-gaspillage (partie 120e9243) : PJ DÉJÀ à PV max → un
+    # soin par kit ne peut rien récupérer. On NE lance même PAS le 1d4 et on
+    # NE touche AUCUNE charge, sinon une charge est brûlée pour un soin
+    # plafonné à 0 (charge 10→9→8 en 2 parties alors que PV restaient 18/18).
+    try:
+        _pv_k, _pm_k = int(fiche.get("pv") or 0), int(fiche.get("pv_max") or 0)
+    except (TypeError, ValueError):
+        _pv_k = _pm_k = 0
+    if _pm_k and _pv_k >= _pm_k:
         return ""
     objets = list(fiche.get("equipement") or []) + list(
         fiche.get("inventaire") or [])
@@ -4989,7 +5016,7 @@ async def _handle_say(
                     and _ACTION_SOIN_RE.search(text or "")
                 ):
                     txt_soins = await _appliquer_soins_oublies(
-                        orch, result, ctx, on_event, actif_avant)
+                        orch, result, ctx, on_event, actif_avant, text)
                     if txt_soins:
                         result.narration += "\n\n" + txt_soins
                         print("[dnd35] Soins narrés appliqués "
@@ -5061,10 +5088,16 @@ async def _handle_say(
                             # de ressusciter une créature détruite par les
                             # seuls jets (partie 263f82dc : « PV 3/3 — ☠️
                             # DÉTRUIT », squelettes ré-engagés).
-                            if _pv_max > 0 and _jetes_c > 0:
-                                _plafond = _pv_max - _jetes_c
-                            else:
-                                _plafond = _pv_max or (_pv + _e)
+                            # 🛡️ 120e9243 (point 3) : sans AUCUN jet réel
+                            # compté ce tour (_jetes_c == 0), restaurer
+                            # jusqu'à pv_max est illusoire et a RESSUSCITÉ
+                            # Zendar (13 dg narrés en doublon → bannière
+                            # « 24/24 PV » au tour suivant). Sans jet, on
+                            # ne restitue RIEN : l'état du moteur fait foi
+                            # (pas de ⚖️ « réajustement » bidon non plus).
+                            if not (_pv_max > 0 and _jetes_c > 0):
+                                continue
+                            _plafond = _pv_max - _jetes_c
                             _pv = min(_pv + _e, _plafond)
                             _mo["pv"] = _pv
                             if _pv > 0:
@@ -6018,7 +6051,7 @@ async def _handle_say(
                             _nom_cite = str(actif_avant or "")
                         if _nom_cite:
                             _txt_s = await _appliquer_soins_oublies(
-                                orch, result, ctx, on_event, _nom_cite)
+                                orch, result, ctx, on_event, _nom_cite, text)
                             if _txt_s:
                                 result.narration += "\n\n" + _txt_s
                                 print(

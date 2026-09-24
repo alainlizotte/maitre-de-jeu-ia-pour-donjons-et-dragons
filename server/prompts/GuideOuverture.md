@@ -1,4 +1,4 @@
-# Guide d'Ouverture de Partie — D&D 3.5 multijoueur
+﻿# Guide d'Ouverture de Partie — D&D 3.5 multijoueur
 
 Ce fichier contient le **message-guide** que le Maître du Jeu (MJ) doit suivre
 au tout premier message d'une nouvelle partie dans le groupe de chat OpenWebUI.
@@ -136,6 +136,15 @@ Sur accord → `etat_partie_save` avec `phase=opening_complete` → narration de
 l'ouverture (scène de rendez-vous, hook d'aventure). La première vraie scène
 commence ; interpellation du premier joueur.
 
+**🎯 Ancrage scénario obligatoire** : si la quête vient d'un scénario, la
+première scène se déroule dans la salle d'ENTRÉE du donjon/scénario (souvent
+(0,0)) : narre sa **description canonique** et présente ses **PNJ** (le brief
+de quête vient des PNJ listés — ex. la magesteresse qui confie la mission).
+Ne commence JAMAIS in medias res dans une salle lointaine, et applique les
+**notes de salle** du manifeste : quand une note dit qu'une porte = un voyage
+de plusieurs jours, narre le VOYAGE (jours, météo, terrain), pas un couloir.
+La partie ne démarre « au milieu » que si les joueurs l'ont choisi ainsi.
+
 ---
 
 ## Recommandations pour le MJ (notes internes)
@@ -143,7 +152,7 @@ commence ; interpellation du premier joueur.
 - **Pace** : ne pas tout expédier en un seul message. Découpe les étapes par
   message, en invitant chaque joueur à répondre. La création collaborative est
   une expérience en soi.
-- **Equité** : passe à chaque joueur (lister leurs noms en début de création
+- **Equite** : passe a chaque joueur (lister leurs noms en debut de creation) et invite-les tous a agir.
   inter帮助他们asking them tous.
 - **Pertinence RAG** : si un joueur demande une règle précise (compétence, sort,
   objet magique), ne donne pas une réponse en l'air — fais une recherche

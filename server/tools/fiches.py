@@ -1454,6 +1454,25 @@ async def fiche_perso_soigner(
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    # 🛡️ Garde anti-gaspillage (partie 120e9243) : PJ DÉJÀ à PV MAX → un
+    # soin par kit/potion/fragment ne peut rien récupérer (tout gain est
+    # plafonné à pv_max par la suite). On sort ICI, AVANT toute déduction :
+    # on ne brûle NI une charge de kit (10→9, puis 9→8, alors que les PV
+    # restaient 18/18), NI une potion, NI un fragment — le soin « plafonné
+    # à zéro » ne doit jamais coûter une dose.
+    try:
+        _pv_g, _pm_g = int(fiche.get("pv") or 0), int(fiche.get("pv_max") or 0)
+    except (TypeError, ValueError):
+        _pv_g = _pm_g = 0
+    if _pm_g and _pv_g >= _pm_g:
+        return ToolResult(
+            text=(
+                f"ℹ️ {nom} est DÉJÀ à {_pv_g}/{_pm_g} PV — soin inutile : "
+                "aucune charge/montant n'est consommée (garde anti-"
+                "gaspillage partie 120e9243). Rapporte simplement que le "
+                "PJ n'a rien perdu ce tour."
+            ),
+        )
     # 📦 Consommable (a6d11005) : une potion bue se SOUSTRAIT de
     # l'inventaire — sans l'objet réel, pas de soin.
     # 🧰 Charges (a6d11005) : le kit de premiers secours a 10 utilisations

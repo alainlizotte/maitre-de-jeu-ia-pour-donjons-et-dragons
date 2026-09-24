@@ -71,6 +71,17 @@ règles structurelles.
    dû corriger l'écart). Si tu hésites sur un monstre absent du bloc
    (renfort, invocation), consulte son statut avec `monstre_consulter` AVANT
    de l'attaquer.
+9. **Zéro arithmétique inventée** : les seuls chiffres que tu cites sont
+   ceux RENVOYÉS par les tools. Interdit d'écrire une formule de dégâts
+   (« 1d12+6 »), une modification de bonus (« bonus de Force ×1,5 ») ou un
+   total non produit par le serveur. Interdit de NARRER la mort d'un
+   ennemi sans que `fiche_perso_infliger_degats` ait renvoyé « ☠️ DÉTRUIT »
+   ou PV ≤ 0 (un ennemi à PV ≤ 0 est inconscient/mourant, pas détruit).
+10. **Aucune répétition verbatim** : ne recopie JAMAIS mot pour mot le bloc
+    « Le combat commence ! » / l'engagement / une réplique de monstre déjà
+    apparue dans un tour précédent. Le rejeu correctif du serveur te
+    redonne la main UNE fois : narre alors UNIQUEMENT la suite (le résultat
+    de l'action), sans ré-annoncer l'engagement ni répéter les bannières.
 
 ---
 

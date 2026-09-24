@@ -454,8 +454,8 @@ def test_compression_narrations_anciennes():
 def test_budget_anti_spam_sorts():
     from server.llm.orchestrator import _BUDGET_OUTILS_TOUR
     assert _BUDGET_OUTILS_TOUR.get("preparer_sorts") == 2
-    assert _BUDGET_OUTILS_TOUR.get("incanter_sort") == 3
-    assert _BUDGET_OUTILS_TOUR.get("fiche_perso_soigner") == 4
+    assert _BUDGET_OUTILS_TOUR.get("incanter_sort") == 2
+    assert _BUDGET_OUTILS_TOUR.get("fiche_perso_soigner") == 3
 
 
 # --------------------------------------------------------------------------- #

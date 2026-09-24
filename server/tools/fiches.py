@@ -1438,6 +1438,15 @@ async def fiche_perso_soigner(
                 f"\n🎲 **Formule de la potion tirée par le serveur** : "
                 f"{nb_p}d{faces_p}+{bonus_p} = {s} PV."
             )
+        elif "kit" in cle_p or "trousse" in cle_p:
+            # 🧰 Audit eb46aeef (point 4 de 120e9243) : le 9B appelle le tool
+            # avec source="kit…" SANS montant → le soin était REFUSÉ (« montant
+            # invalide ») alors que le joueur demandait explicitement son kit.
+            # Comme pour les potions, le serveur tire LUI-MÊME le 1d4 du kit.
+            s = _random_potion.randint(1, 4)
+            note_auto = (
+                f"\n🎲 **Soin du kit tiré par le serveur** : 1d4 = {s} PV."
+            )
     if not s:
         try:
             s = max(0, int(float(soin_txt)))

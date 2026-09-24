@@ -1241,6 +1241,16 @@ def _bloc_contenu_salle(salle: dict[str, Any]) -> str:
             lignes.append("👥 PNJ : " + ", ".join(str(p) for p in pnj))
         else:
             lignes.append(f"👥 PNJ : {pnj}")
+        # ⛔ 120e9243 (point 2) : le MJ narrait « salle vide » en ignorant
+        # les PNJ du manifeste (les 14 myconides de (1,0) étaient dans la
+        # donnée ET dans ce bloc — le 9B les a passés sous silence).
+        lignes.append(
+            "⛔ Cette salle N'EST **PAS** VIDE : les PNJ/créatures listés "
+            "ci-dessus sont PRÉSENTS ici et maintenant. Interdit de narrer "
+            "« une salle vide » ou d'occulter ces présences : décris-les, "
+            "fais-les réagir à l'arrivée du groupe (parole, cri, attaque) — "
+            "et engage via `engager_combat` celles qui sont hostiles."
+        )
     if ennemis:
         if isinstance(ennemis, list):
             liste_e = ", ".join(str(e) for e in ennemis)

@@ -514,6 +514,60 @@ async def phase_vente():
 
 
 # --------------------------------------------------------------------------- #
+#  Garde anti-gaspillage (régression 120e9243)
+# --------------------------------------------------------------------------- #
+def _charges_kit(f: dict) -> int:
+    """Total des CHARGES de kit de premiers secours portées (inventaire)."""
+    tot = 0
+    for e in (f.get("inventaire") or []):
+        n = _norm(e.get("nom"))
+        if ("kit" in n or "trousse" in n) and ("secour" in n or "soin" in n):
+            brut = e.get("charges")
+            try:
+                tot += 10 if brut is None else int(brut)
+            except (TypeError, ValueError):
+                tot += 10
+    return tot
+
+
+async def phase_garde_soin():
+    """Régression 120e9243 : PJ DÉJÀ à PV max + `fiche_perso_soigner`
+    SANS source → le garde anti-gaspillage doit refuser le soin SANS
+    consommer une charge de kit (avant : charge 10→9→8 en 2 parties
+    alors que les PV restaient 18/18)."""
+    pid = lire_pid()
+    bilan = Bilan.charger()
+    cible = ""
+    for nom in NOM_JOUEURS:
+        f = _fiche_pj(nom)
+        if f and int(f.get("pv_max") or 0) > 0:
+            cible = nom
+            break
+    if not cible:
+        bilan.check("[garde] fiche cible trouvée", False, "aucune fiche PJ")
+        bilan.sauver()
+        return
+    f_av = _fiche_pj(cible)
+    pv_av = int(f_av.get("pv") or 0)
+    pm = int(f_av.get("pv_max") or 0)
+    kit_av = _charges_kit(f_av)
+    if pv_av < pm:
+        bilan.event(f"[garde] {cible} pas à PV max ({pv_av}/{pm}) — vérif "
+                    "sautée (relancer après « repos »)")
+        bilan.sauver()
+        return
+    r = await _tool(pid, "fiche_perso_soigner", nom=cible, soin=2)
+    garde = "DÉJÀ à" in str(getattr(r, "text", "") or "")
+    kit_ap = _charges_kit(_fiche_pj(cible))
+    bilan.check(
+        "[garde] soin à PV max : AUCUNE charge consommée (120e9243)",
+        garde and kit_ap == kit_av,
+        f"kit {kit_av}→{kit_ap}, garde={garde}, "
+        f"rep={str(getattr(r, 'text', ''))[:90]}")
+    bilan.sauver()
+
+
+# --------------------------------------------------------------------------- #
 #  Statut / Rapport
 # --------------------------------------------------------------------------- #
 def _fiche_pj(nom: str) -> dict:
@@ -549,6 +603,7 @@ PHASES = {
     "setup": phase_setup, "marche": phase_marche, "auberge": phase_auberge,
     "repos": phase_repos, "familier": phase_familier,
     "combat": phase_combat, "vente": phase_vente,
+    "garde_soin": phase_garde_soin,
     "statut": phase_statut, "rapport": phase_rapport,
 }
 

@@ -3364,7 +3364,7 @@ async def _appliquer_soins_oublies(
         return ""
     tr = await orch.execute_tool_direct(
         "fiche_perso_soigner",
-        {"nom": actif_avant, "soin": soin_total},
+        {"nom": actif_avant, "soin": soin_total, "interne": True},
         ctx, on_event, result,
     )
     if tr is not None and not tr.text.startswith("❌"):
@@ -3562,7 +3562,7 @@ async def _ressusciter_pj_oublie(
         if pv_cible > pv_actuel:
             tr = await orch.execute_tool_direct(
                 "fiche_perso_soigner",
-                {"nom": nom, "soin": pv_cible - pv_actuel},
+                {"nom": nom, "soin": pv_cible - pv_actuel, "interne": True},
                 ctx, on_event, result,
             )
             if tr is not None:
@@ -3622,7 +3622,7 @@ async def _ressusciter_pj_oublie(
                 await orch.execute_tool_direct(
                     "fiche_perso_mettre_a_jour",
                     {"nom": nom, "champ": "pv_max",
-                     "valeur": str(pv_max_new)},
+                     "valeur": str(pv_max_new), "interne": True},
                     ctx, on_event, result,
                 )
                 try:

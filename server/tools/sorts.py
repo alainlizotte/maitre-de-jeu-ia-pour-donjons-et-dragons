@@ -265,7 +265,8 @@ async def incanter_sort(
             lignes.append("- Sort de masse : étends les soins aux alliés dans 9 m (MJ).")
         if cible:
             from .fiches import fiche_perso_soigner
-            tr_soin = await fiche_perso_soigner(ctx, cible, total_soin)
+            tr_soin = await fiche_perso_soigner(
+                ctx, cible, total_soin, interne=True)
             lignes.append(f"- {tr_soin.text}")
             if tr_soin.state_patch:
                 patches_cibles.append(tr_soin.state_patch)

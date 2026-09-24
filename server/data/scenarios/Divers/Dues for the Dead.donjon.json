@@ -280,5 +280,44 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "enquete_cassyt",
+   "titre": "Enquêter dans les galeries hautes avec Cassyt",
+   "type": "pnj",
+   "salle": "0,0",
+   "detail": "Sous le porche du cimetière de Valhingen, Cassyt, acolyte de Kelemvor, guide les visiteurs : les bas-reliefs des prêtres sont maculés de taches noires qui pulsent, la fosse du puits (-1,0) s'est remplie d'ossements fraîchement jetés, et les banquets funèbres des familles de Phlan (0,-1) tournent court. Les tombes sont violées et la Nécropole (1,-1) gronde — à qui profite la profanation ?",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "bas_tombeaux",
+   "titre": "Descendre vers les Bas Tombeaux",
+   "type": "lieu",
+   "salle": "0,-3",
+   "detail": "L'escalier de bois vermoulu s'enroule autour d'une statue à quatre bras aux traits insectoïdes et plonge vers les Bas Tombeaux : l'obélisque aux runes (0,-1), les dioramas de criminels figés (-1,-1), les squelettes qui se libèrent du plâtre (0,-2) et les cryptes jumelles fraîchement violées (-1,-2) où rôdent des goules. La piste mène vers les serviteurs du Culte du Dragon.",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "poste_dragon",
+   "titre": "Attaquer le poste du Culte du Dragon",
+   "type": "combat",
+   "salle": "0,-4",
+   "detail": "Cette antichambre sert de poste aux serviteurs du Culte du Dragon : tonneaux, cordes et palan pour descendre les corps, baril renversé et kobold qui somnole dans un fauteuil près des braises. C'est la dernière sentinelle avant le repaire du nécromancien, au fond des catacombes.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "rorreth",
+   "titre": "Défaire Rorreth Monforoth dans son repaire",
+   "type": "combat",
+   "salle": "0,-5",
+   "detail": "Le repaire du nécromancien : cercle de runes d'argent gravé au sol, parchemins, fioles et instruments de rituel. Rorreth Monforoth, Mage Rouge de Thay au service du Culte du Dragon, lève les morts de Phlan pour payer une dette macabre — sa chute délivre le cimetière de Valhingen.",
+   "xp": 400,
+   "note": "Module League pour PJ de niveau 1-2 : vérifier le bloc 3.5 de Rorreth, [AJUSTEMENT REQUIS] s'il sort du bestiaire local.",
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

@@ -297,5 +297,43 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "bagosh",
+   "titre": "Fouiller la serrurerie Bagosh",
+   "type": "lieu",
+   "salle": "0,0",
+   "detail": "L'atelier du serrurier Bagosh, reconnaissable à sa grande enseigne en forme de clef : la chambre du maître (0,-1) garde son coffre sous le lit, l'étage dessert les chambres des demi-frères (1,-1) et le repaire de Sandor (2,-1) ouvre sur la cour aux remises (2,0). La maison abandonnée d'à côté — cuisine (2,1), pièce aux rats géants (3,1), boutique effondrée (3,2) — descend vers la cave (3,3) où une pierre manque au sol.",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "cloaque",
+   "titre": "Entrer dans le cloaque de Laelith",
+   "type": "lieu",
+   "salle": "2,3",
+   "detail": "Par la pierre manquante de la cave, le cloaque de Laelith déroule ses couloirs de briques récentes dissimulant des mécanismes : le passage se divise en T, avec d'un côté une porte banale marquée d'une croix rouge, de l'autre le parcours d'initiation des apprentis-voleurs. Les traces de pas s'arrêtent au bas des marches.",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "initiation",
+   "titre": "Résoudre le parcours d'initiation",
+   "type": "enigme",
+   "salle": "1,3",
+   "detail": "Sept épreuves s'enchaînent : paillasse et coffre cadenassé derrière son rideau (1,3), porte de fer sans serrure ni poignée face au coffret aux reflets argentés (0,3), bureau au coffret richement orné et fil tendu devant la fausse cheminée (0,4), statue aux yeux de jade et dix portraits (1,4), armoires vitrées aux étagères piégées (2,4), chambre au coffret verrouillé sous l'armoire (3,4), jusqu'à la salle de réunion aux deux cloches (3,5).",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "collier_zark",
+   "titre": "Revendiquer le Collier de Zark",
+   "type": "etape",
+   "salle": "2,5",
+   "detail": "La pièce secrète derrière la salle de délibération, au bouclier accroché au mur, conclut le parcours : c'est ici que la guilde intronise ses apprentis et remet le trophée du Collier de Zark. Le MJ clôt la scène selon l'honneur — ou la rapacité — des candidats.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

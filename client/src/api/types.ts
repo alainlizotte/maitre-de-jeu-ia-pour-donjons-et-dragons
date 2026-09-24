@@ -48,7 +48,13 @@ export interface PartyState {
     etage?: number;
     etages?: Record<string, unknown>;
   }>;
-  quete: { titre: string; pitch: string; source: string };
+  quete: {
+    titre: string;
+    pitch: string;
+    source: string;
+    /** Bible scénario (étapes, objectifs de quête — voir QuestObjective). */
+    bible?: QuestBible;
+  };
   /** Journal serveur des événements (jamais rendu au joueur côté client). */
   histoire: { ts: string; tour: string; evenement: string }[];
   /** 💀 Tous les héros sont morts : partie terminée (bloc game over). */
@@ -67,6 +73,63 @@ export interface CalepinNote {
   id: string;
   texte: string;
   fait: boolean;
+}
+
+// --------------------------------------------------------------------------- //
+//  Objectifs de quête — suivi mécanique (server/game/objectifs.py)
+// --------------------------------------------------------------------------- //
+/** Statut d'un objectif de la trame, recalculé serveur à chaque tour. */
+export type QuestStatut = "complet" | "en_cours" | "bloque" | "a_venir";
+
+/** Objet requis pour accomplir un objectif (inventaire de quête de la partie). */
+export interface QuestRequis {
+  /** Nom EXACT à déclarer dans inventaire_ajouter pour débloquer. */
+  nom: string;
+  /** true si l'objet est présent dans l'inventaire de quête de la partie. */
+  present: boolean;
+  /** Nom du PJ qui porte l'objet (si présent). */
+  porteur?: string;
+}
+
+/** Objectif de la trame (une `etape` du manifeste du donjon enrichie). */
+export interface QuestObjective {
+  cle: string;
+  titre: string;
+  detail: string;
+  /** objet | lieu | pnj | enigme | combat | etape */
+  type: string;
+  statut: QuestStatut;
+  /** Salle (x,y) associée à l'objectif (condition de visite pour type "lieu"). */
+  salle?: string;
+  /** Zone de salles VERROUILLÉES par la mécanique tant que l'objectif
+   *  précédent n'est pas accompli (gating de scénario). */
+  salles?: string[];
+  /** Récompense d'histoire DMG 3.5 INDICATIVE — accordée par le MJ via
+   *  fiche_perso_gagner_xp, jamais auto-attribuée. */
+  xp?: number;
+  requis?: QuestRequis[];
+}
+
+/** Bible scénario enrichie : suivi des Objectifs de quête pour l'onglet. */
+export interface QuestBible {
+  etapes?: string[];
+  etapes_terminees?: string[];
+  etape_courante?: string;
+  objectif?: string;
+  avancement?: string;
+  /** Objectifs de quête évalués (game/objectifs). */
+  objectifs?: QuestObjective[];
+  /** Titre de l'objectif courant (premier non accompli). */
+  objectif_courant?: string;
+  /** Objets requis manquants de l'objectif BLOQUÉ (gating actif). */
+  manquants?: string[];
+  /** Titres des objectifs accomplis. */
+  termines?: string[];
+  /** « faits/total » léger pour l'interface. */
+  progression_objectifs?: string;
+  /** Objets de quête possédés par la partie ({nom, porteur}). */
+  objets_quete?: { nom: string; porteur: string }[];
+  [k: string]: unknown;
 }
 
 export interface MonstreCombat {

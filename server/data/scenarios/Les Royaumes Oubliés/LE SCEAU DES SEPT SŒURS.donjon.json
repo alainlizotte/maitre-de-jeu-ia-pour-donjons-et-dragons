@@ -580,5 +580,54 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "traquer_le_tigre_sanguinaire",
+   "titre": "Traquer et abattre le tigre sanguinaire",
+   "type": "combat",
+   "salle": "2,0",
+   "detail": "Scénario d'introduction de la campagne, dans la forêt de Cormaeryn : les empreintes relevées sur le corps d'Elisabeth désignent une bête quadrupède de grande taille qui mène les héros, le long de la rivière, à un réseau de petites grottes (0,0 → 1,0). La créature rentre de chasse au moment où le groupe explore la tanière (2,0) : un tigre démesuré rendu plus fort et plus agressif par un rituel magique. Ses dépouilles laissées à moitié dévorées mais non emportées trahissent déjà un prédateur magiquement modifié, lié à la caravane du Priakos.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "[AJUSTEMENT REQUIS] Le tigre sanguinaire (FP 8) dépasse le plafond du bestiaire : jouer un tigre normal dopé, ou la traque plus que le combat."
+  },
+  {
+   "cle": "epreuve_du_comte_cormaeryn",
+   "titre": "Passer les épreuves du comte Cormaeryn",
+   "type": "pnj",
+   "salle": "2,1",
+   "detail": "Invités au château pour la Longue-Nuit, les héros descendent par le monte-plats secret vers les caves (0,0) : geôles où croupit Sarah, la jeune fille disparue (2,0), énigme du prisonnier suspendu aux engrenages derrière un Mur de Force (3,0), puis salle fauve (3,1) où tigres et gorilles sanguinaires — un par PJ — jugent leur valeur. Le comte Cormaeryn les attend enfin dans sa bibliothèque (2,1), la main sur une Boule de Cristal, et révèle la véritable mission : retrouver l'Anneau de l'Hiver caché dans l'Anauroch. Le capitaine Maelyn (1,1) empêche tout invité de s'aventurer dans les parties privées du château.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "reactiver_la_forge",
+   "titre": "Réactiver la forge de l'Anneau de l'Hiver",
+   "type": "etape",
+   "salle": "2,1",
+   "detail": "Au cœur de l'Anauroch, la forge des géants, des elfes et des nains (chap. 2, salles 1 à 32 du module) doit être remise en marche : remplir le bassin de refroidissement (2,2) pour actionner le marteau hydraulique de la soufflerie (1,1), raviver le foyer avec le charbon et le minerai des remises (4,1), réparer l'atelier (2,1). Les nagas ténébreux qui squattent le gisement inondé (3,2) connaissent chaque piège et attaquent par les gisements (0,2) ; les Hurleurs affamés de la salle d'invocation (0,4) s'apaisent contre des paquets de viande.",
+   "xp": 600,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "[AJUSTEMENT REQUIS] Les nagas ténébreux (FP 8) ne figurent pas au bestiaire : contourner ou ajuster. Attention à la zone de téléportation de l'antichambre (4,0)."
+  },
+  {
+   "cle": "forger_la_lame_du_maitre",
+   "titre": "Forger la lame du Maître de la Forge et forcer le passage secret",
+   "type": "enigme",
+   "salle": "2,4",
+   "detail": "Le marteau du Maître Forgeron (1,0), les lingots de métaux rares de la chambre forte (2,0) et les alliages secrets déchiffrés en Dethek dans les chambres naines (3,0-4,0) permettent de forger la lame indispensable : la main gravée du passage secret (2,4) proclame que « seul un Maître de la Forge peut pénétrer ces lieux », et la fente reçoit la lame neuve qu'une main ayant participé à sa création actionne. Derrière s'ouvrent les dernières salles où l'Anneau de l'Hiver fut dissimulé. La salle des enchantements (0,3) et son pentacle restent le cœur magique de la forge.",
+   "xp": 800,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "retrouver_la_trace_de_l_anneau",
+   "titre": "Retrouver la trace de l'Anneau de l'Hiver",
+   "type": "enigme",
+   "salle": "1,4",
+   "detail": "Derrière la grille fermée à clé de la prison (1,4), l'autel ne porte plus l'anneau tant recherché : seul demeure le parchemin de Kartas Couronne-de-Guerre — « J'ai consciencieusement tout nettoyé. Le trésor sera en lieu sûr, bien plus sûr que cette cache à la portée du premier venu ! ». Dans le repaire des nagas ténébreux (3,2), la jambe de Gardakroz — un os et sa botte — se compare au portrait trouvé à Lunargent : les indices recoupés désignent le nouvel emplacement de l'Anneau de l'Hiver et ouvrent le chapitre suivant de la campagne.",
+   "xp": 1200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

@@ -6,12 +6,20 @@ import { WorldMap } from "./WorldMap";
 import { Bestiary, MonsterSheetModal } from "./Bestiary";
 import { TeamChat } from "./TeamChat";
 import { Journal } from "./Journal";
+import { QuestObjectives } from "./QuestObjectives";
 import { busteImage } from "../utils/imageBust";
 import { useParty } from "../store";
 import { api } from "../api/rest";
 import type { EncounterMonster } from "../api/types";
 
-type Tab = "des" | "equipe" | "monde" | "donjon" | "bestiaire" | "journal";
+type Tab =
+  | "des"
+  | "equipe"
+  | "monde"
+  | "donjon"
+  | "bestiaire"
+  | "journal"
+  | "objectifs";
 
 const TAB_LABELS: Record<Tab, string> = {
   des: "Dés",
@@ -20,6 +28,7 @@ const TAB_LABELS: Record<Tab, string> = {
   donjon: "Donjon",
   bestiaire: "Bestiaire",
   journal: "Journal",
+  objectifs: "Quête",
 };
 
 interface RightSidebarProps {
@@ -409,8 +418,9 @@ export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps
           <button
             key={t}
             onClick={() => handleTabChange(t)}
+            title={t === "objectifs" ? "Objectifs de quête" : undefined}
             className={
-              "flex-1 px-1.5 py-2 relative " +
+              "flex-1 px-1 py-2 relative whitespace-nowrap " +
               (tab === t
                 ? "bg-stone-800 text-amber-300 font-medium border-b-2 border-amber-400"
                 : "text-stone-400 hover:text-stone-200")
@@ -432,6 +442,7 @@ export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps
         {tab === "donjon" && <DungeonView sendSay={sendSay} />}
         {tab === "bestiaire" && <Bestiary />}
         {tab === "journal" && <Journal />}
+        {tab === "objectifs" && <QuestObjectives />}
       </div>
       <EncounterGallery />
     </aside>

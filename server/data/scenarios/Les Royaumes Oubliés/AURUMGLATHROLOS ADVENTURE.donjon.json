@@ -191,5 +191,45 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "remonter_la_piste_des_harpies",
+   "titre": "Remonter la piste des harpies massacrées",
+   "type": "lieu",
+   "salle": "1,-1",
+   "detail": "Sur les pentes glacées des pics du Nether, une quarantaine de harpies ont été égorgées entre la pente déchiquetée (1,0) et l'aerie perchée (1,-1) — tuées par sorts et lames, sans aucun combat. Fouiller le nid grandiose livre quelques pièces oubliées et surtout l'évidence : un tueur méthodique a précédé les héros et attend à proximité. Le temple du balor Horgrathix (-1,0) domine le plateau, avec ses fresques de supplices : sa porte scellée ne doit JAMAIS être ouverte.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Les cadavres trahissent la Compagnie de la Griffe Écarlate, hors plafond FP [AJUSTEMENT REQUIS] : aucune trace du tueur à l'aerie, la menace ne se révèle qu'à la fin."
+  },
+  {
+   "cle": "ceremonie_du_lien",
+   "titre": "Gagner la confiance d'Aurumglathrolos lors de la cérémonie du lien",
+   "type": "pnj",
+   "salle": "0,-2",
+   "detail": "Dans la salle d'audience tapissée d'or vierge (0,-2), Aurumglathrolos, dernier grand wyrm de bronze et gardien de l'Arc des Géants, reçoit les héros : Galin, l'acolyte du groupe, y endosse le manteau de disciple du dragon. Les galeries d'entrée (0,-1) portent les statues de bronze aux yeux d'émeraude et les runes d'avertissement des géants d'antan, et les protections du wyrm restent dormantes tant qu'on n'approche pas son trésor (1,-2) sans invitation. Découvrir les tombeaux de la lignée (0,-3) attriste le dragon mais renforce le lien nouveau.",
+   "xp": 600,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "apprendre_les_mots_de_commande",
+   "titre": "Apprendre les mots de commande de l'Arc des Géants",
+   "type": "enigme",
+   "salle": "1,-3",
+   "detail": "Dans la bibliothèque des Âges (1,-3), fresques de l'empire des géants et cartes des failles dimensionnelles livrent, gravées dans le basalte, le fonctionnement de l'Arc : « Hortul » ouvre le portail, « Lutroh » le referme. Ces deux mots sont la seule arme fiable contre Rothex le Rouge, qui piste déjà le groupe. Le cadre de bronze aux dimensions presque inconcevables sommeille entre deux colonnes de basalte de dix mètres dans la salle de l'Arc (0,-4).",
+   "xp": 800,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "fermer_l_arc_sur_rothex",
+   "titre": "Fermer l'Arc sur Rothex le Rouge",
+   "type": "etape",
+   "salle": "1,-5",
+   "detail": "Sur le plateau de la bataille (1,-5), la Compagnie de la Griffe Écarlate — prêtre de Talos, prêtresse de Loviatar, mages du culte, flinds, ogres et avant-garde de morts-vivants levés — déferle sur le repaire, et Rothex entre au cinquième round. La résolution du module : fuir par les galeries du vent (1,-4) vers la salle de l'Arc (0,-4), puis prononcer « Lutroh » quand la tête de Rothex passe le portail — il est lacéré en deux. Cliffhanger de campagne : un château de géants surgit au-delà du portail ouvert.",
+   "xp": 1500,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "[AJUSTEMENT REQUIS] La Griffe Écarlate (20 membres niveaux 5-9) et Rothex le Rouge sont hors plafond FP : le module prévoit la fuite et le piège de l'Arc, jamais l'affrontement total."
+  }
  ]
 }

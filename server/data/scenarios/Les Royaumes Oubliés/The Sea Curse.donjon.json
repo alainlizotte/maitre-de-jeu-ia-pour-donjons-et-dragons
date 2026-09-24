@@ -188,5 +188,52 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "enquete_caelbrin",
+   "titre": "Enquêter sur la malédiction qui frappe Caelbrin",
+   "type": "pnj",
+   "salle": "0,0",
+   "detail": "Caelbrin, village de pêcheurs de la côte ouest de Mintarn : depuis des semaines, les animaux naissent déformés puis meurent, et des citoyens disparaissent après avoir contracté une hideuse malodie. L'ancien de Caelbrin (0,0) expose les maux du village ; le puits et les réserves de nourriture (-1,0) livrent le premier indice — une eau à l'arrière-goût étrange de marée auprès de laquelle les bestiaux dépérissent.",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "alliance_locathah_stormbringer",
+   "titre": "Gagner l'alliance des locathah et de Kyle Stormbringer",
+   "type": "pnj",
+   "salle": "1,-1",
+   "detail": "Dans la caverne de marée du récif de corail (1,-1), la tribu locathah alliée guette les mouvements sahuagin depuis que le magicien Kyle Stormbringer l'a aidée à repousser les écailleux. Sa demeure submergée (1,-2), avec ses grimoires gonflés d'humidité et sa précieuse Coupe sur socle de corail, abrite le magicien des tempêtes, légèrement déséquilibré mais allié potentiel. Le sentier côtier (0,-1) est patrouillé la nuit par des silhouettes à nageoires.",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "demasquer_loviatar",
+   "titre": "Démasquer Keerlynth Zelbaar et sa « Reine du Récif »",
+   "type": "pnj",
+   "salle": "1,0",
+   "detail": "Le sanctuaire improvisé de la « Reine du Récif » (1,0) : cierges, coquillages et offrandes de poisson autour de la prêtresse de Loviatar Keerlynth Zelbaar, qui prêche que la malédiction ne peut être levée que par la dévotion à sa déesse — pendant qu'elle complote en secret avec les sahuagin. Démasquer sa supercherie devant les villageois de Caelbrin retourne le bourg contre elle.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "detruire_recette",
+   "titre": "Détruire la « recette » de Guulsh'uugh et sauver les villageois",
+   "type": "etape",
+   "salle": "1,-3",
+   "detail": "L'antre de Guulsh'uugh, sorcière-druide sahuagin (1,-3) : alambics de coquillage et herbes des profondeurs composent le laboratoire où elle brasse sa terrible « recette », le poison qui change les hommes en choses-poissons. La détruire sauve les villageois disparus gémissant dans la fosse inondée (0,-3), métamorphosés à demi et obéissant aux sifflements de leurs maîtres ; l'avant-poste sahuagin du gouffre (0,-2) barre la route.",
+   "xp": 500,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "abattre_ssuulgaash",
+   "titre": "Abattre le prince sahuagin Ssuulg'aash",
+   "type": "combat",
+   "salle": "0,-4",
+   "detail": "Au fond du gouffre, la grande caverne trônée de corail blanc (0,-4) abrite Ssuulg'aash, noble sahuagin renégat venu de Kressilac, cruel même pour les siens et vouant une haine sans bornes aux respirants de la surface. Après la destruction de la recette et le démantèlement de l'avant-poste (0,-2), c'est lui le cœur de la malédiction de Mintarn.",
+   "xp": 600,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

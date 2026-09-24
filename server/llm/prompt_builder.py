@@ -341,7 +341,8 @@ def _ennemis_donjon(etat: dict[str, Any]) -> dict[str, Any]:
 
 
 def _scenario_bible_bloc(
-    quete: dict[str, Any], etat: dict[str, Any] | None = None
+    quete: dict[str, Any], etat: dict[str, Any] | None = None,
+    data_dir: str = "", partie_id: str = "",
 ) -> str:
     """Bloc « SCÉNARIO (bible) » injecté au MJ à chaque tour : la trame du
     scénario (accroche, PNJ, objectifs, étapes en cours/accomplies) et
@@ -499,6 +500,67 @@ def _scenario_bible_bloc(
             "chaque étape accomplie. Ce journal est réinjecté à chaque tour : "
             "c'est lui qui empêche de dévier."
         )
+    # 🎯 OBJECTIFS DE QUÊTE (mécanique serveur — game/objectifs) : statuts
+    # recalculés À FROID (objets requis de l'inventaire de quête de la partie
+    # + salles visitées + étapes clôturées). La mécanique VERROUILLE la suite
+    # du module tant que les objets requis ne sont pas dans l'inventaire de
+    # quête des PJ ; l'onglet client affiche exactement ce même suivi.
+    if etat is not None and data_dir:
+        try:
+            from ..game.objectifs import objectifs_quete as _objectifs_quete  # pylint: disable=import-outside-toplevel
+            _info_o = _objectifs_quete(etat, data_dir, partie_id=partie_id)
+            _objs_o = _info_o.get("objectifs") or []
+            if _objs_o:
+                _lbl_o = {
+                    "complet": "✅ ACCOMPLI",
+                    "en_cours": "🔵 en cours",
+                    "bloque": "⛔ BLOQUÉ (objets requis manquants)",
+                    "a_venir": "⚪ à venir",
+                }
+                lignes.append(
+                    "\n🎯 OBJECTIFS DE QUÊTE (mécanique serveur — requis) :"
+                )
+                lignes.append(
+                    f"   Progression : {_info_o.get('progression', '')} — "
+                    f"objectif courant : "
+                    f"{_info_o.get('objectif_courant') or '(tous accomplis)'}"
+                )
+                for _o in _objs_o:
+                    _req_o = _o.get("requis") or []
+                    _req_txt = ""
+                    if _req_o:
+                        _req_txt = "requis : " + "; ".join(
+                            f"« {r.get('nom')} » "
+                            f"{'✅' if r.get('present') else '❌'}"
+                            + (f" (porteur : {r.get('porteur')})"
+                               if r.get('present') and r.get('porteur') else "")
+                            for r in _req_o
+                        )
+                        if _o.get("xp") and _o.get("statut") != "complet":
+                            _req_txt += (
+                                f" — récompense d'histoire DMG 3.5 : {_o['xp']} "
+                                "XP à attribuer via `fiche_perso_gagner_xp` "
+                                "quand cet objectif passe à ACCOMPLI."
+                            )
+                    lignes.append(
+                        f"   - {_o.get('titre','?')} — "
+                        + _lbl_o.get(_o.get("statut", ""), str(_o.get("statut") or ""))
+                        + (f" — {_req_txt}" if _req_txt else "")
+                    )
+                _manq_o = _info_o.get("manquants") or []
+                if _manq_o:
+                    lignes.append(
+                        "   ⛔ Objets REQUIS manquants à l'inventaire de quête "
+                        "(de la partie courante) : " + ", ".join(_manq_o)
+                        + " — QUELLE que soit la tentation, ne fais PAS "
+                        "franchir la suite du module sans ces objets ; dès que "
+                        "le groupe les obtient, persiste-les via "
+                        "`inventaire_ajouter(nom=\"<PJ>\", objet=\"<nom exact>\", "
+                        "portee=\"quete\")` et la mécanique débloque alors la "
+                        "progression."
+                    )
+        except Exception:                                        # noqa: BLE001
+            pass
     lignes.append(
         "→ FIDÉLITÉ AU SCÉNARIO : les PNJ, lieux et organisations du résumé "
         "font foi — reprends leurs noms EXACTS. N'invente NI village, NI PNJ, "
@@ -844,7 +906,8 @@ class PromptBuilder:
                     _ancre = _lieu_depart_canonique(etat)
                     if _ancre:
                         lignes.append(_ancre)
-            bible_min = _scenario_bible_bloc(quete_min, etat=etat)
+            bible_min = _scenario_bible_bloc(
+                quete_min, etat=etat, data_dir=data_dir, partie_id=partie_id)
             if bible_min:
                 lignes.append(bible_min)
             # Carte du donjon (source de vérité géographique) : sans elle,
@@ -1078,7 +1141,8 @@ class PromptBuilder:
                     lignes.append(_ancre_riche)
             # Bible du scénario : la trame, les étapes et la difficulté,
             # réinjectées pour tenir le cap malgré l'improvisation.
-            bible_bloc = _scenario_bible_bloc(quete, etat=etat)
+            bible_bloc = _scenario_bible_bloc(
+                quete, etat=etat, data_dir=data_dir, partie_id=partie_id)
             if bible_bloc:
                 lignes.append(bible_bloc)
 

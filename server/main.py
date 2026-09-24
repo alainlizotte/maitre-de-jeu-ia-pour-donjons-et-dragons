@@ -1390,6 +1390,15 @@ async def get_party(partie_id: str) -> dict[str, Any]:
     etat = state.load()
     if "_erreur" in etat:
         raise HTTPException(status_code=404, detail=etat["_erreur"])
+    # 🎯 Objectifs de quête : calcul FRAIS (sans LLM) — requis d'objets de
+    # l'inventaire de quête de la partie, salles visitées, étapes clôturées —
+    # pour que l'onglet client reflète l'état réel à chaque chargement.
+    try:
+        from .game.objectifs import actualiser_objectifs  # pylint: disable=import-outside-toplevel
+        data_dir = str(cfg.abs(cfg.paths.data_dir))
+        actualiser_objectifs(etat, data_dir, partie_id=partie_id)
+    except Exception:                                       # noqa: BLE001
+        pass
     return {"partie_id": partie_id, "etat": etat}
 
 

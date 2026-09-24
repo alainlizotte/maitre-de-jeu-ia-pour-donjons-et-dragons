@@ -361,17 +361,129 @@
  ],
  "etapes": [
   {
+   "cle": "couronne",
    "titre": "Récupérer la Couronne de Mystra chez Zendar Nulentok",
+   "type": "objet",
    "salle": "4,0",
-   "detail": "PRÉREQUIS ABSOLU : vaincre Nulentok dans son groove (le puits (3,0) y mène) et reprendre la Couronne. La baguette de téléportation de Thukmuul Teleshann ne s'active QU'AU CONTACT de la Couronne — aucun voyage vers les gemmes n'est possible avant."
+   "detail": "PRÉREQUIS ABSOLU : vaincre Nulentok dans son groove (le puits (3,0) y mène) et reprendre la Couronne. La baguette de téléportation de Thukmuul Teleshann ne s'active QU'AU CONTACT de la Couronne — aucun voyage vers les gemmes n'est possible avant.",
+   "requis": [
+    {
+     "nom": "La Couronne de Mystra",
+     "portee": "quete"
+    }
+   ],
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "gate": true
   },
   {
+   "cle": "huit_gemmes",
    "titre": "Réunir les huit gemmes dispersées sur Faerûn",
-   "detail": "Beljuril — Ruines de Sarr (4,1) ; Diamant — échoppe d'Aluarim (3,1) ; Jacinthe — QG zhentarim d'Olomaa (0,1) ; Rogue Stone — Calimport (0,2) ; trésor de Rineen (1,2) ; Émeraude de Shou Lung — temple de Farouk (4,2) ; Saphir étoilé — crevasse de Shakkak (4,3) ; Étoile de rubis — château de Meredoth (0,3)."
+   "type": "objet",
+   "detail": "Beljuril — Ruines de Sarr (4,1) ; Diamant — échoppe d'Aluarim (3,1) ; Jacinthe — QG zhentarim d'Olomaa (0,1) ; Rogue Stone — Calimport (0,2) ; gemme du trésor de Rineen (1,2) ; Émeraude de Shou Lung — temple de Farouk (4,2) ; Saphir étoilé — crevasse de Shakkak (4,3) ; Étoile de rubis — château de Meredoth (0,3).",
+   "requis": [
+    {
+     "nom": "Le Beljuril",
+     "portee": "quete"
+    },
+    {
+     "nom": "Le Diamant",
+     "portee": "quete"
+    },
+    {
+     "nom": "La Jacinthe",
+     "portee": "quete"
+    },
+    {
+     "nom": "La Rogue Stone",
+     "portee": "quete"
+    },
+    {
+     "nom": "La gemme du trésor de Rineen",
+     "portee": "quete"
+    },
+    {
+     "nom": "L'Émeraude de Shou Lung",
+     "portee": "quete"
+    },
+    {
+     "nom": "Le Saphir étoilé",
+     "portee": "quete"
+    },
+    {
+     "nom": "L'Étoile de rubis",
+     "portee": "quete"
+    }
+   ],
+   "salles": [
+    "4,1",
+    "3,1",
+    "2,1",
+    "1,1",
+    "0,1",
+    "0,2",
+    "1,2",
+    "2,2",
+    "3,2",
+    "4,2",
+    "4,3",
+    "3,3",
+    "2,3",
+    "1,3",
+    "0,3"
+   ],
+   "xp": 800,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ quand l'objectif passe à accompli (huit gemmes réunies) — jamais attribuée automatiquement.",
+   "note": "⚠️ MÉCANIQUE DE VERROU : la liste `salles` = LA ZONE DE FAERÛN tout entière (toutes les portes de téléportation au-delà de la salle (4,0)). Tant que l'acte 1 (la Couronne) n'est pas accompli, toute entrée dans une de ces salles est REFUSÉE par la mécanique serveur (carte_donjon_explorer bloque le déplacement vers l'une d'elles). Une fois la Couronne en inventaire, la zone se débloque et chaque gemme se gagne dans SA salle.",
+   "gate": true
   },
   {
+   "cle": "restauration",
    "titre": "Restaurer la Couronne et la rendre à Mystra",
-   "detail": "Réactiver la Couronne avec les huit gemmes et la rapporter au haut lieu de Mystra (Tour de l'Équilibre, Silverymoon — (0,0))."
+   "type": "etape",
+   "salle": "0,0",
+   "detail": "Réactiver la Couronne avec les huit gemmes et la rapporter au haut lieu de Mystra (Tour de l'Équilibre, Silverymoon — (0,0)).",
+   "requis": [
+    {
+     "nom": "La Couronne de Mystra",
+     "portee": "quete"
+    },
+    {
+     "nom": "Le Beljuril",
+     "portee": "quete"
+    },
+    {
+     "nom": "Le Diamant",
+     "portee": "quete"
+    },
+    {
+     "nom": "La Jacinthe",
+     "portee": "quete"
+    },
+    {
+     "nom": "La Rogue Stone",
+     "portee": "quete"
+    },
+    {
+     "nom": "La gemme du trésor de Rineen",
+     "portee": "quete"
+    },
+    {
+     "nom": "L'Émeraude de Shou Lung",
+     "portee": "quete"
+    },
+    {
+     "nom": "Le Saphir étoilé",
+     "portee": "quete"
+    },
+    {
+     "nom": "L'Étoile de rubis",
+     "portee": "quete"
+    }
+   ],
+   "xp": 1200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ quand l'acte final est joué et la Couronne rendue — jamais attribuée automatiquement.",
+   "gate": true
   }
  ]
 }

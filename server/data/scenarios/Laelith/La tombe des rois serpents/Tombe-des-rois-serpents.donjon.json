@@ -890,5 +890,44 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "tombe_entree",
+   "titre": "Déjouer la fausse chambre funéraire du niveau 1",
+   "type": "lieu",
+   "salle": "4,0",
+   "detail": "Après les tombes de garde (0,-1) et (1,-1) et les caveaux des statuaires (0,1) et (1,1), la fausse chambre du roi des hommes-serpents et de ses deux épouses (3,0) n'offre que fresques délitées et déconvenues. La gigantesque statue du dieu homme-serpent (4,0), déplacée (Perception DD 12), révèle le passage secret qui descend — la porte barrée au marteau colossal (2,0) a déjà failli tout broyer.",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "atrium",
+   "titre": "Traverser le hall aux statues et l'atrium",
+   "type": "lieu",
+   "salle": "1,-2",
+   "detail": "Six statues colossales d'hommes-serpents en armes bordent le hall (0,-1), et le bassin de l'atrium (1,-2) cache une silhouette blême qui bondit hors de l'eau. Les caveaux s'ouvrent au passage : Sparamantur, le squelette du roi-serpent, trépigne derrière ses décombres (1,-1), la momie mal embaumée de Franbinzar pourrit plus loin (1,-3), l'icône en argent aux yeux d'émeraude attend en sacristie (2,-3) et dix-huit statues d'argile creuses veillent dans leur salle (2,-1).",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "basilic",
+   "titre": "Passer le hall du basilic",
+   "type": "combat",
+   "salle": "9,4",
+   "detail": "Au-delà de la porte barrée d'une lourde barre minérale au marteau colossal (6,-2), l'étroit chemin longe le gouffre abyssal (5,-2) jusqu'au vaste hall du basilic : retenu au plafond par une épaisse chaîne de fer, l'animal tente de pétrifier quiconque s'approche à moins de neuf mètres. Le tunnel effacé par le temps (10,4) raccourcit la traversée vers le cœur de la tombe.",
+   "xp": 300,
+   "note": "Prévoir la procédure de pétrification et de restauration ; les hommes-serpents pétrifis flanquent aussi le hall de la chambre d'invocation (5,2).",
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "xiximantre",
+   "titre": "Traquer Xiximantre dans son antre",
+   "type": "pnj",
+   "salle": "7,4",
+   "detail": "Xiximantre, sorcier homme-serpent immortel réduit à un corps décrépit, reçoit dans son antre aux lampes magiques violacées, entre son laboratoire (6,5) et sa réserve aux oubliettes de gobelins captifs (7,5). Baltoplate, succube entravée d'entraves illusoires (6,2), joue la prisonnière des gobelins ; la salle du trône aux huit miroirs (9,3) garde le cœur de la tombe.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

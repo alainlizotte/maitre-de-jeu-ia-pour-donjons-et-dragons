@@ -342,5 +342,44 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "duel",
+   "titre": "Assister au duel et constater la disparition d'Edhelran",
+   "type": "pnj",
+   "salle": "0,0",
+   "detail": "Sur le parvis des Étals de la Belle œuvre, Van Belem et le jeune Edhelran s'affrontent aux pinceaux sous l'œil de Van Warol, Premier Pinceau et juge du duel. La victoire du demi-elfe fait un rival amer — et le lendemain, sa mansarde au plafond de verre (0,-1) est vide : Aymotin est terrorisé, le vieux tisserand Ebolor (0,-2) parle d'enlèvement.",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "cour",
+   "titre": "Tirer les renseignements à la maison de la cour",
+   "type": "pnj",
+   "salle": "0,-3",
+   "detail": "Pris dans la rafle du quartier des artistes, le groupe finit dans les cellules voûtées de la maison de la cour devant le baron-juge Erkiel : les disparitions de peintres s'accumulent et la piste mène à l'hôtel particulier de Valdenath, au cœur de l'échelle des Illusionnistes. Le bal costumé qu'il donne sera la couverture idéale.",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "bal",
+   "titre": "S'infiltrer au bal costumé de Valdenath",
+   "type": "lieu",
+   "salle": "1,-6",
+   "detail": "Cartons d'invitation contrôlés par quatre gardes au portail (0,-4), antichambre aux rondes trentenaires (0,-5), banquet du père Fricottin (1,-5) puis grande salle du bal : la cantatrice Criceline, l'architecte Le-Corpenché, la belle Johanna. Le vieux puits du jardin clos (0,-6) offre un passage secret vers l'étage par ses arceaux de fer.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "edhelran",
+   "titre": "Délivrer Edhelran et subtiliser le portrait",
+   "type": "etape",
+   "salle": "-1,-5",
+   "detail": "Derrière les rayonnages de la bibliothèque (0,-5), un passage secret mène au réduit où Edhelran, les yeux cernés, peint le portrait de Mitrias à travers le miroir sans tain du bureau (0,-4), sous la garde de deux fanatiques. La chambre du portrait (1,-6) est frappée d'un glyphe de protection à sphère acide, et la galerie du trésor (0,-2), fermée à clef, vaut plus de 10 000 pièces d'or.",
+   "xp": 600,
+   "note": "Valdenath et Mitrias (clercs de niveau 14) sont hors plafond FP : [AJUSTEMENT REQUIS], à jouer en scène ou à recalibrer.",
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

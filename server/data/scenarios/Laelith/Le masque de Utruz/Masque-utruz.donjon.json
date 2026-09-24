@@ -327,5 +327,44 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "boulier_bleu",
+   "titre": "Débusquer le masque utruz",
+   "type": "pnj",
+   "salle": "3,0",
+   "detail": "La tour du Boulier Bleu, vitrée et entrouverte : Maître Grassepath, l'usurier, s'est réfugié à l'étage parmi ses coffres et coffrets, pendant que sa servante Mistouk, affligée d'un vertige tyrannique, refuse l'échelle du grenier piégé (2,1) ; les balcons branlants surplombent le gouffre de la faille (2,0). La piste du masque commence ici — ou à la chapelle clandestine du Crâne, où Mulluk veille sur son réduit tapissé d'offrandes (0,1).",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "traversee",
+   "titre": "Rejoindre l'île d'Altalith avec Mez'Arate",
+   "type": "lieu",
+   "salle": "2,2",
+   "detail": "Par les toits et les ruelles obscures de la terrasse du Nuage (1,1), Mez'Arate — déguisé en « Leroy » — affrète un bateau sur les quais : une journée de mer, une grotte percée à flanc de falaise (0,2), un cours d'eau souterrain lugubre (1,2) et l'échouage sur la plage de sable noir, au fond de la grotte, devant l'antre des utruz.",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "dedale",
+   "titre": "Décrypter le dédale utruz",
+   "type": "enigme",
+   "salle": "3,2",
+   "detail": "Les couloirs de basalte se croisent, indistinguables, dans le noir : seule la hiérarchie des couleurs utruz (noir, bleu, jaune, vert, rouge) et des nœuds — valant environ six mètres — lit le bon chemin. Six pièges jalonnent les mauvais embranchements : fosse (3,3), pieux effilés (2,3), projectiles venimeux (1,3), voûte fissurée (0,3), jet de flammes (0,4) et rocher dévalant (1,4) — si le masque n'est pas correctement décrypté, le MJ les tire au hasard.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "porte_metal",
+   "titre": "Forcer la grande porte de métal",
+   "type": "combat",
+   "salle": "3,5",
+   "detail": "La longue ligne droite (2,4) mène à l'immense porte de métal à la serrure évoquant une pieuvre : « Leroy » y révèle son jeu — Mez'Arate exige l'extinction des torches et sa fiole de rapetissement fait des victimes. Au-delà, la stèle de la salle finale supporte la carcasse d'une pieuvre de cinq mètres, gardienne du temple utruz et de son trésor.",
+   "xp": 600,
+   "note": "Mez'Arate et la pieuvre géante sont hors bestiaire : [AJUSTEMENT REQUIS], à jouer en scène.",
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

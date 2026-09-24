@@ -246,5 +246,43 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "circuit_confusion",
+   "titre": "Survivre au circuit de confusion du bastion",
+   "type": "pnj",
+   "salle": "1,1",
+   "detail": "Aveuglés, les aventuriers sont descendus dans la gueule noire et puante des Ruines de Gate (0,0), escortés par la garde de morgensterns (0,1), le poste aux guisarmes (3,0) et les salles de garde aux arbalètes lourdes (1,0 et 1,2) sous les ordres de Thragol (3,1). Le long couloir du circuit de confusion (2,2) brouille chaque bruit et chaque odeur avant le palier de l'aveuglement jonché d'ossements (1,1), où tout est fait pour désorienter les captifs.",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "epreuve_spectateur",
+   "titre": "Passer l'épreuve du Spectateur Zythalarlr",
+   "type": "pnj",
+   "salle": "2,3",
+   "detail": "La grande salle de l'épreuve (2,3) : au centre trône une hideuse créature ronde de près de deux mètres, gueule baveuse garnie de dents de dagues, pédoncules oculaires frémissants — mais ce n'est qu'une illusion. Zythalarlr le Spectateur (beholder), le chaman et les quatre chefs d'escouade gobelours jaugent les prisonniers ; le puits d'évasion (3,3) plonge vers les niveaux inférieurs du bastion.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Zythalarlr (beholder) n'existe pas dans le bestiaire : il reste un PNJ joué à l'initiative du MJ, fiche à créer [AJUSTEMENT REQUIS]."
+  },
+  {
+   "cle": "enigme_du_spectateur",
+   "titre": "Résoudre l'énigme imposée par le Spectateur",
+   "type": "enigme",
+   "detail": "Le Spectateur impose aux aventuriers une énigme dans la salle qui lui est réservée (l'une des salles #11, #13, #14 ou #15 du module) : la réussite conditionne le traitement que les gobelours réservent aux captifs et l'accès à l'épreuve suivante. L'échec se paie auprès des gardes du bastion.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "fuir_par_portail",
+   "titre": "Fuir les Ruines de Gate par les portails",
+   "type": "lieu",
+   "salle": "0,3",
+   "detail": "Les liens enfin coupés, les aventuriers sont poussés seuls dans le bloc de pierre noire de six mètres (1,3) : l'intérieur, tordu par la magie, aligne vingt blocs de pierre aux couleurs variées (0,3) — autant de portails dont un seul, peut-être, ramène en lieu sûr. Choisir, ou tenter le puits d'évasion (3,3) qui plonge vers les niveaux inférieurs et le chemin de quelque horreur.",
+   "xp": 600,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

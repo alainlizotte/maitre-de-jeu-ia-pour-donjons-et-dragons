@@ -208,5 +208,54 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "delivrer_shale",
+   "titre": "Délivrer Shale, le jeune géant de pierre, du cloaque",
+   "type": "pnj",
+   "salle": "0,-1",
+   "detail": "Suite d'Aurumglathrolos : les héros s'introduisent dans la forteresse de pierre d'Hagan, sorcier humain de 13e niveau plaquée sur l'Epine-du-Monde, où un couple d'otyughs veille la vasière du cloaque (0,-1). Shale, dévoré de blessures, y gît depuis qu'Hagan l'y a précipité pour l'avoir voulu prévenir : il révèle que Skielara n'est pas aux ergastules mais ligotée dans la grande salle de festin (0,-3), et confie les plans secrets du sorcier. Soigné, il offre en gage d'amitié la pierre de granite gravée d'une rune géante de sa tribu.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Hagan et les cinq seigneurs géants (Trasher Tuerie, Jarl Vergold, Bergutin, Sar'tol, Aster Horlogis) sont hors plafond [AJUSTEMENT REQUIS] : jouer l'infiltration et l'évasion, pas le combat frontal."
+  },
+  {
+   "cle": "liberer_ergastules",
+   "titre": "Libérer les prisonniers des ergastules",
+   "type": "pnj",
+   "salle": "-1,-1",
+   "detail": "Sous la garde d'un ogre chiourme et de ses orogs geôliers (à jouer comme des orques endurcis), croupissent le Sgt. Brayton et ses soldats de Nesme Cole et Derrick, les nains du clan Taille-hache (Mogor, Herod, Heisa, Lortol), Belira Morningdance, Hasperen Leafwalker et Berol Glittergem. Une libération discrète crée des alliés durables pour l'assaut ou la fuite finale. L'entrée la plus discrète de la forteresse reste le canal d'égout ouest (-1,0), infesté par le couple d'otyughs.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "sonder_les_wards",
+   "titre": "Sonder les wards de la tour de sorcellerie",
+   "type": "enigme",
+   "salle": "1,-3",
+   "detail": "Dans la bibliothèque-tour d'Hagan (1,-3), grimoires géants, reliques et un cercle de warding gravé à même le sol alimentent les protections du fort. Étudier la magie des wards permet de comprendre les défenses et de préparer une « parenthèse muette » pour agir sans déclencher l'alarme. La cour des patrouilles (0,-2) reste le point le plus dangereux du donjon : trois patrouilles d'orques et d'orogs répondent au moindre bruit, et des silhouettes géantes arpentaient les remparts.",
+   "xp": 500,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "demeler_hagan",
+   "titre": "Déjouer Hagan et briser l'alliance des seigneurs géants",
+   "type": "etape",
+   "salle": "0,-3",
+   "detail": "Scène-clef dans la grande salle de festin (0,-3) : Hagan, sorcier humain de 13e niveau, trône entre les cinq seigneurs géants près de la hache du massacreur géant des collines, tandis que Skielara, enchaînée et réduite à taille humaine, attend sa libération. Tuer Hagan fait s'effondrer l'alliance des clans orques de l'Epine-du-Monde ; à défaut, l'embuscade peut être préparée depuis les loges vides des géants (1,-4) ou la cuisine (1,-2) dont les remugles couvrent les bruits.",
+   "xp": 1200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "[AJUSTEMENT REQUIS] Hagan (13e niveau) et les seigneurs géants (134 à 165 PV) dépassent largement le bestiaire : action, ruse et évasion plutôt qu'affrontement."
+  },
+  {
+   "cle": "briser_la_perle",
+   "titre": "Briser la Perle de Voyage et faire s'abattre Sky-Hammer",
+   "type": "etape",
+   "salle": "0,-5",
+   "detail": "Dans le trésor de l'Overking (0,-4), parmi le butin des clans et les tributs des seigneurs géants, repose la Perle de Voyage de Nuage-Marcheur : la briser fait surgir Sky-Hammer, le château nuageux du roi Torgon, au-dessus de la forteresse — elle ne ramène pas Skielara, elle fait pleuvoir des quartiers de roc sur les défenseurs. Depuis les meurtrières du rempart (0,-5), les héros voient les nuages céder et la victoire basculer. La fuite finale s'organise par l'arsenal (1,-5) vers les griffons convoqués par Nuage-Marcheur, le roi offrant alors son amitié et un cristal d'alliance à briser en cas de détresse.",
+   "xp": 800,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

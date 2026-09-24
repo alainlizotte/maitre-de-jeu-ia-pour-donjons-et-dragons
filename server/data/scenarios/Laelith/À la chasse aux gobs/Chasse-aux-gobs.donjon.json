@@ -298,5 +298,43 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "gandelme",
+   "titre": "Libérer Gandelme le Dextre",
+   "type": "pnj",
+   "salle": "-1,-1",
+   "detail": "La grosse porte en bois cerclée de fer de l'entrée — crochetage DD 10 ou Force DD 15 — ouvre sur l'antre où deux sentinelles somnolaient ; au premier carrefour, une toile camouflée dissimule une fosse profonde de trois mètres (0,-1). Dans la salle de torture aux tenailles et aux fers rougis, Gandelme le Dextre, halfelin roublard méconnaissable sur le chevalet, peut payer sa libération en renseignements — et en révélations sur sa propre affaire.",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "hobgobelins",
+   "titre": "Abattre la garde des hobgobelins",
+   "type": "combat",
+   "salle": "0,-6",
+   "detail": "La salle commune est le quartier des hobgobelins, épées longues au côté et boucliers posés sur les tables ; leur dortoir attenant (1,-5) est pour l'heure vide. Un simple fracas ne réveille pas les deux dormeurs du dortoir voisin (1,-6), mais des cris feraient accourir la tribu : râtelier d'armes (0,-2), réserve de butin (0,-3), garde-manger (0,-4) et cuisine (1,-4).",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "fial",
+   "titre": "Régler le compte du gobelours de Fial",
+   "type": "combat",
+   "salle": "0,-7",
+   "detail": "Derrière sa porte, le gobelours signalé autour de Fial fourre un petit sac sous sa paillasse, morgenstern à portée de main. Son passage secret (Investigation DD 15) dissimule la salle aux six statuettes d'ivoire, deux fioles de potion de soins et un grand coffre ouvert (-1,-7).",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "lanea",
+   "titre": "Délivrer Lanéa et renverser le chef de la tribu",
+   "type": "etape",
+   "salle": "0,-8",
+   "detail": "Sur son trône de bois, le chef de la tribu — un poltron qui fuira dès qu'il perd l'avantage — garde Lanéa, la fille du forgeron Thron, ligotée dans la cellule voisine mais saine et sauve (-1,-8). Le laboratoire fermé à clef (0,-9), l'apprenti alchimiste Elric (-1,-9) et la chambre bien décorée (0,-10), où traîne l'équipement d'aventurier de petite taille, recèlent les derniers secrets de l'antre.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

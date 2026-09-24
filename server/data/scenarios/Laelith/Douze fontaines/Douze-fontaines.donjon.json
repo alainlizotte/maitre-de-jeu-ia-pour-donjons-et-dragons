@@ -259,5 +259,44 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "meurtre_lune_ivre",
+   "titre": "Enquêter sur le meurtre de la Lune ivre",
+   "type": "pnj",
+   "salle": "0,0",
+   "detail": "Au 27 de l'échelle du Départ sur la Chaussée du lac, un colosse barbu au poil roux s'effondre sur la table des PJ, une dague plantée dans le dos et un document dans la main. À la rédaction de la Gazette (-1,-1), le rédacteur en chef Ansar Allamra confirme la signature : le Poignard sanglant frappe à nouveau, et le document assassine pourrait viser les douze fontaines de la ville.",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "thrad",
+   "titre": "Faire parler Thrad Redaff",
+   "type": "pnj",
+   "salle": "1,-3",
+   "detail": "Un passant, contre dix pièces d'or, livre la planque de Thrad Redaff : un taudis jonché de cadavres de bouteilles, gardé par sept matelots d'emblée agressifs. Malfrat lâche sous la pression, Thrad révèle le complot de l'eau empoisonnée, la part des armuriers Smitt et Weston (0,-6) et le rendez-vous du pont des Pêcheurs (0,-7).",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "fontaines",
+   "titre": "Confirmer l'empoisonnement des fontaines",
+   "type": "lieu",
+   "salle": "1,-4",
+   "detail": "Une fontaine publique de Laelith, adossée à un mur de pierre : l'eau paraît claire, mais de la poudre blanchâtre s'est dissoute dans la vasque — l'eau empoisonnée est figurée en piège, comme les autres fontaines de la carte de Rufus le long de la terrasse de la Prospérité (0,-4). La garde commence à barricader les fontaines en attendant des analyses.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "entrepot_zaro",
+   "titre": "Donner l'assaut à l'entrepôt de Mork Zaro",
+   "type": "combat",
+   "salle": "1,-8",
+   "detail": "Sur les quais, l'un des quatre entrepôts à toit de tuiles (0,-8) cache, derrière les planches du mur du fond, le repaire de Mork Zaro : le demi-orque balafré y tient Esméralda Cairn, qui se débat dans le réduit attenant (1,-9). Neutraliser marins, malfrats et bretteur — dont Bartabas Diavolo croisé au pont des Pêcheurs — et délivrer la sœur de Rufus clôt l'affaire du Poignard sanglant.",
+   "xp": 500,
+   "note": "Le demi-orque vétéran est joué sur la fiche orque homme d'armes, à jouer nettement supérieur (note_convention du manifeste).",
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

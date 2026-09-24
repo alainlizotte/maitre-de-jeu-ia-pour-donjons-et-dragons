@@ -665,5 +665,45 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "descendre_salles_brume",
+   "titre": "Descendre dans les Salles de la Brume sous le Grand-Père",
+   "type": "lieu",
+   "salle": "1,0",
+   "detail": "Au cœur de la Haute-Forêt, le chêne-animal « Grand-Père » dresse ses quatre chênes nains et son cairn de monolithes (0,0), terre sacrée des tribus. L'échelle de bois sombre plonge 26 m à travers le fût évidé (1,0) vers les racines où les orques, gobelins et gnolls de Tantra Hagra ont forcé la porte de l'antique sanctuaire (0,2) et campent au milieu des salles sacrées.",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "autel_ours_bleu",
+   "titre": "Retrouver l'autel de l'Ours Bleu profané",
+   "type": "lieu",
+   "salle": "3,1",
+   "detail": "Dans une alcôve de pierre des Salles de la Brume, une statue d'ours-grizzli assis veille une dague au manche d'os sculpté d'un lion aux yeux de rubis. La statue pivote sur sa base : à droite, un grêle de lances jaillit du plafond — garde du sanctuaire que les pillards ont déclenchée à leurs dépens (salle voisine jonchée de squelettes d'orques, (2,2)).",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "debander_horde_tantra",
+   "titre": "Défaire Tantra Hagra et sa horde",
+   "type": "combat",
+   "salle": "3,7",
+   "detail": "La salle du trône de la Horde (3,7) : Tantra Hagra, annis déguisée en avatar barbare à la peau bleue de 2,4 m, s'y presse au milieu d'une troupe hétéroclite — hobgobelins, orques, trolls, gnolls, gobelours, loups-monstrueux et worgs. Autour d'elle, la crypte des six jarres (3,3) recèle les prêtres momifiés dont le bris libère l'esprit gardien, et la colonne d'orques à la bannière d'araignée noire borgne (0,5) renforce la horde.",
+   "xp": 500,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Tantra Hagra (annis), les trolls et les loups-monstrueux sortent du plafond FP ≤ 5 du bestiaire : à ajuster [AJUSTEMENT REQUIS]."
+  },
+  {
+   "cle": "salle_creation_races",
+   "titre": "Atteindre la Salle de la Création des Races",
+   "type": "lieu",
+   "salle": "0,9",
+   "detail": "Ultime étage sous les racines : une salle immense (48 m sur 33) brillamment éclairée de lampes magiques, dominée par un ours ailé cornu aux serres d'aigle assis sur un tas de butin au centre d'un bassin d'acide fumant, entre deux statues de lézards. Le trésor des coffres pillés (2,5) et le coffret de laiton posé sur le plan astral (2,8) jalonnent la dernière ligne droite de la Salle de la Création des Races.",
+   "xp": 600,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "L'ours ailé, les golems de pierre et le serpent astral bicéphale de la mosaïque (1,8) sont hors plafond : [AJUSTEMENT REQUIS]."
+  }
  ]
 }

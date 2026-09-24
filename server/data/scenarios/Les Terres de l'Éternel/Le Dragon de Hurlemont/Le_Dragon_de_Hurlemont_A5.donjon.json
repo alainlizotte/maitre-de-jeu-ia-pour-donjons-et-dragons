@@ -233,5 +233,44 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "enquete_hurlemont",
+   "titre": "Enquêter dans le bourg de Hurlemont",
+   "type": "pnj",
+   "salle": "0,0",
+   "detail": "Sous les portes du bourg, des soldats en cuir bouilli rabattent des gobelins jusque sous les flèches et Gritch, gobelin acculé, ne se bat pas (0,0). Varcan Durô dit le Dragon reçoit les envoyés avec une courtoisie glaciale pendant qu'Albine Durô recopie la lettre et que Bérulf, le sergent, se tient en retrait (1,0) ; à l'auberge du Vent Clos (2,0), le vieux muletier se tait devant les soldats, et Bréa, la mémoire du bourg marquée des Mille Sacrifices Miséricordieux, soigne un bûcheron (3,0).",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "secrets_du_monastere",
+   "titre": "Percer les secrets du péage et du Monastère",
+   "type": "etape",
+   "salle": "1,1",
+   "detail": "L'ancien poste de péage (3,1) garde dans ses armoires les comptes du domaine — voyageurs retenus, courriers interceptés — que Bérulf seul peut ouvrir sans témoin. Deux heures de montée sur le chemin taillé dans l'à-pic (2,1) mènent au Monastère (1,1) où le Vénérable, dernier lecteur du livre scellé, cache la clef de fer sous sa robe ; chapelle à la tapisserie du Bon Roi cerné par le grand dragon vert (0,1), crypte aux incunables (1,2) et bibliothèque aux lettres sans réponse (2,2) complètent l'enquête.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "hauteurs_boisees",
+   "titre": "Mener l'affaire dans les hauteurs boisées",
+   "type": "combat",
+   "salle": "4,1",
+   "detail": "Les hauteurs boisées au-dessus de la vallée (4,1) appartenaient aux gobelins bien avant l'arrivée des murs humains : des campements brûlés fument encore parmi les arbres et les patrouilles du seigneur nettoient les approches du Monastère. Gritch peut guider le groupe s'il a survécu à la porte ; gobelins (FP 1/3) et ombres (FP 3) du bestiaire local.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "negocier_vrakendur",
+   "titre": "Négocier avec Vrakendur dans sa tanière",
+   "type": "pnj",
+   "salle": "3,2",
+   "detail": "La tanière de Vrakendur dans les neiges qui dominent Hurlemont (3,2) : une grotte ouverte aux vents où sommeille, sur tout ce qu'il a pris, le descendant du Grand Dragon vaincu par le Bon Roi — le même dragon vert que la tapisserie de la chapelle (0,1) montre cernant le Bon Roi et ses compagnons. Ici on ne vient pas voler : on vient négocier, jamais se battre.",
+   "xp": 600,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Vrakendur est très au-dessus du plafond FP et absent du bestiaire : scène de négociation uniquement, jamais de combat (convention du manifeste)."
+  }
  ]
 }

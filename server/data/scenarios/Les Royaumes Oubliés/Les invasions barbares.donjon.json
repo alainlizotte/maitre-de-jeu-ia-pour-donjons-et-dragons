@@ -218,5 +218,54 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "s_evader_de_la_prison",
+   "titre": "S'évader de la prison de Kurth avant la pendaison",
+   "type": "etape",
+   "salle": "2,0",
+   "detail": "Les héros, accusés du double meurtre d'Aldrick et de Mélissande, croupissent dans les cellules a et b de la prison de Kurth (2,0) sous les crachats de la populace. Au tribunal reconverti dans la salle des fêtes (2,-1), le prévôt Eléas Rochebrune, un bandage sanglant autour du crâne, refuse tout plaidoyer : ils seront pendus à l'aube. Par le soupirail grêlé, Gros Pierre leur glisse une dague et une fiole d'acide pour forcer la porte (deux essais de crochetage) ; leurs effets confisqués restent récupérables au dortoir.",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "fouiller_la_maison_des_bucheronnes",
+   "titre": "Fouiller la maison des bûcherons et recueillir Aléna",
+   "type": "pnj",
+   "salle": "0,-1",
+   "detail": "Dans le val de Rochetaille, la maison des bûcherons abandonnée (0,-1) garde sa table mise et ses jouets sous la poussière : sous le tapis déplacé, une large tache de sang séché, et à l'orée du bois une douzaine de tombes camouflées. Aléna, fillette de sept ans, s'est cachée dans les fourrés pendant le massacre ; elle ne parle qu'à qui se montre doux avec elle. La recueillir et la confier à un couple sans enfant du val vaut à elle seule la reconnaissance des survivants.",
+   "xp": 100,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "delivrer_ernest",
+   "titre": "Délivrer Ernest des mercenaires de Rodrick",
+   "type": "combat",
+   "salle": "1,-2",
+   "detail": "La tour de bois des mercenaires (1,-2), visible de loin, abrite Rodrick le colosse roux, Kurt, Amir la prêtresse de Cyric, Valoréa et le mage Anthéus — qui détiennent Ernest, le fils de Gros Pierre, jour et nuit gardé. La clairière d'accès (0,-2) est hérissée des pièges grossiers de Valoréa, piège à loup aux mâchoires de fer et clochettes en tête. Dans un recoin de la tour, le petit coffre (2,-2) hérissé d'une aiguille empoisonnée (2d4 dégâts, jet de sauvegarde) renferme 500 po de butin, gardé par deux chiens.",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "[AJUSTEMENT REQUIS] Rodrick (guerrier puissant, FOR 18) et Anthéus (mage 3) sont redoutables pour des novices ; si les PJs traînent en route, la bande se débarrasse d'Ernest et leur tend une embuscade."
+  },
+  {
+   "cle": "trouver_la_lettre_s",
+   "titre": "Découvrir la lettre « S » dans l'étude d'Eléas",
+   "type": "lieu",
+   "salle": "1,-3",
+   "detail": "L'étude du sorcier-prévôt (1,-3), mise en désordre par un départ précipité, cache sous l'armoire la lettre de son complice : signée « S », elle confirme le meurtre d'Aldrick et de Mélissande et révèle la machination contre les héros — la preuve qui les disculpe enfin. La boule de cristal qu'Eléas a emportée lui servait à tracer les fugitifs à travers le val de Rochetaille. Le défilé (1,-1), passage obligé vers les anciennes mines, est le lieu rêvé pour tendre une embuscade aux orques de passage.",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "donner_l_alerte_sur_l_invasion",
+   "titre": "Repérer le camp orque et donner l'alerte à Kurth",
+   "type": "etape",
+   "salle": "0,-3",
+   "detail": "Les escaliers de l'ancienne mine (0,-3) plongent vers le camp retranché des centaines d'orques disciplinés du prévôt Eléas, prêts à fondre sur Kurth : sentinelles nombreuses, chaman et lieutenant rendent l'assaut frontal impossible, le module veut la fuite et l'alerte. La mine voisine (2,-3), que les orcs évitent avec soin, abrite une ourse exaspérée et ses deux petits — un poste d'observation idéal si l'on épargne les oursons. L'alerte donnée, le village peut préparer sa défense derrière la porte fortifiée et les remparts (0,0 et 1,0).",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "[AJUSTEMENT REQUIS] L'ourse devient berserk si l'un de ses petits meurt (étreinte 2d8) : jouer la fuite ou la ruse plutôt que le combat frontal."
+  }
  ]
 }

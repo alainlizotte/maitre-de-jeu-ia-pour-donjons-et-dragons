@@ -626,6 +626,16 @@ def _journaliser_lieu(
         bible["etape_courante"] = titre
         bible["objectif"] = str(e.get("detail") or titre).strip()[:600]
         break
+    # 5) Objectifs de quête (requis objets, salles, événements) : recalcule
+    # les statuts et alimente `quete.bible.objectifs/*` pour l'onglet client
+    # et le bloc du prompt. Écrase l'étiquette `etape_courante` par l'objectif
+    # RÉELLEMENT courant (premier non accompli) — la salle atteinte ne suffit
+    # plus si des objets requis manquent.
+    try:
+        from ..game.objectifs import actualiser_objectifs  # pylint: disable=import-outside-toplevel
+        actualiser_objectifs(etat, ctx.data_dir, partie_id=ctx.partie_id)
+    except Exception:                                       # noqa: BLE001
+        pass
 
 
 @tool
@@ -1747,6 +1757,19 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
             "au joueur via `carte_donjon_explorer`."
         ))
     nx, ny = cx + dx, cy + dy
+    # ⛔ SCÉNARIO — verrou d'objets requis : la destination appartient à la
+    # zone (`salles`) d'une étape PLUTÔT que l'objectif courant non accompli
+    # (ex. porte de téléportation SCELLÉE tant que la Couronne n'est pas dans
+    # l'inventaire de quête). Refus AVANT toute mutation et SANS consommer le
+    # déplacement du tour — voir game/objectifs.verrou_deplacement.
+    try:
+        from ..game.objectifs import verrou_deplacement  # pylint: disable=import-outside-toplevel
+        _refus_scenar = verrou_deplacement(
+            etat, ctx.data_dir, ctx.partie_id, (nx, ny))
+    except Exception:                                        # noqa: BLE001
+        _refus_scenar = None
+    if _refus_scenar:
+        return ToolResult(text=_refus_scenar)
     deja_visitee = (nx, ny) in salles and salles[(nx, ny)].get("visitee")
     if (nx, ny) not in salles:
         salles[(nx, ny)] = _nouvelle_salle(nx, ny)

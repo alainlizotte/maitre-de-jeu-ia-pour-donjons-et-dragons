@@ -336,5 +336,59 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "s_infiltrer_a_cryptejardin",
+   "titre": "S'infiltrer dans la forteresse de Cryptejardin",
+   "type": "lieu",
+   "salle": "0,0",
+   "detail": "Au pied du pic qui porte la forteresse, une toile couleur de pierre dissimule l'orifice du tunnel de secours (Fouille DD25, DD10 si l'on sait quoi chercher) : la grille intérieure s'ouvre d'un levier, dans un vacarme qui alerte la salle de garde gobeline (-1,-1). Bastion du Noir Réseau dans les Marches d'Argent, près du village de Sang-Noir, Cryptejardin monte du tunnel (-2,-1) aux caves, au temple de Garagos et au donjon de Monagar Sythael. Les patrouilles extérieures comptent quatre gobelins menés par un gobelours sergent.",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "recuperer_le_message_d_eylistree",
+   "titre": "Récupérer le message d'Eylistrée dans son cachot",
+   "type": "objet",
+   "salle": "1,-4",
+   "detail": "Dans le cachot verrouillé (crochetage DD15) du niveau des cellules (1,-4), un parchemin caché sous la paille (Fouille DD15) porte le message d'Eylistrée à Khelben Bâton-Noir : il prouve l'identité de l'elfe amnésique en fuite et dévoile le projet du Noir Réseau sur les routes. C'est l'objet même de la mission confiée au groupe. Dans la cellule voisine (0,-4), le rôdeur Ruppert Lafran, torturé par les gobelins jusqu'à perdre toute étincelle, ne songe plus qu'à fuir.",
+   "requis": [
+    {
+     "nom": "Le message d'Eylistrée",
+     "portee": "quete"
+    }
+   ],
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "gagner_la_confiance_du_culte",
+   "titre": "Gagner la confiance du culte de Garagos",
+   "type": "pnj",
+   "salle": "0,-3",
+   "detail": "Une écoute discrète (Déplacement silencieux DD10) de la dispute entre le prêtre de Garagos et les deux agents du Zhentarim (-2,-2) révèle la faille entre le culte des « Pilleurs de Sang » et le Noir Réseau — une discorde exploitable. Frère Llammer, second du Grand Prêtre, reçoit dans la salle de réunion du culte (0,-3) : allié précieux si l'on y entre sans l'arme au poing, ennemi mortel sinon. Le petit temple de l'autel aux six bras (-1,-3) et son bassin d'offrandes brisées (1,-3) complètent le quartier du culte.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "atteindre_le_donjon",
+   "titre": "Atteindre le donjon de Monagar Sythael",
+   "type": "lieu",
+   "salle": "2,-5",
+   "detail": "Au sommet du rocher, la cour du donjon (2,-5) résonne des dernières ardeurs du culte, où se sont retranchés Monagar Sythael, capitaine zhent proche de Fzoul Chembryl, et Themyst Lavaster, Grand Prêtre de Garagos. La chambre du mageciel Vendell (-1,-5), absent en chasse sur sa manticore, cache un grimoire et un passage secret vers son butin (0,-5), tandis que la caverne du troll (1,-5) veille l'antichambre du donjon. Le bourreau et sa dague étrange (-1,-4), la phalange orque de Bedogr (-2,-4) et la cuisine d'Albor (-2,-5) garnissent le niveau.",
+   "xp": 500,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Vendell peut revenir à tout moment sur sa manticore ; Bedogr (guerrier orque de 4e niveau) et le troll (régénération, feu et acide) demandent d'ajuster les fiches du bestiaire."
+  },
+  {
+   "cle": "vaincre_monagar_sythael",
+   "titre": "Vaincre Monagar Sythael et livrer la forteresse",
+   "type": "combat",
+   "salle": "2,-5",
+   "detail": "Final du scénario : Sythael tombe dans la cour du donjon et les Ménestrels et les Mains Grises, alertés, donnent l'assaut ; Khelben Bâton-Noir paraît par un portail magique pour recueillir le message d'Eylistrée et remercier le groupe. Les gobelins alliés de la forteresse se battent encore aux côtés des défenseurs zhents. Livrée, Cryptejardin cesse d'étrangler les routes des Marches d'Argent et le culte de Garagos perd son repaire.",
+   "xp": 800,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

@@ -317,5 +317,49 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "enceinte",
+   "titre": "Forcer l'enceinte de la propriété",
+   "type": "combat",
+   "salle": "0,0",
+   "detail": "La grille en fer noir, doublée d'un mur de trois mètres, abrite une cabane de garde où deux gardiens veillent flanqués de deux molosses. Le sentier (1,0) longe l'écurie vide (1,-1) jusqu'à la grande demeure de pierre au toit de chaume, dont la porte de chêne est condamnée de l'intérieur par une barre transversale — impossible à crocheter.",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "mercenaires",
+   "titre": "Neutraliser les hommes de main de Mez'Arate",
+   "type": "combat",
+   "salle": "-1,-1",
+   "detail": "La salle de garde du rez-de-chaussée loge la plupart des hommes laissés sur place, à boire de jour et à dormir de nuit. Au premier étage, deux mercenaires de mieux occupent la chambre (1,-1), les trois autres ayant suivi le maître jusqu'à Egonzasthan-la-basse.",
+   "xp": 250,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "chambre_maitre",
+   "titre": "Fouiller la chambre de Mez'Arate",
+   "type": "lieu",
+   "salle": "0,-1",
+   "detail": "Au deuxième étage, les trois portes des appartements privés sont verrouillées ; la chambre du maître abrite des vêtements de rechange de taille humaine et deux sacs renfermant les richesses de l'espion-magicien. Le secrétaire en acajou du bureau du premier étage ne renferme que parchemins vierges et encres — le vrai butin est ailleurs.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "oeil_gruumsh",
+   "titre": "Saisir l'Œil de Gruumsh dans le laboratoire",
+   "type": "objet",
+   "salle": "-1,-2",
+   "detail": "Derrière le pan de mur de construction récente de la cave verrouillée (-1,-1), un puits communique avec le laboratoire du sous-sol : l'Œil de Gruumsh y repose entre deux potions, un grimoire, des composantes matérielles et, dans un bocal, une chose macabre. Saisir l'artefact orque est le cœur de la mission sur l'espion-magicien.",
+   "requis": [
+    {
+     "nom": "L'Œil de Gruumsh",
+     "portee": "quete"
+    }
+   ],
+   "xp": 500,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

@@ -259,5 +259,44 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "sas_pixel",
+   "titre": "Franchir le sas et survivre à la malédiction pixel",
+   "type": "lieu",
+   "salle": "1,0",
+   "detail": "Le sommet émergé du Cube 1717 ouvre sur un sas de quarante pieds (0,0) puis le carrefour métallique où des lunettes pixel gisent au fond d'un puits : quiconque les chause perçoit l'état véritable des salles maudites. La malédiction pixel (sauvegardes, niveaux physiques et mentaux) pèse dès l'abordage, et l'eau du Styx suinte depuis les étages chirurgicaux.",
+   "xp": 200,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "morgue_styx",
+   "titre": "Traverser la morgue et le temple profané",
+   "type": "lieu",
+   "salle": "0,1",
+   "detail": "La morgue glacée (0,1) déborde de corps dépecés — humains, hobgobelins, duergars — qui se lèvent au commandement du seigneur-crâne. Au-delà, le siphon d'âmes (0,2) recrache un corps nu en plein vol toutes les six secondes, et le temple (1,2) exhibe l'antique statue de Bane profanée, remplacée par un énorme bloc de métal gravé d'un visage sans nez.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "avnas",
+   "titre": "Négocier avec Avnas, l'architecte derro",
+   "type": "pnj",
+   "salle": "1,3",
+   "detail": "L'antre d'Avnas, architecte folle du Cube : courbes qui déchirent la géométrie des couloirs, porte secrète remisée dans des cubes de papier peint, plans de la forteresse étalés sur la planche à dessin. Alliée nominale du seigneur Vargo, la savante peut livrer les accès de la salle des machines — ou dresser le berbalang Bunch (0,3) contre les intrus.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "vargo",
+   "titre": "Renverser Vargo sur le Trône aux six faces",
+   "type": "combat",
+   "salle": "2,4",
+   "detail": "Au cœur exact du Cube bat la salle des machines : vannes, tuyaux, vapeur rouge et la carcasse éventrée de l'Archquadrone, surplombées du Trône aux six faces où règne Vargo, le seigneur-crâne. Le renverser — et couper le siphon d'âmes — est la seule route de sortie depuis la prison de haute sécurité (1,4) et la salle d'opération (0,4).",
+   "xp": 800,
+   "note": "Vargo, les merregons et les vétérans pixelés sont hors plafond du bestiaire : [AJUSTEMENT REQUIS], recalibrer sur fiches squelette/gargouille ou jouer en scène.",
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  }
  ]
 }

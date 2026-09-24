@@ -331,5 +331,45 @@
     }
    ]
   }
+ ],
+ "etapes": [
+  {
+   "cle": "infiltrer_guilde",
+   "titre": "Infiltrer le repaire de la guilde sous la hutte de Sylune",
+   "type": "lieu",
+   "salle": "0,0",
+   "detail": "La trappe cachée de la hutte de Sylune s'ouvre sur le tunnel de terre et de poutres (0,0) — plafond bas, obscurité totale — qui mène aux galeries de la guilde des Voleurs de Shadowdale : poste de garde aux deux brigands en cuir (-1,0), salle commune au fil d'alarme (-2,1), dortoir des braconniers (-1,1) et soute à armes verrouillée (0,1).",
+   "xp": 150,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "depouiller_le_chef",
+   "titre": "Détrousser le maître de guilde et son magot secret",
+   "type": "etape",
+   "salle": "2,1",
+   "detail": "La chambre du maître de guilde (2,1), gardée par deux hommes d'armes aguerris en cotte de mailles (1,1) : l'homme accueille les intrus d'un ton sec — « Vous n'êtes pas membres de cette guilde » — avant de négocier. Derrière un mur d'illusion, un étroit boyau cache le grand coffre de métal verrouillé (2,0), le magot secret du chef des Voleurs de Shadowdale.",
+   "xp": 300,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Scène de négociation possible avec le maître de guilde avant toute effraction ; le mur d'illusion du magot doit être traversé par la détection ou la ruse."
+  },
+  {
+   "cle": "decouvrir_temple_araignee",
+   "titre": "Découvrir le temple oublié de l'Araignée",
+   "type": "lieu",
+   "salle": "1,0",
+   "detail": "Au bout d'un couloir des galeries, un vestibule de pierre taillée porte un paillasson aux glyphes étranges : une araignée gravée et l'inscription « Temple du poison des Araignées » (1,0), devant l'escalier qui descend vers le sanctuaire de marbre noir. Une fois le groupe engagé, l'escalier d'entrée s'évanouit et un mur se referme — sans la moindre trace de magie.",
+   "xp": 400,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
+  },
+  {
+   "cle": "terrasser_haute_pretresse",
+   "titre": "Terrasser la haute prêtresse drow du temple",
+   "type": "combat",
+   "salle": "0,2",
+   "detail": "Le dernier hall sous l'autel (0,2) : la haute prêtresse drow y contemple le téléporteur d'où deux flagelleurs mentaux viennent de s'enfuir, et invoque des araignées géantes en combat final. En chemin : l'armoire aux poisons (-2,0), la cuisine du cuistot drow (-2,1), la prison d'Eldas l'elfe à libérer (1,1), la caserne des drows drogués (2,1) et la niche à baguette de désintégration derrière le mur d'illusion du quartier des prêtresses (2,0).",
+   "xp": 600,
+   "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
+   "note": "Les drows du temple sont affaiblis par des années de drogues et de poisons rituels ; le grand mur de force de la salle du temple (-1,1) n'est franchissable qu'une fois son mécanisme trouvé."
+  }
  ]
 }

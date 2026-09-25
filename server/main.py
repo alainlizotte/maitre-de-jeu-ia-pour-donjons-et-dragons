@@ -2578,6 +2578,8 @@ async def set_quest(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
                 _charger_catalogue_plat as _ccp,
                 _construire_bible as _cb,
                 _ennemis_du_texte as _edt,
+                appliquer_depart as _apd,
+                initialiser_memoire_scenario as _ims,
                 extraire_pdf as _epdf,
             )
             _ctx_q = _TC(
@@ -2596,6 +2598,15 @@ async def set_quest(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
                 )
                 _bible["ennemis"] = _edt(_ctx_q, _txt)
                 etat["quete"]["bible"] = _bible
+                # Mémoire de campagne + point de départ : les mêmes que via
+                # `scenarios_laelith_charger` (partie e48e75dd : quête posée
+                # par le picker → `memoire` jamais amorcée, position monde
+                # inconnue → voyages impossibles).
+                _ims(etat, _s, etat["quete"])
+                try:
+                    _apd(_ctx_q, etat, _sid)
+                except Exception as e:                           # noqa: BLE001
+                    print(f"[dnd35] Départ scénario non placé : {e}")
         except Exception as e:                                   # noqa: BLE001
             print(f"[dnd35] Bible scénario non construite (picker) : {e}")
     etat["phase"] = "exploration"

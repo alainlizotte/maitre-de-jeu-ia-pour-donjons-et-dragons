@@ -438,6 +438,60 @@ def _depart_manifeste(
     return None
 
 
+def initialiser_memoire_scenario(
+    etat: dict[str, Any], s: dict[str, Any], quete: dict[str, Any]
+) -> dict[str, Any]:
+    """Amorce la MÉMOIRE DE CAMPAGNE pour le scénario `s` (partie e48e75dd :
+    quête posée par le PICKER `POST /api/parties/{id}/quest` → `memoire`
+    resté vide — missions, objectif, position — et le MJ perdait le fil).
+
+    Mut `etat` en place ; renvoie le dict `memoire`.
+    """
+    mem = etat.setdefault("memoire", {})
+    mem.setdefault("missions", [])
+    titre = str((quete or {}).get("titre") or "").strip()
+    if titre and not any(
+        str(x.get("titre", "")).lower() == titre.lower()
+        for x in mem["missions"] if isinstance(x, dict)
+    ):
+        mem["missions"].append({
+            "titre": titre,
+            "statut": "active",
+            "notes": str((quete or {}).get("pitch") or ""),
+            "ts": _now_iso(),
+        })
+    mem.setdefault("position", {"lieu": "", "zone": "", "detail": ""})
+    unit = str((s or {}).get("_univers") or "")
+    if unit and not mem["position"].get("lieu"):
+        mem["position"]["lieu"] = unit
+    if titre:
+        mem["objectif_courant"] = str(
+            (quete or {}).get("pitch") or mem.get("objectif_courant") or ""
+        )
+    return mem
+
+
+def appliquer_depart(
+    ctx: ToolContext, etat: dict[str, Any], scenario_id: str
+) -> Optional[tuple[str, float, float]]:
+    """Place le groupe au point de DÉPART du scénario (`depart` du
+    manifeste) si aucune position monde n'existe encore. Mut `etat` en
+    place ; renvoie (nom, x, y) si un placement a eu lieu, sinon None."""
+    dep = _depart_manifeste(ctx, scenario_id)
+    if not dep or (etat.get("positions_joueurs") or {}):
+        return None
+    nom, x, y = dep
+    etat["positions_joueurs"] = {"groupe": [float(x), float(y)]}
+    _lieu_d = etat.setdefault("lieu", {})
+    _lieu_d["nom"] = nom
+    _lieu_d["position_x"] = float(x)
+    _lieu_d["position_y"] = float(y)
+    mem = etat.setdefault("memoire", {})
+    mem.setdefault("position", {"lieu": "", "zone": "", "detail": ""})
+    mem["position"]["lieu"] = nom
+    return dep
+
+
 def ennemis_du_resume(texte: str, best: Optional[dict] = None) -> list[str]:
     """Détection des ennemis d'un scénario (résumé FR **ou EN**).
 
@@ -776,47 +830,25 @@ async def scenarios_laelith_charger(
                         and _m.get("statut") == "active"
                     ):
                         _m["statut"] = "terminée"
-            # Mission active (la quête du scénario devient la mission courante)
-            titre_mission = str(quete.get("titre") or "").strip()
-            if titre_mission and not any(
-                str(x.get("titre", "")).lower() == titre_mission.lower()
-                for x in mem["missions"]
-            ):
-                mem["missions"].append({
-                    "titre": titre_mission,
-                    "statut": "active",
-                    "notes": str(quete.get("pitch") or ""),
-                    "ts": _now_iso(),
-                })
-            # Position : l'univers/le scénario donne un point d'ancrage
-            unit = str(s.get("_univers") or "")
-            mem.setdefault("position", {"lieu": "", "zone": "", "detail": ""})
-            if unit and not mem["position"].get("lieu"):
-                mem["position"]["lieu"] = unit
-            mem.setdefault("objectif_courant", str(quete.get("pitch") or ""))
+            # Mission + objectif + ancrage univers (helper partagé avec le
+            # picker `POST /api/parties/{id}/quest`).
+            initialiser_memoire_scenario(etat, s, quete)
             # ── Point de DÉPART du scénario (`depart` du manifeste) ────────
             # Le groupe est placé sur la carte du monde dès le chargement
             # (partie e48e75dd : position inconnue → voyage impossible, le
             # MJ devait demander « où êtes-vous ? »). Jamais de téléport si
             # le groupe a déjà une position (rechargement de chapitre).
             try:
-                _dep = _depart_manifeste(ctx, str(s.get("id") or ""))
+                _dep = appliquer_depart(ctx, etat, str(s.get("id") or ""))
             except Exception:                                    # noqa: BLE001
                 _dep = None
-            if _dep and not (etat.get("positions_joueurs") or {}):
-                _nom_dep, _xd, _yd = _dep
-                etat["positions_joueurs"] = {"groupe": [float(_xd), float(_yd)]}
-                _lieu_d = etat.setdefault("lieu", {})
-                _lieu_d["nom"] = _nom_dep
-                _lieu_d["position_x"] = float(_xd)
-                _lieu_d["position_y"] = float(_yd)
-                mem["position"]["lieu"] = _nom_dep
+            if _dep:
                 champs.append(
                     f"\n🎯 **Point de départ du scénario** : le groupe démarre "
-                    f"à « {_nom_dep} » ({_xd:g}, {_yd:g}) — position placée sur "
-                    f"la carte du monde. Ancre la narration ici ; pour tout "
-                    f"déplacement, `voyage_demarrer` (distance auto entre "
-                    f"villes connues)."
+                    f"à « {_dep[0]} » ({_dep[1]:g}, {_dep[2]:g}) — position "
+                    f"placée sur la carte du monde. Ancre la narration ici ; "
+                    f"pour tout déplacement, `voyage_demarrer` (distance auto "
+                    f"entre villes connues)."
                 )
             # Persiste la quête avec sa bible (étapes/objectifs suivis) — que
             # la phase suivante retrouve la trame même sans l'historique.

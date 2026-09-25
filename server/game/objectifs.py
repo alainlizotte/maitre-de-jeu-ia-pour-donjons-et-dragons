@@ -483,6 +483,27 @@ def actualiser_objectifs(etat: dict[str, Any], data_dir: str,
     bible["termines"] = info["termines"]
     bible["progression_objectifs"] = info["progression"]
     bible["objets_quete"] = info["objets_quete"]
+    # ── Mémoire de campagne (le LLM n'appelle presque jamais les tools
+    # memoire_* : le serveur alimente lui-même le fil) ──────────────────────
+    try:
+        mem = etat.setdefault("memoire", {})
+        if isinstance(mem, dict):
+            mem["objectif_courant"] = info["objectif_courant"]
+            missions = mem.get("missions")
+            titre_quete = str((etat.get("quete") or {}).get("titre") or "").lower()
+            total = len(info["objectifs"])
+            faits = len(info["termines"])
+            if isinstance(missions, list) and titre_quete:
+                for m in missions:
+                    if not isinstance(m, dict):
+                        continue
+                    if str(m.get("titre", "")).lower() != titre_quete:
+                        continue
+                    m["avancement"] = info["progression"]
+                    if total and faits >= total and m.get("statut") == "active":
+                        m["statut"] = "terminée"
+    except Exception:                                            # noqa: BLE001
+        pass
     return True
 
 
@@ -607,61 +628,83 @@ def verrou_voyage(etat: dict[str, Any], data_dir: str, partie_id: str,
     if not etapes:
         return None
     inv_possede, _ = inventaire_quete(etat, data_dir, partie_id=partie_id)
-    for i, e in enumerate(etapes):
-        if not isinstance(e, dict) or not _est_gate(e):
-            continue
+
+    def _accompli(e: dict[str, Any]) -> bool:
         titre = str(e.get("titre") or "").strip()
         typ = str(e.get("type") or "").strip().lower()
         if typ not in _TYPES_OBJECTIFS:
             typ = "etape"
         salle_txt = str(e.get("salle") or "").strip()
         req_noms = _liste_requis(e.get("requis") or [])
-        accompli = _terminee(etat, titre)
-        if not accompli:
-            if typ == "objet":
-                accompli = bool(req_noms) and all(
-                    _cle_objet(n) in inv_possede for n in req_noms)
-            elif typ == "lieu":
-                accompli = _salle_visitee(etat, salle_txt)
-            elif salle_txt:
-                # Acte purement narratif (etape/pnj/enigme/combat) lié à une
-                # salle : une fois la salle atteinte, le voyage N'EST PAS
-                # bloqué — la scène (et la clôture `scenario_etape`) se joue
-                # ensuite. Bloque seulement tant que la position n'est pas là.
-                accompli = _salle_visitee(etat, salle_txt)
-        if accompli:
-            continue
-        # Objectif courant NON accompli → le voyage est bloqué.
-        manquant = [n for n in req_noms
-                    if _cle_objet(n) not in inv_possede]
-        detail = str(e.get("detail") or "").strip()
-        lignes = [
-            "⛔ **TRAME DU SCÉNARIO — voyage refusé** : l'objectif courant "
-            f"« {titre} » n'est pas accompli."
-        ]
-        if manquant:
-            lignes.append(
-                "❌ Objets REQUIS manquants à l'inventaire de quête :\n   • "
-                + "\n   • ".join(manquant)
-                + f"\nNe lance PAS de voyage vers « {destination} » tant que "
-                  "ces objets ne sont pas possédés (la suite du module est "
-                  "verrouillée par le scénario)."
-            )
-        elif salle_txt:
-            if detail:
-                lignes.append(detail[:400])
-            lignes.append(
-                f"L'objectif appelle d'abord la salle {salle_txt} — reprends "
-                "l'exploration du donjon (`carte_donjon_explorer`). Si la "
-                "table choisit DÉLIBÉRÉMENT d'abandonner la trame, relance "
-                "`voyage_demarrer` avec `forcer=true`."
-            )
-        else:
-            lignes.append(
-                "L'objectif courant doit être joué (événement, PNJ, énigme ou "
-                "réunion d'objets) AVANT de voyager. Si la table choisit "
-                "DÉLIBÉRÉMENT de sortir de la trame, relance "
-                "`voyage_demarrer` avec `forcer=true`."
-            )
-        return "\n".join(lignes)
-    return None
+        if _terminee(etat, titre):
+            return True
+        if typ == "objet":
+            return bool(req_noms) and all(
+                _cle_objet(n) in inv_possede for n in req_noms)
+        if typ == "lieu":
+            return _salle_visitee(etat, salle_txt)
+        if salle_txt:
+            # Acte purement narratif (etape/pnj/enigme/combat) lié à une
+            # salle : une fois la salle atteinte, le voyage N'EST PAS
+            # bloqué — la scène (et la clôture `scenario_etape`) se joue
+            # ensuite. Bloque seulement tant que la position n'est pas là.
+            return _salle_visitee(etat, salle_txt)
+        return False
+
+    # Seul l'objectif COURANT (premier non accompli) peut bloquer le départ :
+    # une étape FUTURE ne verrouille pas le voyage (ses zones restent
+    # scellées côté donjon par `verrou_deplacement`).
+    courant_idx = next(
+        (i for i, e in enumerate(etapes)
+         if isinstance(e, dict) and not _accompli(e)), None)
+    if courant_idx is None:
+        return None
+    e = etapes[courant_idx]
+    if not _est_gate(e):
+        return None
+    titre = str(e.get("titre") or "").strip()
+    typ = str(e.get("type") or "").strip().lower()
+    if typ not in _TYPES_OBJECTIFS:
+        typ = "etape"
+    salle_txt = str(e.get("salle") or "").strip()
+    req_noms = _liste_requis(e.get("requis") or [])
+    # Les objectifs de COLLECTE mondiale (type objet SANS salle précise,
+    # ex. les huit gemmes de la Couronne) s'accomplissent EN VOYAGEANT :
+    # bloquer le départ rendrait la chasse impossible. Seules les étapes
+    # ancrées au donjon (`salle` présente) ou les scènes à jouer
+    # interdisent de quitter la région.
+    if typ == "objet" and not salle_txt:
+        return None
+    # Objectif courant NON accompli → le voyage est bloqué.
+    manquant = [n for n in req_noms
+                if _cle_objet(n) not in inv_possede]
+    detail = str(e.get("detail") or "").strip()
+    lignes = [
+        "⛔ **TRAME DU SCÉNARIO — voyage refusé** : l'objectif courant "
+        f"« {titre} » n'est pas accompli."
+    ]
+    if manquant:
+        lignes.append(
+            "❌ Objets REQUIS manquants à l'inventaire de quête :\n   • "
+            + "\n   • ".join(manquant)
+            + f"\nNe lance PAS de voyage vers « {destination} » tant que "
+              "ces objets ne sont pas possédés (la suite du module est "
+              "verrouillée par le scénario)."
+        )
+    elif salle_txt:
+        if detail:
+            lignes.append(detail[:400])
+        lignes.append(
+            f"L'objectif appelle d'abord la salle {salle_txt} — reprends "
+            "l'exploration du donjon (`carte_donjon_explorer`). Si la "
+            "table choisit DÉLIBÉRÉMENT d'abandonner la trame, relance "
+            "`voyage_demarrer` avec `forcer=true`."
+        )
+    else:
+        lignes.append(
+            "L'objectif courant doit être joué (événement, PNJ, énigme ou "
+            "réunion d'objets) AVANT de voyager. Si la table choisit "
+            "DÉLIBÉRÉMENT de sortir de la trame, relance "
+            "`voyage_demarrer` avec `forcer=true`."
+        )
+    return "\n".join(lignes)

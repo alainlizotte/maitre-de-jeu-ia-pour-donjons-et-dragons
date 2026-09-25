@@ -611,6 +611,28 @@ def _journaliser_lieu(
     })
     if len(hist) > 50:
         etat["histoire"] = hist[-50:]
+    # 🧠 Mémoire de campagne : lieux visités (forme canonique memoire_lieu :
+    # nom/notes/ts, dédupliqués, plafonnés) — le fil du voyage reste dispo
+    # même si le LLM n'appelle jamais memoire_lieu.
+    try:
+        _mem_l = etat.setdefault("memoire", {})
+        _lv = _mem_l.setdefault("lieux_visites", [])
+        _etq = nom_etage or ("étage %s" % donjon.get("etage", 0))
+        _nom_lieu = "%s · %s · salle (%s,%s)" % (nom_dj, _etq, cx, cy)
+        if not any(
+            isinstance(x, dict)
+            and str(x.get("nom", "")).lower() == _nom_lieu.lower()
+            for x in _lv
+        ):
+            _lv.append({
+                "nom": _nom_lieu,
+                "notes": f"{typ} — {evenement[:120]}",
+                "ts": _dt.now().isoformat(),
+            })
+            if len(_lv) > 40:
+                _mem_l["lieux_visites"] = _lv[-40:]
+    except Exception:                                            # noqa: BLE001
+        pass
     # 4) Trame : la bible scénario suit la salle d'étape atteinte.
     for e in (donjon.get("etapes") or []):
         if not isinstance(e, dict):

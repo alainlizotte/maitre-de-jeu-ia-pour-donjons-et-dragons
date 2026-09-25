@@ -1,9 +1,9 @@
-// Carte du monde — image adaptée à l'univers de la quête en cours.
-// Affichage statique : la carte remplit 100 % de la fenêtre de l'onglet ;
-// un clic l'ouvre en plein écran (fermeture par clic ou Échap).
-// Curseur : la position du groupe (et des PJ) — `positions_joueurs` (% de
-// carte, x = ouest→est, y = nord→sud — mêmes repères que VILLES_REPERES et
-// les `depart` des manifestes) — est affichée sur la carte et en plein écran.
+﻿// Carte du monde — image adaptée à l'univers de la quête en cours.
+// La carte ZOOM automatiquement et se CENTRE sur la position du groupe
+// (`positions_joueurs`, % de carte : x = ouest→est, y = nord→sud — mêmes
+// repères que VILLES_REPERES et les `depart` des manifestes). Un bouton
+// bascule vers la carte entière ; un clic ouvre le plein écran (fermeture
+// par clic ou Échap). Épingles = groupe + PJ nommés.
 
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
@@ -90,15 +90,18 @@ function sansAccentsMin(s: string): string {
     .trim();
 }
 
-// ── Curseur de position ────────────────────────────────────────────────── //
+// ── Zoom + centrage sur le groupe ──────────────────────────────────────── //
+// Facteur de zoom appliqué en vue « groupe » (1 = carte entière).
+const AUTO_ZOOM = 2.6;
 
 interface Box { dx: number; dy: number; dw: number; dh: number }
 
 /** Boîte réellement occupée par l'image dans son conteneur (object-cover
  *  rogne, object-contain letterboxe) : indispensable pour placer un marqueur
- *  en % de CARTE au bon endroit pixel. Recalculé au redimensionnement. */
+ *  — et calculer le centrage — au bon endroit pixel. Recalculé au
+ *  redimensionnement. */
 function useImageBox(
-  ref: React.RefObject<HTMLDivElement | null>,
+  ref: React.RefObject<HTMLDivElement>,
   natW: number,
   natH: number,
   mode: "cover" | "contain",
@@ -127,21 +130,28 @@ function useImageBox(
   return box;
 }
 
-/** Épingle de position (groupe ou PJ nommé) — % de carte → pixels. */
+/** Épingle de position (groupe ou PJ nommé) — position ÉCRAN calculée avec
+ *  la même transformation que l'image (tx/ty + zoom), donc elle reste
+ *  posée sur son lieu quand la carte zoome/se déplace. */
 function Marker({
   nom,
   x,
   y,
   box,
+  z,
+  tx,
+  ty,
 }: {
   nom: string;
   x: number;
   y: number;
-  box: Box | null;
+  box: Box;
+  z: number;
+  tx: number;
+  ty: number;
 }) {
-  if (!box) return null;
-  const left = box.dx + (x / 100) * box.dw;
-  const top = box.dy + (y / 100) * box.dh;
+  const left = tx + z * (box.dx + (x / 100) * box.dw);
+  const top = ty + z * (box.dy + (y / 100) * box.dh);
   return (
     <div
       className="absolute z-10 pointer-events-none"
@@ -162,6 +172,99 @@ function Marker({
   );
 }
 
+/** Panneau carte (onglet OU plein écran) : image + épingles, avec zoom de
+ *  recentrage sur le groupe tant que `vueEntiere` est faux. */
+function VueCarte({
+  mapUrl,
+  alt,
+  mode,
+  boxRef,
+  box,
+  focus,
+  positions,
+  vueEntiere,
+  erreur,
+  onImgSize,
+  onErreur,
+  onClick,
+  containerClass,
+  children,
+}: {
+  mapUrl: string;
+  alt: string;
+  mode: "cover" | "contain";
+  boxRef: React.RefObject<HTMLDivElement>;
+  box: Box | null;
+  focus: [number, number] | null;
+  positions: [string, number[]][];
+  vueEntiere: boolean;
+  erreur: boolean;
+  onImgSize: (w: number, h: number) => void;
+  onErreur: () => void;
+  onClick?: () => void;
+  containerClass: string;
+  children?: React.ReactNode;
+}) {
+  const z = vueEntiere || !focus || !box ? 1 : AUTO_ZOOM;
+  // Translation pour amener le point du groupe au centre de l'écran :
+  // le point g de la boîte devient écran = tx + z·g → tx = cw/2 − z·gx.
+  let tx = 0;
+  let ty = 0;
+  if (box && focus && z > 1) {
+    const gx = box.dx + (focus[0] / 100) * box.dw;
+    const gy = box.dy + (focus[1] / 100) * box.dh;
+    const cw = box.dw + 2 * box.dx;
+    const ch = box.dh + 2 * box.dy;
+    tx = cw / 2 - z * gx;
+    ty = ch / 2 - z * gy;
+  }
+  return (
+    <div
+      ref={boxRef}
+      className={containerClass}
+      onClick={onClick}
+      title={onClick ? "Cliquer pour afficher en plein écran" : undefined}
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          transform: `translate(${tx}px, ${ty}px) scale(${z})`,
+          transformOrigin: "0 0",
+          transition: "transform 0.7s ease-out",
+        }}
+      >
+        <img
+          src={mapUrl}
+          alt={alt}
+          draggable={false}
+          onError={onErreur}
+          onLoad={(e) => {
+            const img = e.currentTarget;
+            if (img.naturalWidth && img.naturalHeight) {
+              onImgSize(img.naturalWidth, img.naturalHeight);
+            }
+          }}
+          className={
+            "absolute inset-0 w-full h-full select-none pointer-events-none " +
+            (mode === "cover" ? "object-cover" : "object-contain")
+          }
+        />
+      </div>
+      {box &&
+        positions.map(([nom, [x, y]]) => (
+          <Marker key={nom} nom={nom} x={x} y={y} box={box} z={z} tx={tx} ty={ty} />
+        ))}
+      {erreur && (
+        <div className="absolute inset-0 flex items-center justify-center text-center text-stone-500 text-xs italic px-6">
+          Carte introuvable sur le serveur —
+          redémarrez le serveur pour la copier dans data/scenarios/.
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export function WorldMap() {
   const state = useParty((s) => s.state);
   const lieu = state?.lieu;
@@ -169,6 +272,12 @@ export function WorldMap() {
   const positions = Object.entries(state?.positions_joueurs ?? {}).filter(
     ([, v]) => Array.isArray(v) && v.length >= 2 && isFinite(v[0]) && isFinite(v[1]),
   ) as [string, number[]][];
+  // Point de centrage : le groupe en priorité, sinon la première position.
+  const focusEntry = positions.find(([nom]) => nom === "groupe") ?? positions[0];
+  const focus: [number, number] | null = focusEntry
+    ? [focusEntry[1][0], focusEntry[1][1]]
+    : null;
+
   // Déterminer la carte : scénario > univers > fallback
   const { universe: universeId, scenario: scenarioId } = extractIds(state?.quete?.source);
   const mapInfo = (scenarioId ? SCENARIO_MAPS[scenarioId] : undefined)
@@ -181,6 +290,21 @@ export function WorldMap() {
   // déclarées dans MapInfo ne sont qu'un fallback).
   const [nat, setNat] = useState<[number, number]>([mapInfo.w, mapInfo.h]);
   useEffect(() => setNat([mapInfo.w, mapInfo.h]), [mapInfo]);
+
+  // Vue « carte entière » (sans zoom) — repasse automatiquement en vue
+  // groupe dès que la position du groupe CHANGE.
+  const [vueEntiere, setVueEntiere] = useState(false);
+  const focusCle = focus ? `${focus[0]},${focus[1]}` : "";
+  const prevFocus = useRef<string>("");
+  useEffect(() => {
+    if (prevFocus.current && focusCle && focusCle !== prevFocus.current) {
+      setVueEntiere(false);
+    }
+    prevFocus.current = focusCle;
+  }, [focusCle]);
+
+  const [erreur, setErreur] = useState(false);
+  const [pleinEcran, setPleinEcran] = useState(false);
 
   // Boîtes d'affichage (cover en onglet, contain en plein écran).
   const tabBoxRef = useRef<HTMLDivElement>(null);
@@ -196,9 +320,6 @@ export function WorldMap() {
   })();
   const urlAtlas = nomAtlas ? `${ATLAS_BASE}@${encodeURIComponent(nomAtlas)}` : null;
 
-  const [erreur, setErreur] = useState(false);
-  const [pleinEcran, setPleinEcran] = useState(false);
-
   // Fermeture du plein écran au clavier (Échap).
   useEffect(() => {
     if (!pleinEcran) return;
@@ -209,41 +330,43 @@ export function WorldMap() {
     return () => window.removeEventListener("keydown", h);
   }, [pleinEcran]);
 
+  // Bouton « carte entière / sur le groupe » (commun aux deux vues).
+  const boutonVue = focus && (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        setVueEntiere((v) => !v);
+      }}
+      className="absolute bottom-2 right-2 z-20 px-2 h-7 rounded bg-stone-900/85 border border-stone-600 text-amber-200 text-[10px] hover:bg-stone-800"
+      title={vueEntiere ? "Recentrer sur le groupe" : "Voir la carte entière"}
+    >
+      {vueEntiere ? "🎯 Groupe" : "🗺️ Carte entière"}
+    </button>
+  );
+
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="mb-2 text-sm text-amber-200 font-serif text-center shrink-0">
         {mapInfo.label}
       </div>
-      {/* Carte statique : 100 % de la fenêtre, clic → plein écran */}
-      <div
-        ref={tabBoxRef}
-        className="relative flex-1 min-h-40 rounded border border-stone-700 overflow-hidden bg-stone-950 cursor-zoom-in"
-        title="Cliquer pour afficher en plein écran"
+      {/* Carte de l'onglet : zoomée sur le groupe, clic → plein écran */}
+      <VueCarte
+        mapUrl={MAP_URL}
+        alt={`Carte : ${mapInfo.label}`}
+        mode="cover"
+        boxRef={tabBoxRef}
+        box={tabBox}
+        focus={focus}
+        positions={positions}
+        vueEntiere={vueEntiere}
+        erreur={erreur}
+        onImgSize={(w, h) => setNat([w, h])}
+        onErreur={() => setErreur(true)}
         onClick={() => setPleinEcran(true)}
+        containerClass="relative flex-1 min-h-40 rounded border border-stone-700 overflow-hidden bg-stone-950 cursor-zoom-in"
       >
-        <img
-          src={MAP_URL}
-          alt={`Carte : ${mapInfo.label}`}
-          draggable={false}
-          onError={() => setErreur(true)}
-          onLoad={(e) => {
-            const img = e.currentTarget;
-            if (img.naturalWidth && img.naturalHeight) {
-              setNat([img.naturalWidth, img.naturalHeight]);
-            }
-          }}
-          className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
-        />
-        {positions.map(([nom, [x, y]]) => (
-          <Marker key={nom} nom={nom} x={x} y={y} box={tabBox} />
-        ))}
-        {erreur && (
-          <div className="absolute inset-0 flex items-center justify-center text-center text-stone-500 text-xs italic px-6">
-            Carte introuvable sur le serveur —
-            redémarrez le serveur pour la copier dans data/scenarios/.
-          </div>
-        )}
-      </div>
+        {boutonVue}
+      </VueCarte>
       {/* Lien atlas externe (ressource, pas un contrôle de zoom) */}
       {urlAtlas && (
         <div className="flex justify-center mt-2 shrink-0">
@@ -282,24 +405,22 @@ export function WorldMap() {
                 ✕
               </button>
             </div>
-            <div className="relative flex-1 min-h-0 rounded border border-stone-700 overflow-hidden bg-stone-950">
-              <img
-                src={MAP_URL}
-                alt={`Carte plein écran : ${mapInfo.label}`}
-                draggable={false}
-                onError={() => setErreur(true)}
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  if (img.naturalWidth && img.naturalHeight) {
-                    setNat([img.naturalWidth, img.naturalHeight]);
-                  }
-                }}
-                className="absolute inset-0 w-full h-full object-contain select-none"
-              />
-              {positions.map(([nom, [x, y]]) => (
-                <Marker key={nom} nom={nom} x={x} y={y} box={fsBox} />
-              ))}
-            </div>
+            <VueCarte
+              mapUrl={MAP_URL}
+              alt={`Carte plein écran : ${mapInfo.label}`}
+              mode="contain"
+              boxRef={fsBoxRef}
+              box={fsBox}
+              focus={focus}
+              positions={positions}
+              vueEntiere={vueEntiere}
+              erreur={erreur}
+              onImgSize={(w, h) => setNat([w, h])}
+              onErreur={() => setErreur(true)}
+              containerClass="relative flex-1 min-h-0 rounded border border-stone-700 overflow-hidden bg-stone-950"
+            >
+              {boutonVue}
+            </VueCarte>
             <p className="text-[10px] text-stone-500 mt-1.5 text-center italic shrink-0">
               Cliquez n'importe où ou Échap pour fermer.
             </p>

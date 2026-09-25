@@ -484,5 +484,10 @@
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
    "note": "Le drider mage, gardien du miroir, accepte un pot-de-vin ou une ruse ; combat de secours très au-dessus du FP ≤ 5."
   }
- ]
+ ],
+ "depart": {
+  "nom": "La Tour Inconnue",
+  "x": 35,
+  "y": 10
+ }
 }

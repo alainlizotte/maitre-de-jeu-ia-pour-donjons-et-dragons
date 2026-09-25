@@ -319,5 +319,10 @@
    "note": "Module League pour PJ de niveau 1-2 : vérifier le bloc 3.5 de Rorreth, [AJUSTEMENT REQUIS] s'il sort du bestiaire local.",
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Phlan",
+  "x": 95,
+  "y": 30
+ }
 }

@@ -68,6 +68,46 @@ def _norm(s: str) -> str:
     return "".join(c for c in nf if not unicodedata.combining(c))
 
 
+# Échelle de la carte du monde : 1 unité (%) ≈ 45 km. Recoupée sur la lore
+# (Waterdeep–Neverwinter ≈ 560 milles nautiques… ≈ 560 km pour ~12,5 unités).
+# Sert à CALCULER la distance quand le MJ ne la fournit pas mais que le
+# départ et la destination sont connus de la carte (villes + départs de
+# scénarios placés dans `positions_joueurs`).
+_KM_PAR_UNITE = 45.0
+
+
+def _distance_auto(etat: dict[str, Any], destination: str) -> Optional[float]:
+    """Distance (km, arrondie à 5 km) entre la position du groupe et
+    `destination` si celle-ci est une ville connue de la carte, sinon None."""
+    try:
+        from .cartes import (                            # noqa: PLC0415
+            VILLES_REPERES, _normaliser_nom,
+        )
+    except Exception:                                    # noqa: BLE001
+        return None
+    cible = _normaliser_nom(destination)
+    if not cible:
+        return None
+    cible_pt: Optional[tuple[float, float]] = None
+    for nom, (x, y) in VILLES_REPERES.items():
+        nn = _normaliser_nom(nom)
+        if cible == nn or cible in nn or nn in cible:
+            cible_pt = (float(x), float(y))
+            break
+    if cible_pt is None:
+        return None
+    pos = etat.get("positions_joueurs") or {}
+    if not isinstance(pos, dict) or not pos:
+        return None
+    p = pos.get("groupe") or next(iter(pos.values()))
+    try:
+        px, py = float(p[0]), float(p[1])
+    except (TypeError, ValueError, IndexError):          # noqa: BLE001
+        return None
+    d = math.hypot(px - cible_pt[0], py - cible_pt[1]) * _KM_PAR_UNITE
+    return float(max(5, round(d / 5.0) * 5.0))
+
+
 def _garde_trame_voyage(etat: dict[str, Any], destination: str,
                         data_dir: str = "", partie_id: str = "") -> Optional[str]:
     """⛔ Garde de séquence : un voyage ne doit pas sauter une étape de la
@@ -148,7 +188,7 @@ def _garde_trame_voyage(etat: dict[str, Any], destination: str,
 async def voyage_demarrer(
     ctx: ToolContext,
     destination: str,
-    distance_km: float,
+    distance_km: float = 0,
     mode: str = "marche",
     terrain: str = "plaine",
     piste: bool = False,
@@ -157,11 +197,14 @@ async def voyage_demarrer(
     """
     Lance un voyage hors donjon et calcule sa durée réelle selon les règles
     D&D 3.5 (Movement/Wilderness) : allure, terrain, rencontres aléatoires
-    quotidiennes, risque de s'égarer, météo, marche forcée. OBLIGATOIRE dès
+    quotidiennes, risque de s'égader, météo, marche forcée. OBLIGATOIRE dès
     qu'un groupe quitte un lieu pour un autre — jamais de téléportation.
 
     :param destination (str): nom du lieu de destination (ex. "Phandalin").
-    :param distance_km (float): distance à vol d'oiseau/route en kilomètres.
+    :param distance_km (float): distance en kilomètres. OPTIONNEL si la
+        destination est une ville connue de la carte ET que le groupe a une
+        position : la distance est alors CALCULÉE automatiquement (~45 km par
+        unité de carte). Sinon obligatoire.
     :param mode (str): "lent" | "marche" | "rapide" | "cheval" | "cheval_rapide".
         "rapide" à pied = marche forcée (jets de CON, fatigue).
     :param terrain (str): "route" | "plaine" | "collines" | "foret" |
@@ -185,6 +228,33 @@ async def voyage_demarrer(
             text=(f"⚠️ Terrain '{terrain}' inconnu. Options : "
                   f"{', '.join(_TERRAINS)}.")
         )
+    # Distance : fournie par le MJ, sinon CALCULÉE carte en main (position du
+    # groupe → ville de destination).
+    if float(distance_km or 0) <= 0:
+        try:
+            from ..game.state import PartyState       # lazy : évite tout cycle
+            _etat_d = PartyState(
+                data_dir=ctx.data_dir, partie_id=ctx.partie_id
+            ).load()
+            distance_km = _distance_auto(_etat_d, destination) or 0
+        except Exception:                                # noqa: BLE001
+            distance_km = 0
+        if distance_km <= 0:
+            try:
+                from .cartes import VILLES_REPERES as _villes  # noqa: PLC0415
+                _liste_villes = ", ".join(_villes.keys())
+            except Exception:                            # noqa: BLE001
+                _liste_villes = "(indisponible)"
+            return ToolResult(
+                text=(
+                    f"⚠️ distance_km inconnu pour « {destination} » : ni "
+                    "fourni, ni calculable (destination hors carte OU groupe "
+                    "sans position). Place le groupe "
+                    "(`carte_joueurs_placer_ville`) ou précise "
+                    f"distance_km. Villes connues : {_liste_villes}."
+                )
+            )
+        distance_km = float(distance_km)
     if distance_km <= 0:
         return ToolResult(text="⚠️ distance_km doit être > 0.")
 

@@ -365,8 +365,12 @@
    "titre": "Récupérer la Couronne de Mystra chez Zendar Nulentok",
    "type": "objet",
    "salle": "4,0",
-   "detail": "PRÉREQUIS ABSOLU : vaincre Nulentok dans son groove (le puits (3,0) y mène) et reprendre la Couronne. La baguette de téléportation de Thukmuul Teleshann ne s'active QU'AU CONTACT de la Couronne — aucun voyage vers les gemmes n'est possible avant.",
+   "detail": "PRÉREQUIS ABSOLU : vaincre Nulentok dans son groove (le puits (3,0) y mène) et reprendre la Couronne. La baguette de téléportation de Thukmuul Teleshann ne s'active QU'AU CONTACT de la Couronne — aucun voyage vers les gemmes n'est possible avant. Au départ (Tour de l'Équilibre, (0,0)), Teleshann remet AUSSI au groupe la baguette de téléportation (à enregistrer via inventaire_ajouter, portee=\"quete\"), le parchemin de la route et la fiole de vérité — les deux derniers en équipement.",
    "requis": [
+    {
+     "nom": "La baguette de téléportation de Thukmuul Teleshann",
+     "portee": "quete"
+    },
     {
      "nom": "La Couronne de Mystra",
      "portee": "quete"
@@ -485,5 +489,8 @@
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ quand l'acte final est joué et la Couronne rendue — jamais attribuée automatiquement.",
    "gate": true
   }
- ]
+ ],
+ "depart": {
+  "nom": "Silverymoon"
+ }
 }

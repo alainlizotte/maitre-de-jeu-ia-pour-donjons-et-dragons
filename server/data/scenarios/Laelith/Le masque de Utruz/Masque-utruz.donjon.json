@@ -366,5 +366,10 @@
    "note": "Mez'Arate et la pieuvre géante sont hors bestiaire : [AJUSTEMENT REQUIS], à jouer en scène.",
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Laelith — tour du Boulier Bleu",
+  "x": 86,
+  "y": 77
+ }
 }

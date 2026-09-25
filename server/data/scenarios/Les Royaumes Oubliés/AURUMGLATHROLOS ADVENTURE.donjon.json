@@ -231,5 +231,10 @@
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
    "note": "[AJUSTEMENT REQUIS] La Griffe Écarlate (20 membres niveaux 5-9) et Rothex le Rouge sont hors plafond FP : le module prévoit la fuite et le piège de l'Arc, jamais l'affrontement total."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Pics du Nether",
+  "x": 62,
+  "y": 8
+ }
 }

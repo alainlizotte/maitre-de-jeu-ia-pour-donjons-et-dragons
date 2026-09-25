@@ -371,5 +371,10 @@
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
    "note": "Les drows du temple sont affaiblis par des années de drogues et de poisons rituels ; le grand mur de force de la salle du temple (-1,1) n'est franchissable qu'une fois son mécanisme trouvé."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Shadowdale",
+  "x": 90,
+  "y": 45
+ }
 }

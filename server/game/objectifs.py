@@ -84,16 +84,30 @@ def _norm(s: Any) -> str:
 
 # Désignations alternatives d'un même objet de quête (un manifeste écrit
 # « La Couronne de Mystra », un MJ ajoute « couronne de mystra »…). Clé =
-# `_norm`, pointe le nom canonique de fusion — mêmes synonymes qu'inventaire.
+# `_norm` SANS ARTICLE, pointe le nom canonique de fusion — mêmes synonymes
+# qu'inventaire.
 _SYNONYMES: dict[str, str] = {
     "couronne": "couronne de mystra",
     "couronne de mystra": "couronne de mystra",
     "couronne d e mystra": "couronne de mystra",
 }
 
+# Articles français retirés du début du nom avant comparaison : le MJ écrit
+# « Couronne de Mystra » là où le manifeste exige « La Couronne de Mystra »
+# (partie e48e75dd : la couronne en équipement legacy n'était PAS reconnue).
+_ARTICLE_RE = re.compile(r"^(le|la|les|l|un|une|de|du|des|d)\s+")
+
+
+def _sans_article(n: str) -> str:
+    while True:
+        n2 = _ARTICLE_RE.sub("", n, count=1)
+        if n2 == n or not n2:
+            return n
+        n = n2
+
 
 def _cle_objet(nom: Any) -> str:
-    n = _norm(nom)
+    n = _sans_article(_norm(nom))
     return _SYNONYMES.get(n, n)
 
 
@@ -459,6 +473,12 @@ def actualiser_objectifs(etat: dict[str, Any], data_dir: str,
         return False
     bible["objectifs"] = info["objectifs"]
     bible["objectif_courant"] = info["objectif_courant"]
+    # Écrase AUSSI l'étiquette legacy `etape_courante` : le pas 4 de
+    # `_journaliser_lieu` la positionne dès qu'une salle d'étape est visitée
+    # (partie e48e75dd : entrer dans la grotte à (0,0) — qui est AUSSI la
+    # salle de restauration de l'acte final — figeait l'étiquette sur le
+    # DERNIER objectif). L'objectif réel (premier non accompli) prime.
+    bible["etape_courante"] = info["objectif_courant"]
     bible["manquants"] = info["manquants"]
     bible["termines"] = info["termines"]
     bible["progression_objectifs"] = info["progression"]

@@ -267,5 +267,10 @@
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
    "note": "[AJUSTEMENT REQUIS] L'ourse devient berserk si l'un de ses petits meurt (étreinte 2d8) : jouer la fuite ou la ruse plutôt que le combat frontal."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Kurth",
+  "x": 8,
+  "y": 62
+ }
 }

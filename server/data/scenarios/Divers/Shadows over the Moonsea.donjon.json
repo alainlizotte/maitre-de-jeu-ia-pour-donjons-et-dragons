@@ -301,5 +301,10 @@
    "note": "Le lémure invoqué n'a pas de fiche au bestiaire : [AJUSTEMENT REQUIS], jouer d'après l'Appendice du module.",
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Phlan",
+  "x": 95,
+  "y": 30
+ }
 }

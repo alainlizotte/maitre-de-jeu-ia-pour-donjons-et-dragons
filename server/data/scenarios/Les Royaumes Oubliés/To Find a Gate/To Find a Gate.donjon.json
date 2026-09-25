@@ -284,5 +284,10 @@
    "xp": 600,
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Ruines de Gate",
+  "x": 42,
+  "y": 4
+ }
 }

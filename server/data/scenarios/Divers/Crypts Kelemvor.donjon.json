@@ -267,5 +267,8 @@
    "note": "Idris (liche) et les wights/crânes flamboyants sont hors plafond du bestiaire local : [AJUSTEMENT REQUIS], recalibrer sur gabarits squelette/momie ou jouer en scène.",
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Neverwinter"
+ }
 }

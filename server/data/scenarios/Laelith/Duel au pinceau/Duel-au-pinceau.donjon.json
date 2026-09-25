@@ -381,5 +381,10 @@
    "note": "Valdenath et Mitrias (clercs de niveau 14) sont hors plafond FP : [AJUSTEMENT REQUIS], à jouer en scène ou à recalibrer.",
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Laelith — la Main qui Travaille",
+  "x": 87,
+  "y": 76
+ }
 }

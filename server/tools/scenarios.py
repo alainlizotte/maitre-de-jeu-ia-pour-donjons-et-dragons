@@ -384,6 +384,60 @@ def _norm_txt(s: str) -> str:
     return "".join(c for c in nf if not _ud.combining(c))
 
 
+def _depart_manifeste(
+    ctx: ToolContext, scenario_id: str
+) -> Optional[tuple[str, float, float]]:
+    """Point de DÉPART (`depart` du manifeste `.donjon.json`) du scénario :
+    (nom, x, y) sur la carte du monde, ou None.
+
+    Résolution des coordonnées : villes du répertoire monde
+    (`cartes.VILLES_REPERES`) par nom, sinon x/y explicites du manifeste
+    (lieux hors répertoire : Laelith, Phlan, Mintarn…).
+    """
+    if not scenario_id:
+        return None
+    try:
+        from .cartes import (                            # noqa: PLC0415
+            VILLES_REPERES, _normaliser_nom,
+        )
+    except Exception:                                    # noqa: BLE001
+        return None
+    base = os.path.join(str(ctx.data_dir), "scenarios")
+    if not os.path.isdir(base):
+        return None
+    for racine, _dirs, fichiers in os.walk(base):
+        for f in fichiers:
+            if not f.endswith(".donjon.json"):
+                continue
+            try:
+                with open(os.path.join(racine, f), encoding="utf-8") as fh:
+                    man = json.load(fh)
+            except Exception:                            # noqa: BLE001
+                continue
+            if not isinstance(man, dict):
+                continue
+            scen = man.get("scenario")
+            ids = scen if isinstance(scen, list) else [scen]
+            if scenario_id not in {str(x).strip() for x in ids if x}:
+                continue
+            dep = man.get("depart")
+            if isinstance(dep, str):
+                dep = {"nom": dep}
+            nom = str((dep or {}).get("nom") or "").strip()
+            if not nom:
+                return None
+            cible = _normaliser_nom(nom)
+            for vn, (vx, vy) in VILLES_REPERES.items():
+                nn = _normaliser_nom(vn)
+                if cible == nn or cible in nn or nn in cible:
+                    return vn, float(vx), float(vy)
+            try:
+                return nom, float(dep["x"]), float(dep["y"])
+            except (KeyError, TypeError, ValueError):    # noqa: BLE001
+                return None
+    return None
+
+
 def ennemis_du_resume(texte: str, best: Optional[dict] = None) -> list[str]:
     """Détection des ennemis d'un scénario (résumé FR **ou EN**).
 
@@ -740,6 +794,30 @@ async def scenarios_laelith_charger(
             if unit and not mem["position"].get("lieu"):
                 mem["position"]["lieu"] = unit
             mem.setdefault("objectif_courant", str(quete.get("pitch") or ""))
+            # ── Point de DÉPART du scénario (`depart` du manifeste) ────────
+            # Le groupe est placé sur la carte du monde dès le chargement
+            # (partie e48e75dd : position inconnue → voyage impossible, le
+            # MJ devait demander « où êtes-vous ? »). Jamais de téléport si
+            # le groupe a déjà une position (rechargement de chapitre).
+            try:
+                _dep = _depart_manifeste(ctx, str(s.get("id") or ""))
+            except Exception:                                    # noqa: BLE001
+                _dep = None
+            if _dep and not (etat.get("positions_joueurs") or {}):
+                _nom_dep, _xd, _yd = _dep
+                etat["positions_joueurs"] = {"groupe": [float(_xd), float(_yd)]}
+                _lieu_d = etat.setdefault("lieu", {})
+                _lieu_d["nom"] = _nom_dep
+                _lieu_d["position_x"] = float(_xd)
+                _lieu_d["position_y"] = float(_yd)
+                mem["position"]["lieu"] = _nom_dep
+                champs.append(
+                    f"\n🎯 **Point de départ du scénario** : le groupe démarre "
+                    f"à « {_nom_dep} » ({_xd:g}, {_yd:g}) — position placée sur "
+                    f"la carte du monde. Ancre la narration ici ; pour tout "
+                    f"déplacement, `voyage_demarrer` (distance auto entre "
+                    f"villes connues)."
+                )
             # Persiste la quête avec sa bible (étapes/objectifs suivis) — que
             # la phase suivante retrouve la trame même sans l'historique.
             etat["quete"] = {

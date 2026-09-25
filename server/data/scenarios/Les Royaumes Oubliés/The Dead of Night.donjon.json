@@ -466,5 +466,10 @@
    "note_xp": "Story Award (DMG 3.5, ch. 2) : récompense d'histoire INDICATIVE à accorder par le MJ via `fiche_perso_gagner_xp` quand l'objectif passe à accompli — jamais attribuée automatiquement par le serveur.",
    "note": "Braxius est très au-dessus du plafond FP du bestiaire (guerrier 13) : combat, ruse ou fuite à ajuster par le MJ [AJUSTEMENT REQUIS] ; les cubes gélatineux de l'infirmerie (0,-10) sont pareillement signalés."
   }
- ]
+ ],
+ "depart": {
+  "nom": "Kalthrax",
+  "x": 48,
+  "y": 35
+ }
 }

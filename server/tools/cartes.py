@@ -53,29 +53,31 @@ _OPP = {"nord": "sud", "sud": "nord", "est": "ouest", "ouest": "est"}
 # Villes repères du nord de Faerûn — coordonnées en POURCENTAGE de la carte
 # `cartes/faerun_nord.png` servie au front (/data/cartes/faerun_nord.png) :
 # x = 0 % bord ouest (océan) → 100 % bord est, y = 0 % bord nord → 100 % sud.
-# Positions approximatives (carte canonique) — ajuster ici si besoin, le
+# Positions mesurées sur la carte canonique « Sword-Coast-Map.jpg » (Schley,
+# 9890×6292, échelle ~500 miles ≈ 18 % de largeur) : chaque ville étiquetée
+# sur l'image a été recadrée sur son libellé. Ajuster ici si besoin, le
 # marqueur joueur et ces repères partagent la même grille.
 VILLES_REPERES = {
-    "Mirabar":        (13, 9),
-    "Luskan":         (24, 13),
-    "Neverwinter":    (21, 19),
-    "Waterdeep":      (27, 30),
-    "Daggerford":     (30, 32),
-    "Triboar":        (38, 29),
-    "Phandalin":      (37, 34),
-    "Everlund":       (49, 26),
-    "Silverymoon":    (54, 23),
-    "Mithral Hall":   (57, 17),
-    "Evereska":       (36, 39),
-    "Secomber":       (33, 40),
-    "Scornubel":      (33, 46),
-    "Elturel":        (37, 50),
-    "Baldur's Gate":  (28, 54),
-    "Athkatla":       (26, 61),
-    "Suzail":         (66, 55),
+    "Mirabar":        (42, 8.5),
+    "Luskan":         (37, 12),
+    "Neverwinter":    (38, 19),
+    "Waterdeep":      (43, 37.5),
+    "Daggerford":     (42, 42),
+    "Triboar":        (46, 18),
+    "Phandalin":      (41, 30),
+    "Everlund":       (48, 16),
+    "Silverymoon":    (53, 13),
+    "Mithral Hall":   (43, 14.5),
+    "Evereska":       (62, 32),
+    "Secomber":       (48, 41),
+    "Scornubel":      (56, 60),
+    "Elturel":        (55, 57),
+    "Baldur's Gate":  (51, 65),
+    "Athkatla":       (51, 76),
+    "Suzail":         (86, 68),
 }
 # Nom de la carte affichée dans l'onglet « Monde » du panneau droit.
-CARTE_MONDE_FICHIER = "faerun_nord.png"
+CARTE_MONDE_FICHIER = "Sword-Coast-Map.jpg"
 
 
 def _normaliser_nom(nom: str) -> str:

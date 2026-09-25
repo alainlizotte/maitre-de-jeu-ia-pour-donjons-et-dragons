@@ -19,6 +19,9 @@ export interface PartyState {
   pj: Personnage[];
   pnj: Personnage[];
   lieu: { nom: string; type: string; description: string; position_x: number; position_y: number };
+  /** Position monde (% de la carte) par personnage ou "groupe" — curseur
+   *  de l'onglet Monde (carte_joueurs_placer_ville / depart de scénario). */
+  positions_joueurs?: Record<string, number[]>;
   donjon: {
     id: string | null;
     salles_visitees: string[];

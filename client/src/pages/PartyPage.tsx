@@ -274,18 +274,42 @@ export function PartyPage() {
   if (isMobile) {
     return (
       <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Les trois panneaux restent MONTÉS (masqués via .hidden) : l'onglet
+            actif d'Outils, la galerie et les sélections survivent au passage
+            par le Chat, et les auto-switchs (image reçue → onglet, entrée/
+            sortie de donjon → Donjon/Monde) fonctionnent même quand le
+            panneau est masqué. L'animation .panel-swap rejoue à chaque
+            réaffichage (display:none → rendered relance l'animation CSS). */}
         <div
-          key={mobileView}
           style={{ "--panel-dir": panelDir } as CSSProperties}
-          className="panel-swap flex-1 min-h-0 flex flex-col overflow-hidden"
+          className="flex-1 min-h-0 flex flex-col overflow-hidden"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          {mobileView === "etat" && <StateSidebar />}
-          {mobileView === "chat" && colonneCentrale}
-          {mobileView === "outils" && (
+          <div
+            className={
+              "panel-swap flex-1 min-h-0 flex flex-col overflow-hidden " +
+              (mobileView === "etat" ? "" : "hidden")
+            }
+          >
+            <StateSidebar />
+          </div>
+          <div
+            className={
+              "panel-swap flex-1 min-h-0 flex flex-col overflow-hidden " +
+              (mobileView === "chat" ? "" : "hidden")
+            }
+          >
+            {colonneCentrale}
+          </div>
+          <div
+            className={
+              "panel-swap flex-1 min-h-0 flex flex-col overflow-hidden " +
+              (mobileView === "outils" ? "" : "hidden")
+            }
+          >
             <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} socket={socket} />
-          )}
+          </div>
         </div>
 
         {/* Fond assombri : un tap referme les ressources. */}

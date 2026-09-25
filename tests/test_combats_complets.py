@@ -298,12 +298,18 @@ async def test_combat2_magie_soins_sauvegarde():
 
         # ── Le zombie contre-attaque Elara (CA 12) ────────────────────────
         pv_avant = _fiche(d, "Elara")["pv"]
+        # Graines déterministes : le zombie TOUCHE (d20=20) pour 4 dégâts
+        # (d6=3, +1). Sans elles, ce test était 50/50 (toucher à +1 vs CA 12)
+        # ET cassait quand le premier soin remontait Elara à 5/5 (garde anti-
+        # gaspillage : « soin inutile » au lieu de « PV 5/5 maximum atteint »).
+        random.seed(_seed_for_d20(20))
         ra = await tool(d, "lancer_attaque", nom_attaquant="Zombie",
                         arme="Coup fistuleux", bonus_attaque=1,
                         nom_cible="Elara", ca_cible=12)
         # La CA officielle (fiche d'Elara, 12) doit primer.
         assert "CA 12" in ra.text
         if any(m in ra.text for m in TOUCHE):
+            random.seed(_seed_for_dice(1, 6, 3))  # d6=3 → 4 dégâts (+1)
             rd = await tool(d, "lancer_degats", nb_des=1, faces=6, bonus=1,
                             arme_ou_sort="Coup fistuleux", cible="Elara")
             total = int(RE_DEGATS.search(rd.text).group(1))
@@ -327,6 +333,10 @@ async def test_combat2_magie_soins_sauvegarde():
 
         # ── Mélodie (barde) soigne Elara : soins légers 1d8+1 ────────────
         pv_blessée = _fiche(d, "Elara")["pv"]
+        # Graine : d8=2 → soin = 3 (Elara blessée de 4 PV → reste SOUS le
+        # maximum, sinon la garde anti-gaspillage court-circuite l'assertion
+        # « PV 5/5 maximum atteint » qui suit).
+        random.seed(_seed_for_dice(1, 8, 2))
         rs = await tool(d, "lancer_des", nb_des=1, faces=8, bonus=1,
                         raison="Soins légers d'Elara")
         m = re.search(r"\*\*Total : (\d+)\*\*", rs.text)
@@ -428,12 +438,14 @@ async def test_combat3_mort_dun_pj():
         assert f["pv"] == min(5, -10 + 8)
 
         # ── Un PJ mort est exclu de l'initiative du combat suivant ───────
-        await tool(d, "finir_combat")
+        # retraite_combat (et non finir_combat : la garde F4 refuse de
+        # clore une victoire avec l'ogre encore vivant).
+        await tool(d, "retraite_combat")
         await tool(d, "engager_combat", monstres="Rat géant")
         noms = [p["nom"] for p in _etat(d)["initiative"]]
         assert "Zarkon" not in noms, "un PJ mort ne rejoint pas l'initiative"
         assert {"Groth", "Mélodie", "Elara"} <= set(noms)
-        await tool(d, "finir_combat")
+        await tool(d, "retraite_combat")
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
@@ -464,7 +476,9 @@ async def test_avancement_des_tours():
         assert etat["tour"] == 2
         assert etat["courant_tour_pour"] == depart
         # tour_suivant hors combat → refus propre.
-        await tool(d, "finir_combat")
+        # retraite_combat (le kobold est vivant : la garde F4 refuse
+        # finir_combat hors victoire totale).
+        await tool(d, "retraite_combat")
         r = await tool(d, "tour_suivant_combat")
         assert r.text.startswith("❌")
     finally:

@@ -78,6 +78,11 @@ Consignes pour les phases hors combat.
    SA description figée — ils s'explorent SUR PLACE, sans déplacement de
    carte ; seules les PORTES listées changent de salle (une direction de
    carte ≠ « la zone à droite dans la pièce »).
+   **Étages EXISTANTS uniquement** : n'invente JAMAIS un escalier ou un
+   étage absent de la carte (« un escalier plonge encore plus bas » au
+   dernier étage connu = inventé) — la structure du donjon est celle des
+   salles explorées ; un étage non listé par `carte_donjon_etage` n'existe
+   pas.
 
 - **Découverte de piège** : décris le piège, fais-le déclencher, **affiche le jet de
   sauvegarde** via `lancer_sauvegarde(type, mod, DD, source)` et annonce l'issue +

@@ -28,6 +28,7 @@ export function useChatSocket(partie_id: string | null) {
   const setTeamMessages = useParty((s) => s.setTeamMessages);
   const applyPatches = useParty((s) => s.applyPatches);
   const bumpStateRev = useParty((s) => s.bumpStateRev);
+  const setWsStatus = useParty((s) => s.setWsStatus);
   const player = useParty((s) => s.player);
   const lastJoinRef = useRef<string>("");
 
@@ -104,6 +105,10 @@ export function useChatSocket(partie_id: string | null) {
       lastJoinRef.current = "";
     });
 
+    // État de connexion → bandeau « reconnexion… » dans le chat (et
+    // avertissement quand un message part dans la file hors-ligne).
+    sock.onStatus((st) => setWsStatus(st));
+
     // Applique des patches d'état au store + effets de bord associés
     // (re-fetch REST sur pj_updated, galeries d'images, retrait des monstres
     // détruits). Utilisé par le push immédiat « state_patches » ET par le
@@ -159,14 +164,31 @@ export function useChatSocket(partie_id: string | null) {
             // setMessages (et non addMessage) : le `joined` arrive à chaque
             // (re)connexion WS — on REMPLACE le fil au lieu de dupliquer
             // toute l'histoire après une reconnexion.
+            // 🧹 Les messages user persistés portent le préfixe LLM
+            // `**[Joueur]** :` (session.py) — affiché BRUT il fuyait dans le
+            // rendu markdown (« You**[BetaTesteur]** : »). On le retire : le
+            // fil affiche déjà l'auteur via `player`.
+            const re_prefixe = /^\*\*\[(.+?)\]\*\*\s*:\s*/;
             const replayed: ChatMessage[] = (msg.history || [])
               .filter((h) => h.role === "user" || h.role === "assistant")
-              .map((h, i) => ({
-                id: `replay-${i}`,
-                role: h.role === "assistant" ? "dm" : "user",
-                content: h.content,
-                ts: 0,
-              }));
+              .map((h, i) => {
+                if (h.role === "user") {
+                  const m = re_prefixe.exec(h.content);
+                  return {
+                    id: `replay-${i}`,
+                    role: "user" as const,
+                    player: m ? m[1] : undefined,
+                    content: m ? h.content.slice(m[0].length) : h.content,
+                    ts: 0,
+                  };
+                }
+                return {
+                  id: `replay-${i}`,
+                  role: "dm" as const,
+                  content: h.content,
+                  ts: 0,
+                };
+              });
             setMessages(replayed);
             streamId.current = null;
             // La reconnexion a pu rater le `status done` de fin de tour :
@@ -184,6 +206,9 @@ export function useChatSocket(partie_id: string | null) {
               sock.join(player, useParty.getState().password, useParty.getState().personnage);
               lastJoinRef.current = partie_id;
             }
+            // 🛡️ La session est rattachée : on rejoue les messages partis
+            // pendant la déconnexion (outbox du ChatSocket).
+            sock.flush();
           } else if (msg.event === "participant_joined") {
             addParticipant(msg.player);
           } else if (msg.event === "auth_required") {
@@ -192,6 +217,7 @@ export function useChatSocket(partie_id: string | null) {
             if (lastJoinRef.current !== partie_id) {
               sock.join(player, useParty.getState().password, useParty.getState().personnage);
               lastJoinRef.current = partie_id;
+              sock.flush();
             }
           } else if (msg.event === "auth_failed") {
             addMessage({
@@ -370,6 +396,18 @@ export function useChatSocket(partie_id: string | null) {
       content: text,
       ts: Date.now(),
     });
+    // 🛡️ Hors ligne : le message part dans la file du ChatSocket et sera
+    // envoyé à la reconnexion — on prévient l'auteur au lieu de laisser
+    // croire que le MJ l'a ignoré (partie réelle : message perdu en silence).
+    if (!sockRef.current.estConnecte) {
+      addMessage({
+        id: uid(),
+        role: "system",
+        content:
+          "⚠️ Connexion perdue — ton message est en attente et partira dès la reconnexion.",
+        ts: Date.now(),
+      });
+    }
     sockRef.current.say(player, text);
   };
 

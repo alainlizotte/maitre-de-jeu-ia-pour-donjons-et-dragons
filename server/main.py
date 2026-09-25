@@ -1,4 +1,4 @@
-﻿"""Point d'entrée FastAPI de l'application D&D 3.5 — Maître du Jeu.
+"""Point d'entrée FastAPI de l'application D&D 3.5 — Maître du Jeu.
 
 Endpoints :
 - GET  /                  → frontend statique (chat multijoueur)
@@ -442,6 +442,107 @@ def _objet_revendique_nom(narration: str) -> str:
     return ""
 
 
+async def _appliquer_gains_inventaire_narres(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Optional[Any],
+    result: Any,
+) -> str:
+    """Rattrapage DÉTERMINISTE des gains d'inventaire que le MJ a NARRÉS dans
+    un bloc « Inventaire mis à jour » (partie réelle : « Pièces d'or : +3 »
+    affiché mais la fiche jamais créditée — le rejeu LLM 5quater-c ne produisait
+    pas l'appel). Le serveur applique LUI-MÊME les gains chiffrés :
+    - « Or : +N pièces » / « Pièces d'or : +N » → crédite N po (= ×10 pc) ;
+    - « X : +N objet(s) » → `inventaire_ajouter` (portee="quete" : loot).
+
+    Bornes anti-fiction : or ≤ 200 po, objets ≤ 20 (au-delà : refus). Renvoie
+    la note mécanique ("" si rien à faire)."""
+    narration = result.narration or ""
+    if "inventaire mis à jour" not in narration.lower():
+        return ""
+    # Lignes de gain du bloc (et ±100 chars autour) : « Or : +3 pièces »,
+    # « Pièces d'or : +3 (Total : 3) », « Pendentif : +1 objet ».
+    lignes_gain = _re_mod.findall(
+        r"^\s*[-*]?\s*(?:([A-Za-zÀ-ÿ'œœ][^\n:+*]{0,40}?|Or)\s*:\s*)?"
+        r"\+\s*(\d{1,3})\s*(pièces? d'or|pièces?|po\b|or\b|objets?)?",
+        narration,
+        _re_mod.IGNORECASE | _re_mod.MULTILINE,
+    )
+    notes: list[str] = []
+    for nom_brut, montant_s, type_s in lignes_gain:
+        montant = int(montant_s)
+        if montant <= 0:
+            continue
+        type_l = (type_s or "").lower()
+        nom_l = (nom_brut or "").strip().lower()
+        est_or = ("or" in type_l or "po" in type_l
+                  or nom_l in ("or", "pièces d'or", "pieces d'or")
+                  or "or" in nom_l)
+        if est_or:
+            # Or : la fiche stocke en pc. Un gain chiffré du MJ est exprimé
+            # en pièces d'OR (po) → ×10 pc. Bornes : ≤ 200 po.
+            if montant > 200:
+                continue
+            from .tools.fiches import _fiche_pj as _charger_fiche
+            etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+            cible_or = None
+            for pj in etat.get("pj") or []:
+                try:
+                    fiche = _charger_fiche(ctx, str(pj.get("nom") or ""))
+                except Exception:                            # noqa: BLE001
+                    fiche = None
+                if fiche is not None:
+                    cible_or = str(fiche.get("nom"))
+                    break
+            if cible_or is None:
+                continue
+            # Patch direct de l'or de la fiche (pas de tool dédié : le champ
+            # `or` est un simple compteur en pc, fiche-fait-foi).
+            try:
+                from .tools.fiches import _load_fiche, _save_fiche
+                fiche = _charger_fiche(ctx, cible_or)
+                if fiche is not None:
+                    fiche["or"] = int(fiche.get("or", 0) or 0) + montant * 10
+                    _save_fiche(ctx, cible_or, fiche)
+                    idx = next((i for i, p in enumerate(etat.get("pj") or [])
+                                if p.get("nom") == cible_or), 0)
+                    result.state_patches.append(
+                        {"pj.%d.or" % idx: fiche["or"], "pj_updated": True})
+                    notes.append(
+                        f"📦 **Rattrapage serveur** : +{montant} po "
+                        f"crédités à {cible_or} (or total : "
+                        f"{fiche['or'] // 10} po).")
+            except Exception as e_or:                    # noqa: BLE001
+                print(f"[dnd35] Rattrapage or échoué : {e_or}")
+        else:
+            # Objet : « X : +N objet(s) » → inventaire_ajouter (portee quête).
+            if not nom_brut or montant > 20:
+                continue
+            nom_objet = (nom_brut or "").strip().rstrip(":").strip()
+            # Nettoie un éventuel préfixe de puce et « Total »
+            nom_objet = _re_mod.sub(r"^[-*]\s*", "", nom_objet).strip()
+            if not nom_objet or nom_objet.lower().startswith("total"):
+                continue
+            etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+            cible_obj = next(
+                (str(p.get("nom") or "") for p in (etat.get("pj") or [])),
+                None,
+            )
+            if not cible_obj:
+                continue
+            tr = await orch.execute_tool_direct(
+                "inventaire_ajouter",
+                {"nom": cible_obj, "objet": nom_objet, "quantite": montant,
+                 "portee": "quete"},
+                ctx, on_event, result,
+            )
+            if tr is not None and not tr.text.startswith(("❌", "⛔")):
+                notes.append(
+                    f"📦 **Rattrapage serveur** : {nom_objet} ×{montant} "
+                    f"ajouté à l'inventaire de {cible_obj}.")
+    return "\n\n".join(notes)
+
+
 def _rejeu_inventaire_necessaire(
     text: str, narration: str,
     ctx: Any = None, etat: Any = None,
@@ -455,6 +556,18 @@ def _rejeu_inventaire_necessaire(
         return True                     # le joueur déclare lui-même
     if not (narration or "").strip():
         return False
+    # 📦 Liste « Inventaire mis à jour » avec un gain chiffré (« Or : +3
+    # pièces », « +1 objet ») : le MJ CROIT avoir mis à jour l'inventaire —
+    # signal fort (partie réelle : loot narré « Or : +3 pièces (Total : 3) »
+    # resté fiction, fiche jamais crédité). Un gain explicite « +N » est
+    # exigé pour éviter les fausses pistes (partie 6746fc6c).
+    if _re_mod.search(
+        r"inventaire\s+mis\s+à\s+jour[^+]*\+\s*\d+|"
+        r"\+\s*\d+\s*(?:pièces?|objets?|or\b)",
+        narration,
+        _re_mod.IGNORECASE,
+    ):
+        return True
     if _POSSESSION_SAC_RE.search(narration):
         return False                    # possession narrée, pas acquisition
     if _ACQUISITION_ANCRE_RE.search(narration):
@@ -574,10 +687,13 @@ _INVENTAIRE_TOOLS = {
 
 # Détection d'une acquisition/looting d'objet annoncé par le joueur ou le MJ :
 # déclenche le rattrapage 5quater-c si l'objet n'a pas été enregistré.
+# ⚠️ Formes fléchées (« je prends ») : l'ancien « je prend\b » ne matchait
+# JAMAIS « prends » (le \b exige une fin de mot) — partie réelle : « Je prends
+# les bijoux et l'or » restait sans rattrapage, le loot narré jamais appliqué.
 _ITEM_ACQUISITION_RE = _re_mod.compile(
     r"\b(ramass\w*|récup\w*|récupèr\w*|trouv\w*|obtien?t|obtenir|acquis\w*"
-    r"|pill\w*|prise au|je prend|il prend|elle prend|gagne\w* un|obtient un"
-    r"|butin|loot\w*"
+    r"|pill\w*|prise au|je prend\w*|il prend\w*|elle prend\w*|gagne\w* un"
+    r"|butin|loot\w*|rep[èe]r\w*"
     r"|donne\w* à|offre\w* à|cède\w* à)\b",
     _re_mod.IGNORECASE,
 )
@@ -700,6 +816,7 @@ _RE_BLOC_MECANIQUE_SERVEUR = _re_mod.compile(
     r"|⚔️\s*\*\*(?:Au tour de|Combat engagé)"
     r"|⚖️\s*_"
     r"|🎲\s*\*\*Initiative du combat"
+    r"|🎲\s*_Jets officiels du tour"
     r"|🏆\s*\*\*Victoire"
     r")"
 )
@@ -808,30 +925,31 @@ def _harmoniser_statut_serveur(
 
 
 def _dedupliquer_phrases(narration: str, seuil: int = 25) -> str:
-    """Retire les lignes/phrases CONSÉCUTIVES identiques de la narration.
+    """Retire les lignes/paragraphes répétés de la narration.
 
     Le petit modèle local répète parfois verbatim la même phrase ou le même
-    paragraphe (partie 4b529064 : « Barkrur pose le parchemin sur une pierre
-    près de l'entrée de la grotte, puis l'ajoute à son inventaire pour qu'il
-    soit enregistré. » narré DEUX fois de suite). Le doublon strict
-    n'apporte aucune information — on n'en garde qu'un. La comparaison
-    normalise espaces, casse et ponctuation finale, et ne porte que sur les
-    lignes assez longues (`seuil`) : les lignes courtes (titres, listes
+    paragraphe — JUXTAPOSÉS (partie 4b529064 : phrase du parchemin narrée
+    deux fois de suite) mais aussi DISPERDÉS dans le message (partie réelle
+    sept. 2026 : « Votre épée longue heurte l'air… » recopiée 4 fois entre
+    des blocs mécaniques, bandeau « Phase : Combat » triplé). Un doublon
+    strict n'apporte aucune information : on n'en garde que la PREMIÈRE
+    occurrence, où qu'elle soit. La comparaison normalise espaces, casse et
+    ponctuation finale, et ne porte que sur les lignes assez longues
+    (`seuil`) : les lignes courtes (titres, dialogues brefs, listes
     mécaniques) ne sont jamais touchées. Les lignes vides sont conservées
-    telles quelles mais n'interrompent PAS la comparaison : un paragraphe
-    recopié après un saut de ligne reste détecté.
+    telles quelles.
     """
     if not narration:
         return narration
     sortie: list[str] = []
-    derniere_cle = ""
+    vues: set[str] = set()
     for ligne in narration.split("\n"):
         cle = " ".join(ligne.split()).strip().lower().rstrip(".!?…:;,»\"'")
-        if cle and len(cle) >= seuil and cle == derniere_cle:
-            continue
-        sortie.append(ligne)
         if cle and len(cle) >= seuil:
-            derniere_cle = cle
+            if cle in vues:
+                continue
+            vues.add(cle)
+        sortie.append(ligne)
     return "\n".join(sortie)
 
 
@@ -2081,6 +2199,10 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
     max_dons = 1 + max(0, niveau // 3) + (
         1 if (persos_mod.resoudre_race(race) or race) == "Humain" else 0
     )
+    # Guerrier : dons supplémentaires aux niveaux 1, 2, 4, 6… (PHB 3.5) :
+    # count = 1 (niv. 1) + 1 par niveau pair → 1 + niveau // 2.
+    if (persos_mod.resoudre_classe(classe) or classe) == "Guerrier":
+        max_dons += 1 + max(0, niveau // 2)
     if len(dons) > max_dons:
         raise HTTPException(
             status_code=400,
@@ -2106,7 +2228,7 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         mod_int = (int(calculs["carac_final"]["INT"]) - 10) // 2
         budget_comp = max(1, base_pts + mod_int) * (3 + niveau)
         if (persos_mod.resoudre_race(race) or race) == "Humain":
-            budget_comp += niveau
+            budget_comp += 4 + max(0, niveau - 1)
         try:
             rangs_total = sum(max(0, int(v or 0)) for v in competences.values())
         except (TypeError, ValueError):
@@ -3201,6 +3323,104 @@ def _exces_degats_monstres(
     return exces
 
 
+async def _rouler_degats_attaque(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Optional[Any],
+    result: Any,
+    attaquant: str,
+    arme: str,
+    cible: str,
+) -> Optional[str]:
+    """Rattrapage « touché SANS dégâts » : le serveur lance LUI-MÊME les
+    dégâts de l'arme (partie réelle : une attaque réussie restée sans
+    `lancer_degats` narrait un coup qui n'existait pas dans l'état).
+
+    Dés de dégâts, dans l'ordre : fiche bestiaire du MONSTRE attaquant (armes
+    de taille spéciale), sinon catalogue PHB pour un PJ. Bonus = mod. FOR
+    (×1,5 à deux mains) / +0 à distance — le même calcul officiel que
+    `lancer_degats`. Renvoie le texte mécanique (None si l'arme est
+    indéterminable : on n'invente pas de dés)."""
+    from .tools.dice import _arme_fiche_monstre, _de_arme_catalogue
+
+    nb, faces, bonus = None, None, 0
+    fiche_m = _arme_fiche_monstre(ctx, attaquant) if attaquant else None
+    if fiche_m is not None and (not arme or _arme_citee(arme, fiche_m[0])):
+        _, nb, faces = fiche_m
+        bonus = 0  # le bonus du bestiaire est inclus dans son type d'attaque
+    else:
+        de_cat = _de_arme_catalogue(arme or "")
+        if de_cat is None:
+            return None
+        nb, faces, _nom_canon = de_cat
+        bonus = await _bonus_degats_pj(ctx, attaquant, arme)
+    tr_dm = await orch.execute_tool_direct(
+        "lancer_degats",
+        {"nb_des": nb, "faces": faces, "bonus": bonus,
+         "arme_ou_sort": arme or "arme improvisée", "cible": cible,
+         "attaquant": attaquant},
+        ctx, on_event, result,
+    )
+    if tr_dm is None or tr_dm.text.startswith(("❌", "⛔", "⚠️")):
+        return None
+    m = _re_mod.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr_dm.text)
+    if not m:
+        return None
+    tr_inf = await orch.execute_tool_direct(
+        "fiche_perso_infliger_degats",
+        {"nom": cible, "degats": int(m.group(1))},
+        ctx, on_event, result,
+    )
+    entete = (
+        "⚙️ _Rattrapage serveur : attaque réussie sans dégâts — le serveur "
+        f"a résolu lui-même les dégâts ({arme or 'arme improvisée'})._"
+    )
+    blocs = [entete, tr_dm.text]
+    if tr_inf is not None and not tr_inf.text.startswith("❌"):
+        blocs.append(tr_inf.text)
+    return "\n\n".join(blocs)
+
+
+def _arme_citee(texte: str, nom_arme: str) -> bool:
+    """Vrai si `texte` cite l'arme `nom_arme` (mots entiers, sans accents)."""
+    import unicodedata as _u
+
+    def _n(s: str) -> str:
+        nf = _u.normalize("NFKD", (s or "").lower())
+        return " ".join(
+            "".join(c for c in nf if not _u.combining(c)).split()
+        )
+
+    t, a = _n(texte), _n(nom_arme)
+    if not t or not a:
+        return False
+    return t == a or bool(
+        _re_mod.search(r"(?:^|\s)" + _re_mod.escape(a) + r"(?:\s|$)", t)
+    )
+
+
+async def _bonus_degats_pj(ctx: ToolContext, attaquant: str, arme: str) -> int:
+    """Bonus de dégâts officiel d'un PJ (mod. FOR, ×1,5 à deux mains, +0
+    distance) lu sur sa fiche — 0 si fiche absente ou cas non couvert."""
+    try:
+        from .tools.fiches import _fiche_pj as _charger_fiche
+        fiche = _charger_fiche(ctx, attaquant)
+        if fiche is None:
+            return 0
+        caracs = fiche.get("carac") or {}
+        a_l = (arme or "").lower()
+        if any(m in a_l for m in ("arc", "arbalète", "arbalet", "fronde",
+                                  "javelot", "dard", "sarbacane")):
+            return 0
+        val = int(caracs.get("FOR", 10) or 10)
+        mod = (val - 10) // 2
+        if any(m in a_l for m in ("deux mains", "2 mains")):
+            return mod * 3 // 2
+        return mod
+    except Exception:                                        # noqa: BLE001
+        return 0
+
+
 async def _appliquer_degats_oublies(
     orch: Orchestrator,
     result: Any,
@@ -3292,6 +3512,16 @@ async def _appliquer_degats_oublies(
         r"\+?\s*(\d{1,3})\s*(?:points?\s+de\s+)?d[ée]g[âa]ts",
         _re_mod.IGNORECASE,
     )
+    # Chute de PV narrée (« ses points de vie chutant de 5 à 4 », « passe de
+    # 12 à 8 PV ») : forme OBSERVÉE en partie réelle pour une attaque réussie
+    # sans lancer_degats — l'ancien fillet (montant « N points de dégâts »)
+    # ne la détectait pas et le coup réussi restait sans effet.
+    re_chute_pv = _re_mod.compile(
+        r"(?:chut(?:ant|er?)?|pass(?:ant|er?)?|descend(?:ant|er?)?|tombe"
+        r"|baiss(?:ant|er?)?)\s*(?:brutalement\s*)?(?:de\s+)?(\d{1,3})"
+        r"\s*(?:à|→|->)\s*(\d{1,3})",
+        _re_mod.IGNORECASE,
+    )
     narration = result.narration or ""
     cibles_traitees: set[str] = set()
     for tc in trace:
@@ -3310,6 +3540,28 @@ async def _appliquer_degats_oublies(
                                       _re_mod.IGNORECASE):
             fenetre = narration[max(0, m_nom.start() - 100):m_nom.end() + 100]
             montants.extend(int(x) for x in re_montant.findall(fenetre))
+            # Chutes de PV « de X à Y » : montant = X − Y si cohérent (> 0).
+            for m_ch in re_chute_pv.finditer(fenetre):
+                try:
+                    chute = int(m_ch.group(1)) - int(m_ch.group(2))
+                except ValueError:
+                    continue
+                if 0 < chute <= 60:
+                    montants.append(chute)
+        if not montants:
+            # Dernier recours : le LLM n'annonce AUCUN montant → le serveur
+            # lance LUI-MÊME les dégâts de l'arme utilisée (le coup a Touché :
+            # ne rien appliquer laisserait la fiction créer un état faux).
+            tr_roll = await _rouler_degats_attaque(
+                orch, ctx, on_event, result,
+                attaquant=str((tc.get("args") or {}).get("nom_attaquant") or ""),
+                arme=str((tc.get("args") or {}).get("arme") or ""),
+                cible=cible,
+            )
+            if tr_roll is not None:
+                cibles_traitees.add(cle_cible)
+                lignes.append(tr_roll)
+            continue
         uniques = sorted(set(montants))
         if len(uniques) != 1:
             continue
@@ -4334,6 +4586,17 @@ async def _handle_say(
             except Exception as e:                                   # noqa: BLE001
                 print(f"[dnd35] Pre-run moteur de combat échoué (ignoré) : {e}")
 
+            # 🏆 Clôture survenue pendant le PRE-RUN (victoire/défaite + XP) :
+            # ces blocs FACTUELS ne passaient JAMAIS dans la narration du
+            # chemin normal (partie réelle : +100 PX attribués en silence,
+            # aucun « 🏆 Victoire » affiché — le joueur ne savait pas pourquoi
+            # sa barre d'XP avait bougé). On les affichera en fin de tour.
+            cloture_pre = [
+                ev for ev in events_pre
+                if ev.lstrip().startswith("🏆") or "Victoire !" in ev
+                or "💀" in ev
+            ]
+
             # 1bis. ⚔️ Application MÉCANIQUE du tour de jeu (D&D 3.5) : en
             # phase de combat, seul le joueur dont c'est le tour peut
             # déclencher le MJ. Les messages des autres joueurs sont
@@ -5207,8 +5470,7 @@ async def _handle_say(
                         timeout_secondes=cfg.game.combat_turn_timeout_seconds,
                     )
                     if res_post.events:
-                        if res_post.combat_termine:
-                            # 🧾 Clôture de combat (victoire/défaite/mort) :
+                        if res_post.combat_termine:                            # 🧾 Clôture de combat (victoire/défaite/mort) :
                             # bloc brut FACTUEL obligatoire. La narration LLM
                             # de ces moments inventait des issues
                             # contradictoires — « victoire écrasante » sur
@@ -5938,21 +6200,34 @@ async def _handle_say(
                 if inv_pas_appele and _rejeu_inventaire_necessaire(
                         text or "", result.narration or "",
                         ctx, _etat_rejouer):
-                    _obj_inv = (
-                        "⚠️ ERREUR système : l'objet gagné/récupéré/donné "
-                        "n'a pas été enregistré. Appelle MAINTENANT "
-                        "`inventaire_ajouter` (nom d'un PJ, nom, quantité, "
-                        "poids, portee) pour persister l'objet, puis narre "
-                        "la suite. PORTÉE : don de PNJ ou objet de "
-                        "l'aventure (potion, fiole, or donné, carte, clé, "
-                        "parchemin, lettre) → portee=\"quete\" ; achat en "
-                        "marchand, arme, armure, trésor → "
-                        "portee=\"permanent\". NE narrate PAS "
-                        "l'acquisition sans appeler l'outil d'inventaire."
-                    )
-                    await _rejoue_correctif(orch, messages, ctx, result,
-                                            on_event, _obj_inv,
-                                            "inventaire objet")
+                    # 📦 Gain chiffré dans un bloc « Inventaire mis à jour » →
+                    # application DÉTERMINISTE (le rejeu LLM ne produisait pas
+                    # l'appel — partie réelle : loot narré jamais crédité).
+                    _note_inv = await _appliquer_gains_inventaire_narres(
+                        orch, ctx, on_event, result)
+                    if _note_inv:
+                        result.narration = (
+                            (result.narration or "").rstrip()
+                            + "\n\n" + _note_inv
+                        ).strip()
+                        print("[dnd35] Rattrapage inventaire déterministe "
+                              "(gains narrés appliqués).")
+                    else:
+                        _obj_inv = (
+                            "⚠️ ERREUR système : l'objet gagné/récupéré/donné "
+                            "n'a pas été enregistré. Appelle MAINTENANT "
+                            "`inventaire_ajouter` (nom d'un PJ, nom, quantité, "
+                            "poids, portee) pour persister l'objet, puis narre "
+                            "la suite. PORTÉE : don de PNJ ou objet de "
+                            "l'aventure (potion, fiole, or donné, carte, clé, "
+                            "parchemin, lettre) → portee=\"quete\" ; achat en "
+                            "marchand, arme, armure, trésor → "
+                            "portee=\"permanent\". NE narrate PAS "
+                            "l'acquisition sans appeler l'outil d'inventaire."
+                        )
+                        await _rejoue_correctif(orch, messages, ctx, result,
+                                                on_event, _obj_inv,
+                                                "inventaire objet")
 
                 # --- 5quater-d2. ⚔️ Engagement de combat NARRÉ sans outil
                 # (phase exploration). Le LLM écrit « Engagement du combat /
@@ -6267,7 +6542,62 @@ async def _handle_say(
             except Exception as e_nar:                             # noqa: BLE001
                 print(f"[dnd35] Auto-mémorisation narration échouée : {e_nar}")
 
+            # 6ter. 🏆 Clôture du pre-run (victoire/XP) jamais affichée :
+            # ajoutée ici, sauf si déjà présente dans la narration.
+            try:
+                if cloture_pre:
+                    _deja = [
+                        ev for ev in cloture_pre
+                        if (ev.strip()[:80]) not in (result.narration or "")
+                    ]
+                    if _deja:
+                        result.narration = (
+                            (result.narration or "").rstrip()
+                            + "\n\n⚔️ _Résolution automatique du tour :_\n\n"
+                            + "\n\n".join(_deja)
+                        ).strip()
+            except Exception as e_cp:                          # noqa: BLE001
+                print(f"[dnd35] Affichage clôture pre-run échoué (ignoré) : {e_cp}")
+
+            # 6bis. 🎲 JETS OFFICIELS DU TOUR : les résultats réels des dés
+            # (attaque, dégâts, sauvegarde) sont toujours affichés à la table,
+            # même quand la narration ne cite aucun chiffre (partie réelle :
+            # des tours entiers de combat sans UN seul nombre affiché). Bloc
+            # mécanique serveur : affiché, mais exclu du contexte LLM par
+            # _narration_prose_seule.
+            try:
+                _JETS_AFFICHES = (
+                    "lancer_attaque", "lancer_degats", "lancer_sauvegarde",
+                )
+                _jets_txt = [
+                    (tc.get("text") or "").strip()
+                    for tc in result.tool_calls_trace
+                    if tc.get("name") in _JETS_AFFICHES and tc.get("ok")
+                    and (tc.get("text") or "").strip()
+                ]
+                if _jets_txt:
+                    _bloc_jets = (
+                        "🎲 _Jets officiels du tour :_\n\n"
+                        + "\n\n".join(_jets_txt)
+                    )
+                    result.narration = (
+                        (result.narration or "").rstrip() + "\n\n" + _bloc_jets
+                    ).strip()
+            except Exception as e_j:                           # noqa: BLE001
+                print(f"[dnd35] Bloc jets officiels échoué (ignoré) : {e_j}")
+
             # 6. Broadcast final (= complet, même en streaming : permet le rendu MD).
+            # 🧹 Dédup de sécurité appliquée EN DERNIER : les rejeux/fallbacks
+            # peuvent concaténer des blocs répétés (partie réelle : même phrase
+            # ×4, bandeau « Phase : Combat » ×3) qui échappaient au passage
+            # 5quater-g3 quand une branche intermédiaire échouait.
+            try:
+                result.narration = _re_mod.sub(
+                    r"\n{3,}", "\n\n",
+                    _dedupliquer_phrases(result.narration or "").strip(),
+                )
+            except Exception:                                  # noqa: BLE001
+                pass
             await session.broadcast({
                 "type": "dm",
                 "text": result.narration,

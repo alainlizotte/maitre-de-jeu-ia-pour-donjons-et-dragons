@@ -540,6 +540,14 @@ def _candidats_noms(nom: str) -> list[str]:
     mot à mot (dédupe en conservant l'ordre)."""
     n = _normalise_nom(nom)
     cands = [nom, n]
+    # 🧩 Homonymes de combat (« Gobelin (2) ») : sans le retrait du suffixe
+    # « (N) », la recherche tombait sur « Hobgobelin, homme d'armes… »
+    # (sous-chaîne + clé la plus longue) — le second gobelin frappait en
+    # épée longue 1d8 au lieu de son cimeterre 1d6 (partie réelle sept. 2026).
+    sans_suffixe = re.sub(r"\s*\(\d+\)\s*$", "", nom).strip()
+    if sans_suffixe and sans_suffixe != nom:
+        cands.append(sans_suffixe)
+        cands.append(_normalise_nom(sans_suffixe))
     alias = _ALIAS_EN_FR.get(n)
     if alias:
         cands.append(alias)
@@ -589,7 +597,9 @@ def _find_monstre(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
                 return m
     # 3. sous-ensemble de mots traduits — gère les ordres différents
     #    ({jeune,rouge,dragon} ⊆ {dragon,rouge,jeune}) ; la clé la plus
-    #    longue gagne.
+    #    longue gagne. ⚠️ Matching MOT ENTIER (tokens de la clé) : la
+    #    sous-chaîne (« gobelin » ⊂ « hobgobelin ») faisait résoudre
+    #    « Gobelin (2) » vers Hobgobelin (épée longue au lieu du cimeterre).
     meilleur: Optional[tuple[int, dict[str, Any]]] = None
     for cand in cands:
         mots = [
@@ -599,10 +609,10 @@ def _find_monstre(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
         if not mots:
             continue
         for k, m in monstres.items():
-            nk = _normalise_nom(k)
-            if all(w in nk for w in mots):
-                if meilleur is None or len(nk) > meilleur[0]:
-                    meilleur = (len(nk), m)
+            nk_tokens = _normalise_nom(k).split("_")
+            if all(w in nk_tokens for w in mots):
+                if meilleur is None or len(_normalise_nom(k)) > meilleur[0]:
+                    meilleur = (len(_normalise_nom(k)), m)
     if meilleur:
         return meilleur[1]
     # 4. mot-clé partagé : UN mot significatif de la requête correspond à un

@@ -540,10 +540,12 @@ async def lancer_attaque(
             ca_cible = ca_off
 
     # --- Recoupement fiche (conformité 3.5) --------------------------------
-    # bonus_attaque = BBA + mod FOR (mêlée) / mod DEX (distance) + bonus
-    # divers (arme magique, focus...). Un petit LLM invente parfois des bonus
-    # absurdes (+8 au niveau 1) : on borne au bonus plausible lu sur la fiche,
-    # avec une marge de +3 pour les bonus magiques temporaires.
+    # bonus_attaque = BBA + mod FOR (mêlée) / mod DEX (distance). Quand la
+    # fiche de l'attaquant existe, la valeur OFFICIELLE PRIME : le LLM ne
+    # choisit que QUI frappe QUI avec QUOI — le modificateur est recalculé
+    # serveur (partie réelle : le LLM passait +5/+4 pour un guerrier niv. 1
+    # à +2, et l'ancienne « marge +3 » laissait passer). Les monstres (sans
+    # fiche PJ) conservent le bonus du bestiaire passé par le moteur.
     bonus_final = bonus_attaque
     note_bonus = ""
     note_ammo = ""
@@ -565,13 +567,14 @@ async def lancer_attaque(
             cle_car = "DEX" if a_distance else "FOR"
             val_car = int(caracs.get(cle_car, 10) or 10)
             mod_car = (val_car - 10) // 2
-            plausible = bab + mod_car + 3
-            if bonus_attaque > plausible:
-                bonus_final = plausible
+            officiel = bab + mod_car
+            if bonus_attaque != officiel:
+                bonus_final = officiel
                 note_bonus = (
-                    f"\n- ⚠️ Bonus ajusté {bonus_attaque:+d} → {bonus_final:+d} "
-                    f"(fiche de {nom_attaquant} : BBA {bab:+d}, {cle_car} "
-                    f"{val_car} ({mod_car:+d}) + marge +3 max pour bonus divers)."
+                    f"\n- ⚠️ Bonus recalculé par le serveur "
+                    f"{bonus_attaque:+d} → {bonus_final:+d} (fiche de "
+                    f"{nom_attaquant} : BBA {bab:+d}, {cle_car} {val_car} "
+                    f"({mod_car:+d}) — la fiche fait foi)."
                 )
             # 💪 Bonus de dégâts OFFICIEL (partie 263f82dc : le LLM passait
             # +4 puis +6 pour le MÊME attaquant — bonus improvisé au lieu du
@@ -688,6 +691,48 @@ async def lancer_degats(
     bonus = _as_int(bonus)
     if faces not in (2, 3, 4, 6, 8, 10, 12, 20, 100):
         return ToolResult(text=f"⚠️ Type de dé {faces} non standard en D&D 3.5.")
+
+    # --- Bonus de dégâts officiel pour un PJ attaquant -----------------------
+    # Le LLM n'a pas à fournir le bonus : pour un attaquant AVEC fiche et une
+    # ARME (pas un sort), le serveur recalcule mod. FOR (×1,5 à deux mains) /
+    # +0 à distance, et corrige toute valeur différente. Les monstres (sans
+    # fiche PJ) et les sorts conservent la valeur passée.
+    note_bonus_dm = ""
+    if not _est_nom_de_sort(arme_ou_sort):
+        try:
+            _fiche_pj = _fiche_pj(ctx, attaquant or "")
+        except Exception:                                    # noqa: BLE001
+            _fiche_pj = None
+        if _fiche_pj is not None:
+            _caracs = _fiche_pj.get("carac") or {}
+            _arme_l = (arme_ou_sort or "").lower()
+            _a_distance = any(
+                m in _arme_l for m in
+                ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard",
+                 "sarbacane", "shuriken")
+            )
+            if _a_distance:
+                bonus_off = 0
+                _detail = "arme à distance : le mod. DEX ne s'applique pas"
+            else:
+                _val_for = int(_caracs.get("FOR", 10) or 10)
+                _mod_for = (_val_for - 10) // 2
+                _deux_mains = any(
+                    m in _arme_l for m in ("deux mains", "2 mains")
+                )
+                bonus_off = _mod_for * 3 // 2 if _deux_mains else _mod_for
+                _detail = (
+                    f"FOR {_val_for} ({_mod_for:+d})"
+                    + (" ×1,5 arme à deux mains" if _deux_mains else "")
+                )
+            if bonus != bonus_off:
+                note_bonus_dm = (
+                    f"\n- ⚠️ Bonus dégâts recalculé par le serveur "
+                    f"{bonus:+d} → {bonus_off:+d} ({_detail}) — la fiche "
+                    f"de {attaquant} fait foi."
+                )
+                bonus = bonus_off
+
     # Conformité des dés — deux sources de vérité, dans l'ordre :
     # 1. la FICHE du monstre `attaquant`, quand `arme_ou_sort` nomme SON
     #    arme (tailles spéciales : le Géant (froid) de taille G frappe en
@@ -727,7 +772,7 @@ async def lancer_degats(
         f"- Formule : {nb_des}d{faces}{'+' if bonus >= 0 else ''}{bonus}",
         f"- Jets bruts : {jets}",
         f"- Total jets : {sum(jets)}",
-        f"- Bonus dégâts : {bonus:+d}",
+        f"- Bonus dégâts : {bonus:+d}" + note_bonus_dm,
         f"- **Dégâts infligés : {total}**",
     ]
     if sum(jets) + bonus < 0:

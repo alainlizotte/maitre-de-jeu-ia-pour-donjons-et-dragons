@@ -611,7 +611,23 @@ class OllamaClient:
                 # requêtes : on poll /models jusqu'à statut "loaded" ou timeout.
                 if r.status_code == 400 and "already loading" in r.text.lower():
                     return await self._llamacpp_wait_loaded(root, timeout=60.0)
-                _log.warning("llamacpp load failed (%s): %s", r.status_code, r.text[:200])
+                # Contention transitoire (unload_after_turn + tour suivant qui
+                # démarre pendant le reload) : un seul retry rapide avant de
+                # considérer l'échec réel — le 400 disparaît dans ~1 s.
+                await asyncio.sleep(0.8)
+                try:
+                    r2 = await tmp.post(
+                        f"{root.rstrip('/')}/models/load",
+                        json={"model": self.cfg.model},
+                    )
+                except Exception:                                # noqa: BLE001
+                    r2 = None
+                if r2 is not None and r2.status_code == 200:
+                    _log.info("llamacpp model loaded (retry): %s", self.cfg.model)
+                    return True
+                body = (r2.text if r2 is not None else r.text)[:200]
+                code = r2.status_code if r2 is not None else r.status_code
+                _log.warning("llamacpp load failed (%s): %s", code, body)
                 return False
         except Exception as e:
             _log.warning("llamacpp load error: %s", e)

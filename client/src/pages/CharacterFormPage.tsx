@@ -5,7 +5,7 @@
 // - À l'enregistrement : le serveur recalcule tout et lance la génération du
 //   portrait (fiche + traits de la race) attribué à ce personnage précis.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken } from "../api/rest";
@@ -624,6 +624,9 @@ export function CharacterFormPage() {
     if (p > tiers) return { cat: "Moyenne", depasse: false, max: false, pct: Math.min(100, (p / max) * 100) };
     return { cat: "Légère", depasse: false, max: false, pct: Math.min(100, (p / max) * 100) };
   }, [poidsPorte.poids, calc.chargeMax]);
+  // Poids de l'or porté (PHB 3.5 : 50 pièces = 1 lb = 0,4536 kg), inclus dans
+  // poidsPorte.poids — itemisé dans l'UI pour ne plus paraître fantôme.
+  const poidsOrKg = (((Number(form.or) || 0) * 10) / 50) * 0.4536;
   const budgetRangs = useMemo(() => {
     const base = form.classe
       ? (modele.data?.points_competence?.[form.classe] ?? 0)
@@ -631,16 +634,23 @@ export function CharacterFormPage() {
     if (!base) return 0;
     const parNiveau = Math.max(1, base + calc.mods.INT);
     let total = parNiveau * 4 + Math.max(1, base + calc.mods.INT) * Math.max(0, form.niveau - 1);
-    if (form.race === "Humain") total += form.niveau;
+    // PHB 3.5, Humain : +4 points au niveau 1, +1 par niveau supplémentaire
+    // (l'ancienne formule « +niveau » donnait 9 au lieu de 12 en niv. 1).
+    if (form.race === "Humain") total += 4 + Math.max(0, form.niveau - 1);
     return total;
   }, [modele.data, form.classe, form.race, form.niveau, calc.mods.INT]);
 
   // Budget de dons (règles 3.5) : 1 au niveau 1, puis 1 don supplémentaire
-  // aux niveaux 3, 6, 9… ; les humains gagnent 1 don en plus. Les dons
-  // libres (zone de texte) consomment le même budget.
+  // aux niveaux 3, 6, 9… ; les humains gagnent 1 don en plus ; le GUERRIER
+  // reçoit des dons supplémentaires aux niveaux 1, 2, 4, 6… (1 + niv/2).
+  // Les dons libres (zone de texte) consomment le même budget.
   const budgetDons = useMemo(
-    () => 1 + Math.floor(form.niveau / 3) + (form.race === "Humain" ? 1 : 0),
-    [form.niveau, form.race],
+    () =>
+      1 +
+      Math.floor(form.niveau / 3) +
+      (form.race === "Humain" ? 1 : 0) +
+      (form.classe === "Guerrier" ? 1 + Math.floor(form.niveau / 2) : 0),
+    [form.niveau, form.race, form.classe],
   );
   const donsLibresUtilises = useMemo(
     () => form.donsLibre.split("\n").map((l) => l.trim()).filter(Boolean).length,
@@ -740,9 +750,22 @@ export function CharacterFormPage() {
     });
 
   // ----------------------------- Mutations -------------------------------- //
+  // 🛡️ Garde anti-course (un compteur PAR tirage) : seules les réponses au
+  // DERNIER clic de CHAQUE tirage sont appliquées (partie réelle : des
+  // réponses arrivées dans le désordre ont laissé dans le formulaire une
+  // apparence jamais affichée à l'écran).
+  const reqCaracs = useRef(0);
+  const reqOr = useRef(0);
+  const reqApparence = useRef(0);
+
   const tirageAleatoire = useMutation({
-    mutationFn: api.statsAleatoires,
-    onSuccess: (d) => {
+    mutationFn: async () => {
+      const req = ++reqCaracs.current;
+      const d = await api.statsAleatoires();
+      return { req, d };
+    },
+    onSuccess: ({ req, d }) => {
+      if (req !== reqCaracs.current) return; // réponse périmée
       for (const c of CARACS) {
         setCarac(c, d.carac[c] ?? 10);
       }
@@ -750,16 +773,30 @@ export function CharacterFormPage() {
   });
 
   const orDepart = useMutation({
-    mutationFn: (v: { classe: string; mode: "tirage" | "moyenne" }) =>
-      api.orDepart(v.classe, v.mode),
-    onSuccess: (d) => set("or", d.or),
+    mutationFn: async (v: { classe: string; mode: "tirage" | "moyenne" }) => {
+      const req = ++reqOr.current;
+      const d = await api.orDepart(v.classe, v.mode);
+      return { req, d };
+    },
+    onSuccess: ({ req, d }) => {
+      if (req !== reqOr.current) return; // réponse périmée
+      set("or", d.or);
+    },
   });
 
   // Tirage officiel âge/taille/poids (tables DRS : race × classe × sexe).
   const apparenceAleatoire = useMutation({
-    mutationFn: () =>
-      api.apparenceAleatoire(form.race, form.classe, form.sexe === "F" ? "F" : "M"),
-    onSuccess: (d) => {
+    mutationFn: async () => {
+      const req = ++reqApparence.current;
+      const d = await api.apparenceAleatoire(
+        form.race,
+        form.classe,
+        form.sexe === "F" ? "F" : "M",
+      );
+      return { req, d };
+    },
+    onSuccess: ({ req, d }) => {
+      if (req !== reqApparence.current) return; // réponse périmée
       set("age", d.age);
       set("taille", d.taille);
       set("poids", d.poids);
@@ -917,6 +954,16 @@ export function CharacterFormPage() {
     if (rangsUtilises > budgetRangs) {
       setErreur(
         `Trop de rangs de compétence (${rangsUtilises}) : maximum ${budgetRangs} au niveau ${form.niveau}.`,
+      );
+      return;
+    }
+    // 💰 Or de départ : l'équipement ne peut pas dépasser le solde (partie
+    // réelle : 165 po cochés pour 150 po passaient, solde jamais déduit).
+    if (soldeOr < 0) {
+      setErreur(
+        `Équipement trop cher : ${depenseEquipement} po dépensés pour ` +
+        `${Number(form.or) || 0} po d'or de départ — retirez un objet ` +
+        `(${Math.abs(soldeOr)} po de trop).`,
       );
       return;
     }
@@ -1111,7 +1158,7 @@ export function CharacterFormPage() {
                 </button>
               </div>
               {tirageAleatoire.isSuccess && (
-                <p className="text-xs text-emerald-400 mb-2">{tirageAleatoire.data.methode}</p>
+                <p className="text-xs text-emerald-400 mb-2">{tirageAleatoire.data.d.methode}</p>
               )}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 {CARACS.map((c) => {
@@ -1371,6 +1418,16 @@ export function CharacterFormPage() {
                       {poidsPorte.inconnus.join(", ")}
                     </p>
                   )}
+                  {/* 💰 Poids de l'or itemisé : sans cette ligne, la charge
+                      affichait un « poids fantôme » à équipement vide (1500 pc
+                      ≈ 13,6 kg — PHB : 50 pièces = 1 livre) que tout le monde
+                      prenait pour un bug. */}
+                  {poidsOrKg > 0 && (
+                    <p className="text-xs text-stone-500 mt-1">
+                      dont or : <span className="tabular-nums">{poidsOrKg.toFixed(2)} kg</span>{" "}
+                      ({Number(form.or) || 0} po = {(Number(form.or) || 0) * 10} pc — 50 pc = 0,45 kg).
+                    </p>
+                  )}
                   {etatCharge.depasse && (
                     <p className="text-xs text-rose-300 mt-2 font-medium">
                       ⚠️ La charge dépasse la capacité maximale. Selon les règles PHB 3.5 le
@@ -1408,7 +1465,7 @@ export function CharacterFormPage() {
               </div>
               {apparenceAleatoire.isSuccess && (
                 <p className="text-xs text-emerald-400 mb-2">
-                  Tirage officiel — âge selon la classe ({apparenceAleatoire.data.formule_age}).
+                  Tirage officiel — âge selon la classe ({apparenceAleatoire.data.d.formule_age}).
                 </p>
               )}
               <p className="text-xs text-stone-500 mb-3">
@@ -1634,8 +1691,9 @@ export function CharacterFormPage() {
                     donsTotal > budgetDons ? "text-rose-400" : "text-stone-500"
                   }`}
                 >
-                  ({donsTotal} / {budgetDons} autorisés — 1 au niv. 1 puis 1 tous
-                  les 3 niveaux ; humain : +1)
+                  ({donsTotal} / {budgetDons} autorisés — 1 au niv. 1 puis 1
+                  tous les 3 niveaux ; humain : +1 ;
+                  guerrier : +1 aux niv. 1, 2, 4, 6…)
                 </span>
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1">
@@ -1643,9 +1701,18 @@ export function CharacterFormPage() {
                   const coche = form.donsChoisis.includes(d.nom);
                   const dispo = donDisponible(d, calc.final, calc.bab);
                   const ok = dispo || coche;
+                  // Info-bulle explicite sur les dons NON sélectionnables
+                  // (partie réelle : « Arme de prédilection » grisé sans
+                  // aucune explication).
+                  const raison = !ok
+                    ? `Prérequis non remplis (${d.condition || "voir description"}).`
+                    : !coche && donsPlein
+                      ? `Budget de dons atteint (${donsTotal}/${budgetDons}) — décochez un don pour en choisir un autre.`
+                      : undefined;
                   return (
                     <label
                       key={d.nom}
+                      title={raison}
                       className={`flex items-start gap-2 text-xs rounded px-1 py-0.5 ${
                         ok && (!donsPlein || coche) ? "" : "opacity-40 cursor-not-allowed"
                       }`}
@@ -1926,7 +1993,7 @@ export function CharacterFormPage() {
                   }`}
                 >
                   rangs utilisés : {rangsUtilises}
-                  {budgetRangs > 0 && ` / budget ≈ ${budgetRangs}`}
+                  {budgetRangs > 0 && ` / budget : ${budgetRangs}`}
                   {" — "}hors classe grisées (×2 en règles complètes)
                 </span>
               </h2>

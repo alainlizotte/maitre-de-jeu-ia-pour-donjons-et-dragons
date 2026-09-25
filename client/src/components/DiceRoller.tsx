@@ -1,11 +1,11 @@
-// Dé visuel client — jet rapide d1d20/d6/d8/d100 pour le joueur. Le résultat
-// est annoncé dans le chat de partie (visible du MJ et des autres joueurs) ;
-// les jets officiels (attaques, sauvegardes) restent lancés par le MJ via
-// tool-calling serveur.
+// Dé visuel client — jet rapide d4/d6/d8/d10/d12/d20/d100 pour le joueur. Le
+// résultat est annoncé dans le chat de partie (visible du MJ et des autres
+// joueurs) ; les jets officiels (attaques, sauvegardes) restent lancés par le
+// MJ via tool-calling serveur.
 
 import { useState } from "react";
 
-const FACES = [20, 6, 8, 100] as const;
+const FACES = [4, 6, 8, 10, 12, 20, 100] as const;
 
 export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
   const [sides, setSides] = useState<(typeof FACES)[number]>(20);
@@ -23,7 +23,7 @@ export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
 
   return (
     <div className="flex flex-col items-center text-center">
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 flex flex-wrap justify-center gap-1.5">
         {FACES.map((n) => (
           <button
             key={n}
@@ -32,24 +32,34 @@ export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
               "px-2 py-1 rounded text-sm " +
               (sides === n
                 ? "bg-amber-600 text-stone-900 font-medium"
-                : "bg-stone-800 text-stone-300")
+                : "bg-stone-800 text-stone-300 hover:bg-stone-700")
             }
           >
             d{n}
           </button>
         ))}
       </div>
+      {/* Le gros bouton rond EST le lanceur : libellé explicite + titre.
+          (Partie réelle : il n'affichait qu'un « ? » muet — le joueur
+          cliquait la face et croyait le dé lancé.) */}
       <button
         onClick={roll}
-        className="w-24 h-24 rounded-full bg-stone-800 border-2 border-amber-500 text-3xl font-bold text-amber-200 hover:bg-stone-700 active:scale-95"
-        title="Lancer"
+        className="w-24 h-24 rounded-full bg-stone-800 border-2 border-amber-500 text-3xl font-bold text-amber-200 hover:bg-stone-700 active:scale-95 flex flex-col items-center justify-center"
+        title={`Lancer 1d${sides}`}
+        aria-label={`Lancer 1d${sides}`}
       >
         {result ?? "?"}
       </button>
-      <div className="mt-3 text-stone-500 text-xs">
+      <button
+        onClick={roll}
+        className="mt-2 px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-stone-900 text-xs font-medium"
+      >
+        🎲 Lancer 1d{sides}
+      </button>
+      <div className="mt-2 text-stone-500 text-xs">
         {sendSay
-          ? `Lance 1d${sides} et annonce le résultat au MJ`
-          : `Lance 1d${sides} (visuel local)`}
+          ? `Annonce le résultat au MJ dans le chat`
+          : `Jet visuel local`}
       </div>
       {log.length > 0 && (
         <ul className="mt-3 text-stone-400 text-xs space-y-0.5 self-stretch">

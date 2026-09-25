@@ -92,7 +92,9 @@ function sansAccentsMin(s: string): string {
 
 // ── Zoom + centrage sur le groupe ──────────────────────────────────────── //
 // Facteur de zoom appliqué en vue « groupe » (1 = carte entière).
-const AUTO_ZOOM = 2.6;
+// Capacité maximale du zoom : 5x (demande beta test — la vue groupe montre
+// les villes repères voisines autour du groupe).
+const AUTO_ZOOM = 5;
 
 interface Box { dx: number; dy: number; dw: number; dh: number }
 

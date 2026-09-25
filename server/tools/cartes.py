@@ -425,10 +425,21 @@ async def carte_joueurs_placer_ville(
             trouve = (nom, x, y)
             break
     if trouve is None:
+        # Lieu de scénario absent de la carte du monde : au lieu d'un refus
+        # sec (qui poussait le LLM à méta-commenter « la carte ne connaît pas
+        # Hurlemont… » et à relocaliser la scène), on explique la procédure
+        # d'ANCRAGE : placer à la ville repère la plus proche, puis renommer
+        # le lieu via etat_partie_patch — le marqueur reste juste et la
+        # narration garde le nom du scénario.
         return ToolResult(
             text=(
                 f"❌ Ville « {ville} » inconnue de la carte. Villes repères : "
                 + ", ".join(VILLES_REPERES.keys())
+                + f".\n➡️ Lieu de scénario ? Relance carte_joueurs_placer_ville"
+                + " avec la ville repère la plus proche, PUIS renomme le lieu"
+                + " via etat_partie_patch('lieu.nom', '<lieu du scénario>') —"
+                + " ne relocalise JAMAIS la narration et ne mentionne jamais"
+                + " la carte dans la prose."
             )
         )
     nom_v, x, y = trouve
@@ -758,7 +769,7 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
         portes_c = _portes_ouvertes(_salles.get((cx, cy)))
         bloc_p = _bloc_portes(donjon, _salles.get((cx, cy)) or {})
         msg_restore = (
-            f"🔄 Vous retournez dans **{donjon_id}** — "
+            f"🔄 Vous retournez dans **{_nom_donjon_affiche(donjon_id)}** — "
             f"salle actuelle restaurée ({cx},{cy}), "
             f"{len(donjon.get('salles_visitees', []))} salles déjà explorées. "
             "Portes EXISTANTES ici : "
@@ -783,7 +794,7 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             donjon["arrivee_par"] = None
             portes0 = _portes_ouvertes(entree0)
             msg_restore = (
-                f"📜 Vous entrez dans **{donjon.get('id')}** — plan du "
+                f"📜 Vous entrez dans **{_nom_donjon_affiche(donjon.get('id'))}** — plan du "
                 f"scénario chargé ({nb_salles} salles, {nb_etages} étage(s), "
                 f"source : « {os.path.basename(str(manifeste.get('_chemin') or ''))} »). "
                 "Suis FIDÈLEMENT les descriptions canoniques et le contenu "
@@ -821,7 +832,7 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             }
             _sync_etage(donjon)
             msg_restore = (
-                f"🚪 Vous entrez dans **{donjon_id}** (rez-de-chaussée). "
+                f"🚪 Vous entrez dans **{_nom_donjon_affiche(donjon_id)}** (rez-de-chaussée). "
                 f"Salle d'entrée (0,0). Portes visibles : nord, est, ouest."
             )
     # 🧭 F6 (audit eb46aeef) : on mémorise la LOCALITÉ MONDE depuis laquelle
@@ -1178,6 +1189,14 @@ def _donjon_depuis_manifeste(man: dict[str, Any]) -> Optional[dict[str, Any]]:
         donjon["etapes"] = man["etapes"]
     return donjon
 
+
+def _nom_donjon_affiche(donjon_id: str) -> str:
+    """Nom PRÉSENTABLE d'un donjon pour la narration : « vieux_donjon » →
+    « Vieux donjon » (underscores → espaces). L'id brut reste la clé de
+    stockage — seul l'AFFICHAGE est prettifié (partie réelle : l'id technique
+    fuyait dans la prose du MJ)."""
+    s = re.sub(r"[_-]+", " ", str(donjon_id or "donjon inconnu")).strip()
+    return s[:1].upper() + s[1:] if s else "Donjon inconnu"
 
 def _portes_ouvertes(salle: dict[str, Any] | None) -> list[str]:
     """Portes OUVERTES d'une salle, dans l'ordre géographique.

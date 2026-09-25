@@ -56,6 +56,7 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
   const thinking = useParty((s) => s.thinking);
   const thinkingLabel = useParty((s) => s.thinkingLabel);
   const participants = useParty((s) => s.participants);
+  const wsStatus = useParty((s) => s.wsStatus);
   const player = useParty((s) => s.player);
   const state = useParty((s) => s.state);
   const [text, setText] = useState("");
@@ -89,6 +90,15 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
           ? `Connectés : ${participants.join(", ")}`
           : "Personne d'autre connecté."}
       </div>
+
+      {/* 🛡️ Bandeau hors-ligne : le joueur sait pourquoi ses messages ne
+          reçoivent pas de réponse (avant : perte silencieuse, écran mort). */}
+      {wsStatus === "reconnecting" && (
+        <div className="shrink-0 bg-rose-900/60 border-b border-rose-800 px-4 py-2 text-xs text-rose-200">
+          ⚠️ Connexion perdue — reconnexion en cours… Les messages envoyés
+          partiront automatiquement au retour de la liaison.
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden chat-scroll p-4">
         {messages.map((m) => (

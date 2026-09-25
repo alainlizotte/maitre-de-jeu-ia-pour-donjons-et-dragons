@@ -81,6 +81,9 @@ interface PartyStore {
   thinking: boolean;
   /** Libellé du statut MJ (« Le MJ réfléchit… », « Le MJ finalise la scène… »). */
   thinkingLabel: string;
+  /** État du WebSocket partie : « connected » | « reconnecting ». */
+  wsStatus: "connected" | "reconnecting";
+  setWsStatus: (s: "connected" | "reconnecting") => void;
   participants: string[];
 
   // -- Monstres rencontrés (galerie bas de colonne droite) --------------- //
@@ -233,6 +236,8 @@ export const useParty = create<PartyStore>((set) => ({
   messages: [],
   thinking: false,
   thinkingLabel: "Le MJ réfléchit…",
+  wsStatus: "connected",
+  setWsStatus: (s) => set({ wsStatus: s }),
   participants: [],
 
   monsters: [],

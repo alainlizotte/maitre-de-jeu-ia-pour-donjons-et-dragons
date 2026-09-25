@@ -19,7 +19,7 @@ connectent depuis leur navigateur sur le réseau local.
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD |
-| **Qualité** | **224 tests pytest** (moteur de combat, carte, fiches, scénarios, E2E sans LLM) |
+| **Qualité** | **623 tests pytest** (moteur de combat, carte, fiches, scénarios, E2E sans LLM) |
 | **Images** | ComfyUI (monstres, portraits, salles, scènes) — optionnel |
 | **Données** | Inventaire & encombrement (poids PHB 3.5), mémoire de campagne persistante |
 
@@ -120,7 +120,7 @@ connectent depuis leur navigateur sur le réseau local.
   préparation/mémorisation), repos long officiel (PV + sorts restaurés).
 - **Inventaire & encombrement (PHB 3.5)** : poids officiels par objet, charge recalculée
   (Légère/Moyenne/Lourde/Dépassée), consommation de munitions.
-- **Bestiaire étendu (339 monstres)** consultable, avec fiche détaillée ; tout combat est
+- **Bestiaire étendu (400 monstres)** consultable, avec fiche détaillée ; tout combat est
   engagé contre une créature **du bestiaire officiel** (créatures inventées refusées).
 
 ### IA générative (ComfyUI — optionnel, désactivé par défaut)
@@ -178,7 +178,7 @@ py -m uvicorn server.main:app --port 8000            # → http://127.0.0.1:8000
 
 ## 🧪 Tests
 
-224 tests déterministes (sans LLM ni GPU) couvrent le moteur de combat complet (initiative,
+623 tests déterministes (sans LLM ni GPU) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
 refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, les
 scénarios et le pipeline d'orchestration :
@@ -245,14 +245,14 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 │   ├── rag/                ← chunker, embeddings, ChromaDB store, CLI ingestion
 │   ├── image/              ← workflows ComfyUI + helpers génération
 │   ├── prompts/            ← SystemPrompt MJ (par phase) + sections dynamiques
-│   └── data/               ← parties, fiches, bestiaire (339 monstres), caches, ChromaDB
+│   └── data/               ← parties, fiches, bestiaire (400 monstres), caches, ChromaDB
 ├── cartes/                 ← cartes de référence servies aux joueurs
 ├── config/                 ← config.example.yaml (+ config.yaml gitignored)
 ├── knowledge_import/       ← corpus RAG local (gitignored, apportez vos textes)
 ├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées,
 │                             génération de manifestes de donjons par scénario,
 │                             simulation)
-└── tests/                  ← 216 tests pytest déterministes (combat, carte,
+└── tests/                  ← 623 tests pytest déterministes (combat, carte,
                               manifestes de scénario, fiches, E2E)
 ```
 

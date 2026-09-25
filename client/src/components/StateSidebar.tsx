@@ -215,9 +215,25 @@ function sexeLibelle(sexe: string): string | undefined {
   return s || undefined;
 }
 
-function Field({ label, value }: { label: string; value: unknown }) {
+function Field({
+  label,
+  value,
+  accentsSauves,
+}: {
+  label: string;
+  value: unknown;
+  /** Rend les clés de sauvegardes avec accents (« Reflexes » → « Réflexes »,
+   *  « Volonte » → « Volonté » — clés techniques de fiche, jamais affichées
+   *  brutes). */
+  accentsSauves?: boolean;
+}) {
   if (value === undefined || value === null || value === "" || value === "—") return null;
-  const text = fieldText(value);
+  let text = fieldText(value);
+  if (accentsSauves && text.trim()) {
+    text = text
+      .replace(/Reflexes/g, "Réflexes")
+      .replace(/Volonte/g, "Volonté");
+  }
   if (!text.trim()) return null;
   return (
     <div className="mb-1.5">
@@ -505,11 +521,17 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
     ? `${portraitUrl}${portraitUrl.includes("?") ? "&" : "?"}t=${busteImage(portraitUrl)}`
     : null;
   // Champs non rendus explicitement ci-dessous (extension libre de la fiche).
+  // 🧹 Les champs techniques (debug/dev) ne sont PAS affichés : « proprietaire
+  // », « avancement_confirme », « poids_transporte »… fuyaient en clair dans
+  // la fiche (partie réelle) — l'UI les montre déjà via les cartes/bars dédiées.
   const connus = new Set([
     "nom", "joueur", "race", "classe", "niveau", "alignement", "pv", "pv_max",
     "ca", "carac", "sauvegardes", "bab", "competences", "dons", "equipement",
     "inventaire", "armes", "or", "histoire", "conditions", "sorts",
     "sorts_connus", "charge_max", "apparence", "capacites",
+    // Champs techniques/dev jamais destinés à l'affichage brut :
+    "proprietaire", "xp", "avancement_confirme", "gains_carac", "initiative",
+    "poids_transporte", "etat_encumbrance", "portrait", "familier",
   ]);
   const extras = Object.entries(f).filter(([k]) => !connus.has(k));
   // Familier (Magicien/Sorcier) ou compagnon animal (Druide/Rodeur) : espèce
@@ -666,7 +688,7 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
           </div>
         )}
         <Field label="Caractéristiques" value={f.carac} />
-        <Field label="Sauvegardes" value={f.sauvegardes} />
+        <Field label="Sauvegardes" value={f.sauvegardes} accentsSauves />
         <Field label="Compétences" value={f.competences} />
         <Field label="Dons" value={f.dons} />
         {(capacites.race.length > 0 || capacites.classe.length > 0) && (
@@ -780,7 +802,9 @@ export function StateSidebar() {
         </h2>
         <div className="flex items-center gap-2 mt-1 text-xs text-stone-400">
           <PhaseBadge phase={state.phase} />
-          <span>tour {state.tour}</span>
+          {/* « tour » n'a de sens qu'en combat (round) : hors combat il
+              affichait « tour 0 » en permanence, sémantique trompeuse. */}
+          {state.phase === "combat" && <span>round {state.tour}</span>}
         </div>
       </div>
 

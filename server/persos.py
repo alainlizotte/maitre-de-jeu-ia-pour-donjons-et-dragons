@@ -35,17 +35,21 @@ from .tools.fiches import _CLASSES_35, _slug
 # dans le prompt de portrait montre le personnage ÉQUIPÉ — rendu nettement
 # meilleur qu'un buste générique (demande utilisateur).
 _ARME_EN: dict[str, str] = {
-    "baton": "quarterstaff", "matraque": "club", "dague": "dagger",
-    "masse d'armes legere": "light mace", "faucille": "sickle",
-    "lance courte": "shortspear", "javeline": "javelin", "fronde": "sling",
+    # Traductions DESCRIPTIVES : les modèles de diffusion rendent bien mieux
+    # « simple wooden club » que « club » (le mot seul laisse le biais
+    # d'archétype choisir l'arme — bozo à matraque → portrait aux 2 haches).
+    "baton": "wooden quarterstaff", "matraque": "simple wooden club, blunt weapon",
+    "dague": "dagger",
+    "masse d'armes legere": "blunt light mace with metal head", "faucille": "sickle",
+    "lance courte": "shortspear", "javeline": "javelin", "fronde": "leather sling",
     "arbalete legere": "light crossbow",
-    "arbalete lourde": "heavy crossbow", "lance": "spear",
-    "epee longue": "longsword", "epee courte": "shortsword",
-    "rapiere": "rapier", "hache d'arme": "battleaxe",
-    "hache a deux mains": "greataxe", "espadon": "greatsword",
-    "masse d'armes lourde": "heavy mace", "fleau d'armes": "flail",
-    "marteau de guerre": "warhammer", "glaive": "glaive",
-    "hallebarde": "halberd", "arc court": "shortbow",
+    "arbalete lourde": "heavy crossbow", "lance": "long spear",
+    "epee longue": "longsword with polished blade", "epee courte": "shortsword",
+    "rapiere": "rapier", "hache d'arme": "single-bladed battleaxe",
+    "hache a deux mains": "great two-handed axe", "espadon": "greatsword",
+    "masse d'armes lourde": "blunt heavy mace with metal head", "fleau d'armes": "flail",
+    "marteau de guerre": "warhammer", "glaive": "glaive polearm",
+    "hallebarde": "halberd polearm", "arc court": "shortbow",
     "arc long": "longbow",
 }
 _ARMURE_EN: dict[str, str] = {
@@ -1149,6 +1153,30 @@ _CATEGORIE_CLASSE = {
     "Alchimiste": "alchemist surrounded by bubbling vials",
 }
 
+# 🎨 Variante SANS arme/armure emblématiques : quand le personnage a un
+# équipement RÉEL choisi à la création (matraque, épée longue, cotte de
+# mailles…), l'archétype complet la contredisait — partie réelle : bozo
+# (barbare à matraque) avait un portrait aux DEUX HACHES parce que « wielding
+# primal weapons » battait « wielding a club » dans le rendu. On n'y garde que
+# le look/l'attitude ; armes et armures viennent de l'équipement réel seul.
+_CATEGORIE_CLASSE_SANS_ARME = {
+    "Guerrier": "battle-hardened warrior, confident determined stance",
+    "Barbare": "wild fur-clad barbarian, fierce tribal look",
+    "Paladin": "holy knight, resolute expression, sacred symbol on the chest",
+    "Rodeur": "wilderness ranger, weathered look, forest cloak",
+    "Voleur": "hooded rogue, cautious shifty gaze",
+    "Barde": "flamboyant bard, colorful garb, cheerful smile",
+    "Moine": "disciplined monk, serene focused expression",
+    "Clerc": "devout priest, serene pious expression",
+    "Druide": "nature-bound druid, weathered wise look",
+    "Magicien": "scholarly wizard, intelligent thoughtful gaze",
+    "Sorcier": "sorcerer, intense arcane gaze",
+    "Warlock": "warlock, ominous eldritch aura",
+    "Assassin": "masked assassin, cold hidden gaze",
+    "Artificier": "tinkerer artificer, inventive clever look",
+    "Alchimiste": "alchemist, curious meticulous look",
+}
+
 
 def _taille_cm(valeur: str) -> Optional[int]:
     """Extrait une taille en cm depuis un champ libre (« 1,65 m », « 165 », …)."""
@@ -1237,7 +1265,16 @@ def construire_prompt_portrait(fiche: dict[str, Any]) -> str:
     if traits_race:
         details.append(traits_race)
     # Catégorie de classe : l'archétype visuel (armure, emblème…).
+    # 🎨 Si l'équipement RÉEL est montré (arme/armure/bouclier choisis à la
+    # création), on utilise la variante SANS arme/armure emblématiques :
+    # l'archétype complet contredit l'équipement (bozo à matraque → portrait
+    # aux 2 haches via « wielding primal weapons »).
+    arme_portrait, armure_portrait, _ = _extraire_equipement_portrait(fiche)
     categorie_classe = _CATEGORIE_CLASSE.get(classe_canon, "")
+    if categorie_classe and (arme_portrait or armure_portrait):
+        categorie_classe = _CATEGORIE_CLASSE_SANS_ARME.get(
+            classe_canon, categorie_classe
+        )
     if categorie_classe:
         details.append(categorie_classe)
 

@@ -328,8 +328,11 @@ async def test_soin_kit_sans_montant_applique_1d4():
             result = _result(
                 "Vous appliquez le pansement du kit de premiers secours. "
                 "Votre vitalité se stabilise, vous permettant de tenir.")
+            # La porte « soin déclaré » (120e9243) exige le message joueur CE
+            # tour — le rattrapage kit n'existe que pour un soin DÉCLARÉ.
             txt = await _appliquer_soins_oublies(
-                orch, result, _ctx(d), None, "Utturgut")
+                orch, result, _ctx(d), None, "Utturgut",
+                TEXTES_REELS["soin"])
         finally:
             random.randint = real
 

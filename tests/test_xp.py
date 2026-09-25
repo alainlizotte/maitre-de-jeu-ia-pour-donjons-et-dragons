@@ -70,12 +70,17 @@ def test_table_dmg_valeurs_officielles():
 def test_cr_fractionnaires():
     assert parse_cr("1/2") == 0.5
     assert parse_cr("1/4") == 0.25
-    # CR 1/2 pour un PJ niv.1 = 150 (300 × 1/2), CR 1/4 = 75.
-    assert xp_pour_cr("1/2", 1) == 150
-    assert xp_pour_cr("1/4", 1) == 75
-    assert xp_pour_cr("1/3", 1) == 100
-    # Niveau 6 : les tout petits monstres ne donnent plus rien.
-    assert xp_pour_cr("1/2", 6) == 19  # 38 × 0.5 (ligne n=6, CR1=38)
+    # Valeurs OFFICIELLES DMG 3.5 p.38 (« Experience Point Awards », colonne
+    # niveau 1) : CR 1/2 = 200, CR 1/3 = 135, CR 1/4 = 100. L'ancienne
+    # approximation « fraction de 300 » sous-estimait (150/100/75).
+    assert xp_pour_cr("1/2", 1) == 200
+    assert xp_pour_cr("1/4", 1) == 100
+    assert xp_pour_cr("1/3", 1) == 135
+    assert xp_pour_cr("1/8", 1) == 50
+    assert xp_pour_cr("1/10", 1) == 40
+    # Niveau 6 : progression par le facteur officiel (×8 vs niveau 1).
+    assert xp_pour_cr("1/2", 6) == 25  # 200 / 8
+    assert xp_pour_cr("1/3", 6) == 17  # 135 / 8, arrondi standard
 
 
 def test_seuils_de_niveau():

@@ -110,7 +110,7 @@ def test_victoire_attribue_xp_et_croit_la_memoire():
     d = _fresh_dir()
     try:
         # Monstre seul mais déjà détruit → le moteur doit clôturer en
-        # victoire et distribuer l'XP (PJ niveau 1, FP 1/3 → 100 XP).
+        # victoire et distribuer l'XP (PJ niveau 1, FP 1/3 → 135 XP DMG p.38).
         _setup(d, courant="Brunhild", monstre_fp="1/3", monstre_pv=5)
         etat = _etat(d)
         etat["monstres_combat"][0]["conditions"] = ["Détruit"]
@@ -120,12 +120,12 @@ def test_victoire_attribue_xp_et_croit_la_memoire():
         assert res.combat_termine == "victoire"
         assert res.phase == "exploration"
         fiche = _fiche(d)
-        assert fiche["xp"] == 100
+        assert fiche["xp"] == 135
         # La liste `pj` de la partie (ce que le front affiche) est synchronisée
         # avec la fiche après la clôture (régression : l'état périmé de la
         # clôture écrasait ce champ).
         etat_final = _etat(d)
-        assert etat_final["pj"][0]["xp"] == 100
+        assert etat_final["pj"][0]["xp"] == 135
         # Mémoire de campagne remplie automatiquement.
         mem = _etat(d)["memoire"]["monstres_combattus"]
         assert mem and mem[-1]["issue"] == "victoire"

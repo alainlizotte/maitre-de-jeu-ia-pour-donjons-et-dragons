@@ -39,17 +39,24 @@ def test_les_trois_pieces_sont_injectees():
         {"nom": "Ration de voyage", "qte": 5},   # pas de l'équipement montré
     ])
     arme, armure, bouclier = _extraire_equipement_portrait(fiche)
-    assert arme == "greataxe", arme
+    # Traductions DESCRIPTIVES (partie réelle : « club » seul laissait le
+    # biais d'archétype dessiner des haches pour une matraque).
+    assert arme == "great two-handed axe", arme
     assert armure == "chainmail", armure
     assert bouclier == "heavy wooden shield", bouclier
 
     prompt = construire_prompt_portrait(fiche)
-    assert "wielding a greataxe" in prompt, prompt
+    assert "wielding a great two-handed axe" in prompt, prompt
     assert "wearing chainmail" in prompt, prompt
     assert "heavy wooden shield strapped on the arm" in prompt, prompt
     # Cadre élargi pour que l'équipement soit visible.
     assert "upper body portrait" in prompt, prompt
     assert "head and shoulders" not in prompt, prompt
+    # L'archétype complet est remplacé par la variante SANS arme/armure
+    # emblématiques quand l'équipement est montré (sinon contradiction :
+    # bozo à matraque → portrait aux 2 haches via « wielding primal
+    # weapons »).
+    assert "wielding primal weapons" not in prompt, prompt
 
 
 def test_sans_equipement_cadre_classique():
@@ -80,7 +87,7 @@ def test_inventaire_aussi_scanne():
         {"nom": "Targe", "qte": 1},
     ])
     arme, armure, bouclier = _extraire_equipement_portrait(fiche)
-    assert arme == "longsword" and armure == "leather armor"
+    assert arme == "longsword with polished blade" and armure == "leather armor"
     assert bouclier == "buckler"
 
 

@@ -37,10 +37,19 @@ _BASE_CR1_20 = [
 _FACTEUR_NIVEAU = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192,
                    256, 384, 512, 768, 1024]
 
-# CR fractionnaires officiels : fraction de la colonne CR 1 (règle DMG 3.5).
+# CR fractionnaires officiels (valeur NUMÉRIQUE du FP, lue par parse_cr).
 _CR_FRACTIONS: dict[str, float] = {
     "1/2": 0.5, "1/3": 1 / 3, "1/4": 0.25, "1/6": 1 / 6,
     "1/8": 0.125, "1/10": 0.1,
+}
+
+# XP officiels de la ligne CR correspondante, colonne « niveau 1 » de la
+# table DMG 3.5 p.38 (Experience Point Awards). L'ancienne approximation
+# « fraction de la colonne CR 1 » sous-estimait : CR 1/3 → 100 au lieu de
+# 135, CR 1/2 → 150 au lieu de 200, CR 1/4 → 75 au lieu de 100, etc.
+_XP_CR_FRACTIONNAIRES: dict[str, float] = {
+    "1/2": 200.0, "1/3": 135.0, "1/4": 100.0, "1/6": 70.0,
+    "1/8": 50.0, "1/10": 40.0,
 }
 
 _NIVEAU_MAX = 20
@@ -69,7 +78,12 @@ def xp_pour_cr(fp: Any, niveau: int) -> int:
         return 0
     n = min(niveau, _NIVEAU_MAX)          # au-delà de 20 : ligne 20
     if cr < 1:                             # CR fractionnaire officiel
-        base = _BASE_CR1_20[0] * cr
+        # Valeurs EXACTES de la ligne CR du tableau DMG p.38 pour un perso de
+        # niveau 1 ; aux niveaux supérieurs, la progression suit le facteur
+        # officiel (÷2 tous les 2 niveaux à partir du niveau 5).
+        base = _XP_CR_FRACTIONNAIRES.get(
+            str(fp).strip().replace(",", "."), 300.0 * cr
+        )
     elif cr <= _NIVEAU_MAX:
         base = _BASE_CR1_20[int(round(cr)) - 1]
     else:

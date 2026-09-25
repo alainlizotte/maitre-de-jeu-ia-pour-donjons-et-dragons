@@ -365,12 +365,8 @@
    "titre": "Récupérer la Couronne de Mystra chez Zendar Nulentok",
    "type": "objet",
    "salle": "4,0",
-   "detail": "PRÉREQUIS ABSOLU : vaincre Nulentok dans son groove (le puits (3,0) y mène) et reprendre la Couronne. La baguette de téléportation de Thukmuul Teleshann ne s'active QU'AU CONTACT de la Couronne — aucun voyage vers les gemmes n'est possible avant. Au départ (Tour de l'Équilibre, (0,0)), Teleshann remet AUSSI au groupe la baguette de téléportation (à enregistrer via inventaire_ajouter, portee=\"quete\"), le parchemin de la route et la fiole de vérité — les deux derniers en équipement.",
+   "detail": "PRÉREQUIS ABSOLU : vaincre Nulentok dans son groove (le puits (3,0) y mène) et reprendre la Couronne. Au départ, Teleshann remet au groupe le parchemin de la route et la fiole de vérité (équipement). Tant que la Couronne n'est pas reprise, la baguette de Teleshann est inactive : aucun voyage vers les gemmes n'est possible.",
    "requis": [
-    {
-     "nom": "La baguette de téléportation de Thukmuul Teleshann",
-     "portee": "quete"
-    },
     {
      "nom": "La Couronne de Mystra",
      "portee": "quete"
@@ -384,8 +380,12 @@
    "cle": "huit_gemmes",
    "titre": "Réunir les huit gemmes dispersées sur Faerûn",
    "type": "objet",
-   "detail": "Beljuril — Ruines de Sarr (4,1) ; Diamant — échoppe d'Aluarim (3,1) ; Jacinthe — QG zhentarim d'Olomaa (0,1) ; Rogue Stone — Calimport (0,2) ; gemme du trésor de Rineen (1,2) ; Émeraude de Shou Lung — temple de Farouk (4,2) ; Saphir étoilé — crevasse de Shakkak (4,3) ; Étoile de rubis — château de Meredoth (0,3).",
+   "detail": "Au retour de la Couronne, Teleshann confie la BAGUETTE DE TÉLÉPORTATION (inventaire_ajouter, portee=\"quete\") : elle ne s'active qu'au contact de la Couronne. Beljuril — Ruines de Sarr (4,1) ; Diamant — échoppe d'Aluarim (3,1) ; Jacinthe — QG zhentarim d'Olomaa (0,1) ; Rogue Stone — Calimport (0,2) ; gemme du trésor de Rineen (1,2) ; Émeraude de Shou Lung — temple de Farouk (4,2) ; Saphir étoilé — crevasse de Shakkak (4,3) ; Étoile de rubis — château de Meredoth (0,3).",
    "requis": [
+    {
+     "nom": "La baguette de téléportation de Thukmuul Teleshann",
+     "portee": "quete"
+    },
     {
      "nom": "Le Beljuril",
      "portee": "quete"

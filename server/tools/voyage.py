@@ -68,8 +68,9 @@ def _norm(s: str) -> str:
     return "".join(c for c in nf if not unicodedata.combining(c))
 
 
-# Échelle de la carte du monde : 1 unité (%) ≈ 45 km. Recoupée sur la lore
-# (Waterdeep–Neverwinter ≈ 560 milles nautiques… ≈ 560 km pour ~12,5 unités).
+# Échelle de la carte du monde : 1 unité (%) ≈ 45 km. Mesuré sur l'échelle
+# IMPRIMÉE de Sword-Coast-Map.jpg (Schley) : 500 miles ≈ 18 % de largeur
+# → ~44,7 km par unité, arrondis à 45.
 # Sert à CALCULER la distance quand le MJ ne la fournit pas mais que le
 # départ et la destination sont connus de la carte (villes + départs de
 # scénarios placés dans `positions_joueurs`).

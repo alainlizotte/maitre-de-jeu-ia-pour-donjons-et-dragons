@@ -14,8 +14,8 @@ import { useParty } from "../store";
 interface MapInfo { url: string; w: number; h: number; label: string; atlas?: string }
 
 const FALLBACK_MAP: MapInfo = {
-  url: "/data/scenarios/Les Royaumes Oubliés/Cartes/faerun_nord.png",
-  w: 1137, h: 928, label: "Faerûn — Nord",
+  url: "/data/cartes/Sword-Coast-Map.jpg",
+  w: 9890, h: 6292, label: "La Côte des Épées — Nord de Faerûn",
   atlas: "https://www.aidedd.org/atlas/fr/faerun",
 };
 

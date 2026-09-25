@@ -15,7 +15,7 @@ interface MapInfo { url: string; w: number; h: number; label: string; atlas?: st
 
 const FALLBACK_MAP: MapInfo = {
   url: "/data/cartes/Sword-Coast-Map.jpg",
-  w: 9890, h: 6292, label: "La Côte des Épées",
+  w: 4945, h: 3146, label: "La Côte des Épées",
   atlas: "https://www.aidedd.org/atlas/fr/faerun",
 };
 

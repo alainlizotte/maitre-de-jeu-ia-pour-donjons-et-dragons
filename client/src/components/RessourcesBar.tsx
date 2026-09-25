@@ -4,6 +4,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/rest";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 /** Libellés courts pour les catégories de manuels. */
 const CAT_ORDER = [
@@ -18,6 +19,10 @@ export function RessourcesBar({ partie_id }: { partie_id?: string }) {
   const [scenariosOuverts, setScenariosOuverts] = useState(false);
   const [manuelsOuverts, setManuelsOuverts] = useState(false);
   const [cartesOuvertes, setCartesOuvertes] = useState(false);
+  // Smartphone : le mot « Ressources » est masqué (le bouton de la barre
+  // de navigation le dit déjà) — le pullup ne montre que Manuels / Cartes /
+  // Scénarios.
+  const isMobile = useIsMobile();
   const { data } = useQuery({
     queryKey: ["ressources", partie_id ?? null],
     queryFn: () => api.ressources(partie_id),
@@ -50,7 +55,9 @@ export function RessourcesBar({ partie_id }: { partie_id?: string }) {
 
   return (
     <footer className="relative shrink-0 border-t border-stone-800 bg-stone-950/80 px-3 py-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap text-xs">
-      <span className="text-stone-500 uppercase tracking-wide text-[10px]">Ressources</span>
+      {!isMobile && (
+        <span className="text-stone-500 uppercase tracking-wide text-[10px]">Ressources</span>
+      )}
 
       {/* Manuels — dropdown par catégorie */}
       <div className="relative">

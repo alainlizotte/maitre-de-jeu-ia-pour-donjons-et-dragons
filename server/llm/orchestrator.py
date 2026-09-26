@@ -737,6 +737,39 @@ def looks_like_simulation(
 # On détecte l'écho quasi verbatim contre les narrations récentes, et la boucle
 # run() relance alors le tour avec un correctif ciblé.
 _REPET_SEUIL_CHEVAUCHEMENT = 0.40  # bigrammes fenêtrés = reprise de la scène
+
+# 📊 Libellés joueur des outils les plus courants (statut « quelle étape ») —
+# le défaut est « Applique {tool}… ».
+_STATUT_OUTILS = {
+    "lancer_attaque": "Résout l'attaque…",
+    "lancer_degats": "Calcule les dégâts…",
+    "lancer_sauvegarde": "Résout la sauvegarde…",
+    "lancer_des": "Lance les dés…",
+    "calculer_initiative": "Calcule l'initiative…",
+    "engager_combat": "Met en place le combat…",
+    "demarrer_combat": "Met en place le combat…",
+    "fiche_perso_infliger_degats": "Applique les dégâts…",
+    "fiche_perso_soigner": "Applique les soins…",
+    "fiche_perso_creer_rapide": "Crée le personnage…",
+    "fiche_perso_recuperer": "Consulte la fiche…",
+    "fiche_perso_mettre_a_jour": "Met à jour la fiche…",
+    "inventaire_ajouter": "Ajoute au sac…",
+    "inventaire_consulter": "Fouille l'inventaire…",
+    "inventaire_consommer_munition": "Compte les munitions…",
+    "carte_donjon_entrer": "Entre dans le donjon…",
+    "carte_donjon_explorer": "Explore la salle suivante…",
+    "carte_donjon_etage": "Change d'étage…",
+    "carte_donjon_get": "Met à jour la carte…",
+    "carte_joueurs_placer_ville": "Met à jour la carte du monde…",
+    "carte_joueurs_position": "Met à jour la carte du monde…",
+    "terminer_mon_tour": "Termine le tour…",
+    "tour_suivant_combat": "Passe au tour suivant…",
+    "incanter_sort": "Lance le sort…",
+    "preparer_sorts": "Prépare les sorts…",
+    "scenario_etape": "Note la progression…",
+    "memoire_ajouter": "Note dans la mémoire de campagne…",
+    "etat_partie_patch": "Enregistre l'état…",
+}
 _REPET_PREFIXE = 200          # préfixe normalisé dont le containment suffit
 _REPET_MIN_CANDIDAT = 80      # narrations trop courtes : pas de verdict
 _REPET_FENETRE = 8            # nb de narrations assistant récentes comparées
@@ -2439,6 +2472,7 @@ class Orchestrator:
         ctx: ToolContext,
         on_event: Optional[EventCallback] = None,
         on_delta: Optional[Callable[[str], Awaitable[None]]] = None,
+        on_status: Optional[Callable[[str], Awaitable[None]]] = None,
         trust_damage_prose: bool = False,
     ) -> OrchestratedResult:
         """Boucle principale : appelle le LLM, exécute les tools, narrate.
@@ -2449,6 +2483,9 @@ class Orchestrator:
         - `on_event`    : callback async pour events structurés (image, status).
         - `on_delta`    : callback async pour streaming tokens de narration au
                          client (peut être None si on ne stream pas).
+        - `on_status`   : callback async pour l'étape en cours (« Résout
+                         l'action avec les outils… ») — affiché au joueur
+                         pendant la réflexion.
         - `trust_damage_prose` : True quand des dégâts viennent d'être résolus
                          côté serveur (pre-run du moteur de combat) et que le
                          LLM les reformule légitimement — désactive la
@@ -2456,6 +2493,9 @@ class Orchestrator:
         """
         result = OrchestratedResult()
         work = list(messages)
+        # 📊 Statut enrichi : exposé via ctx (par partie) pour que les tools
+        # et la boucle puissent pousser l'étape en cours au client.
+        ctx.on_status = on_status
         # Filtrage par phase : un modèle 12B gère mal 39 tools fiables. Avant la
         # création de perso, seuls 3 outils de la phase d'ouverture suffisent ;
         # en exploration, seuls les pertinents. En cas de doute, on donne les
@@ -2688,6 +2728,18 @@ class Orchestrator:
                 if (use_native and retry_requis_envoye)
                 else ("auto" if use_native else None)
             )
+            # 📊 Statut enrichi : l'étape en cours, affichée au joueur.
+            if on_status is not None:
+                try:
+                    if result.iterations == 1:
+                        await on_status("Résout l'action avec les outils…")
+                    else:
+                        await on_status(
+                            f"Résout l'action ({result.iterations}/"
+                            f"{self.max_iterations})…"
+                        )
+                except Exception:                            # noqa: BLE001
+                    pass
             try:
                 chat = await self.client.chat(
                     work, tools=tools_arg,
@@ -4098,6 +4150,16 @@ class Orchestrator:
         ctx.on_event = on_event
         args_log = json.dumps(args, ensure_ascii=False, default=str)[:200]
         _log.info("tool_call name=%s args=%s", spec.name, args_log)
+        # 📊 Statut enrichi : l'outil en cours d'application, affiché au
+        # joueur pendant la réflexion (« Résout l'attaque… »).
+        _on_status = getattr(ctx, "on_status", None)
+        if _on_status is not None:
+            try:
+                await _on_status(
+                    _STATUT_OUTILS.get(spec.name,
+                                       f"Applique {spec.name}…"))
+            except Exception:                                # noqa: BLE001
+                pass
         tr = await invoke_tool(spec, ctx, args)
         # ok = succès : ni message d'erreur ❌, ni REFUS de verrou ⛔ (les refus
         # ⛔ du verrou d'incarnation déclenchent une RETENTATIVE du LLM — on ne

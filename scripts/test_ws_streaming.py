@@ -33,6 +33,7 @@ async def main() -> None:
     joueur = r.json().get("utilisateur", "BetaTesteur")
 
     stats: dict[str, int] = {}
+    statuts: list[str] = []
     premier_delta = None
     t0 = time.time()
     fin_dm = None
@@ -63,6 +64,10 @@ async def main() -> None:
                 continue
             t = msg.get("type")
             stats[t] = stats.get(t, 0) + 1
+            if t == "status":
+                desc = msg.get("description") or ""
+                if desc and (not statuts or statuts[-1] != desc):
+                    statuts.append(desc)
             if t == "delta":
                 if premier_delta is None:
                     premier_delta = time.time() - t0
@@ -78,6 +83,9 @@ async def main() -> None:
     print(f"latence dm final  : {fin_dm:.1f}s" if fin_dm
           else "latence dm final  : TIMEOUT")
     print("types reçus :", json.dumps(stats, ensure_ascii=False))
+    print("statuts reçus :")
+    for st in statuts:
+        print("  •", st)
     print("status done reçu :", fin_ok)
     print("--- extrait dm ---")
     print(texte_dm[-600:])

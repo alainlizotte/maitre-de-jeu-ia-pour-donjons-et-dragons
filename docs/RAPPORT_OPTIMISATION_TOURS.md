@@ -100,3 +100,49 @@ La boucle tools réinjecte le system prompt COMPLET à chaque itération. Une ve
   ```
 - **Fichiers concernés** : `config/config.yaml` (stream, unload, itérations, contexte), `docker-compose.yml` (flags llamacpp, MTP en commentaire), `server/llm/orchestrator.py` (boucle tools), `server/main.py` (post-tour, unload).
 - **Mesures de session** : tour simple 54 s (avec rattrapage inventaire), tour combat 2 monstres ~2 min, victoire complète ~4 min.
+---
+
+# 🚀 APPLICATION DU PLAN (1-6) + VALIDATION EN SITUATION RÉELLE (26 sept. 2026)
+
+## ✅ Points 1, 2, 4 : appliqués (config)
+
+| Point | Changement | État |
+|---|---|---|
+| 1. Streaming | `game.stream_to_clients: true` | ✅ appliqué |
+| 2. VRAM | `unload_after_turn: false` + `unload_delay_minutes: 5` | ✅ (déjà en place) |
+| 4. Itérations | `llm.max_tool_iterations: 6 → 4` | ✅ appliqué |
+
+## 📏 Point 3 : mesuré → conclusion = NE PAS réduire
+Le logger de taille est implémenté (`prompt_builder.build_system_message`, 1 log par tour : `prompt: N chars (~M tokens) [sys/recap/sections/rag]`).
+**Mesures réelles** : exploration **17 683 chars (~4 420 tokens)**, combat **17 734 chars (~4 433 tokens)** — le régime « prompt court » (déjà en place dès qu'un PJ existe, combat inclus) maintient le prompt à ~4,4k tokens, très loin du budget 32k.
+**Conclusion** : réduire `max_context_tokens` à 16384 n'apporterait **aucun gain de prefill** et tronquerait la bible des gros scénarios → **conservé à 32768**. Le logger reste actif pour surveiller l'évolution.
+
+## 🎨 Point 6 : élage des itérations ≥ 2 appliqué (avec garde-fou)
+- `prompt_builder` : les sections de règles sont préfixées du marqueur `=== RÈGLES DU JEU (sections dynamiques) ===`.
+- `orchestrator.run` : à l'itération ≥ 2, si le marqueur est présent, le system prompt est coupé au marqueur (+ note courte d'itération mécanique) — gain de prefill sur chaque itération de combat.
+- **Nuance mesurée** : le régime « court » actuel n'injecte pas de sections → l'élage ne se déclenche que si un régime à sections est actif (phases sans PJ / futures évolutions). Inoffensif sinon, prêt si le régime complet revient.
+
+## 🧬 Point 5 : MTP préparé, activation documentée (bloqué matériel)
+L'image fork `llamacpp-spark:server-cuda` est **absente du poste** (vérifié `docker images`). Le `docker-compose.yml` documente maintenant la procédure d'activation en 3 étapes (pull/construire l'image → basculer `image:` → décommenter `--spec-type draft-mtp --spec-draft-n-max 4`). ⚠️ Les flags ne doivent PAS être activés sur l'image standard (crash au démarrage — constaté).
+
+## ✅ Validation de fiabilité en situation réelle
+
+Méthode : client WebSocket réel (connexion, join, say), tours joués, logs serveur, suite complète.
+
+| Test | Résultat |
+|---|---|
+| Suite pytest | **623/623** ✓ |
+| Streaming | **176 deltas** (tour 1) / **129 deltas** (tour 2) — texte livré progressivement ✓ |
+| Latence perçue (1er delta) | 25-29 s (le gros du temps = résolution tools d'abord, puis narration streamée) |
+| Latence totale (dm) | 27-31 s par tour (vs 54 s-2 min avant) |
+| Combat complet en 1 tour | engagement → attaque (bonus recalculé +4→+2 par le serveur) → CA imposée bestiaire (14→13) → dégâts 9 → victoire → XP multijoueur (Kaelen 470 XP, bozo 100 XP — 2 PJ dans la partie, attribué aux deux) → patches UI ✓ |
+| Gardes de fiabilité | re-pop de gobelin fantôme refusée (« Salle déjà vidée ») + rejeu propre « Reprends l'action hors initiative » ✓ ; `incanter_sort` par un guerrier refusé ✓ |
+| Logger prompt | actif, ~4,4k tokens/tour ✓ |
+| Élage itération ≥ 2 | neutre en régime court (pas de sections), actif si marqueur présent ✓ |
+| Docker | llamacpp sain, dnd35 sain (un crash llamacpp temporaire corrigé : les `#` dans un bloc YAML plié sont passés à llama.cpp comme arguments — le bloc command a été nettoyé) |
+
+## ⚠️ Constats résiduels (hors périmètre des optimisations)
+- Le 9B ré-invoque parfois des créatures déjà tuées (hallucination) — les gardes serveur bloquent proprement, mais la narration reste approximative sur ces tours.
+- Les deltas du streaming commencent après la résolution des tools (design « mécanique d'abord ») : la première seconde d'attente reste silencieuse — un statut plus riche (« résolution de l'attaque… ») pourrait encore améliorer la perception.
+
+**Verdict : plan appliqué (1, 2, 4, 6 appliqués ; 3 mesuré — réduction non pertinente ; 5 préparé et documenté). Aucune perte de fiabilité constatée : 623/623 tests, combat complet valide, gardes opérationnelles, latence totale divisée par ~2 et texte visible en continu.**

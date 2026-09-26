@@ -1,4 +1,4 @@
-﻿# docker-compose.yml â€” D&D 3.5 MaÃ®tre du Jeu
+# docker-compose.yml â€” D&D 3.5 MaÃ®tre du Jeu
 #
 # DÃ©marrage (arriÃ¨re-plan, aucune fenÃªtre de terminal ouverte) :
 #   docker compose up -d --build
@@ -74,7 +74,14 @@ services:
   #
   # VRAM estimée (Q4_0 + Q8 KV 32768 ctx, -ngl 99) : ~5-6 Go / 8 Go disponible.
   llamacpp:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda  # pour Spark-X2.5 : image locale « llamacpp-spark:server-cuda » (fork XHToken, déjà construite)
+    # 🚀 MTP (Multi-Token Prediction, ~1,6-2x sur la génération) : requiert
+    # l'image fork « llamacpp-spark:server-cuda » (XHToken). État actuel :
+    # image ABSENTE du poste — pour activer :
+    #   1) docker pull/construire llamacpp-spark:server-cuda
+    #   2) image: llamacpp-spark:server-cuda
+    #   3) décommenter --spec-type draft-mtp et --spec-draft-n-max ci-dessous
+    # (le llama.cpp standard ignore/échoue sur ces flags : ne PAS activer tel quel)
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: llamacpp
     ports:
       - "8080:8080"

@@ -13,6 +13,7 @@ Reproduit la logique de `Filtre_EtatPartie_INJECT.py` :
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -20,6 +21,8 @@ from typing import Any, Optional
 
 from ..config import AppConfig
 from ..game.state import PartyState
+
+_log = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -1218,7 +1221,13 @@ class PromptBuilder:
             sys_prompt = self.system_prompt()
         parts = [sys_prompt, recap]
         if sections:
-            parts.append(sections)
+            # Marqueur de coupe pour l'orchestrateur : à l'itération ≥ 2 de la
+            # boucle tools, les règles narratives peuvent être élaguées (les
+            # itérations mécaniques n'en ont plus besoin) sans toucher au
+            # récap d'état qui les précède.
+            parts.append(
+                "=== RÈGLES DU JEU (sections dynamiques) ===\n" + sections
+            )
         if rag_context:
             parts.append(
                 "=== CONTEXTE RÈGLES (Knowledge Base D&D 3.5) ===\n"
@@ -1227,4 +1236,18 @@ class PromptBuilder:
                 + "Utilise ces extraits des manuels pour appliquer fidèlement les "
                 "règles quand un point mécanique se présente."
             )
-        return "\n\n".join(p for p in parts if p), etat
+        system_message = "\n\n".join(p for p in parts if p)
+
+        # 📏 Mesure de la taille du prompt (rapport d'optimisation) : 1 log
+        # par tour, estimation ~4 chars/token — sert à calibrer
+        # `max_context_tokens` (16k vs 32k) sans casser la fiabilité.
+        try:
+            _total_chars = sum(len(p) for p in parts if p)
+            _log.info(
+                "prompt: %d chars (~%d tokens) [sys=%d recap=%d sections=%d rag=%d]",
+                _total_chars, _total_chars // 4,
+                len(sys_prompt), len(recap), len(sections), len(rag_context),
+            )
+        except Exception:                                        # noqa: BLE001
+            pass
+        return system_message, etat

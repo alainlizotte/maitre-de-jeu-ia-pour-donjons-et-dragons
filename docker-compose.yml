@@ -85,6 +85,12 @@ services:
     container_name: llamacpp
     ports:
       - "8080:8080"
+    environment:
+      # 🚀 MTP Qwen (fusionné dans llama.cpp officiel, PR 20533) : propagé aux
+      # instances chargées à la demande du router via les variables LLAMA_ARG_*.
+      # Gain mesuré attendu : ~1,6-2x sur la vitesse de génération.
+      LLAMA_ARG_SPEC_TYPE: draft-mtp
+      LLAMA_ARG_SPEC_DRAFT_N_MAX: "4"
     volumes:
       - ./models:/models
     command: >

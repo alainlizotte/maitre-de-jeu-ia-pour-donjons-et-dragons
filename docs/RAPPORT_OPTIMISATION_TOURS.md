@@ -146,3 +146,69 @@ Méthode : client WebSocket réel (connexion, join, say), tours joués, logs ser
 - Les deltas du streaming commencent après la résolution des tools (design « mécanique d'abord ») : la première seconde d'attente reste silencieuse — un statut plus riche (« résolution de l'attaque… ») pourrait encore améliorer la perception.
 
 **Verdict : plan appliqué (1, 2, 4, 6 appliqués ; 3 mesuré — réduction non pertinente ; 5 préparé et documenté). Aucune perte de fiabilité constatée : 623/623 tests, combat complet valide, gardes opérationnelles, latence totale divisée par ~2 et texte visible en continu.**
+---
+
+# 🚀 MTP IMPLANTÉ + STATUTS ENRICHIS (26 sept. 2026 — suite sur demande)
+
+## ✅ Point 5 réactivé : MTP IMPLANTÉ (image officielle, pas de fork nécessaire)
+Recherche : le MTP Qwen a été **fusionné dans llama.cpp officiel** (PR 20533) — le fork
+`llamacpp-spark` n'est PAS requis. Démarche réalisée :
+1. `docker compose pull llamacpp` → image officielle à jour (le `--help` confirme
+   `--spec-type draft-mtp` parmi les types de speculative decoding) ;
+2. le GGUF standard ne contient pas les couches MTP (constat : « context type MTP
+   requested but model doesn't contain MTP layers ») → téléchargé le GGUF
+   **`unsloth/Qwen3.5-9B-MTP-GGUF`** (Q4_K_M, 5,47 Go) dans `models/` ;
+3. le router llama.cpp ne propage PAS `--spec-type` aux instances chargées à la
+   demande → passage par les **variables d'environnement** `LLAMA_ARG_SPEC_TYPE=draft-mtp`
+   + `LLAMA_ARG_SPEC_DRAFT_N_MAX=4` (héritées par les sous-instances) ;
+4. `llm.model` → `Qwen3.5-9B-Q4_K_M-MTP` (config.yaml).
+
+**Validé** : « creating MTP draft context » sans erreur ; **génération 108,29 tokens/s
+contre 74 avant = +46 %**.
+
+## ✅ Statuts enrichis (« quelle étape est en préparation »)
+Callback `on_status` ajouté au pipeline (`orchestrator.run` via `ctx.on_status`,
+câblé dans `main.py` → broadcast WS `status`). Le joueur voit désormais l'étape en
+cours pendant la réflexion — mesuré en jeu, 5 à 9 statuts par tour :
+- « Le MJ réfléchit... »
+- « Le serveur joue les tours des monstres… » (pre-run moteur de combat)
+- « Résout l'action avec les outils… » / « Résout l'action (2/4)… » (boucle tools)
+- « Résout l'attaque… » / « Calcule les dégâts… » / « Met en place le combat… » /
+  « Entre dans le donjon… » / « Lance le sort… » (mapping `_STATUT_OUTILS`, 30 outils)
+- « Le MJ finalise la scène… »
+
+## ✅ Validation sur un SCÉNARIO RÉEL (Le Dragon de Hurlemont, partie 70548a95)
+Suite de 4 tours joués via client WS (client, join, say) :
+
+| Tour | Contenu | 1er delta | Total | Statuts | Fiabilité |
+|---|---|---|---|---|---|
+| 1 | Ouverture (auberge, rumeurs) | 15,3 s | 42,2 s (rejeu correctif inclus) | 7 | scénario respecté, stream_reset géré proprement |
+| 2 | Enquête + entrée donjon | 11,6 s | 17,0 s | 5 (« Entre dans le donjon… ») | carte générée, bible fidèle |
+| 3 | Combat Gobelin ×2 (scénario) | 11,1 s | 13,7 s | 5 (« Met en place le combat… ») | PV cohérents (14→10), initiative ✓ |
+| 4 | Résolution (attaque ratée) | 38,2 s | 50,4 s (3 itérations) | 9 | jets affichés, recalcul +5→+2, état cohérent |
+
+Spoiler corrigé au passage : les blocs module « ⚔️ Ennemis DU SCÉNARIO » et
+« 📝 Note du module » (dilemme Gritch = spoiler) fuyaient dans la narration
+affichée → ajoutés au strip des consignes LLM (portes/infos légitimes conservées,
+validé unitairement).
+
+## 📊 COMPARATIF FINAL AVANT / APRÈS
+
+| Métrique | AVANT optimisations | APRÈS | Gain |
+|---|---|---|---|
+| Génération LLM | 74 tok/s | **108 tok/s** (MTP) | **+46 %** |
+| Tour simple (exploration) | 54 s | **11-17 s** | **÷3** |
+| Premier contenu visible | rien avant la fin (25-29 s) | **11-16 s** (deltas) | perçu ÷2 + progression continue |
+| Combat : engagement + résolution | ~2 min | **13,7-21,6 s** | **÷5 à ÷8** |
+| Combat : tour multi-itérations (3/4) | 2-4 min | **38-50 s** | **÷3 à ÷4** |
+| Statuts pendant la réflexion | 2 libellés fixes | **5-9 libellés d'étape** | nouveau |
+| Fiabilité (tests) | 623/623 | **623/623** | idem ✓ |
+
+Fiabilité identique vérifiée en situation réelle : mécanique serveur intacte
+(bonus recalculés, CA imposée, gardes anti re-pop/loot, XP multijoueur),
+scénario fidèle, état cohérent après chaque tour, rattrapages opérationnels.
+
+**Incident corrigé pendant l'implantation** : un crash llamacpp (les lignes
+`#` ajoutées DANS un bloc YAML plié `command: >` sont passées à llama.cpp comme
+arguments) — le bloc a été nettoyé, les instructions MTP déplacées en
+commentaires YAML au-dessus.

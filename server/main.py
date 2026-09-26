@@ -801,7 +801,10 @@ _RE_CONSIGNES_LLM_STRIP = _re_mod.compile(
     r"|[ \t]*—\s*recopie CE bonus dans `lancer_degats`[^.\n]*\.?"
     r"|[ \t]*—?\s*Relance `lancer_degats`[^.\n]*\.?"
     r"|[ \t]*\((?:inventaire_ajouter|inventaire_consommer_munition)\)"
-    r"\s*:[^.\n]*\.?",
+    r"\s*:[^.\n]*\.?"
+    r"|>[ \t]*———?\s*et engage via `engager_combat`[^\n]*"
+    r"|[ \t]*⚔️\s*Ennemis DU SC[ÉE]NARIO[^\n]*"
+    r"|[ \t]*📝\s*Note du module[^\n]*",
     _re_mod.IGNORECASE,
 )
 
@@ -4344,7 +4347,8 @@ def _estnarration_explo(narration: str) -> bool:
 
 
 async def _rejoue_correctif(orch, messages, ctx, result, on_event,
-                            consigne: str, tag: str) -> None:
+                            consigne: str, tag: str,
+                            on_status=None) -> None:
     """Résout une action narrée EN PROSE par le MJ : ré-invoque une fois
     l'orchestrateur avec une consigne ferme et fusionne le résultat dans
     `result` s'il a produit des outils. Génère au plus UN rejeu (le supervise
@@ -4368,7 +4372,7 @@ async def _rejoue_correctif(orch, messages, ctx, result, on_event,
             Message(role="user", content=consigne),
         ]
         result2 = await orch.run(corrective_messages, ctx, on_event=on_event,
-                                 on_delta=None)
+                                 on_delta=None, on_status=on_status)
         if result2.tool_calls_trace:
             result.tool_calls_trace.extend(result2.tool_calls_trace)
             result.tool_events.extend(result2.tool_events)
@@ -4538,6 +4542,14 @@ async def _handle_say(
                 else:
                     await session.broadcast({"type": "tool_event", "event": ev})
 
+            # 📊 Statut enrichi : l'étape en cours est poussée au client
+            # (défini TÔT — utilisé par le pre-run du moteur de combat).
+            async def on_status(desc: str) -> None:
+                await session.broadcast({
+                    "type": "status",
+                    "description": desc,
+                })
+
             # ⚡ Streaming coupé (stream_to_clients: false) → on_delta=None :
             # l'orchestrateur réutilise alors le contenu de l'appel non-streamé
             # (chat.content) au lieu de RÉ-GÉNÉRER la narration finale en
@@ -4577,6 +4589,14 @@ async def _handle_say(
                     partie_id=partie_id,
                 ).load()
                 if etat_pre.get("phase") == "combat":
+                    # 📊 Statut enrichi : le serveur joue la mécanique des
+                    # monstres (déterministe, sans LLM).
+                    if on_status is not None:
+                        try:
+                            await on_status(
+                                "Le serveur joue les tours des monstres…")
+                        except Exception:                    # noqa: BLE001
+                            pass
                     res_pre = await _boucle_combat(
                         ctx_pre,
                         timeout_secondes=cfg.game.combat_turn_timeout_seconds,
@@ -4794,8 +4814,10 @@ async def _handle_say(
             )
 
             orch = _orchestrator(app)
+
             result = await orch.run(
                 messages, ctx, on_event=on_event, on_delta=on_delta,
+                on_status=on_status,
                 trust_damage_prose=trust_damage_prose,
             )
 
@@ -5049,6 +5071,7 @@ async def _handle_say(
                             "salle NI passage.)"
                         ),
                         "déplacement donjon",
+                        on_status=on_status,
                     )
             except Exception as e:                               # noqa: BLE001
                 print(f"[dnd35] 5bis-e rejeu déplacement failed: {e}")
@@ -6080,7 +6103,8 @@ async def _handle_say(
                     )
                     await _rejoue_correctif(orch, messages, ctx, result,
                                             on_event, _obj_open,
-                                            "ouverture scénario")
+                                            "ouverture scénario",
+on_status=on_status)
                     # 2e essai : DÉTERMINISTE. Le petit modèle 9B refuse
                     # parfois catégoriquement d'appeler `scenarios_laelith_`
                     # (il confond avec `memoire_mission`/`etat_partie_patch`).
@@ -6186,7 +6210,8 @@ async def _handle_say(
                         )
                         await _rejoue_correctif(orch, messages, ctx, result,
                                                 on_event, _obj_explo,
-                                                "exploration donjon")
+                                                "exploration donjon",
+on_status=on_status)
 
                 # --- 5quater-c. Acquisition d'objet non enregistrée.
                 # Le MJ (ou le joueur) annonce la récupération/le don d'un
@@ -6227,7 +6252,8 @@ async def _handle_say(
                         )
                         await _rejoue_correctif(orch, messages, ctx, result,
                                                 on_event, _obj_inv,
-                                                "inventaire objet")
+                                                "inventaire objet",
+on_status=on_status)
 
                 # --- 5quater-d2. ⚔️ Engagement de combat NARRÉ sans outil
                 # (phase exploration). Le LLM écrit « Engagement du combat /
@@ -6272,7 +6298,8 @@ async def _handle_say(
                         )
                         await _rejoue_correctif(
                             orch, messages, ctx, result, on_event,
-                            _obj_eng, "engagement combat")
+                            _obj_eng, "engagement combat",
+on_status=on_status)
                 except Exception as e:                             # noqa: BLE001
                     print(f"[dnd35] Rattrapage engagement échoué (ignoré) : {e}")
 
@@ -6310,7 +6337,8 @@ async def _handle_say(
                         "guérison sans appeler l'outil."
                     )
                     await _rejoue_correctif(orch, messages, ctx, result,
-                                            on_event, _obj_soin, "soins")
+                                            on_event, _obj_soin, "soins",
+on_status=on_status)
 
                 # --- 5quater-d-bis. 💚 Soin NARRÉ PAR LE MJ appliqué au
                 # serveur (hors combat, hors résurrection). La narration

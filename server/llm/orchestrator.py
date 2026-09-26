@@ -2551,8 +2551,37 @@ class Orchestrator:
                     calls_decides, ctx, work, result, on_event,
                 )
 
+        # 🚀 Itérations ≥ 2 : élage des règles narratives du system prompt.
+        # Les itérations mécaniques (attaque → dégâts → fin de tour) n'ont plus
+        # besoin des sections narratives longues : l'état (récap) et les
+        # résultats des tools déjà exécutés (dans `work`) suffisent. Gain :
+        # prefill réduit sur chaque itération de combat. Le récap d'état
+        # (avant le marqueur) est conservé intégralement.
+        _SECTIONS_MARKER = "=== RÈGLES DU JEU (sections dynamiques) ==="
+        elage_fait = False
+
         for _ in range(self.max_iterations):
             result.iterations += 1
+            if (not elage_fait and result.iterations >= 2 and work
+                    and work[0].role == "system"
+                    and _SECTIONS_MARKER in work[0].content):
+                _sys_court, _sep, _reste = work[0].content.partition(
+                    _SECTIONS_MARKER)
+                work[0] = Message(
+                    role="system",
+                    content=(
+                        _sys_court.rstrip()
+                        + "\n\n⚠️ Itération de mécanique : applique les "
+                        "règles essentielles (résous avec les outils, "
+                        "narre bref d'après leurs résultats)."
+                    ),
+                )
+                elage_fait = True
+                _log.info(
+                    "itération %d : sections narratives élaguées du system "
+                    "prompt (-%d chars).",
+                    result.iterations, len(_sep) + len(_reste),
+                )
             use_native = self.tool_mode in ("native", "auto")
             # ⟳ Re-filtrage par phase À CHAQUE itération : un changement de
             # phase EN COURS de tour (ex. `engager_combat` appelé depuis

@@ -206,11 +206,18 @@ export function HomePage() {
   const data = parties.data;
   const details = data?.details ?? {};
   const seen = new Set<string>();
-  const list: { id: string; active: boolean; titre: string; phase: string; tour: number; pj: number; protegee: boolean }[] = [];
+  const list: { id: string; active: boolean; titre: string; phase: string; tour: number; pj: number; protegee: boolean; supprimable: boolean; createur: string | null }[] = [];
   for (const id of [...(data?.active ?? []), ...(data?.persisted ?? [])]) {
     if (seen.has(id)) continue;
     seen.add(id);
     const d = details[id];
+    // 🔒 Bêta (C1) : suppression réservée au propriétaire. Parties anciennes
+    // sans créateur : le serveur tolère si la partie est vide ou si on y a
+    // un PJ — on affiche alors le bouton (il reste gardé côté serveur).
+    const createur: string | null = d?.createur ?? null;
+    const supprimable = !createur
+      ? true
+      : createur.toLowerCase() === (utilisateur || "").toLowerCase();
     list.push({
       id,
       active: (data?.active ?? []).includes(id),
@@ -219,6 +226,8 @@ export function HomePage() {
       tour: d?.tour ?? 0,
       pj: d?.pj ?? 0,
       protegee: !!d?.protegee,
+      supprimable,
+      createur,
     });
   }
 
@@ -233,6 +242,18 @@ export function HomePage() {
     navigate(`/partie/${id}`);
   };
 
+  // 🔧 Bêta (r4) : suppression du compte — confirmation en deux temps.
+  const [confirmSupprCompte, setConfirmSupprCompte] = useState(false);
+  const supprCompte = useMutation({
+    mutationFn: () => api.supprimerCompte(),
+    onSuccess: () => {
+      // Token invalidé côté serveur : purge locale + retour connexion.
+      setToken("");
+      setUtilisateur("");
+      navigate("/connexion");
+    },
+  });
+
   return (
     <div className="max-w-4xl w-full mx-auto p-6 overflow-y-auto">
       <div className="mb-6 flex items-start gap-3">
@@ -244,12 +265,48 @@ export function HomePage() {
             Gérez vos personnages puis lancez ou rejoignez une partie.
           </p>
         </div>
-        <button
-          onClick={deconnexion}
-          className="ml-auto px-3 py-1.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-sm text-stone-300 shrink-0"
-        >
-          Déconnexion
-        </button>
+        {confirmSupprCompte ? (
+          <div className="ml-auto flex flex-col items-end gap-1">
+            <span className="text-rose-300 text-xs max-w-56 text-right">
+              Supprimer le compte « {utilisateur} » ? Parties créées, fiches et
+              portraits seront perdus.
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => supprCompte.mutate()}
+                disabled={supprCompte.isPending}
+                className="px-3 py-1.5 bg-rose-700 hover:bg-rose-600 rounded text-sm text-white shrink-0"
+              >
+                {supprCompte.isPending ? "Suppression…" : "Confirmer"}
+              </button>
+              <button
+                onClick={() => setConfirmSupprCompte(false)}
+                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 rounded text-sm text-stone-300 shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+            {supprCompte.isError && (
+              <span className="text-rose-400 text-xs">{(supprCompte.error as Error).message}</span>
+            )}
+          </div>
+        ) : (
+          <div className="ml-auto flex gap-2 shrink-0">
+            <button
+              onClick={() => setConfirmSupprCompte(true)}
+              title="Supprimer ce compte (parties créées, fiches, portraits)"
+              className="px-3 py-1.5 bg-stone-800 hover:bg-rose-900/60 border border-stone-700 rounded text-sm text-stone-500"
+            >
+              🗑️ Compte
+            </button>
+            <button
+              onClick={deconnexion}
+              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-sm text-stone-300"
+            >
+              Déconnexion
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ------------------------- MES PERSONNAGES ------------------------- */}
@@ -404,16 +461,25 @@ export function HomePage() {
                       Rejoindre
                     </button>
                   )}
-                  <button
-                    className="px-3 py-1.5 bg-stone-700 hover:bg-rose-900/60 rounded text-sm shrink-0"
-                    title="Supprimer cette partie (état, historiques, cartes)"
-                    onClick={() => {
-                      setSupprId(supprId === p.id ? null : p.id);
-                      setPendingJoin(null);
-                    }}
-                  >
-                    🗑️
-                  </button>
+                  {p.supprimable ? (
+                    <button
+                      className="px-3 py-1.5 bg-stone-700 hover:bg-rose-900/60 rounded text-sm shrink-0"
+                      title="Supprimer cette partie (état, historiques, cartes)"
+                      onClick={() => {
+                        setSupprId(supprId === p.id ? null : p.id);
+                        setPendingJoin(null);
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  ) : (
+                    <span
+                      className="px-3 py-1.5 text-stone-600 text-sm shrink-0 select-none"
+                      title={`Partie créée par « ${p.createur} » — suppression réservée au propriétaire`}
+                    >
+                      🗑️
+                    </span>
+                  )}
                 </div>
                 {supprId === p.id && (
                   <div className="mt-3 flex gap-2 items-center flex-wrap bg-rose-950/40 border border-rose-900/60 rounded px-3 py-2">

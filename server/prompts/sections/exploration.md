@@ -104,6 +104,9 @@ Consignes pour les phases hors combat.
   Les lanceurs préparés (Magicien, Clerc, Druide…) mémorisent leurs sorts
   du jour via `preparer_sorts` après un repos ; `repos_long` restaure les
   emplacements et soigne toute l'équipe.
+  ⚠️ Un sort narré SANS tool est de toute façon CORRIGÉ par le serveur
+  (rattrapage déterministe : l'incantation est re-validée, ou refusée, via
+  les règles) — ne raconte jamais une réussite par la seule prose.
 
 - **Familier / compagnon animal** : le compagnon d'un PJ (familier
   Magicien/Sorcier, compagnon animal Druide/Rodeur) est CHOISI à la création

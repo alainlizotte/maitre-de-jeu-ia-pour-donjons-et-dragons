@@ -27,10 +27,19 @@ function PhaseBadge({ phase }: { phase: string }) {
     exploration: "bg-emerald-800 text-emerald-200",
     combat: "bg-rose-800 text-rose-200",
     epilogue: "bg-amber-800 text-amber-200",
+    game_over: "bg-black text-rose-300 border border-rose-900",
+  };
+  const libelles: Record<string, string> = {
+    opening: "ouverture",
+    creation: "création",
+    exploration: "exploration",
+    combat: "combat",
+    epilogue: "épilogue",
+    game_over: "💀 game over",
   };
   return (
     <span className={`text-xs px-2 py-0.5 rounded ${colors[phase] ?? "bg-stone-700"}`}>
-      {phase}
+      {libelles[phase] ?? phase}
     </span>
   );
 }
@@ -38,10 +47,15 @@ function PhaseBadge({ phase }: { phase: string }) {
 // --------------------------------------------------------------------------- //
 //  Portrait + carte joueur
 // --------------------------------------------------------------------------- //
-function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
+function Portrait({ nom, size = "h-40" }: { nom?: string; size?: string }) {
   const [failed, setFailed] = useState(false);
   const [retries, setRetries] = useState(0);
-  const slug = slugify(nom);
+  // 🔧 Bêta : nom optionnel — un patch d'état appliqué sur un snapshot périmé
+  // crée des entrées pj PARTIELLES (sans nom) : `slugify(undefined)` plantait
+  // tout le panneau (« Cannot read properties of undefined (reading
+  // 'normalize') », page blanche jusqu'à un F5). Le fallback "perso" attend
+  // le re-fetch REST déclenché par pj_updated.
+  const slug = slugify(nom ?? "");
   const url = `/data/portraits_cache/${slug}.png`;
   // Cache-busting STABLE (même URL que la fiche et la page principale) :
   // un portrait régénéré par le serveur doit être rechargé, même pour un
@@ -73,7 +87,7 @@ function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
       );
     }
     // Pas de portrait généré : monogramme stylé dérivé du nom.
-    const initiales = nom
+    const initiales = (nom || "?")
       .split(/\s+/)
       .map((w) => w.charAt(0).toUpperCase())
       .slice(0, 2)
@@ -99,24 +113,28 @@ function Portrait({ nom, size = "h-40" }: { nom: string; size?: string }) {
   );
 }
 
-function PlayerCard({ pj, onOpen }: { pj: Personnage; onOpen: () => void }) {
-  const joueur = (pj.joueur as string | undefined) || "(joueur inconnu)";
+function PlayerCard({ pj, onOpen }: { pj?: Personnage; onOpen: () => void }) {
+  // 🔧 Bêta : pj optionnel (patch partiel sur snapshot périmé) — rendu
+  // dégradé en attendant le re-fetch REST (pj_updated), sans planter la page.
+  const joueur =
+    ((pj?.joueur as string | undefined) || "(joueur inconnu)");
+  const nom = pj?.nom ?? "";
   const pvRatio =
-    pj.pv !== undefined && pj.pv_max ? Math.max(0, Math.min(1, pj.pv / pj.pv_max)) : null;
+    pj?.pv !== undefined && pj?.pv_max ? Math.max(0, Math.min(1, pj.pv / pj.pv_max)) : null;
   return (
     <button
       onClick={onOpen}
       className="w-full text-left bg-stone-800/40 hover:bg-stone-800/70 rounded p-2 transition-colors group"
-      title={`Voir la fiche de ${pj.nom}`}
+      title={`Voir la fiche de ${nom || "(chargement…)"}`}
     >
       <div className="text-center text-xs text-amber-200/90 truncate mb-1" title={joueur}>
         👤 {joueur}
       </div>
-      <Portrait nom={pj.nom} />
+      <Portrait nom={nom} />
       <div className="mt-1 text-center">
-        <div className="text-sm text-stone-100 font-medium truncate">{pj.nom}</div>
+        <div className="text-sm text-stone-100 font-medium truncate">{nom || "…"}</div>
         <div className="text-xs text-stone-400">
-          {[pj.race, pj.classe, pj.niveau != null ? `niv. ${pj.niveau}` : null]
+          {[pj?.race, pj?.classe, pj?.niveau != null ? `niv. ${pj.niveau}` : null]
             .filter(Boolean)
             .join(" · ")}
         </div>
@@ -133,27 +151,27 @@ function PlayerCard({ pj, onOpen }: { pj: Personnage; onOpen: () => void }) {
             />
           </div>
           <div className="text-center text-xs tabular-nums text-stone-400 mt-0.5">
-            {pj.pv}/{pj.pv_max} pv{pj.ca !== undefined ? ` · CA ${pj.ca}` : ""}
+            {pj?.pv}/{pj?.pv_max} pv{pj?.ca !== undefined ? ` · CA ${pj.ca}` : ""}
           </div>
         </div>
       )}
-      {(pj.xp !== undefined || pj.niveau !== undefined) && (
+      {(pj?.xp !== undefined || pj?.niveau !== undefined) && (
         <div className="mt-1.5 rounded bg-stone-900/50 border border-stone-800 px-1.5 py-1">
           <XpBar xp={Number(pj.xp ?? 0)} niveau={Number(pj.niveau ?? 1)} compact />
         </div>
       )}
-      {(pj.charge_max !== undefined || pj.poids_transporte !== undefined) && (
+      {(pj?.charge_max !== undefined || pj?.poids_transporte !== undefined) && (
         <div className="mt-1.5 rounded bg-stone-900/50 border border-stone-800 px-1.5 py-1">
           <ChargeBar
-            poids={Number(pj.poids_transporte ?? 0)}
-            chargeMax={Number(pj.charge_max ?? 0)}
-            etat={typeof pj.etat_encumbrance === "string" ? pj.etat_encumbrance : undefined}
+            poids={Number(pj?.poids_transporte ?? 0)}
+            chargeMax={Number(pj?.charge_max ?? 0)}
+            etat={typeof pj?.etat_encumbrance === "string" ? pj.etat_encumbrance : undefined}
           />
         </div>
       )}
-      {(pj as { conditions?: string[] }).conditions?.length ? (
+      {(pj as { conditions?: string[] })?.conditions?.length ? (
         <div className="text-xs text-amber-400 mt-1 text-center truncate">
-          {(pj as { conditions: string[] }).conditions.join(", ")}
+          {(pj as { conditions?: string[] }).conditions?.join(", ")}
         </div>
       ) : null}
     </button>
@@ -886,7 +904,11 @@ export function StateSidebar() {
         </h3>
         <div className="space-y-2">
           {state.pj?.map((p, i) => (
-            <PlayerCard key={i} pj={p} onOpen={() => setFicheOuverte(p.nom)} />
+            <PlayerCard
+              key={i}
+              pj={p ?? undefined}
+              onOpen={() => { if (p?.nom) setFicheOuverte(p.nom); }}
+            />
           ))}
           {sansPerso.map((nom) => (
             <ParticipantCard key={nom} nom={nom} />

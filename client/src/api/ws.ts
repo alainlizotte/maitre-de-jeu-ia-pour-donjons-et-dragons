@@ -12,6 +12,7 @@
 // d'attente (outbox) et rejoué après la reconnexion + re-join.
 
 import type { WsMessage } from "./types";
+import { getToken } from "./rest";
 
 export type WsHandler = (msg: WsMessage) => void;
 export type OpenHandler = () => void;
@@ -168,11 +169,29 @@ export class ChatSocket {
     // Personnage choisi dans le menu déroulant de l'accueil — le serveur
     // enregistre le PJ dans l'état de la partie.
     if (personnage) payload.personnage = personnage;
+    // 🔒 Bêta (C2) : token d'auth — le serveur vérifie l'identité et lie la
+    // connexion au COMPTE réel (le `player` déclaré n'est plus une preuve).
+    const token = getToken();
+    if (token) payload.token = token;
     this.send(payload);
   }
 
-  say(player: string, text: string): void {
-    this.send({ type: "say", player, text });
+  say(player: string, text: string, clientId?: string): void {
+    const payload: Record<string, unknown> = { type: "say", player, text };
+    // 🔁 Bêta (M2) : id client renvoyé par l'echo serveur — permet à
+    // l'expéditeur de dédoublonner son message tout en affichant ceux
+    // des autres joueurs.
+    if (clientId) payload.client_id = clientId;
+    this.send(payload);
+  }
+
+  /** 🎲 Bêta (r2) : jet manuel INFORMATIF — diffusé à la table et persisté,
+   *  mais n'invoque PAS le MJ (un tour LLM complet par clic déclenchait des
+   *  actions en fiction : attaque sur une « cible invisible »…). */
+  dice(player: string, text: string, clientId?: string): void {
+    const payload: Record<string, unknown> = { type: "dice", player, text };
+    if (clientId) payload.client_id = clientId;
+    this.send(payload);
   }
 
   close(): void {

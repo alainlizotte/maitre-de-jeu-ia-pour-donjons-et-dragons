@@ -4207,7 +4207,13 @@ class Orchestrator:
             "name": spec.name,
             "args": args,
             "ok": ok,
-            "text": tr.text[:300],
+            # 🔧 Bêta : budget relevé 300 → 900 chars — les traces d'attaque
+            # (en-tête + jets + bonus recalculé + verdict « ✅ Touché » en FIN
+            # de texte) étaient TRONQUÉES avant le verdict : le rattrapage
+            # « touché sans dégâts » et le bloc « 🎲 Jets officiels » ne
+            # voyaient jamais l'issue du jet (dégâts jamais appliqués, partie
+            # réelle : attaque touchée restée sans effet sur le monstre).
+            "text": tr.text[:900],
         })
         _log.info("tool_call done name=%s ok=%s text=%s",
                   spec.name, ok, tr.text[:150].replace("\n", " "))

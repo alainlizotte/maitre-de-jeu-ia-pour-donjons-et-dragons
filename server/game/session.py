@@ -43,6 +43,24 @@ class PartySession:
     # Indique que le MJ est en cours de traitement (pensée/génération).
     # Les messages "say" des joueurs sont rejetés tant que thinking est True.
     thinking: bool = False
+    # 🔒 Bêta (C2) : personnage incarné PAR CONNEXION (posé au `join`) — la
+    # garde de tour compare le personnage de l'EXPÉDITEUR au personnage actif,
+    # pas seulement le compte : deux PJ du même compte (deux onglets) doivent
+    # pouvoir jouer l'un après l'autre sans que l'action de l'un soit
+    # réattribuée à l'autre.
+    ws_personnage: dict[Any, str] = field(default_factory=dict)
+    # 🔒 Bêta (C2) : compte AUTHENTIFIÉ par connexion (token vérifié au join).
+    # Si présent, il prime sur le `player` déclaré par le client (anti-spoof).
+    ws_user: dict[Any, str] = field(default_factory=dict)
+
+    def personnage_de(self, ws: Any) -> str:
+        """Personnage incarné par cette connexion ('' si non joint)."""
+        return str(self.ws_personnage.get(ws) or "")
+
+    def utilisateur_de(self, ws: Any, declare: str = "") -> str:
+        """Compte canonique de la connexion : token vérifié si présent,
+        sinon le nom déclaré par le client (compatibilité anciens clients)."""
+        return str(self.ws_user.get(ws) or declare or "")
 
     def add_participant(self, name: str) -> None:
         if name and name not in self.participants:

@@ -311,6 +311,16 @@ export function CharacterFormPage() {
       if (donsCatalogue.has(d.toLowerCase())) donsChoisis.push(m.dons.find((x) => x.nom.toLowerCase() === d.toLowerCase())!.nom);
       else donsLibres.push(d);
     }
+    // 💰 Bêta (fix or) : coût de l'équipement DÉJÀ payé (chargé de la fiche) —
+    // l'édition ne devra déduire que les nouveaux achats, et l'or stocké en
+    // pc est converti en po pour l'affichage (sinon ×10 à chaque sauvegarde).
+    const prixArmes = new Map(m.armes.map((a) => [a.nom, a.cout] as const));
+    const prixEquip = new Map(m.equipement_aventurier.map((o) => [o.nom, o.cout] as const));
+    let coutInitial = 0;
+    for (const nom of armesChoisies) coutInitial += prixArmes.get(nom) ?? 0;
+    for (const nom of armuresChoisies) coutInitial += m.armures.find((a) => a.nom === nom)?.cout ?? 0;
+    for (const nom of equipChoisi) coutInitial += prixEquip.get(nom) ?? 0;
+    depenseInitialeRef.current = coutInitial;
     setForm({
       nom: f.nom ?? "",
       race: f.race ?? "",
@@ -589,6 +599,17 @@ export function CharacterFormPage() {
     return total;
   }, [modele.data, form.armesChoisies, form.armuresChoisies, form.equipChoisi]);
   const soldeOr = (Number(form.or) || 0) - depenseEquipement;
+  // 💰 Bêta (fix or) : l'or réellement PORTÉ = or de départ − achats. En
+  // création, depenseInitiale vaut 0 ; en ÉDITION, l'équipement chargé depuis
+  // la fiche a DÉJÀ été payé — on ne retire que les NOUVEAUX achats, sinon
+  // chaque ré-enregistrement déduisait l'équipement une seconde fois.
+  // (Bug observé : Thorin 150 po → 82 po d'achats → fiche créditée 1500 pc,
+  // charge faussée de +7,4 kg ; et une édition ×10 l'or à chaque sauvegarde.)
+  const depenseInitialeRef = useRef(0);
+  const orPorte = Math.max(
+    0,
+    (Number(form.or) || 0) - depenseEquipement + depenseInitialeRef.current,
+  );
 
   // Poids total porté (kg) des armes/armures/équipements cochés + objets libres
   // connus du catalogue → permet d'indiquer la charge par rapport à la capacité.
@@ -612,9 +633,9 @@ export function CharacterFormPage() {
       }
       total += pu * (o.qte || 1);
     }
-    if (form.or) total += ((Number(form.or) || 0) * 10) / 50 * 0.4536;
+    if (orPorte) total += ((orPorte * 10) / 50) * 0.4536;
     return { poids: Math.round(total * 100) / 100, inconnus };
-  }, [modele.data, form.armesChoisies, form.armuresChoisies, form.equipChoisi, form.equipLibre, form.or]);
+  }, [modele.data, form.armesChoisies, form.armuresChoisies, form.equipChoisi, form.equipLibre, orPorte]);
   const etatCharge = useMemo(() => {
     const max = calc.chargeMax || 1;
     const p = poidsPorte.poids;
@@ -626,7 +647,9 @@ export function CharacterFormPage() {
   }, [poidsPorte.poids, calc.chargeMax]);
   // Poids de l'or porté (PHB 3.5 : 50 pièces = 1 lb = 0,4536 kg), inclus dans
   // poidsPorte.poids — itemisé dans l'UI pour ne plus paraître fantôme.
-  const poidsOrKg = (((Number(form.or) || 0) * 10) / 50) * 0.4536;
+  // 💰 Bêta : basé sur l'or PORTÉ (après achats), plus l'or de départ brut.
+  // ⚠️ orPorte est en PO → ×10 pour les PC (le serveur compte or_pc/50 lb).
+  const poidsOrKg = ((orPorte * 10) / 50) * 0.4536;
   const budgetRangs = useMemo(() => {
     const base = form.classe
       ? (modele.data?.points_competence?.[form.classe] ?? 0)
@@ -825,7 +848,9 @@ export function CharacterFormPage() {
         gain_carac: form.gainCarac || undefined,
         alignement: form.alignement,
         dieu: form.dieu.trim(),
-        or: (Number(form.or) || 0) * 10,
+        // 💰 Bêta (fix or) : on crédite l'or PORTÉ (départ − achats), plus
+        // l'or de départ brut qui surestimait la bourse et la charge.
+        or: Math.round(orPorte * 10),
         equipement: [
           ...form.armesChoisies.map((nom) => ({ nom, qte: 1 })),
           ...form.armuresChoisies.map((nom) => ({ nom, qte: 1 })),
@@ -957,9 +982,9 @@ export function CharacterFormPage() {
       );
       return;
     }
-    // 💰 Or de départ : l'équipement ne peut pas dépasser le solde (partie
-    // réelle : 165 po cochés pour 150 po passaient, solde jamais déduit).
-    if (soldeOr < 0) {
+    // 💰 Or : la bourse finale ne peut pas être négative (équipement > or de
+    // départ + or déjà en poche en édition). `orPorte` = or porté réel.
+    if (orPorte < 0 || soldeOr < 0) {
       setErreur(
         `Équipement trop cher : ${depenseEquipement} po dépensés pour ` +
         `${Number(form.or) || 0} po d'or de départ — retirez un objet ` +
@@ -1425,7 +1450,7 @@ export function CharacterFormPage() {
                   {poidsOrKg > 0 && (
                     <p className="text-xs text-stone-500 mt-1">
                       dont or : <span className="tabular-nums">{poidsOrKg.toFixed(2)} kg</span>{" "}
-                      ({Number(form.or) || 0} po = {(Number(form.or) || 0) * 10} pc — 50 pc = 0,45 kg).
+                      ({orPorte} po portés = {orPorte * 10} pc — 50 pc = 0,45 kg).
                     </p>
                   )}
                   {etatCharge.depasse && (
@@ -1554,6 +1579,7 @@ export function CharacterFormPage() {
                   }`}
                 >
                   Dépensé : {depenseEquipement} po · Solde : {soldeOr} po
+                  {modeEdition ? ` · Or porté : ${orPorte} po` : ""}
                   {soldeOr < 0 ? " ⚠️ trop dépensé !" : ""}
                 </span>
                 <span className="text-xs text-stone-500 pb-1.5">

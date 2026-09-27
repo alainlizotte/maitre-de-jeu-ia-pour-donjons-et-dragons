@@ -183,7 +183,8 @@ def test_pj_mourant_est_stabilise_ou_skip():
         assert any("stabilisation" in e for e in res.events)
         # Le gobelin, seule menace, peut ensuite achever le mourant isolé :
         # le combat se termine alors légitimement en défaite — ou continue.
-        if res.phase == "exploration":
+        # 🔧 Bêta (r3) : une défaite passe en phase dédiée « game_over ».
+        if res.phase in ("game_over", "exploration"):
             assert res.combat_termine == "defaite"
         else:
             assert res.phase == "combat"
@@ -208,7 +209,10 @@ def test_pj_mort_entraine_defaite():
 
         res = asyncio.run(boucle_auto(_ctx(d)))
         assert res.combat_termine == "defaite"
-        assert res.phase == "exploration"
+        # 🔧 Bêta (r3) : phase dédiée « game_over » en défaite (plus
+        # « exploration » qui laissait la partie « continuer » avec un
+        # groupe décédé). Le flag et la mémoire restent posés.
+        assert res.phase == "game_over"
         mem = _etat(d)["memoire"]["monstres_combattus"]
         assert mem and mem[-1]["issue"] == "defaite"
     finally:

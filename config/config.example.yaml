@@ -98,6 +98,13 @@ game:
   default_frame: "Côte des Épées (Faerûn)"
   max_history_events: 50
   max_recap_chars: 6000
+  # Livraison EN BLOC recommandée (beta test sept. 2026) : en streaming
+  # (true), la narration candidate s'affichait puis était REMPLACÉE par le
+  # texte final (strips, blocs mécaniques, rejeux correctifs) — effet
+  # désagréable. En bloc, le texte n'apparaît qu'une fois, final ; l'attente
+  # est couverte par les statuts enrichis (étape en cours).
+  # Passer à true seulement si vous préférez la narration progressive et
+  # acceptez les remplacements ponctuels de rejeux correctifs.
   stream_to_clients: false     # réponses du MJ livrées EN BLOC ; passer à
                                # true pour afficher la narration token par
                                # token (streaming) au fil de la génération

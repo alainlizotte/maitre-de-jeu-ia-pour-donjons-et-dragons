@@ -599,6 +599,21 @@ _COMBAT_PROSE_MARKERS = (
     "t'attaque", "vous agresse", "t'agresse", "se rue sur vous",
     "se rue sur toi",
     "prend son tour", "c'est au tour de",
+    # 🔧 Bêta (M1) : créatures qui APPROCHENT en menace ou ATTAQUENT EN PROSE
+    # SANS dégâts chiffrés (coup esquivé/paré/raté) — ces tours restaient
+    # 100 % fiction sans initiative ni PV (partie réelle « Dues for the
+    # Dead » : un zombi décrit puis attaquant 3 tours de suite en exploration).
+    "avance vers vous", "avancent vers vous",
+    "s'approche de vous", "s'approchent de vous",
+    "s'avance vers vous", "s'avancent vers vous",
+    "tente de vous mordre", "tentent de vous mordre",
+    "prêt à vous mordre", "prêts à vous mordre",
+    "tente de vous saisir", "tentent de vous saisir",
+    "manque son but", "manque sa cible", "manque de justesse",
+    "vous frôle", "vous frôlent", "frôle votre armure",
+    "frôlent votre armure", "sans l'entamer", "sans vous toucher",
+    "esquivez l'attaque", "esquivez de justesse", "parez l'attaque",
+    "vous vous repliez", "se déplace : un", "créature se déplace",
 )
 # Prose de DÉGÂTS infligés (attaque portée en narration) : un montant de
 # dégâts narré hors combat signifie qu'une action hostile a été jouée —
@@ -633,6 +648,10 @@ _MONSTRES_EN_FR_PROSE: dict[str, str] = {
     "goblin": "Gobelin", "goblins": "Gobelin",
     "skeleton": "Squelette", "skeletons": "Squelette",
     "zombie": "Zombie", "zombies": "Zombie",
+    # 🔧 Bêta (M1) : orthographe française « zombi » — sans cet alias, la
+    # prose « un zombi avance vers vous » ne rapprochait AUCUN monstre du
+    # bestiaire (le rattrapage 5ter ignorait la rencontre, partie réelle).
+    "zombi": "Zombie", "zombis": "Zombie",
     "kobold": "Kobold",
     "troll": "Troll",
     "ogre": "Ogre",
@@ -956,6 +975,102 @@ def _dedupliquer_phrases(narration: str, seuil: int = 25) -> str:
     return "\n".join(sortie)
 
 
+# --------------------------------------------------------------------------- #
+#  🧹 Bêta (M3) — Assainissement de la narration FINALE avant diffusion.
+#
+#  Partie réelle : le petit modèle livrait à la table ses COULISSES
+#  (« Vérifions son état réel. », « le système n'a pas encore mis à jour ses
+#  PV… », « Résultat : Touché ! () » avec parenthèses vides, « vous avez
+#  réussi votre ! ») et DOUBLAIT des paragraphes entiers en reformulant
+#  (deux versions de la même action dans le même message). Ces défauts
+#  échappaient à `_dedupliquer_phrases` (verbatim uniquement) — on nettoie
+#  donc : (1) templates cassés, (2) échos mécaniques « Résultat : … »,
+#  (3) paragraphes méta-discursifs, (4) paraphrases quasi identiques.
+# --------------------------------------------------------------------------- #
+_RE_VERDICT_PARENS_VIDES = _re_mod.compile(
+    r"\b([Tt]ouch[ée]|[Mm]anqu[ée]|[Rr][ée]ussite|[ÉEé]chec|[Rr][ée]ussi|[Rr]at[ée])"
+    r"(\s*(?:!|\.))?\s*\(\s*\)"
+)
+_RE_POSSESSIF_SUSPENDU = _re_mod.compile(r"\b(?:votre|vos|son|sa|ses)\s*!")
+_RE_ECHO_RESULTAT = _re_mod.compile(r"^\s*R[ée]sultat\s*:.*$", _re_mod.MULTILINE)
+_RE_PARAGRAPHE_META = _re_mod.compile(
+    r"(v[ée]rifi\w*\s+(?:son|leur|sa|l')?\s*[ée]tat"
+    r"|[ée]tat\s+r[ée]el"
+    r"|le\s+syst[èe]me\s+n'a\s+pas"
+    r"|le\s+syst[èe]me\s+semble\s+avoir\s+perdu"
+    r"|quelque\s+chose\s+ne\s+va\s+pas"
+    r"|nous\s+devons\s+d'abord\s+r[ée]tablir\s+le\s+contexte"
+    r"|n'a\s+pas\s+encore\s+mis\s+à\s+jour"
+    r"|devrait\s+[êe]tre\s+mort"
+    r"|^en\s+r[ée]alit[ée]\b"
+    r"|^note\s*:"
+    r"|r[ée]g[ée]n[ée]ration\s+rapide"
+    r"|^en\s+tant\s+que\s+(mj|mod[èe]le|assistant)"
+    r"|^commentaire\s*:)",
+    _re_mod.IGNORECASE | _re_mod.MULTILINE,
+)
+# Seuil de similarité (Jaccard sur les mots > 3 lettres) au-delà duquel deux
+# paragraphes sont considérés comme la MÊME scène re-racontée.
+_SEUIL_SIMILARITE_PARAGRAPHE = 0.55
+
+
+def _jaccard_mots(a: str, b: str) -> float:
+    """Similarité Jaccard entre deux textes (mots > 3 lettres, sans accents)."""
+    import unicodedata as _ud
+
+    def _tokens(t: str) -> set[str]:
+        nf = _ud.normalize("NFKD", t.lower())
+        sans = "".join(c for c in nf if not _ud.combining(c))
+        return {w for w in _re_mod.split(r"[^a-zà-ÿ]+", sans) if len(w) > 3}
+
+    ta, tb = _tokens(a), _tokens(b)
+    if not ta or not tb:
+        return 0.0
+    inter = len(ta & tb)
+    union = len(ta | tb)
+    return inter / union if union else 0.0
+
+
+def _nettoyer_meta_narration(narration: str) -> str:
+    """Nettoie la narration finale : coulisses LLM, templates cassés,
+    paraphrases doublées (cf. en-tête de bloc M3 ci-dessus)."""
+    if not narration or not narration.strip():
+        return narration or ""
+
+    texte = narration
+
+    # (1) Verdicts à parenthèses vides : « Touché ! () » → « Touché ! ».
+    texte = _RE_VERDICT_PARENS_VIDES.sub(r"\1\2", texte)
+    # (2) Possessif suspendu : « réussi votre ! » → « réussi ! ».
+    texte = _RE_POSSESSIF_SUSPENDU.sub("!", texte)
+    # (3) Échos mécaniques d'un outil rejoué en prose : « Résultat : Touché ! ».
+    texte = _RE_ECHO_RESULTAT.sub("", texte)
+
+    # (4)+(5) Paragraphe par paragraphe : retire les méta-commentaires et les
+    # paraphrases quasi identiques (on garde la PREMIÈRE version, plus
+    # fidèle à l'action déclarée).
+    paragraphes = [p for p in texte.split("\n\n")]
+    sortie: list[str] = []
+    gardes: list[str] = []
+    for p in paragraphes:
+        aplati = " ".join(p.split())
+        if not aplati:
+            continue
+        if _RE_PARAGRAPHE_META.search(aplati):
+            continue
+        if len(aplati) >= 60:
+            duplicata = any(
+                _jaccard_mots(aplati, g) >= _SEUIL_SIMILARITE_PARAGRAPHE
+                for g in gardes
+            )
+            if duplicata:
+                continue
+            gardes.append(aplati)
+        sortie.append(p)
+
+    return _re_mod.sub(r"\n{3,}", "\n\n", "\n\n".join(sortie)).strip()
+
+
 # Tools qui CONSOMMENT l'action standard du personnage courant : dès que le
 # joueur actif en a appelé un, le moteur serveur avance la rotation (le LLM
 # n'a plus à se souvenir de tour_suivant_combat).
@@ -1091,6 +1206,23 @@ app.add_middleware(
 # --------------------------------------------------------------------------- #
 #  Helpers
 # --------------------------------------------------------------------------- #
+def _dossier_donnees() -> str:
+    return str(cfg.abs(cfg.paths.data_dir))
+
+
+async def utilisateur_courant(
+    authorization: str = Header(default=""),
+) -> str:
+    """Dépendance FastAPI : renvoie le nom d'utilisateur authentifié ou 401.
+
+    Doit être défini AVANT les routes qui l'utilisent en valeur par défaut
+    (`Depends(utilisateur_courant)` est évalué à la décoration)."""
+    nom = auth_mod.utilisateur_depuis_header(_dossier_donnees(), authorization)
+    if not nom:
+        raise HTTPException(status_code=401, detail="Non authentifié.")
+    return nom
+
+
 def _ctx(partie_id: str, player: str) -> ToolContext:
     return ToolContext(
         partie_id=partie_id,
@@ -1461,6 +1593,10 @@ async def list_parties() -> dict[str, Any]:
             "pj": len(etat.get("pj", [])),
             # Partie protégée par mot de passe (sans révéler le hash).
             "protegee": bool(etat.get("meta", {}).get("mot_de_passe_sha256")),
+            # 🔒 Propriétaire (suppression réservée au créateur — C1).
+            # Parties anciennes : createur absent → suppression tolérée si
+            # la partie est vide ou si le demandeur y a un PJ (cf. delete).
+            "createur": etat.get("meta", {}).get("createur") or None,
         }
     return {
         "active": ids,
@@ -1470,7 +1606,10 @@ async def list_parties() -> dict[str, Any]:
 
 
 @app.post("/api/parties")
-async def create_party(payload: dict[str, Any]) -> dict[str, Any]:
+async def create_party(
+    payload: dict[str, Any],
+    utilisateur: str = Depends(utilisateur_courant),
+) -> dict[str, Any]:
     titre = payload.get("titre") or cfg.game.default_title
     cadre = payload.get("cadre") or cfg.game.default_frame
     partie_id = payload.get("partie_id") or uuid.uuid4().hex[:8]
@@ -1485,6 +1624,10 @@ async def create_party(payload: dict[str, Any]) -> dict[str, Any]:
         "titre": titre,
         "cadre": cadre,
         "regles": "D&D 3.5",
+        # 🔒 Bêta (C1) : le créateur devient propriétaire — seul lui (ou un
+        # compte héritant d'un PJ de la partie pour les parties anciennes)
+        # pourra la supprimer (cf. `delete_party`).
+        "createur": utilisateur,
     })
     if mot_de_passe:
         etat["meta"]["mot_de_passe_sha256"] = _hash_mot_de_passe(mot_de_passe)
@@ -1586,17 +1729,62 @@ async def calepin_supprimer(partie_id: str, note_id: str) -> dict[str, Any]:
 
 
 @app.delete("/api/parties/{partie_id}")
-async def delete_party(partie_id: str) -> dict[str, Any]:
+async def delete_party(
+    partie_id: str,
+    utilisateur: str = Depends(utilisateur_courant),
+) -> dict[str, Any]:
     """Supprime définitivement une partie : état persistant, historiques de
     chat (MJ + équipe), cartes SVG liées (donjon…) et session en mémoire.
     Les WebSockets encore connectés sont fermés — les joueurs voient la
-    partie disparaître."""
+    partie disparaître.
+
+    🔒 Bêta (C1) : la suppression est réservée au PROPRIÉTAIRE de la partie
+    (`meta.createur`, posé à la création). Parties anciennes sans créateur :
+    suppression tolérée uniquement si la partie est vide (aucun PJ) OU si le
+    demandeur possède un personnage dans la partie — plus aucun compte
+    étranger ne peut effacer la table d'autrui."""
     import re
 
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", partie_id):
         raise HTTPException(status_code=400, detail="Identifiant de partie invalide.")
 
     data_dir = cfg.abs(cfg.paths.data_dir)
+
+    # 🔒 Contrôle de propriété AVANT toute suppression.
+    etat_cible = PartyState(
+        data_dir=str(data_dir), partie_id=partie_id
+    ).load()
+    if "_erreur" not in etat_cible:
+        createur = str(
+            (etat_cible.get("meta") or {}).get("createur") or ""
+        ).strip()
+        if createur:
+            if utilisateur.strip().lower() != createur.lower():
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        f"Seul le propriétaire de la partie (« {createur} ») "
+                        "peut la supprimer."
+                    ),
+                )
+        else:
+            # Partie ancienne sans créateur enregistré.
+            pjs = etat_cible.get("pj") or []
+            possede_pj = any(
+                persos_mod._meme_compte(
+                    str(p.get("joueur") or ""), utilisateur
+                )
+                for p in pjs
+            )
+            if pjs and not possede_pj:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Partie ancienne sans propriétaire enregistré : "
+                        "suppression réservée aux joueurs qui y ont un "
+                        "personnage."
+                    ),
+                )
 
     # Session en mémoire : fermeture propre des WebSockets puis retrait.
     sess = sessions.pop(partie_id)
@@ -1785,20 +1973,6 @@ async def set_image_scenes(payload: dict[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 #  Authentification — comptes locaux + tokens Bearer
 # --------------------------------------------------------------------------- #
-def _dossier_donnees() -> str:
-    return str(cfg.abs(cfg.paths.data_dir))
-
-
-async def utilisateur_courant(
-    authorization: str = Header(default=""),
-) -> str:
-    """Dépendance FastAPI : renvoie le nom d'utilisateur authentifié ou 401."""
-    nom = auth_mod.utilisateur_depuis_header(_dossier_donnees(), authorization)
-    if not nom:
-        raise HTTPException(status_code=401, detail="Non authentifié.")
-    return nom
-
-
 @app.post("/api/auth/inscription")
 async def auth_inscription(payload: dict[str, Any]) -> dict[str, Any]:
     """Crée un compte {nom, mot_de_passe} et renvoie directement un token."""
@@ -1829,6 +2003,73 @@ async def auth_connexion(payload: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/auth/moi")
 async def auth_moi(utilisateur: str = Depends(utilisateur_courant)) -> dict[str, Any]:
     return {"utilisateur": utilisateur}
+
+
+@app.delete("/api/auth/compte")
+async def auth_supprimer_compte(
+    utilisateur: str = Depends(utilisateur_courant),
+) -> dict[str, Any]:
+    """🔧 Bêta (r4) : supprime le compte CONNECTÉ (auto-suppression).
+
+    Dans l'ordre : les parties CRÉÉES par le compte (état, historiques,
+    cartes, WebSockets fermés), les fiches de personnages qui lui appartiennent
+    (+ portraits en cache), puis le compte lui-même — les tokens mémorisés
+    deviennent immédiatement invalides (le compte n'existe plus). Les parties
+    d'AUTRES comptes où le compte avait des personnages sont conservées
+    (les fiches y restent, rattachées au compte supprimé, ignorées au join)."""
+    data_dir = cfg.abs(cfg.paths.data_dir)
+
+    # 1) Parties créées par le compte.
+    parties_supprimees: list[str] = []
+    ids = set(sessions.all_ids())
+    ids |= {p.stem[len("partie_"):] for p in data_dir.glob("partie_*.json")}
+    for pid in sorted(ids):
+        etat = PartyState(data_dir=str(data_dir), partie_id=pid).load()
+        if "_erreur" in etat:
+            continue
+        createur = str((etat.get("meta") or {}).get("createur") or "").strip()
+        if createur.lower() == utilisateur.strip().lower():
+            try:
+                await delete_party(pid, utilisateur=utilisateur)
+                parties_supprimees.append(pid)
+            except HTTPException:
+                pass  # (non-propriétaire impossible ici, garde défensive)
+
+    # 2) Fiches de personnages du compte (+ portraits).
+    fiches_supprimees: list[str] = []
+    from .tools.fiches import _slug as _slug_fn  # pylint: disable=import-outside-toplevel
+    dossier_fiches = data_dir / "fiches"
+    if dossier_fiches.is_dir():
+        for fn in list(dossier_fiches.glob("fiche_*.json")):
+            try:
+                with open(fn, "r", encoding="utf-8") as f:
+                    fiche = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+            if persos_mod._meme_compte(fiche.get("proprietaire"), utilisateur):
+                slug = _slug_fn(str(fiche.get("nom") or fn.stem))
+                for cible in (
+                    fn,
+                    data_dir / "portraits_cache" / f"{slug}.png",
+                    data_dir / "bestiaire_cache" / f"{slug}.png",
+                ):
+                    try:
+                        cible.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                fiches_supprimees.append(str(fiche.get("nom") or slug))
+
+    # 3) Le compte lui-même (tokens invalides de fait).
+    supprime = auth_mod.supprimer_compte(_dossier_donnees(), utilisateur)
+    if not supprime:
+        raise HTTPException(status_code=404, detail="Compte introuvable.")
+
+    return {
+        "ok": True,
+        "compte": utilisateur,
+        "parties_supprimees": parties_supprimees,
+        "fiches_supprimees": fiches_supprimees,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -3044,6 +3285,16 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                         ),
                     })
                     continue
+                # 🔒 Bêta (C2) : authentification optionnelle par token — le
+                # compte VÉRIFIÉ prime sur le nom déclaré (anti-usurpation
+                # du `player`). Anciens clients sans token : inchangé.
+                token_ws = str(msg.get("token") or "")
+                user_verifie = auth_mod.verifier_token(
+                    _dossier_donnees(), token_ws
+                ) if token_ws else None
+                if user_verifie:
+                    session.ws_user[ws] = user_verifie
+                    player = user_verifie
                 if pw_hash is not None:
                     mdp = msg.get("password") or ""
                     if _hash_mot_de_passe(mdp) != pw_hash:
@@ -3072,6 +3323,10 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                         ),
                     })
                     continue
+                # 🔒 Bêta (C2) : mémorise le personnage incarné par CETTE
+                # connexion — la garde de tour l'exige (le même compte peut
+                # incarner deux PJ dans deux onglets différents).
+                session.ws_personnage[ws] = personnage
                 session.add_participant(player)
                 # Pour une partie protégée, l'historique n'arrive qu'ici.
                 if pw_hash is not None:
@@ -3087,6 +3342,25 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                 })
                 continue
 
+            if mtype == "dice":
+                # 🎲 Bêta (r2) : un jet manuel du joueur est INFORMATIF — il
+                # est diffusé à la table et mémorisé dans l'historique, mais
+                # n'invoque PLUS le MJ (avant : un tour LLM complet par jet,
+                # interprété en fiction : attaque sur une « cible invisible »,
+                # test de poison improvisé…). Les jets officiels restent
+                # lancés par le serveur (tools).
+                texte_des = str(msg.get("text") or "").strip()
+                if not texte_des:
+                    continue
+                session.remember_player_message(player, texte_des)
+                await session.broadcast({
+                    "type": "player",
+                    "player": player,
+                    "text": texte_des,
+                    "client_id": str(msg.get("client_id") or ""),
+                })
+                continue
+
             if mtype == "say":
                 if pw_hash is not None and ws not in session.authenticated:
                     await _ws_envoi(ws, {
@@ -3095,7 +3369,17 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                         "detail": "Partie protégée : rejoignez avec le mot de passe.",
                     })
                     continue
-                await _handle_say(ws, session, partie_id, player, msg.get("text", ""))
+                # 🔒 Bêta (C2) : identité canonique = compte vérifié (token)
+                # sinon nom déclaré ; personnage = celui mémorisé au join.
+                await _handle_say(
+                    ws,
+                    session,
+                    partie_id,
+                    session.utilisateur_de(ws, player),
+                    msg.get("text", ""),
+                    personnage=session.personnage_de(ws),
+                    client_id=str(msg.get("client_id") or ""),
+                )
                 continue
 
             if mtype == "team_say":
@@ -3146,6 +3430,9 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
     finally:
         session.connections.discard(ws)
         session.authenticated.discard(ws)
+        # 🔒 Bêta (C2) : purge des identités par connexion.
+        session.ws_personnage.pop(ws, None)
+        session.ws_user.pop(ws, None)
 
 
 # Compteur global de tours MJ actifs (toutes parties confondues) : géré par
@@ -3916,13 +4203,17 @@ async def _ressusciter_pj_oublie(
                 + (f", PV max −{perte_pvmax}." if perte_pvmax else ".")
             )
 
-    # 4) Levée du flag GAME OVER (collant : prompt_builder le réinjecte).
+    # 4) Levée du flag GAME OVER + retour à la phase exploration (🔧 bêta r3 :
+    # la phase dédiée « game_over » doit repartir en exploration quand les
+    # héros reviennent à la vie — sinon le badge reste « 💀 game over » avec
+    # un groupe debout).
     try:
         etat2 = st.load()
-        if etat2.get("game_over"):
+        if etat2.get("game_over") or etat2.get("phase") == "game_over":
             etat2["game_over"] = False
+            etat2["phase"] = "exploration"
             st.save(etat2)
-            result.state_patches.append({"game_over": False})
+            result.state_patches.append({"game_over": False, "phase": "exploration"})
     except Exception:                                            # noqa: BLE001
         pass
 
@@ -4299,6 +4590,146 @@ def _load_bestiaire_plain(data_dir: str) -> dict[str, Any]:
     return {"monstres": monstres}
 
 
+# --------------------------------------------------------------------------- #
+#  🧪 Bêta (M4) — Détection des sorts NARRÉS sans `incanter_sort`.
+#
+#  Partie réelle : « il lance Bénédiction… puis Lumière » alors que la fiche
+#  n'avait AUCUN sort préparé — le LLM contournait le tool, la préparation et
+#  les emplacements restaient intacts (fiction sans effet). On repère les
+#  noms de sorts du catalogue dans la prose du tour ; le rattrapage 5quater-s
+#  ré-invoque `incanter_sort` qui applique (ou REFUSE honnêtement) les règles :
+#  préparation, emplacements, effets.
+# --------------------------------------------------------------------------- #
+_RE_NEGATION_SORT = _re_mod.compile(
+    r"(pas\s+(?:de\s+)?(?:sort|pr[ée]par\w*|emplacement)"
+    r"|ne\s+peut|ne\s+peux|impossible|refus\w*|aucun\s+emplacement"
+    r"|épuis[ée]s?|n'a\s+pas|n'ai\s+pas|sans\s+succès|en\s+ vain)",
+    _re_mod.IGNORECASE,
+)
+_RE_MEMORISATION_SORT = _re_mod.compile(
+    r"\b(m[ée]moris\w*|pr[ée]par\w*(?:er|e|es)?\s+(?:ses\s+|mes\s+|ses)?sorts?)\b",
+    _re_mod.IGNORECASE,
+)
+# 🔧 Bêta (M4, durcissement) : un nom de sort dans la prose ne prouve PAS une
+# incantation — « bouclier » désignait l'éQUIPEMENT du clerc et déclenchait le
+# rattrapage du sort « Bouclier ». Une mention ne compte que précédée d'un
+# verbe d'incantation (lance le sort de…, incante…, prononce…).
+_RE_VERBE_INCANTATION = _re_mod.compile(
+    r"\b(?:"
+    r"lanc[ée]z?s?\s+(?:(?:le|un|une|ensuite|puis|alors|son|sa|ses)\s+)*(?:sort\s+(?:de\s+)?)?"
+    r"|incant\w*\s+(?:(?:le|un|une|ensuite|puis)\s+)*(?:sort\s+(?:de\s+)?)?"
+    r"|jett[ée]z?s?\s+(?:(?:un|le|une|ensuite|puis|son|sa)\s+)*(?:sort\s+(?:de\s+)?)?"
+    r"|r[ée]cit\w+\s+"
+    r"|invoqu\w*\s+(?:(?:le|un|une|ensuite|puis)\s+)*(?:sort\s+(?:de\s+)?)?"
+    r"|prononc\w+\s+(?:les\s+mots\s+de\s+|le\s+|la\s+|l'\s*)?"
+    r"|d[ée]clench\w+\s+(?:(?:le|un|une|son|sa)\s+)?"
+    r"|m[ée]moris\w+\s+(?:(?:le|un|une|mes|ses|ensuite|puis)\s+)*"
+    r")$",
+    _re_mod.IGNORECASE,
+)
+# 🔧 Bêta (M4, élargissement symétrique) : les phrasings naturels placent le
+# verbe APRÈS le nom (« un rayon de givre jaillit de son index », « le sort
+# s'abat sur la cible ») — un verbe de MANIFESTATION qui suit prouve tout
+# autant l'incantation narrée.
+_RE_MANIFESTATION_SORT = _re_mod.compile(
+    r"\b(?:"
+    r"jaill\w*|s'abat|s\Wabat\w*|foudroi\w*|illumin\w*|s'embrase|s\Wembras\w*"
+    r"|travers\w*\s+(?:l'air|la\s+pi[èe]ce|le\s+courloir)"
+    r"|frapp\w*|vise\w*|blesse\w*|atteint\w*|glac\w+\s+(?:la|le|le\s+mort|sa|son)"
+    r"|envelopp\w*|recouvr\w*|touch\w*\s+(?:la|le|sa|son)|surgit\w*\s+(?:de\s+son|du\s+sac)"
+    r")",
+    _re_mod.IGNORECASE,
+)
+
+
+def _normaliser_texte_sort(t: str) -> str:
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", str(t or "").lower())
+    return "".join(c for c in nf if not _ud.combining(c))
+
+
+def _detecter_sorts_narres(
+    prose: str,
+    traces_incanter_norm: set[str],
+) -> list[dict[str, Any]]:
+    """Repère les sorts du catalogue mentionnés comme LANCÉS dans la prose.
+
+    - Faux positifs maîtrisés : un sort cité dans une phrase de REFUS
+      (« pas préparé », « ne peut », « épuisé »…) ou de simple MENTION
+      (« tu pourrais lancer… ») n'est PAS considéré comme lancé.
+    - `traces_incanter_norm` : textes NORMALISÉS des appels `incanter_sort`
+      réussis ce tour — un sort déjà résolu par le tool n'est jamais
+      re-rattrapé.
+
+    Renvoie [{nom, position}] trié par position dans la prose.
+    """
+    if not prose or not prose.strip():
+        return []
+    norm = _normaliser_texte_sort(prose)
+    trouves: dict[str, dict[str, Any]] = {}
+    for s in sorts_mod.SORTS:
+        nom = str(s.get("nom") or "").strip()
+        if len(nom) < 4:
+            continue
+        n = _normaliser_texte_sort(nom)
+        if not n:
+            continue
+        if any(n in t for t in traces_incanter_norm):
+            continue  # déjà résolu par le tool ce tour
+        m = _re_mod.search(
+            r"(?<![a-z0-9])" + _re_mod.escape(n) + r"(?![a-z0-9])", norm
+        )
+        if not m:
+            continue
+        # Fenêtre de contexte : une phrase de refus/mention ne compte pas.
+        debut = max(0, m.start() - 80)
+        fin = min(len(norm), m.end() + 80)
+        contexte = norm[debut:fin]
+        if _RE_NEGATION_SORT.search(contexte):
+            continue
+        if _re_mod.search(r"\b(pourrais?|pourriez?|devr\w+|faudr\w+)\b", contexte):
+            continue
+        # 🔧 Durcissement + élargissement : un verbe d'incantation doit
+        # PRÉCÉDER le nom (~40 caractères), OU un verbe de manifestation le
+        # SUIVRE (~60) — sinon simple mention (« bouclier » = objet).
+        avant = norm[max(0, m.start() - 40) : m.start()]
+        apres = norm[m.end() : min(len(norm), m.end() + 60)]
+        if not (
+            _RE_VERBE_INCANTATION.search(avant)
+            or _RE_MANIFESTATION_SORT.search(apres)
+        ):
+            continue
+        if nom not in trouves:
+            trouves[nom] = {"nom": nom, "position": m.start()}
+    return sorted(trouves.values(), key=lambda x: x["position"])
+
+
+def _detecter_sorts_cites(prose: str) -> list[str]:
+    """Liste les sorts du catalogue SIMPLEMENT CITÉS dans un texte (noms
+    exacts, frontières de mots, sans analyse de verbe).
+
+    Réservé aux contextes déjà verrouillés par un verbe au niveau du message
+    (mémorisation : « je mémorise Bénédiction et Lumière » — le verbe porte
+    sur TOUTE la liste, les connecteurs « et/puis » entre les noms échappent
+    à la détection de verbe par nom)."""
+    if not prose or not prose.strip():
+        return []
+    norm = _normaliser_texte_sort(prose)
+    trouves: list[str] = []
+    for s in sorts_mod.SORTS:
+        nom = str(s.get("nom") or "").strip()
+        if len(nom) < 4:
+            continue
+        n = _normaliser_texte_sort(nom)
+        if not n:
+            continue
+        if _re_mod.search(
+            r"(?<![a-z0-9])" + _re_mod.escape(n) + r"(?![a-z0-9])", norm
+        ):
+            trouves.append(nom)
+    return trouves
+
+
 def _derive_scenario_id(data_dir: str, narration: str) -> Optional[str]:
     """Déduit l'identifiant du scénario à charger pour une écriture « opening ».
 
@@ -4485,8 +4916,16 @@ async def _handle_say(
     partie_id: str,
     player: str,
     text: str,
+    personnage: str = "",
+    client_id: str = "",
 ) -> None:
-    """Traite un message de joueur : invoque le MJ (orchestrateur) et broadcast."""
+    """Traite un message de joueur : invoque le MJ (orchestrateur) et broadcast.
+
+    🔒 Bêta (C2) : `personnage` = personnage incarné par la connexion
+    expéditrice (mémorisé au join). En combat, la garde de tour exige que ce
+    soit LUI le personnage actif — deux PJ du même compte ne peuvent plus
+    faire passer l'action de l'un pour celle de l'autre.
+    """
     if not text.strip():
         return
 
@@ -4505,6 +4944,11 @@ async def _handle_say(
         "type": "player",
         "player": player,
         "text": text,
+        # 🔁 Bêta (M2) : identifiant client → l'auteur reconnaît son propre
+        # echo (déjà affiché en optimiste) ; les AUTRES clients, eux, doivent
+        # afficher ce broadcast (c'était le bug : messages joueurs invisibles
+        # en direct chez les coéquipiers).
+        "client_id": str(client_id or ""),
     })
 
     # 1bis. ⚔️ Garde de tour : DÉPLACÉE après le pre-run du moteur de combat
@@ -4634,7 +5078,21 @@ async def _handle_say(
                 )
                 if pj_actif is not None:
                     joueur_actif = str(pj_actif.get("joueur") or "").strip().lower()
-                    if joueur_actif and player.strip().lower() != joueur_actif:
+                    # 🔒 Bêta (C2) : garde DOUBLE — le compte doit être celui
+                    # du PJ actif ET le personnage incarné par la connexion
+                    # doit ÊTRE le PJ actif. Sans la seconde vérification,
+                    # deux PJ du même compte (deux onglets) se volaient leurs
+                    # tours : l'action de l'un était rejouée comme celle de
+                    # l'autre (observé en bêta : « coup de masse d'Elandra »
+                    # déclenché depuis la fiche de Thorin).
+                    perso_exp = (personnage or "").strip().casefold()
+                    mauvais_perso = bool(
+                        perso_exp and perso_exp != actif.strip().casefold()
+                    )
+                    if (
+                        (joueur_actif and player.strip().lower() != joueur_actif)
+                        or mauvais_perso
+                    ):
                         # Les événements mécaniques du pre-run (monstres
                         # joués, tours passés…) sont montrés à la table même
                         # si le message n'ouvre pas un tour LLM — NARRÉS par
@@ -4678,11 +5136,20 @@ async def _handle_say(
                             "type": "sys",
                             "event": "turn_blocked",
                             "detail": (
-                                f"⏳ {player} doit attendre : en combat, "
-                                f"c'est le tour de {actif} (joué par "
+                                f"⏳ {player}"
+                                + (f" ({personnage})" if mauvais_perso else "")
+                                + " doit attendre : en combat, c'est le tour "
+                                f"de {actif} (joué par "
                                 f"{pj_actif.get('joueur')}) — round "
                                 f"{etat_avant.get('tour', 1)}."
                             ),
+                        })
+                        # 🔧 Bêta : le returncourt sautait le broadcast final
+                        # « status done » (étape 7) — le verrou de réflexion
+                        # restait collé chez les clients (champ de saisie
+                        # désactivé jusqu'à un F5). On clôt le statut ICI.
+                        await session.broadcast({
+                            "type": "status", "description": "", "done": True
                         })
                         return
                 # Si l'actif est un PNJ/monstre restant (rare après pre-run),
@@ -6425,6 +6892,156 @@ on_status=on_status)
                         f"(ignoré) : {e}"
                     )
 
+                # --- 5quater-s. ✨ Sorts NARRÉS sans `incanter_sort` (bêta
+                # M4) : le LLM racontait l'incantation en prose — préparation
+                # et emplacements restaient intacts, la fiche contredisait le
+                # récit (« lance Bénédiction » sans AUCUN sort préparé). On
+                # ré-invoque le tool officiel : il applique l'effet si les
+                # règles le permettent, et REFUSE honnêtement sinon (le refus
+                # est affiché à la table — la fiction ne prime plus).
+                try:
+                    _trace_sorts = {
+                        _normaliser_texte_sort(tc.get("text") or "")
+                        for tc in (result.tool_calls_trace or [])
+                        if tc.get("name") == "incanter_sort" and tc.get("ok")
+                    }
+                    _prose_sort = _narration_prose_seule(
+                        result.narration or ""
+                    ) or (result.narration or "")
+                    _sorts_narres = _detecter_sorts_narres(
+                        _prose_sort,
+                        _trace_sorts,
+                    )
+                    # 🔧 Bêta (M4-bis) : l'action DÉCLARÉE par le joueur
+                    # (« je lance un rayon de givre ») que le MJ a ignorée
+                    # (narration sans le nom du sort, confusion…) est
+                    # rattrapée elle aussi — miroir du rattrapage soins.
+                    _nom_perso_joueur = str(
+                        personnage or actif_avant or ""
+                    ).strip()
+                    if _nom_perso_joueur:
+                        for _sd in _detecter_sorts_narres(
+                            text or "", _trace_sorts
+                        ):
+                            _sn = str(_sd["nom"])
+                            if not any(s["nom"] == _sn for s in _sorts_narres):
+                                _sorts_narres.append(
+                                    {"nom": _sn, "position": 10_000}
+                                )
+                    # Mémorisation demandée PAR LE JOUEUR (« je mémorise
+                    # Bénédiction et Lumière ») → preparer_sorts avec fusion
+                    # des préparations existantes.
+                    if _RE_MEMORISATION_SORT.search(text or ""):
+                        _preps_fusion: dict[str, int] = {}
+                        try:
+                            _pjs_mem = etat_avant.get("pj") or []
+                            _nom_mem = next(
+                                (str(p.get("nom")) for p in _pjs_mem
+                                 if p.get("nom")
+                                 and _norm_nom_objet(str(p.get("nom")))
+                                 in _norm_nom_objet(text)),
+                                str(actif_avant
+                                    or (_pjs_mem[0].get("nom")
+                                        if _pjs_mem else "") or ""),
+                            )
+                            if _nom_mem:
+                                from .tools.sorts import preparer_sorts as _prep_tool
+                                _fiche_mem = persos_mod.charger_fiche(
+                                    cfg.abs(cfg.paths.data_dir), _nom_mem
+                                ) or {}
+                                _preps_actu = (
+                                    (_fiche_mem.get("sorts") or {})
+                                    .get("prepares") or {}
+                                )
+                                _preps_fusion = {
+                                    str(k): int(v or 1)
+                                    for k, v in _preps_actu.items()
+                                }
+                                for _sn in _detecter_sorts_cites(text or ""):
+                                    _preps_fusion[_sn] = (
+                                        _preps_fusion.get(_sn, 0) + 1
+                                    )
+                                if _preps_fusion:
+                                    _res_prep = await _prep_tool(
+                                        ctx,
+                                        nom_personnage=_nom_mem,
+                                        preparations_json=json.dumps(
+                                            _preps_fusion, ensure_ascii=False
+                                        ),
+                                    )
+                                    if _res_prep.text:
+                                        result.narration += (
+                                            "\n\n⚙️ _Rattrapage serveur "
+                                            "(mémorisation)_\n\n"
+                                            + _res_prep.text
+                                        )
+                                        print(
+                                            "[dnd35] Mémorisation narrée "
+                                            "appliquée (preparer_sorts)."
+                                        )
+                        except Exception as e_pm:              # noqa: BLE001
+                            print(
+                                "[dnd35] Rattrapage mémorisation échoué "
+                                f"(ignoré) : {e_pm}"
+                            )
+
+                    if _sorts_narres:
+                        from .tools.sorts import incanter_sort as _cast_tool
+                        _pjs_sort = [
+                            p for p in (etat_avant.get("pj") or [])
+                            if isinstance(p, dict) and p.get("nom")
+                        ]
+                        _norm_prose = _norm_nom_objet(_prose_sort)
+                        for _sd in _sorts_narres:
+                            # Lanceur : PJ NOMMÉ le plus proche (avant le sort
+                            # dans la prose) ; sort DÉCLARÉ par le joueur →
+                            # son personnage incarné ; sinon PJ actif en
+                            # combat ; sinon on renonce (jamais imputer un
+                            # sort au hasard — faux positif « Bouclier »
+                            # facturé à Elandra).
+                            _pos = int(_sd.get("position") or 0)
+                            _nom_lanceur = ""
+                            if _pos >= 10_000:
+                                _nom_lanceur = _nom_perso_joueur
+                            _meilleure = -1
+                            for _p in _pjs_sort:
+                                _idx = _norm_prose.find(
+                                    _norm_nom_objet(str(_p.get("nom")))
+                                )
+                                if 0 <= _idx <= _pos and _idx > _meilleure:
+                                    _meilleure = _idx
+                                    _nom_lanceur = str(_p.get("nom"))
+                            if not _nom_lanceur and str(
+                                    etat_avant.get("phase")) == "combat":
+                                _nom_lanceur = str(actif_avant or "")
+                            if not _nom_lanceur:
+                                print(
+                                    "[dnd35] Sort narré sans lanceur identifié, "
+                                    f"rattrapage ignoré : {_sd['nom']}."
+                                )
+                                continue
+                            _res_cast = await _cast_tool(
+                                ctx,
+                                nom_personnage=_nom_lanceur,
+                                nom_sort=str(_sd["nom"]),
+                                cible="",
+                            )
+                            _etiquette = (
+                                "accepté" if "✨" in (_res_cast.text or "")
+                                else "refusé"
+                            )
+                            result.narration += (
+                                "\n\n⚙️ _Rattrapage serveur (sort narré sans "
+                                f"outil — {_etiquette})_\n\n" + _res_cast.text
+                            )
+                            print(
+                                "[dnd35] Sort narré rattrapé : "
+                                f"{_sd['nom']} par {_nom_lanceur} → "
+                                f"{_etiquette}."
+                            )
+                except Exception as e_sp:                          # noqa: BLE001
+                    print(f"[dnd35] Rattrapage sorts narrés échoué (ignoré) : {e_sp}")
+
                 # --- 5quater-g. 🧹 Bandeau « Au tour de » hors combat : le
                 # strip déterministe ne tourne qu'après le moteur (phase
                 # combat). En exploration, une copie LLM du bandeau avec PV
@@ -6619,6 +7236,15 @@ on_status=on_status)
             # peuvent concaténer des blocs répétés (partie réelle : même phrase
             # ×4, bandeau « Phase : Combat » ×3) qui échappaient au passage
             # 5quater-g3 quand une branche intermédiaire échouait.
+            try:
+                # 🧹 Bêta (M3) : coulisses LLM (« Vérifions son état réel »),
+                # templates cassés (« Touché ! () ») et paraphrases doublées
+                # sont purgés AVANT le dédup verbatim.
+                result.narration = _nettoyer_meta_narration(
+                    result.narration or ""
+                ).strip()
+            except Exception as e_m3:                         # noqa: BLE001
+                print(f"[dnd35] Nettoyage narration (M3) échoué (ignoré) : {e_m3}")
             try:
                 result.narration = _re_mod.sub(
                     r"\n{3,}", "\n\n",

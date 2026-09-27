@@ -106,6 +106,22 @@ def creer_utilisateur(data_dir: str, nom: str, mot_de_passe: str) -> tuple[bool,
     return True, "Compte créé."
 
 
+def supprimer_compte(data_dir: str, nom: str) -> bool:
+    """🔧 Bêta (r4) : supprime un compte. Les tokens mémorisés deviennent
+    immédiatement invalides (`verifier_token` exige l'existence du compte).
+    Renvoie True si le compte existait et a été supprimé."""
+    nom = (nom or "").strip()
+    utilisateurs = _charger_utilisateurs(data_dir)
+    cible = next(
+        (k for k in utilisateurs if k.lower() == nom.lower()), None
+    )
+    if not cible:
+        return False
+    del utilisateurs[cible]
+    _sauver_utilisateurs(data_dir, utilisateurs)
+    return True
+
+
 def verifier_identifiants(data_dir: str, nom: str, mot_de_passe: str) -> bool:
     utilisateurs = _charger_utilisateurs(data_dir)
     cle = (nom or "").strip().lower()

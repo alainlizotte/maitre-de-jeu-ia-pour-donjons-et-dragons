@@ -146,7 +146,7 @@ export function PartyPage() {
     }
   }, [partyQuery.data, partie_id, addMonster, addScene, addSalle, removeMonsterByNom]);
 
-  const { sendSay, sendTeamSay, socket } = useChatSocket(partie_id ?? null);
+  const { sendSay, sendTeamSay, sendDice, socket } = useChatSocket(partie_id ?? null);
 
   // set_quest enregistre toujours un objet quête (même à titre vide pour
   // « aventure libre ») ; tant que rien n'est enregistré, le sélecteur reste
@@ -308,7 +308,7 @@ export function PartyPage() {
               (mobileView === "outils" ? "" : "hidden")
             }
           >
-            <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} socket={socket} />
+            <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} sendDice={sendDice} socket={socket} />
           </div>
         </div>
 
@@ -381,7 +381,7 @@ export function PartyPage() {
       <div className="flex-1 min-h-0 flex overflow-hidden">
         <StateSidebar />
         {colonneCentrale}
-        <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} socket={socket} />
+        <RightSidebar sendSay={sendSay} sendTeamSay={sendTeamSay} sendDice={sendDice} socket={socket} />
       </div>
       <RessourcesBar partie_id={partie_id} />
     </div>

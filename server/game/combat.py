@@ -567,7 +567,12 @@ def _memoriser_combat(etat: dict, raison: str) -> None:
 
 
 def _fermer_etat(etat: dict, raison: str) -> None:
-    etat["phase"] = "exploration"
+    # 🔧 Bêta (r3) : une DÉFAITE passe en phase dédiée « game_over » (plus
+    # une exploration qui « continuait » avec un groupe décédé) ; la
+    # victoire revient en exploration. Le filtrage d'outils retombe sur
+    # l'ensemble exploration pour une phase inconnue — le MJ reste
+    # capable de narre/résusciter (repos, reprise narrative…).
+    etat["phase"] = "exploration" if raison == "victoire" else "game_over"
     etat["initiative"] = []
     etat["courant_tour_pour"] = None
     etat["tour"] = 0
@@ -628,10 +633,11 @@ async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
     })
     _fermer_etat(etat, raison)
     state.save(etat)
-    res.phase = "exploration"
+    # 🔧 Bêta (r3) : phase finale fidèle — « game_over » en défaite.
+    res.phase = "exploration" if raison == "victoire" else "game_over"
     res.combat_termine = raison
     res.patches.append({
-        "phase": "exploration", "tour": 0, "courant_tour_pour": None,
+        "phase": res.phase, "tour": 0, "courant_tour_pour": None,
         "initiative": [], "monstres_combat": [],
         **({"game_over": True} if raison != "victoire" else {}),
     })

@@ -131,8 +131,8 @@ def test_aucun_pj_vivant_pas_auto_attaque():
 
         res = asyncio.run(boucle_auto(_ctx(d)))
         # Sans PJ vivant et avec un monstre vivant, le combat se clôt en
-        # défaite sans accroc.
+        # défaite sans accroc. 🔧 Bêta (r3) : phase dédiée « game_over ».
         assert res.combat_termine == "defaite"
-        assert res.phase == "exploration"
+        assert res.phase == "game_over"
     finally:
         shutil.rmtree(d, ignore_errors=True)

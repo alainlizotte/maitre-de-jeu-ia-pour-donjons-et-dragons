@@ -31,6 +31,12 @@ export function useChatSocket(partie_id: string | null) {
   const setWsStatus = useParty((s) => s.setWsStatus);
   const player = useParty((s) => s.player);
   const lastJoinRef = useRef<string>("");
+  // 🔁 Bêta (M2) : ids des messages envoyés par CE client — l'echo serveur
+  // correspondant ne doit pas être ré-affiché (déjà ajouté en optimiste),
+  // alors que les broadcasts des AUTRES joueurs doivent l'être (bug bêta :
+  // le cas "player" était entièrement ignoré → messages des coéquipiers
+  // invisibles en direct, visibles seulement après rechargement).
+  const ownSayIds = useRef<Set<string>>(new Set());
 
   const beep = useCallback((freq = 800, duration = 120, vol = 0.15) => {
     try {
@@ -236,6 +242,9 @@ export function useChatSocket(partie_id: string | null) {
             });
           } else if (msg.event === "turn_blocked") {
             // Hors-tour en combat : le serveur refuse d'invoquer le MJ.
+            // 🔧 Bêta : lève aussi le verrou de réflexion — l'absence de
+            // « status done » après un blocage laissait la saisie désactivée.
+            setThinking(false);
             addMessage({
               id: uid(),
               role: "system",
@@ -251,10 +260,24 @@ export function useChatSocket(partie_id: string | null) {
             });
           }
           break;
-        case "player":
-          // Ack du serveur — l'auteur verra son message. On évite le double
-          // ici : le client ajoute déjà son propre message avant l'envoi.
+        case "player": {
+          // 🔁 Bêta (M2) : affiche les messages joueurs REÇUS. Le sien
+          // (client_id renvoyé par le serveur et déjà affiché en optimiste)
+          // est ignoré ; celui des autres coéquipiers s'affiche en direct.
+          const cid = (msg as { client_id?: string }).client_id;
+          if (cid && ownSayIds.current.has(cid)) {
+            ownSayIds.current.delete(cid);
+            break;
+          }
+          addMessage({
+            id: cid || uid(),
+            role: "user",
+            player: msg.player,
+            content: msg.text,
+            ts: Date.now(),
+          });
           break;
+        }
         case "status":
           // Libellé serveur (« Le MJ réfléchit... », « Le MJ finalise la
           // scène… ») affiché tel quel pendant le tour ; done → indicateur off.
@@ -389,8 +412,15 @@ export function useChatSocket(partie_id: string | null) {
 
   const sendSay = (text: string) => {
     if (!sockRef.current || !player) return;
+    // 🔒 Bêta : verrou optimiste — le statut serveur « thinking » n'arrive
+    // qu'après un aller-retour réseau ; sans ce verrou, deux clics rapides
+    // envoyaient DEUX fois le message (deux tours MJ facturés).
+    if (useParty.getState().thinking) return;
+    setThinking(true, "Le MJ réfléchit...");
+    const cid = uid();
+    ownSayIds.current.add(cid);
     addMessage({
-      id: uid(),
+      id: cid,
       role: "user",
       player,
       content: text,
@@ -408,7 +438,7 @@ export function useChatSocket(partie_id: string | null) {
         ts: Date.now(),
       });
     }
-    sockRef.current.say(player, text);
+    sockRef.current.say(player, text, cid);
   };
 
   const sendTeamSay = (text: string) => {
@@ -416,5 +446,22 @@ export function useChatSocket(partie_id: string | null) {
     sockRef.current.send({ type: "team_say", player, text });
   };
 
-  return { sendSay, sendTeamSay, socket: sockRef };
+  /** 🎲 Bêta (r2) : jet manuel — informatif seulement. Pas de verrou de
+   *  réflexion ni de tour LLM : le résultat est diffusé à la table et
+   *  persisté dans l'historique. */
+  const sendDice = (text: string) => {
+    if (!sockRef.current || !player) return;
+    const cid = uid();
+    ownSayIds.current.add(cid);
+    addMessage({
+      id: cid,
+      role: "user",
+      player,
+      content: text,
+      ts: Date.now(),
+    });
+    sockRef.current.dice(player, text, cid);
+  };
+
+  return { sendSay, sendTeamSay, sendDice, socket: sockRef };
 }

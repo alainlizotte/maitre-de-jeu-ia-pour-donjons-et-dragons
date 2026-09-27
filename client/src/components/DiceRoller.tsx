@@ -1,7 +1,9 @@
 // Dé visuel client — jet rapide d4/d6/d8/d10/d12/d20/d100 pour le joueur. Le
 // résultat est annoncé dans le chat de partie (visible du MJ et des autres
-// joueurs) ; les jets officiels (attaques, sauvegardes) restent lancés par le
-// MJ via tool-calling serveur.
+// joueurs) SANS invoquer le MJ (bêta r2 : un tour LLM complet par clic était
+// interprété en fiction — attaque sur une « cible invisible ») ; les jets
+// officiels (attaques, sauvegardes) restent lancés par le MJ via tool-calling
+// serveur.
 
 import { useState } from "react";
 
@@ -17,7 +19,7 @@ export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
     setResult(r);
     const line = `1d${sides} → ${r}${r === 20 ? " ⭐" : r === 1 ? " 💀" : ""}`;
     setLog((l) => [line, ...l].slice(0, 12));
-    // Annonce le jet dans le chat de partie (informe le MJ et l'équipe).
+    // Annonce le jet à la table (canal "dice" — informatif, sans tour MJ).
     sendSay?.(`🎲 Jet manuel : 1d${sides} → ${r}${r === 20 ? " (20 naturel !)" : r === 1 ? " (1 naturel…)" : ""}`);
   };
 
@@ -58,7 +60,7 @@ export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
       </button>
       <div className="mt-2 text-stone-500 text-xs">
         {sendSay
-          ? `Annonce le résultat au MJ dans le chat`
+          ? `Annonce le résultat à la table (sans déclencher le MJ)`
           : `Jet visuel local`}
       </div>
       {log.length > 0 && (

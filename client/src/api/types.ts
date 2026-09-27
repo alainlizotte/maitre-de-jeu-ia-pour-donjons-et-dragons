@@ -205,7 +205,9 @@ export type WsMessage =
   | { type: "sys"; event: "join_refused"; detail: string }
   | { type: "sys"; event: "turn_blocked"; detail: string }
   | { type: "sys"; event: "error"; detail: string }
-  | { type: "player"; player: string; text: string }
+  | { type: "player"; player: string; text: string; client_id?: string }
+  /** 🎲 Bêta (r2) : jet manuel du joueur — diffusé et persisté, SANS tour MJ. */
+  | { type: "dice"; player: string; text: string; client_id?: string }
   | { type: "status"; description: string; done?: boolean }
   | { type: "delta"; text: string }
   | { type: "tool_event"; event: ToolEvent }
@@ -229,7 +231,7 @@ export type WsMessage =
 export interface PartiesList {
   active: string[];
   persisted: string[];
-  details: Record<string, { titre: string; phase: string; tour: number; pj: number; protegee?: boolean }>;
+  details: Record<string, { titre: string; phase: string; tour: number; pj: number; protegee?: boolean; createur?: string | null }>;
 }
 
 export interface HealthStatus {

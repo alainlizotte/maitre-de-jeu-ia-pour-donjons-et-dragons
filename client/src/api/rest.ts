@@ -95,6 +95,12 @@ export const api = {
       body: JSON.stringify({ nom, mot_de_passe: motDePasse }),
     }).then(jq<{ token: string; utilisateur: string }>),
   moi: () => fetch(`${API}/auth/moi`, { headers: entetes() }).then(jq<{ utilisateur: string }>),
+  /** 🔧 Bêta (r4) : auto-suppression du compte connecté (parties créées,
+   *  fiches, portraits, compte). Les tokens deviennent invalides. */
+  supprimerCompte: () =>
+    fetch(`${API}/auth/compte`, { method: "DELETE", headers: entetes() }).then(
+      jq<{ ok: boolean; compte: string; parties_supprimees: string[]; fiches_supprimees: string[] }>,
+    ),
 
   // -- Personnages (« Mes personnages ») ----------------------------------- //
   modelePerso: () => fetch(`${API}/persos/modele`).then(jq<ModelePerso>),
@@ -125,7 +131,9 @@ export const api = {
   createParty: (titre: string, motDePasse?: string) =>
     fetch(`${API}/parties`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // 🔒 Bêta (C1) : le créateur est enregistré propriétaire de la partie
+      // — le token est donc requis (sinon la création est refusée 401).
+      headers: entetes({ "Content-Type": "application/json" }),
       body: JSON.stringify({ titre, mot_de_passe: motDePasse || "" }),
     }).then(jq<{ partie_id: string }>),
   getParty: (id: string) =>

@@ -34,6 +34,8 @@ const TAB_LABELS: Record<Tab, string> = {
 interface RightSidebarProps {
   sendSay?: (text: string) => void;
   sendTeamSay?: (text: string) => void;
+  /** 🎲 Bêta (r2) : jet manuel informatif — n'invoque pas le MJ. */
+  sendDice?: (text: string) => void;
   socket?: React.RefObject<{ send: (payload: Record<string, unknown>) => void } | null>;
 }
 
@@ -384,7 +386,7 @@ function EncounterGallery() {
   );
 }
 
-export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps) {
+export function RightSidebar({ sendSay, sendTeamSay, sendDice, socket }: RightSidebarProps) {
   const [tab, setTab] = useState<Tab>("des");
   const teamUnread = useParty((s) => s.teamUnread);
   const resetTeamUnread = useParty((s) => s.resetTeamUnread);
@@ -436,7 +438,7 @@ export function RightSidebar({ sendSay, sendTeamSay, socket }: RightSidebarProps
         ))}
       </div>
       <div className="flex-1 min-h-0 overflow-auto p-3">
-        {tab === "des" && <DiceRoller sendSay={sendSay} />}
+        {tab === "des" && <DiceRoller sendSay={sendDice} />}
         {tab === "equipe" && <TeamChat sendTeamSay={sendTeamSay ?? (() => {})} socket={socket} />}
         {tab === "monde" && <WorldMap />}
         {tab === "donjon" && <DungeonView sendSay={sendSay} />}

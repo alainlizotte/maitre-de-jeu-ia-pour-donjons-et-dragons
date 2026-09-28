@@ -501,7 +501,13 @@ def _verifier_fin(etat: dict) -> Optional[str]:
 async def _distribuer_xp(ctx, res: ResultatBoucle, etat: dict) -> None:
     """XP officielle (DMG 3.5) : chaque PJ vivant gagne, pour CHAQUE ennemi
     détruit, la valeur de la table selon SON propre niveau. Applique les
-    montées de niveau (jet de dé de vie) et synchronise les fiches."""
+    montées de niveau (jet de dé de vie) et synchronise les fiches.
+
+    🔧 Bêta (résidu 2) : si la liste `monstres_combat` a été PERDUE avant la
+    clôture (écriture concurrente, tour interrompu…), on retombe sur le
+    snapshot `monstres_derniers` — la victoire remportée doit payer son XP
+    même quand le suivi a sauté (partie réelle : un Squelette détruit, une
+    victoire clôturée, zéro XP distribué)."""
     from ..game import xp as gxp
     from ..tools.fiches import _load_fiche, _save_fiche, _sync_pj, _patch_pj
 
@@ -514,6 +520,21 @@ async def _distribuer_xp(ctx, res: ResultatBoucle, etat: dict) -> None:
              # 2ca691ec — PV patchés sans la condition « Détruit »).
              or (int(m.get("pv", 0) or 0) <= 0 and not m.get("inconnu")))
     ]
+    if not vaincus:
+        # 🔧 Fallback : ennemis perdus avant la clôture → le snapshot des
+        # derniers ennemis suivis fait foi (tous considérés détruits : la
+        # clôture en victoire ne survient que s'ils ne menacent plus).
+        derniers = etat.get("monstres_derniers") or []
+        if derniers:
+            vaincus = [
+                {"nom": str(m.get("nom") or "?"), "fp": m.get("fp"),
+                 "conditions": ["Détruit"]}
+                for m in derniers if isinstance(m, dict) and m.get("nom")
+            ]
+            res.events.append(
+                "⚙️ _Suivi de combat perdu — XP distribuée sur le snapshot "
+                "des derniers ennemis suivis._"
+            )
     if not vaincus:
         return
     resume: list[str] = [
@@ -557,6 +578,13 @@ def _memoriser_combat(etat: dict, raison: str) -> None:
         str(m.get("nom") or "") for m in etat.get("monstres_combat") or []
         if not m.get("allie")
     ]
+    # 🔧 Bêta (résidu 2) : liste perdue avant la clôture → le snapshot fait
+    # foi pour la mémoire de campagne aussi.
+    if not ennemis:
+        ennemis = [
+            str(m.get("nom") or "") for m in (etat.get("monstres_derniers") or [])
+            if isinstance(m, dict) and m.get("nom")
+        ]
     memoire = etat.setdefault("memoire", {})
     memoire.setdefault("monstres_combattus", []).append({
         "noms": ennemis,
@@ -622,14 +650,17 @@ async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
     # (defaite) : Magmatique, Ane, Rat » ressemblait au groupe et poussait
     # la narration à traiter les monstres comme des compagnons).
     raison_fr = "victoire" if raison == "victoire" else "défaite"
+    ennemis_label = ", ".join(
+        str(m.get("nom") or "")
+        for m in etat.get("monstres_combat") or [] if not m.get("allie")
+    ) or ", ".join(
+        str(m.get("nom") or "")
+        for m in (etat.get("monstres_derniers") or []) if isinstance(m, dict)
+    )
     etat.setdefault("histoire", []).append({
         "ts": datetime.now().isoformat(),
         "tour": "",
-        "evenement": f"Combat terminé — {raison_fr}. Ennemis : "
-        + ", ".join(
-            str(m.get("nom") or "")
-            for m in etat.get("monstres_combat") or [] if not m.get("allie")
-        ),
+        "evenement": f"Combat terminé — {raison_fr}. Ennemis : {ennemis_label}",
     })
     _fermer_etat(etat, raison)
     state.save(etat)
@@ -687,6 +718,19 @@ async def boucle_auto(
         if etat.get("phase") != "combat":
             res.courant = str(etat.get("courant_tour_pour") or "")
             return res
+        # 🔧 Bêta (résidu 2) : SNAPSHOT des ennemis suivis — si la liste
+        # `monstres_combat` est perdue avant la clôture (écriture concurrente
+        # read-modify-write…), la victoire est clôturée SANS XP (« ennemis
+        # incalculables »). Le snapshot permet de distribuer l'XP de secours.
+        ennemis_snap = [
+            {"nom": str(m.get("nom") or ""), "fp": m.get("fp")}
+            for m in (etat.get("monstres_combat") or [])
+            if isinstance(m, dict) and not m.get("allie") and m.get("nom")
+        ]
+        if ennemis_snap and etat.get("monstres_derniers") != ennemis_snap:
+            etat["monstres_derniers"] = ennemis_snap
+            state.save(etat)
+            etat = state.load()
         if not etat.get("initiative"):
             # Combat en phase mais SANS ordre d'initiative (tour interrompu
             # par une déconnexion, crash…). Sans ce filet, l'état restait

@@ -16,6 +16,7 @@ Usage : py -m pytest tests/test_correctifs_beta_session1.py -q
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
@@ -510,6 +511,107 @@ def test_r5_crash_patch_partiel_sans_nom_corrige():
     assert '(nom || "?")' in src
     # La carte pj map tolère les entrées nulles
     assert "pj={p ?? undefined}" in src
+
+
+# --------------------------------------------------------------------------- #
+#  R6 — Résidu 1b : chutes narratives harmonisées sur l'état serveur
+# --------------------------------------------------------------------------- #
+def test_r6_chute_narrative_reecrite_sur_etat_serveur():
+    """« Les points de vie de X chutent à 10/11 » alors que le serveur dit
+    -1/11 (Mourant) → la valeur COURANTE est réécrite sur l'état officiel."""
+    pj = [{"nom": "Bran Mainedacier", "pv": -1, "pv_max": 11}]
+    nar = ("Le gaz empoisonné frappe le guerrier. Les points de vie de "
+           "Bran Mainedacier chutent à 10/11. Il s'effondre.")
+    out = srv._harmoniser_statut_serveur(nar, pj, [])
+    assert "chutent à -1/11" in out, out
+    assert "10/11" not in out, out
+    # La prose autour est conservée.
+    assert "Le gaz empoisonné frappe le guerrier" in out
+
+
+def test_r6_chute_narrative_inconnue_intacte():
+    """Un nom absent de l'état (PNJ quelconque) n'est PAS réécrit."""
+    nar = ("Les points de vie du garde municipal chutent à 3/8. Il fuit.")
+    assert srv._harmoniser_statut_serveur(nar, [], []) == nar
+
+
+# --------------------------------------------------------------------------- #
+#  R7 — Résidu 1a : timeouts INVENTÉS purgés de la narration
+# --------------------------------------------------------------------------- #
+def test_r7_timeout_invente_purge():
+    """« Le délai de trente secondes expiré consomme son tour » (invention
+    LLM, aucun timeout serveur) est purgé de la narration."""
+    nettoye = srv._nettoyer_meta_narration(
+        "Le temps s'écoule lourdement dans la tombe froide. Bran Mainedacier "
+        "reste immobile : le délai de trente secondes expiré consomme son "
+        "tour sans qu'il puisse bouger un muscle.\n\n"
+        "Le squelette avance vers vous, ses os grinçant sous l'armure rouillée."
+    )
+    assert "trente secondes" not in nettoye
+    assert "expiré consomme son tour" not in nettoye
+    assert "Le squelette avance vers vous" in nettoye
+
+
+def test_r7_evenement_serveur_timeout_conserve():
+    """L'événement SERVEur (« passé automatiquement ») n'est jamais purgé."""
+    nar = ("⚙️ Tour de Bran Mainedacier passé automatiquement (délai "
+           "dépassé - 300 s).")
+    assert srv._nettoyer_meta_narration(nar) == nar
+
+
+# --------------------------------------------------------------------------- #
+#  R8 — Résidu 2 : XP distribuée via le snapshot quand le suivi est perdu
+# --------------------------------------------------------------------------- #
+def test_r8_xp_de_secours_sur_snapshot_ennemis_perdus(tmp_path, monkeypatch):
+    """Combat clôturé en victoire avec `monstres_combat` VIDE (suivi perdu)
+    mais `monstres_derniers` présent → l'XP du snapshot est distribuée."""
+    from server.game.combat import ResultatBoucle, cloturer
+    from server.tools.base import ToolContext
+
+    pid = "betar8"
+    d = str(tmp_path)
+    shutil.copy2(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "data", "bestiaire.json"),
+        os.path.join(d, "bestiaire.json"),
+    )
+    ctx = ToolContext(partie_id=pid, joueur="J1", data_dir=d)
+    st = PartyState(data_dir=d, partie_id=pid)
+    st.save({
+        "phase": "combat",
+        # 🔧 Suivi PERDU : monstres_combat vide.
+        "monstres_combat": [],
+        # 🔧 …mais le snapshot des derniers ennemis suivis existe.
+        "monstres_derniers": [{"nom": "Squelette", "fp": "1/3"}],
+        "pj": [{"nom": "Brunhild", "joueur": "J1", "pv": 5}],
+    })
+    # Fiche du PJ (XP lue/écrite dessus).
+    (tmp_path / "fiches").mkdir(exist_ok=True)
+    fiche = {"nom": "Brunhild", "classe": "guerrier", "niveau": 1,
+             "carac": {"FOR": 16}, "pv": 5, "pv_max": 12, "xp": 0,
+             "equipement": []}
+    (tmp_path / "fiches" / "fiche_brunhild.json").write_text(
+        json.dumps(fiche, ensure_ascii=False), encoding="utf-8")
+
+    res = ResultatBoucle()
+    asyncio.run(cloturer(ctx, res, "victoire"))
+    etat = st.load()
+    # L'XP du Squelette (FP 1/3 → 135 XP niveau 1) a été distribuée.
+    assert etat["pj"][0]["xp"] == 135, etat["pj"][0]
+    assert any("135" in e for e in res.events), res.events
+
+
+def test_r8_snapshot_pose_en_boucle_combat(tmp_path, monkeypatch):
+    """La boucle de combat pose le snapshot `monstres_derniers` dès qu'un
+    ennemi est suivi (source du fallback XP)."""
+    src = open(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "game", "combat.py"), encoding="utf-8").read()
+    assert '"monstres_derniers"' in src
+    assert "ennemis_snap" in src
+    # Le fallback XP lit le snapshot.
+    assert "monstres_derniers" in src.split("def _distribuer_xp")[1].split(
+        "def _memoriser_combat")[0]
 
 
 # --------------------------------------------------------------------------- #

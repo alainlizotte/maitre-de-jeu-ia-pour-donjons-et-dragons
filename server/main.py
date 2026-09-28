@@ -871,6 +871,16 @@ _RE_PV_BLOC_NARRE = _re_mod.compile(
     r"[:：]\s*\*{0,2}\s*\d{1,3}\s*/\s*\d{1,3}\s*\*{0,2}(?:\s*\([^)]*\))?",
     _re_mod.IGNORECASE,
 )
+# 🔧 Bêta (résidu 1b) : format NARRATIF « Les points de vie de <nom> chutent
+# à 10/11 » — l'harmonisation ne couvrait que « PV <nom> : a/b » et laissait
+# des valeurs inventées contredire l'état serveur (partie réelle : « chutent
+# à 10/11 » narré alors que le PJ était à -1, Mourant).
+_RE_PV_CHUTE_NARRE = _re_mod.compile(
+    r"points?\s+de\s+vie\s+de\s+(?P<nom>[A-Za-zÀ-ÿ' -]{2,40}?)\s+"
+    r"(?P<verbe>chut\w*|pass\w*|tomb\w*|descend\w*|baiss\w*|effondr\w*|retomb\w*)"
+    r"(?:\s*brutalement)?\s+à\s*(?P<pv>\d{1,3})\s*(?:/|sur)\s*(?P<pm>\d{1,3})",
+    _re_mod.IGNORECASE,
+)
 _RE_CA_BLOC_NARRE = _re_mod.compile(
     r"(?:\*\*\s*)?CA\s+(?P<nom>[A-Za-zÀ-ÿŒœ][^\n:*，,]{0,40}?)\s*"
     r"[:：]\s*\*{0,2}\s*\d{1,3}\*{0,2}",
@@ -943,6 +953,27 @@ def _harmoniser_statut_serveur(
 
     _nar = _RE_PV_BLOC_NARRE.sub(_remplace_pv, narration)
     _nar = _RE_CA_BLOC_NARRE.sub(_remplace_ca, _nar)
+
+    # 🔧 Bêta (résidu 1b) : chutes narratives (« points de vie de X chutent
+    # à 10/11 ») — le PV COURANT narré est réécrit sur la valeur serveur
+    # (le PJ mourant à -1 doit rester mourant dans le récit).
+    def _remplace_chute(m: re.Match) -> str:
+        cle = _norm_nom_objet(m.group("nom"))
+        source = None
+        if cle in pj_map:
+            source = pj_map[cle]
+        elif cle in mon_map:
+            source = mon_map[cle]
+        if source is None:
+            return m.group(0)
+        _pv = _to_int_fiable(source.get("pv"))
+        _pm = _to_int_fiable(source.get("pv_max"))
+        if _pv is None or not _pm:
+            return m.group(0)
+        _label = str(source.get("nom") or m.group("nom"))
+        return f"points de vie de {_label} {m.group('verbe')} à {_pv}/{_pm}"
+
+    _nar = _RE_PV_CHUTE_NARRE.sub(_remplace_chute, _nar)
     return _nar.strip()
 
 
@@ -1009,6 +1040,19 @@ _RE_PARAGRAPHE_META = _re_mod.compile(
     r"|^commentaire\s*:)",
     _re_mod.IGNORECASE | _re_mod.MULTILINE,
 )
+# 🔧 Bêta (résidu 1a) : TIMEOUTS INVENTÉS — le LLM narrait un « délai de
+# trente secondes expiré » alors qu'aucun timeout serveur n'a eu lieu (la
+# rotation est gérée par le moteur, qui émet son propre événement « passé
+# automatiquement »). Un paragraphe qui RAconte une expiration de délai est
+# donc de la fiction fausse : purgé (l'événement serveur, lui, est conservé).
+_RE_PARAGRAPHE_TIMEOUT_INVENTE = _re_mod.compile(
+    r"(expir\w*\s+(?:d[ée]lai|dans\s+la\s+limite)"
+    r"|d[ée]lai\s+(?:de\s+)?(?:trente|\d+)\s+secondes"
+    r"|limite\s+\w*\s*des\s+trente\s+secondes"
+    r"|le\s+tour\s+(?:de\s+\S+\s+)?(?:a\s+)?expir\w*"
+    r"|tour\s+expir\w*\s+(?:automatiquement|sans))",
+    _re_mod.IGNORECASE,
+)
 # Seuil de similarité (Jaccard sur les mots > 3 lettres) au-delà duquel deux
 # paragraphes sont considérés comme la MÊME scène re-racontée.
 _SEUIL_SIMILARITE_PARAGRAPHE = 0.55
@@ -1057,6 +1101,13 @@ def _nettoyer_meta_narration(narration: str) -> str:
         if not aplati:
             continue
         if _RE_PARAGRAPHE_META.search(aplati):
+            continue
+        # 🔧 Bêta (résidu 1a) : les timeouts INVENTÉS (« le délai de trente
+        # secondes expiré consomme son tour ») sont purgés — le vrai timeout
+        # est narré par l'événement serveur « passé automatiquement ».
+        if _RE_PARAGRAPHE_TIMEOUT_INVENTE.search(aplati) and (
+            "passé automatiquement" not in aplati.lower()
+        ):
             continue
         if len(aplati) >= 60:
             duplicata = any(
@@ -5208,6 +5259,9 @@ async def _handle_say(
                     "mourants, fin de combat, expérience. N'appelle NI "
                     "tour_suivant_combat NI finir_combat NI engager_combat "
                     "pendant un combat en cours.\n"
+                    "🚫 N'invente JAMAIS un délai ou timeout expiré pour "
+                    "expliquer un changement de tour : la rotation est "
+                    "SERVEUR, aucun délai n'« expire » dans ta narration.\n"
                     "🧭 Ton rôle : narrer ce qui vient de se passer "
                     "(notamment les événements mécaniques serveur listés "
                     "ci-dessous) puis, si c'est le tour d'un PJ, résoudre "

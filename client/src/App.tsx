@@ -7,11 +7,26 @@ import { api, getToken, setToken } from "./api/rest";
 import { useParty } from "./store";
 
 export default function App() {
-  const { data } = useQuery({ queryKey: ["health"], queryFn: api.health });
+  // 🔧 Bêta (résidu 3) : polling ADAPTATIF — 30 s quand tout va bien, 5 s
+  // dès que le statut est inconnu/perdu (redémarrage serveur, coupure réseau)
+  // : le bandeau « down » ne reste plus collé une minute après le retour du
+  // backend. `staleTime` évite le refetch immédiat au remount.
+  const { data } = useQuery({
+    queryKey: ["health"],
+    queryFn: api.health,
+    staleTime: 20_000,
+    refetchInterval: (q) => (q.state.data?.ok ? 30_000 : 5_000),
+  });
   const utilisateur = useParty((s) => s.utilisateur);
   const setUtilisateur = useParty((s) => s.setUtilisateur);
   const navigate = useNavigate();
-  const backendOk = !!data?.ok && !!data?.model_available;
+  // 🔧 Bêta (résidu 3) : « down » = le backend NE répond PAS. Un modèle
+  // déchargé après inactivité (unload_after_turn) n'est PAS un down : il
+  // est rechargé à la volée au prochain tour — affiché « en veille ».
+  const backendInconnu = data === undefined;
+  const backendJoignable = data?.ok === true;
+  const backendOk = backendJoignable && !!data?.model_available;
+  const backendEnVeille = backendJoignable && !data?.model_available;
   const backendLabel = data?.backend === "llamacpp" ? "llama.cpp" : "Ollama";
   const connecte = Boolean(getToken());
 
@@ -29,8 +44,19 @@ export default function App() {
           <span className="hidden md:inline">🎲 D&D 3.5 — Maître du Jeu</span>
         </Link>
         <span className="text-xs text-stone-400 flex items-center gap-2 md:gap-3 min-w-0">
-          <span className={backendOk ? "text-emerald-400" : "text-rose-400"}>
-            ● {backendLabel} {backendOk ? "ok" : "down"}
+          <span className={
+            backendInconnu ? "text-stone-500"
+              : backendOk ? "text-emerald-400"
+                : backendEnVeille ? "text-sky-400"
+                  : "text-rose-400"
+          }>
+            {backendInconnu ? (
+              <>● backend…</>
+            ) : (
+              <>● {backendLabel}{" "}
+                {backendOk ? "ok" : backendEnVeille ? "ok · modèle en veille" : "down"}
+              </>
+            )}
           </span>
           {data?.model && (
             <span className="hidden md:inline text-stone-500 max-w-48 truncate" title={data.model}>

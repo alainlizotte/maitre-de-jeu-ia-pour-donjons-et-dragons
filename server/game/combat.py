@@ -153,14 +153,23 @@ def _avancer_curseur(etat: dict) -> Optional[str]:
         return None
     courant = etat.get("courant_tour_pour")
     idx = next((i for i, e in enumerate(ordre) if e.get("nom") == courant), -1)
+    wrap = False
     if idx == -1:
         idx = 0
         etat["tour"] = (etat.get("tour", 0) or 0) + 1
+        wrap = True
     else:
         idx += 1
         if idx >= len(ordre):
             idx = 0
             etat["tour"] = (etat.get("tour", 0) or 0) + 1
+            wrap = True
+    # 🔧 Bêta (séquencement) : au CHANGEMENT DE ROUND seulement (wrap), on
+    # efface les marques « a déjà agi ce round ». Un effacement à CHAQUE
+    # avancement aurait détruit la marque du déclencheur hors initiative
+    # dès la première avance (double action redevenue possible).
+    if wrap:
+        etat["deja_agi"] = []
     vivant = _prochain_vivant(etat, ordre, idx)
     if vivant == -1:
         vivant = idx  # la clôture gérera ce cas
@@ -606,6 +615,7 @@ def _fermer_etat(etat: dict, raison: str) -> None:
     etat["tour"] = 0
     etat["monstres_combat"] = []
     etat["tour_depuis"] = None
+    etat["deja_agi"] = []
 
 
 async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
@@ -789,6 +799,21 @@ async def boucle_auto(
         # 3) Tour d'un PJ.
         ok, raison = _pj_peut_agir(pj)
         if ok:
+            # 🔧 Bêta (séquencement) : le combat a DÉBUTÉ pendant le tour du
+            # joueur qui a déclenché l'attaque (hors initiative) — son action
+            # est déjà consommée. Sans cette marque, soit il re-jouait au
+            # passage du curseur (double action), soit le `force` de
+            # post-tour sautait le PREMIER PJ de l'initiative à sa place
+            # (partie réelle : Kaelin, init 23, n'a jamais joué son round 1).
+            if actif in (etat.get("deja_agi") or []):
+                res.events.append(
+                    f"⏭️ Tour de {actif} déjà consommé ce round (action "
+                    "hors initiative)."
+                )
+                etat = state.load()
+                _avancer_curseur(etat)
+                state.save(etat)
+                continue
             if avance_force_pending:
                 avance_force_pending = False
                 _avancer_curseur(etat)

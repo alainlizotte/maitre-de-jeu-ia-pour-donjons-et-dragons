@@ -811,6 +811,8 @@ async def engager_combat(
     etat["monstres_combat"] = monstres_combat
     from datetime import datetime as _dt
     etat["tour_depuis"] = _dt.now().isoformat()
+    # 🔧 Bêta (séquencement) : nouveau combat → marques « déjà agi » à zéro.
+    etat["deja_agi"] = []
     # ♻️ Historique des engagements (voir garde anti re-engagement) :
     # signature + horodatage, borné aux 8 dernières rencontres.
     _hist = [h for h in (etat.get("historique_engagements") or [])
@@ -1007,6 +1009,9 @@ async def tour_suivant_combat(ctx: ToolContext) -> ToolResult:
         if idx >= len(ordre):
             idx = 0
             etat["tour"] = (etat.get("tour", 0) or 0) + 1
+    # 🔧 Bêta (séquencement) : changement de round → on efface les marques
+    # « a déjà agi ce round ».
+    etat["deja_agi"] = []
     # Sauter les combattants morts / détruits (ne jamais leur donner de tour).
     prochain = _prochain_vivant(etat, ordre, idx)
     if prochain == -1:
@@ -1394,6 +1399,9 @@ async def terminer_mon_tour(ctx: ToolContext) -> ToolResult:
     if idx >= len(ordre):
         idx = 0
         etat["tour"] = (etat.get("tour", 0) or 0) + 1
+        # 🔧 Bêta (séquencement) : changement de round → on efface les
+        # marques « a déjà agi ce round ».
+        etat["deja_agi"] = []
     vivant = _prochain_vivant(etat, ordre, idx)
     if vivant == -1:
         vivant = idx

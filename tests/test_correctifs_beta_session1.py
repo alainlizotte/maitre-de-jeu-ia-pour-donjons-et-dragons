@@ -22,6 +22,7 @@ import os
 import shutil
 import sys
 import tempfile
+from datetime import datetime
 
 import pytest
 
@@ -612,6 +613,158 @@ def test_r8_snapshot_pose_en_boucle_combat(tmp_path, monkeypatch):
     # Le fallback XP lit le snapshot.
     assert "monstres_derniers" in src.split("def _distribuer_xp")[1].split(
         "def _memoriser_combat")[0]
+
+
+# --------------------------------------------------------------------------- #
+#  S1 — Séquencement fin de tour : « déjà agi » (déclenchement hors initiative)
+# --------------------------------------------------------------------------- #
+def test_s1_wrap_efface_deja_agi():
+    """_avancer_curseur : au changement de round (wrap), les marques
+    « a déjà agi » sont effacées."""
+    from server.game.combat import _avancer_curseur
+
+    etat = {
+        "initiative": [
+            {"nom": "A", "init": 20}, {"nom": "B", "init": 10},
+        ],
+        "courant_tour_pour": "B",
+        "tour": 1,
+        "deja_agi": ["A"],
+    }
+    nouveau = _avancer_curseur(etat)
+    # B est dernier → wrap → tour 2 → courant = A.
+    assert etat["tour"] == 2
+    assert nouveau == "A"
+    assert etat["deja_agi"] == []
+
+
+def test_s1_avancement_simple_conserve_le_tour():
+    """Sans wrap : le tour ne s'incrémente pas, deja_agi est réinitialisé
+    (nouveau round seulement au wrap)."""
+    from server.game.combat import _avancer_curseur
+
+    etat = {
+        "initiative": [
+            {"nom": "A", "init": 20}, {"nom": "B", "init": 10},
+        ],
+        "courant_tour_pour": "A",
+        "tour": 1,
+        "deja_agi": [],
+    }
+    nouveau = _avancer_curseur(etat)
+    assert etat["tour"] == 1
+    assert nouveau == "B"
+
+
+def test_s1_pj_deja_agi_est_skippe(tmp_path):
+    """Le combat débute pendant le tour d'un joueur (action hors initiative
+    marquée `deja_agi`) : la boucle SAUTE ce PJ au lieu de lui donner un
+    second tour — et le premier PJ de l'initiative joue son tour normalement."""
+    from server.game.combat import boucle_auto
+    from server.tools.base import ToolContext
+
+    d = str(tmp_path)
+    shutil.copy2(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "data", "bestiaire.json"),
+        os.path.join(d, "bestiaire.json"),
+    )
+    ctx = ToolContext(partie_id="tests1", joueur="J1", data_dir=d)
+    st = PartyState(data_dir=d, partie_id="tests1")
+    st.save({
+        "phase": "combat",
+        "tour": 1,
+        # Ordre : A (20) → Gobelin (15) → B (10). L'attaquant hors initiative
+        # était A (il a déclenché le combat pendant son tour d'exploration).
+        "initiative": [
+            {"nom": "A", "init": 20},
+            {"nom": "Gobelin", "init": 15},
+            {"nom": "B", "init": 10},
+        ],
+        "courant_tour_pour": "A",
+        "tour_depuis": datetime.now().isoformat(),
+        "deja_agi": ["A"],
+        "pj": [
+            {"nom": "A", "joueur": "J1", "pv": 10, "pv_max": 10},
+            {"nom": "B", "joueur": "J2", "pv": 10, "pv_max": 10},
+        ],
+        "monstres_combat": [
+            {"nom": "Gobelin", "pv": 5, "pv_max": 5, "ca": 15, "fp": "1/3",
+             "conditions": []},
+        ],
+    })
+    (tmp_path / "fiches").mkdir(exist_ok=True)
+    for nom, joueur in (("A", "J1"), ("B", "J2")):
+        fiche = {"nom": nom, "classe": "guerrier", "niveau": 1,
+                 "carac": {"FOR": 14, "DEX": 12}, "pv": 10, "pv_max": 10,
+                 "xp": 0, "equipement": [], "joueur": joueur}
+        (tmp_path / "fiches" / f"fiche_{nom.lower()}.json").write_text(
+            json.dumps(fiche, ensure_ascii=False), encoding="utf-8")
+
+    res = asyncio.run(boucle_auto(ctx, force_avance=False))
+    etat = st.load()
+    # A est skipé (déjà agi) ; le gobelin joue (attaque auto) ; la boucle
+    # s'arrête sur B (capable) — PAS sur A, qui ne rejoue pas.
+    assert res.courant == "B", res.courant
+    assert any("déjà consommé" in e for e in res.events), res.events
+    # Et l'événement d'attaque du gobelin est présent (le monstre a joué).
+    assert any("Attaque" in e for e in res.events), res.events
+
+
+def test_s1_pj_normal_n_est_pas_skippe(tmp_path):
+    """Sans marque deja_agi, le premier PJ capable de l'initiative joue
+    normalement (pas de skip parasite)."""
+    from server.game.combat import boucle_auto
+    from server.tools.base import ToolContext
+
+    d = str(tmp_path)
+    shutil.copy2(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "data", "bestiaire.json"),
+        os.path.join(d, "bestiaire.json"),
+    )
+    ctx = ToolContext(partie_id="tests1b", joueur="J1", data_dir=d)
+    st = PartyState(data_dir=d, partie_id="tests1b")
+    st.save({
+        "phase": "combat",
+        "tour": 1,
+        "initiative": [{"nom": "A", "init": 20}],
+        "courant_tour_pour": "A",
+        "tour_depuis": datetime.now().isoformat(),
+        "deja_agi": [],
+        "pj": [{"nom": "A", "joueur": "J1", "pv": 10, "pv_max": 10}],
+        # Un ennemi est requis (sinon _verifier_fin clôt en victoire immédiate).
+        "monstres_combat": [{"nom": "Gobelin", "pv": 5, "pv_max": 5, "ca": 15,
+                             "fp": "1/3", "conditions": []}],
+    })
+    (tmp_path / "fiches").mkdir(exist_ok=True)
+    fiche = {"nom": "A", "classe": "guerrier", "niveau": 1,
+             "carac": {"FOR": 14}, "pv": 10, "pv_max": 10, "xp": 0,
+             "equipement": [], "joueur": "J1"}
+    (tmp_path / "fiches" / "fiche_a.json").write_text(
+        json.dumps(fiche, ensure_ascii=False), encoding="utf-8")
+
+    res = asyncio.run(boucle_auto(ctx, force_avance=False))
+    assert res.courant == "A"
+    assert not any("déjà consommé" in e for e in res.events), res.events
+
+
+def test_s1_cablage_post_tour_deja_agi():
+    """Le post-tour marque l'acteur `deja_agi` quand le combat a débuté
+    pendant son tour (au lieu de forcer l'avance au-delà du 1er PJ)."""
+    src = open(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "main.py"), encoding="utf-8").read()
+    # L'affectation du marqueur (combat débuté = actif_avant vide).
+    assert "combat_demarre_ce_tour = not bool(actif_avant)" in src
+    # Le marqueur est persisté dans l'état de partie.
+    assert '"deja_agi"' in src
+    # La force exige actif_avant non vide (le cas vide passe par deja_agi) :
+    # bloc du calcul de force = après la 2e occurrence (condition `if`).
+    parties = src.split("combat_demarre_ce_tour")
+    assert len(parties) >= 3
+    bloc_force = parties[2][:2600]
+    assert "and actif_avant" in bloc_force
 
 
 # --------------------------------------------------------------------------- #

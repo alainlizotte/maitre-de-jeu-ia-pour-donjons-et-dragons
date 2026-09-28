@@ -5994,19 +5994,39 @@ async def _handle_say(
                         == str(apres.get("courant_tour_pour") or "")
                         for p in (apres.get("pj") or [])
                     )
+                    # 🔧 Bêta (séquencement) : combat DÉBUTÉ pendant ce tour
+                    # (`actif_avant` vide) → l'action du déclencheur est déjà
+                    # consommée : on le MARQUE (déjà_agi) et on laisse la
+                    # boucle jouer l'initiative DEPUIS LE HAUT — l'ancien
+                    # `force=True` avançait le curseur au-delà du PREMIER
+                    # combattant de l'initiative, qui perdait silencieusement
+                    # son tour de round 1 (partie réelle : Kaelin, init 23).
+                    combat_demarre_ce_tour = not bool(actif_avant)
+                    if combat_demarre_ce_tour:
+                        _acteur = (personnage or "").strip()
+                        if _acteur:
+                            _deja = [
+                                str(x) for x in (apres.get("deja_agi") or [])
+                            ]
+                            if _acteur not in _deja and any(
+                                str(e.get("nom") or "") == _acteur
+                                for e in (apres.get("initiative") or [])
+                            ):
+                                _deja.append(_acteur)
+                                apres["deja_agi"] = _deja
+                                PartyState(
+                                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                    partie_id=partie_id,
+                                ).save(apres)
                     # `actif_avant` est vide quand le combat a DÉBUTÉ pendant
-                    # ce tour (le joueur attaquait hors combat) : l'action
-                    # résolue doit alors aussi faire avancer la rotation,
-                    # sinon le joueur restait actif et rejouait au tour
-                    # suivant (double action, conformité 3.5 rompue).
+                    # ce tour (le joueur attaquait hors combat) — ce cas est
+                    # traité ci-dessus via `deja_agi`, SANS forcer l'avance.
                     force = bool(
                         action_consommee
                         and courant_est_pj
-                        and (
-                            not actif_avant
-                            or str(apres.get("courant_tour_pour") or "")
-                            == actif_avant
-                        )
+                        and actif_avant
+                        and str(apres.get("courant_tour_pour") or "")
+                        == actif_avant
                     )
                     res_post = await _boucle_combat(
                         ctx,

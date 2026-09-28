@@ -15,13 +15,13 @@ connectent depuis leur navigateur sur le réseau local.
 
 | | |
 |---|---|
-| **Backend** | FastAPI + WebSocket, **68 tools Python** (function-calling) |
+| **Backend** | FastAPI + WebSocket, **76 tools Python** (function-calling) |
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD |
-| **Qualité** | **623 tests pytest** (moteur de combat, carte, fiches, scénarios, E2E sans LLM) |
+| **Qualité** | **662 tests pytest** (moteur de combat, carte, fiches, scénarios, robustesse bêta, E2E sans LLM) |
 | **Images** | ComfyUI (monstres, portraits, salles, scènes) — optionnel |
-| **Données** | Inventaire & encombrement (poids PHB 3.5), mémoire de campagne persistante |
+| **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
 
 ## 📸 Captures d'écran
 
@@ -37,9 +37,20 @@ connectent depuis leur navigateur sur le réseau local.
 ### Table multijoueur temps réel
 - **Salon de jeu en ligne** : création/rejoindre une partie, optionnellement protégée par mot
   de passe ; chat partagé avec narration du MJ (en bloc ou token par token, configurable).
+- **Multi-comptes garanti** : chaque joueur se connecte avec son compte (token vérifié au
+  `join` WebSocket — l'identité déclarée ne fait pas foi) et ne peut incarner que **ses**
+  personnages ; la garde de tour compare le **personnage incarné par la connexion** au
+  personnage actif — deux PJ du même compte (deux onglets) ne se volent pas leurs tours,
+  et l'action hors-tour d'un autre compte est **refusée** (jamais réattribuée).
+- **Diffusion temps réel fiable** : messages joueurs, jets de dés informatifs (canal dédié
+  **sans tour LLM**), narrations du MJ, patches d'état (PV, XP, initiative…) et roster —
+  tout est diffusé à toutes les connexions, sans doublon chez l'expéditeur.
+- **Suppression de compte** (auto-service, confirmation) : parties créées, fiches et
+  portraits supprimés, tokens invalidés — les tables d'autrui ne sont pas touchées.
 - **Fiches de personnages complètes** : création guidée (caractéristiques, race, classe,
   compétences plafonnées selon INT/niveau, dons limités selon niveau) puis consultation et
-  modification à tout moment — PV, conditions, sorts, équipement.
+  modification à tout moment — PV, conditions, sorts, équipement. L'or porté (départ −
+  achats) pèse : 50 pièces = 1 livre (PHB).
 - **Apparence par race** : tirage officiel de l'âge (selon le groupe de classe), de la taille
   et du poids (selon le sexe) aux tables du PHB, alimentant le portrait.
 - **Jets de dés réels** : attaque, dégâts, sauvegardes, initiative… toujours résolus par des
@@ -58,8 +69,10 @@ connectent depuis leur navigateur sur le réseau local.
 - **Rattrapages serveur** : un combat narré en prose sans `engager_combat`, des dégâts jetés
   mais non appliqués, une invoquation oubliée, un sort de soin sans tool… sont détectés et
   régularisés mécaniquement — la narration ne peut plus créer de fiction sans effet.
+- **Suppression de partie par le propriétaire uniquement** : `meta.createur` posé à la
+  création, contrôle serveur sur la suppression (403 pour un compte étranger).
 - **Barres de progression visibles** : XP (niveau actuel → suivant) et **charge transportée**
-  (poids kg / charge max) sur les cartes PJ en jeu, les fiches et l'accueil.
+  (poids kg / charge max, or compris) sur les cartes PJ en jeu, les fiches et l'accueil.
 
 ### Robustesse — « le serveur décide, le LLM narre »
 - **Mécanique d'abord, prose ensuite** : les jets (tours de monstres, XP,
@@ -83,6 +96,18 @@ connectent depuis leur navigateur sur le réseau local.
   narrés sans tool, XP répercutée sur la fiche ET l'état de partie, fiches
   par compte utilisateur (comparaison insensible à la casse, renommage suivi
   par le fichier, rattachement des fiches orphelines).
+- **Assainissement de la narration finale** : coulisses LLM (« Vérifions son
+  état réel »), templates cassés (« Touché ! () »), timeouts inventés et
+  paraphrases doublées sont purgés avant diffusion ; les valeurs de PV
+  narrées (« chutent à 10/11 ») sont réécrites sur l'état serveur.
+- **Magie contrainte de bout en bout** : un sort narré ou **déclaré** par le
+  joueur sans `incanter_sort` est re-validé par le serveur (préparation,
+  emplacements, liste de classe) — appliqué si les règles le permettent,
+  **refusé honnêtement** à la table sinon ; la mémorisation demandée
+  (« je mémorise X et Y ») est appliquée avec fusion des préparations.
+- **XP de secours** : si le suivi `monstres_combat` est perdu avant la
+  clôture, le snapshot `monstres_derniers` paie l'XP de la victoire — une
+  victoire n'est jamais « sans XP ».
 - **Galerie d'images réactive** : une nouvelle image (monstre, pièce, scène)
   active automatiquement son onglet dans la colonne droite.
 
@@ -117,8 +142,7 @@ connectent depuis leur navigateur sur le réseau local.
   automatiquement à chaque victoire) et position du groupe — réinjectée dans le prompt du MJ
   pour une cohérence longue durée.
 - **Magie D&D 3.5** : incantation validée (classe, niveau, emplacements de sorts,
-  préparation/mémorisation), repos long officiel (PV + sorts restaurés).
-- **Inventaire & encombrement (PHB 3.5)** : poids officiels par objet, charge recalculée
+  préparation/mémorisation), repos long officiel (PV + sorts restaurés).- **Inventaire & encombrement (PHB 3.5)** : poids officiels par objet, charge recalculée
   (Légère/Moyenne/Lourde/Dépassée), consommation de munitions.
 - **Bestiaire étendu (400 monstres)** consultable, avec fiche détaillée ; tout combat est
   engagé contre une créature **du bestiaire officiel** (créatures inventées refusées).
@@ -140,6 +164,24 @@ connectent depuis leur navigateur sur le réseau local.
   pertinents dans le contexte du MJ → réponses fidèles aux règles.
 - Activer `rag.enabled: true` dans `config/config.yaml` puis ingestion :
   `docker compose exec dnd35 python -m server.rag --ingest`.
+
+### 🔒 Passe de durcissement bêta (09/2026)
+Audit complet en conditions réelles (solo + multi-comptes à 3 joueurs) suivi de
+correctifs, chacun couvert par des tests déterministes :
+
+- **Sécurité multi-comptes** : propriété des parties (suppression réservée au
+  créateur, 403 sinon), garde de propriété au `join` WebSocket, identité
+  canonique par token vérifié, garde de tour par personnage incarné.
+- **Cohérence mécanique/narration** : sorts re-validés par le serveur quand le
+  LLM les narre sans tool (accepté ou refusé honnêtement), chutes de PV
+  narratives réécrites sur l'état officiel, coulisses LLM et paraphrases
+  doublées purgées, timeouts inventés purgés.
+- **Diffusion temps réel** : messages joueurs et jets de dés informatifs
+  reçus par tous les clients sans doublon ; verrou de réflexion toujours
+  levé (même après un refus hors-tour).
+- **Reprise après game over** : phase dédiée « game_over », bannière dédiée,
+  résurrection appliquée par le serveur (pénalité officielle −1 niveau ou
+  −2 CON au niveau 1) et retour à l'exploration.
 
 ## 🚀 Démarrage rapide (Docker)
 

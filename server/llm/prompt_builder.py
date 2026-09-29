@@ -59,6 +59,13 @@ _DEBUT_AVENTURE = (
     "JAMAIS directement au lieu du boss, à la confrontation finale ou en "
     "pleine mission ; les objets de quête ne sont PAS encore en la "
     "possession des PJ tant qu'ils n'ont pas été gagnés ou remis.\n"
+    "🎁 REMISES D'OBJETS du premier tour (le scénario peut les prévoir) : "
+    "appelle `inventaire_ajouter(nom=<PJ>, objet=\"<nom exact>\", "
+    "portee=\"quete\") AVANT de narrer la remise — et explique l'objet "
+    "(fonction, limites) comme le fait le scénario. JAMAIS d'objet "
+    "improvisé hors scénario (pas de « baguette de téléportation » "
+    "inventée si le module n'en donne pas). Les objets de quête narrés "
+    "sans tool n'atteignent PAS l'inventaire.\n"
     "🌐 Le résumé du scénario peut être en anglais : transpose "
     "intégralement ta narration EN FRANÇAIS.\n"
     "🧍 Respecte STRICTEMENT l'identité des PJ du récapitulatif (genre → "
@@ -1098,6 +1105,18 @@ class PromptBuilder:
                 "du PJ (reste d'une partie à l'autre) ; « Inventaire de "
                 "quête » = dons de PNJ et objets de l'aventure, propres à "
                 "CETTE partie — ils n'existent pas dans les autres parties.)"
+            )
+            # 🔧 Bêta : REMISES D'OBJETS — le petit modèle narre « elle vous
+            # tend la baguette… » sans tool : l'objet canonique du scénario
+            # n'atteint JAMAIS l'inventaire (partie réelle a16401c0 : la
+            # Wand of Teleportation remise, inventaire resté vide).
+            lignes.append(
+                "  (REMISSIONS D'OBJETS — obligatoire : toute remise d'objet "
+                "à un PJ (d'un PNJ, d'un coffre, en butin) passe par "
+                "`inventaire_ajouter(nom=<nom du PJ>, objet=\"<nom exact>\", "
+                "portee=\"quete\") AVANT de la narrer — une remise narrée "
+                "sans tool n'ajoute RIEN à l'inventaire et l'objet n'existe "
+                "pas sur le plateau.)"
             )
             # Partie 6746fc6c : ce rappel de sac était re-tissé dans CHAQUE
             # narration (« votre kit est bien rangé… », « la fiole glisse

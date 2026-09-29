@@ -240,6 +240,15 @@ export function useChatSocket(partie_id: string | null) {
               content: `⛔ ${msg.detail}`,
               ts: Date.now(),
             });
+          } else if (msg.event === "combat_reprise") {
+            // 🔧 Bêta : re-join en cours de combat — le combat continue, le
+            // joueur revient sait à qui est le tour (l'état ne se perd pas).
+            addMessage({
+              id: uid(),
+              role: "system",
+              content: msg.detail,
+              ts: Date.now(),
+            });
           } else if (msg.event === "turn_blocked") {
             // Hors-tour en combat : le serveur refuse d'invoquer le MJ.
             // 🔧 Bêta : lève aussi le verrou de réflexion — l'absence de

@@ -53,7 +53,17 @@ _DEBUT_AVENTURE = (
     "d'un objet via l'outil d'inventaire le cas échéant — puis termine "
     "par une invitation OUVERTE à agir (jamais une question fermée "
     "« acceptez-vous ? »). INTERDIT ce tour : combat, monstre, rencontre, "
-    "image de monstre, mise en contexte expédiée en trois lignes."
+    "image de monstre, mise en contexte expédiée en trois lignes.\n"
+    "🕰️ RESPECTE LA CHRONOLOGIE du scénario : commence au TOUT DÉBUT "
+    "(convocation, briefing de la mission, remise du contrat) — NE saute "
+    "JAMAIS directement au lieu du boss, à la confrontation finale ou en "
+    "pleine mission ; les objets de quête ne sont PAS encore en la "
+    "possession des PJ tant qu'ils n'ont pas été gagnés ou remis.\n"
+    "🌐 Le résumé du scénario peut être en anglais : transpose "
+    "intégralement ta narration EN FRANÇAIS.\n"
+    "🧍 Respecte STRICTEMENT l'identité des PJ du récapitulatif (genre → "
+    "pronoms et accords, race, classe) — un contresens de genre est une "
+    "erreur de jeu."
 )
 
 _MAX_SALLES_BLOC = 40       # plafond de salles listées dans le bloc donjon
@@ -1055,6 +1065,19 @@ class PromptBuilder:
                     f"CA {p.get('ca','?')} — joueur: {p.get('joueur','?')} — "
                     f"conditions: {p.get('conditions') or 'aucune'}"
                 )
+                # 🔧 Bêta : identité de rôle — le genre était dans le récap
+                # mais le petit modèle écrivait « Margoth, armée… elle » pour
+                # un PJ masculin. Consigne EXPLICITE de pronoms + accords.
+                _g = _genre_pj(data_dir, p)
+                if _g:
+                    _pronom = ("il / lui / le sien" if _g == "Masculin"
+                               else "elle / la sienne" if _g == "Féminin"
+                               else "il·le / elle·la (au choix, constant)")
+                    lignes.append(
+                        f"    · ⚠️ IDENTITÉ DE RÔLE — {_g} : accords et "
+                        f"pronoms TOUJOURS {_pronom} (JAMAIS l'autre genre) "
+                        "dans toute la narration."
+                    )
                 # Fiche PJ (valeurs officielles) : sac, dons/rangs, sorts —
                 # l'entrée `pj` de l'état n'en transporte aucune.
                 for detail in _fiche_pj_lignes(

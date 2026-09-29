@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 // ── Lookup univers → carte par défaut ──────────────────────────────────── //
 // Clé = ID d'univers dans scenarios_catalogue.json ; valeur = URL de la
@@ -308,10 +309,14 @@ export function WorldMap() {
   const [erreur, setErreur] = useState(false);
   const [pleinEcran, setPleinEcran] = useState(false);
 
-  // Boîtes d'affichage (cover en onglet, contain en plein écran).
+  // Boîtes d'affichage (cover en onglet desktop, contain sur smartphone et
+  // en plein écran).
+  const isMobile = useIsMobile();
   const tabBoxRef = useRef<HTMLDivElement>(null);
+  const tabBoxContainRef = useRef<HTMLDivElement>(null);
   const fsBoxRef = useRef<HTMLDivElement>(null);
   const tabBox = useImageBox(tabBoxRef, nat[0], nat[1], "cover");
+  const tabBoxContain = useImageBox(tabBoxContainRef, nat[0], nat[1], "contain");
   const fsBox = useImageBox(fsBoxRef, nat[0], nat[1], "contain");
 
   // Atlas link (si ville connue sur carte Faerûn)
@@ -351,13 +356,16 @@ export function WorldMap() {
       <div className="mb-2 text-sm text-amber-200 font-serif text-center shrink-0">
         {mapInfo.label}
       </div>
-      {/* Carte de l'onglet : zoomée sur le groupe, clic → plein écran */}
+      {/* Carte de l'onglet : zoomée sur le groupe, clic → plein écran.
+          🔧 Bêta : mode "contain" sur smartphone — "cover" rogne la carte
+          (portrait étroit) et des parties entières du monde disparaissent
+          du cadre. En contain, la carte entière reste visible. */}
       <VueCarte
         mapUrl={MAP_URL}
         alt={`Carte : ${mapInfo.label}`}
-        mode="cover"
+        mode={isMobile ? "contain" : "cover"}
         boxRef={tabBoxRef}
-        box={tabBox}
+        box={isMobile ? tabBoxContain : tabBox}
         focus={focus}
         positions={positions}
         vueEntiere={vueEntiere}

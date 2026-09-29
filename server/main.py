@@ -2733,8 +2733,7 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
 
     chemin = persos_mod.chemin_fiche(data_dir, nom)
     try:
-        with open(chemin, "w", encoding="utf-8") as f:
-            json.dump(fiche, f, ensure_ascii=False, indent=2)
+        with open(chemin, "w", encoding="utf-8") as f:            json.dump(fiche, f, ensure_ascii=False, indent=2)
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Écriture impossible : {e}")
 
@@ -2742,6 +2741,59 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
     persos_mod.lancer_portrait_background(data_dir, fiche)
 
     return {"ok": True, "fiche": fiche, "calculs": calculs}
+
+
+@app.post("/api/persos/{slug}/portrait/regenerer")
+async def persos_portrait_regenerer(
+    slug: str,
+    payload: Optional[dict[str, Any]] = None,
+    utilisateur: str = Depends(utilisateur_courant),
+) -> dict[str, Any]:
+    """🎨 Bêta : RÉGÉNÈRE le portrait d'un personnage du compte connecté avec
+    une SEED différente (image mal générée → nouvelle variante) d'après la
+    fiche ACTUELLE — l'équipement porté a pu évoluer depuis la création
+    (achats, butin, remises de PNJ) : le prompt de portrait relit l'inventaire
+    à jour. Accepte `{"seed": <int>}` (0/omis = seed aléatoire).
+
+    Synchrone (attends ComfyUI, quelques secondes) : le client rafraîchit
+    l'affichage à la réponse (cache-bust fourni en `version`)."""
+    data_dir = _dossier_donnees()
+    from .tools.fiches import _slug as _slug_fn
+
+    cible = None
+    for fiche in persos_mod.lister_fiches(data_dir, proprietaire=utilisateur):
+        if _slug_fn(str(fiche.get("nom", ""))) == slug:
+            cible = fiche
+            break
+    if cible is None:
+        raise HTTPException(status_code=404, detail="Personnage introuvable.")
+
+    seed = None
+    try:
+        brut = (payload or {}).get("seed")
+        if brut not in (None, "", 0, "0"):
+            seed = max(0, int(brut))
+    except (TypeError, ValueError):
+        seed = None
+
+    # Génération SYNCHRONE avec une seed neuve (ou celle demandée) : la fiche
+    # rechargée porte l'équipement courant (arme/armure/bouclier montrés).
+    chemin = await persos_mod.generer_portrait_async(
+        data_dir, cible, seed=seed
+    )
+    if not chemin:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Génération d'images indisponible (ComfyUI désactivé ou "
+                "injoignable)."
+            ),
+        )
+    return {
+        "ok": True,
+        "portrait": f"/data/portraits_cache/{os.path.basename(chemin)}",
+        "version": int(time.time() * 1000),
+    }
 
 
 @app.delete("/api/persos/{slug}")

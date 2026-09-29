@@ -1344,8 +1344,13 @@ def construire_prompt_portrait(fiche: dict[str, Any]) -> str:
     return corps
 
 
-async def generer_portrait_async(data_dir: str, fiche: dict[str, Any]) -> Optional[str]:
+async def generer_portrait_async(
+    data_dir: str, fiche: dict[str, Any], seed: Optional[int] = None
+) -> Optional[str]:
     """Génère le portrait ComfyUI du personnage et le copie aussi sous `<slug>.png`.
+
+    `seed=None` → seed aléatoire (régénération = nouvelle variante) ; la fiche
+    rechargée porte l'équipement COURANT (le prompt le reflète).
 
     Renvoie le chemin écrit, ou None si ComfyUI est indisponible (fallback
     silencieux — le monogramme côté front reste affiché).
@@ -1362,7 +1367,7 @@ async def generer_portrait_async(data_dir: str, fiche: dict[str, Any]) -> Option
 
     dest = os.path.join(cache_dir, f"perso_{_slug(proprietaire)}_{_slug(nom)}.png")
     prompt = construire_prompt_portrait(fiche)
-    ecrit = await generer_si_dispo("portrait", prompt, dest)
+    ecrit = await generer_si_dispo("portrait", prompt, dest, seed=seed)
 
     # Copie « slug nu » pour la sidebar de partie et toutes les autres vues
     # (portraits_cache/<slug>.png), TOUJOURS rafraîchie : un nom de personnage

@@ -123,6 +123,12 @@ export const api = {
       method: "DELETE",
       headers: entetes(),
     }).then(jq<{ ok: boolean }>),
+  /** 🎨 Bêta : régénère le portrait avec une nouvelle seed, d'après la fiche
+   *  ACTUELLE (l'équipement porté a pu évoluer depuis la création). */
+  regenererPortrait: (slug: string) =>
+    post<{ ok: boolean; portrait: string; version: number }>(
+      `${API}/persos/${encodeURIComponent(slug)}/portrait/regenerer`,
+    ),
 
   // -- Parties ------------------------------------------------------------ //
   // /api/parties renvoie { active:[ids], persisted:[ids] } — IDs seuls.

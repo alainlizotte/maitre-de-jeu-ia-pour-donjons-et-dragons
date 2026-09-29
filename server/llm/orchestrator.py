@@ -2550,15 +2550,37 @@ class Orchestrator:
         # sur du texte pourtant adapté à l'action répétée du joueur — les
         # relances n'ont jamais produit de variation utile).
         phase_combat = False
+        ouverture_tour = False
+        a_deja_narre = any(
+            m.role == "assistant" and (m.content or "").strip()
+            for m in messages
+        )
         try:
             _etat_tour = PartyState(
                 data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,            ).load()
             phase_combat = (
                 str(_etat_tour.get("phase") or "").strip().lower() == "combat"
             )
+            # 🔧 Bêta : tour d'OUVERTURE (phase opening, aucun événement
+            # d'histoire, AUCUNE narration antérieure) — les brouillons
+            # d'ouverture re-décrivent naturellement la même scène de départ :
+            # l'anti-répétition y épuisait la boucle (2-3 corrections + repli)
+            # et livrait une intro bâclée (partie réelle e920255c : intro
+            # précipitée). S'il existe DÉJÀ une narration (re-visite, combat…),
+            # l'anti-répétition redevient normale.
+            ouverture_tour = (
+                str(_etat_tour.get("phase") or "").strip().lower()
+                in ("opening", "opening_complete")
+                and not (_etat_tour.get("histoire"))
+                and not a_deja_narre
+            )
         except Exception:                                    # noqa: BLE001
             phase_combat = False
+            ouverture_tour = False
         seuil_repet = 0.75 if phase_combat else _REPET_SEUIL_CHEVAUCHEMENT
+        # 🎲 À l'ouverture : AUCUNE correction echo (le premier brouillon est
+        # livré tel quel — il pose le décor, c'est son rôle).
+        cap_echo = 0 if ouverture_tour else 3
         cles_filtre_prec: Optional[set] = None
 
         # 🎯 PHASE DE DÉCISION CONTRAITE — avant toute narration, un appel
@@ -3549,7 +3571,7 @@ class Orchestrator:
             # partie réelle) : l'action est perdue et le fil de l'histoire
             # casse. On relance avec un correctif qui re-cite l'action du
             # joueur — les deltas déjà streamés sont remplacés par le dm final.
-            if narration.strip() and result.corrections_echo < 3:
+            if narration.strip() and result.corrections_echo < cap_echo:
                 # EXCEPTION : re-visite d'une salle à description FIGÉE. Le
                 # tool `carte_donjon_explorer` ordonne alors explicitement de
                 # re-narrer À L'IDENTIQUE (« Description enregistrée » /

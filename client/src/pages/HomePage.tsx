@@ -11,7 +11,7 @@ import { useParty } from "../store";
 import { SheetModal } from "../components/StateSidebar";
 import { XpBar } from "../components/Bars";
 import { slugify } from "../utils/slug";
-import { busteImage } from "../utils/imageBust";
+import { busteImage, invaliderImage } from "../utils/imageBust";
 
 // --------------------------------------------------------------------------- //
 //  Portrait avec repli monogramme (pas de retry ComfyUI ici : fiche fraîche).
@@ -51,6 +51,7 @@ function CartePerso({ perso }: { perso: FichePerso }) {
   const navigate = useNavigate();
   const [confirmer, setConfirmer] = useState(false);
   const [voirFiche, setVoirFiche] = useState(false);
+  const [regen, setRegen] = useState(false);
   const slug = slugify(perso.nom);
   // Un passage de niveau est en attente : la fiche est modifiable pour
   // régler les gains du niveau (dons, +1 carac, sorts…).
@@ -59,6 +60,26 @@ function CartePerso({ perso }: { perso: FichePerso }) {
   const supprimer = useMutation({
     mutationFn: () => api.deletePerso(slug),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["persos"] }),
+  });
+  // 🎨 Bêta : régénération du portrait (nouvelle seed, fiche ACTUELLE —
+  // l'équipement porté a pu évoluer depuis la création). À la réponse :
+  // invalidation du cache-bust des deux URLs du portrait + re-fetch.
+  const regenererPortrait = useMutation({
+    mutationFn: () => api.regenererPortrait(slug),
+    onSuccess: () => {
+      invaliderImage(`/data/portraits_cache/${slug}.png`);
+      invaliderImage(
+        `/data/portraits_cache/perso_${slug}_${slug}.png`,
+      );
+      invaliderImage(
+        `/data/portraits_cache/perso_${(perso.proprietaire || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, "_")}_${slug}.png`,
+      );
+      qc.invalidateQueries({ queryKey: ["persos"] });
+      setRegen(false);
+    },
+    onError: () => setRegen(false),
   });
 
   return (
@@ -101,6 +122,26 @@ function CartePerso({ perso }: { perso: FichePerso }) {
           >
             Voir la fiche
           </button>
+          {regen ? (
+            <button
+              className="px-2 py-1.5 bg-stone-700 rounded text-sm text-sky-300 shrink-0 animate-pulse"
+              title="Régénération du portrait en cours (ComfyUI)…"
+              disabled
+            >
+              🔄…
+            </button>
+          ) : (
+            <button
+              className="px-2 py-1.5 bg-stone-700 hover:bg-sky-900/60 rounded text-sm shrink-0"
+              title="Régénérer le portrait (nouvelle seed — équipement actuel)"
+              onClick={() => {
+                setRegen(true);
+                regenererPortrait.mutate();
+              }}
+            >
+              🔄
+            </button>
+          )}
           {confirmer ? (
             <>
               <button
@@ -127,6 +168,11 @@ function CartePerso({ perso }: { perso: FichePerso }) {
             </button>
           )}
         </div>
+        {regenererPortrait.isError && (
+          <p className="text-rose-400 text-xs mt-1">
+            ⚠️ {(regenererPortrait.error as Error).message}
+          </p>
+        )}
       </div>
       {voirFiche && <SheetModal nom={perso.nom} onClose={() => setVoirFiche(false)} />}
     </div>

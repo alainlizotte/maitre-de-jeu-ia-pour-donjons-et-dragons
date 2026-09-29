@@ -77,8 +77,12 @@ async def generer_si_dispo(
     usage: str,
     prompt: str,
     dest_path: str,
+    seed: Optional[int] = None,
 ) -> Optional[str]:
     """Génère une image si ComfyUI est dispo et activé, renvoie son chemin ; sinon None.
+
+    `seed=None` → seed aléatoire (une nouvelle variante à chaque génération) ;
+    `seed` explicite → reproduction déterministe (régénération à la demande).
 
     En cas d'erreur (timeout, ComfyUI injoignable, etc.) on renvoie None
     silencieusement — l'appelant doit savoir qu'il dispose d'un fallback
@@ -96,7 +100,7 @@ async def generer_si_dispo(
     if b is None:
         return None
     try:
-        path, _seed = await b.generer(usage, prompt, dest_path)
+        path, _seed = await b.generer(usage, prompt, dest_path, seed=seed)
         if os.path.isfile(path):
             return path
     except Exception:

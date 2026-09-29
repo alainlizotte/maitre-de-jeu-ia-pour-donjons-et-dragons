@@ -638,6 +638,38 @@ def test_s1_wrap_efface_deja_agi():
     assert etat["deja_agi"] == []
 
 
+def test_s1b_exemption_echo_tour_ouverture():
+    """Au PREMIER tour d'une partie (aucune narration antérieure), les
+    brouillons d'ouverture se ressemblent naturellement : l'anti-répétition
+    ne doit PAS épuiser la boucle — le premier brouillon est livré tel quel
+    (partie réelle e920255c : 2 corrections + repli = intro précipitée)."""
+    src = open(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "llm", "orchestrator.py"), encoding="utf-8").read()
+    # L'exemption existe et porte sur les 3 conditions (phase, histoire,
+    # narration antérieure).
+    assert "ouverture_tour" in src
+    assert "a_deja_narre" in src
+    assert "cap_echo = 0 if ouverture_tour else 3" in src
+    # La condition d'echo utilise le cap variable (plus de `3` codé en dur).
+    assert "corrections_echo < cap_echo" in src
+    assert "corrections_echo < 3" not in src
+
+
+def test_s1b_identity_genre_renforcee():
+    """L'identité de rôle (pronoms/accords explicites) est injectée dans le
+    récapitulatif des PJ (le genre seul était ignoré par le petit modèle)."""
+    src = open(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "server", "llm", "prompt_builder.py"),
+        encoding="utf-8").read()
+    assert "IDENTITÉ DE RÔLE" in src
+    assert "_genre_pj(data_dir, p)" in src
+    # La directive d'ouverture impose la chronologie + la langue française.
+    assert "RESPECTE LA CHRONOLOGIE" in src
+    assert "transpose" in src and "EN FRANÇAIS" in src
+
+
 def test_s1_avancement_simple_conserve_le_tour():
     """Sans wrap : le tour ne s'incrémente pas, deja_agi est réinitialisé
     (nouveau round seulement au wrap)."""

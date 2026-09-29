@@ -239,12 +239,23 @@ _INTENT_VOYAGE_RE = _re_mod.compile(
 # franchissement de seuil (une simple mention du lieu ne suffit pas).
 _DONJON_LIEU_RE = _re_mod.compile(
     r"\b(catacombes?|donjons?|cryptes?|souterrains?|tunnels?|grottes?|"
-    r"cavernes?|[ée]gouts?|tombeaux?|labyrinthes?|repaire|antre)\b",
+    r"cavernes?|[ée]gouts?|tombeaux?|labyrinthes?|repaire|antre"
+    # 🔧 Bêta (Duel au pinceau) : le « donjon » du scénario est un HÔTEL
+    # particulier (mansarde, estaminet, salles de réception…) — sans ces
+    # mots, la carte du plan ne s'initialisait jamais pour ce module.
+    r"|h[ôo]tels?\s+(?:particulier|de\s|du\s)"
+    r"|m[âa]nsardes?|estaminets?)\b",
     _re_mod.IGNORECASE,
 )
 _DONJON_ENTREE_RE = _re_mod.compile(
     r"vous\s+(?:entrez\b|p[ée]n[ée]trez\b|descendez\b|franchissez\b"
     r"|vous\s+enfoncez\b|vous\s+engagez\b|dirigez\s+vers\s+l['']entr[ée]e)"
+    # 🔧 Bêta : 1re personne du pluriel (message joueur) et formes
+    # reformulées (« vous êtes les bienvenus dans l'hôtel… ») — le petit
+    # modèle reformule l'entrée sans jamais employer le bon verbe (partie
+    # réelle Duel au pinceau : « Bienvenue… dans l'hôtel de Valdenath »).
+    r"|nous\s+(?:entrons\b|p[ée]n[ée]trons\b|descendons\b|franchissons\b)"
+    r"|bienvenu\w*\s+dans\s+l['' ]"
     r"|l['']entr[ée]e\s+(?:des?\b|du\b|de\s+la\b)"
     r"|\bfranchi\w+\s+le\s+seuil\b|\bau\s+seuil\b"
     r"|descend\w*\s+dans\s+(?:la\s|le\s|les\s|l[''])"
@@ -713,7 +724,13 @@ _ITEM_ACQUISITION_RE = _re_mod.compile(
     r"\b(ramass\w*|récup\w*|récupèr\w*|trouv\w*|obtien?t|obtenir|acquis\w*"
     r"|pill\w*|prise au|je prend\w*|il prend\w*|elle prend\w*|gagne\w* un"
     r"|butin|loot\w*|rep[èe]r\w*"
-    r"|donne\w* à|offre\w* à|cède\w* à)\b",
+    r"|donne\w* à|offre\w* à|cède\w* à"
+    # 🔧 Bêta : REMISES DE PNJ (« elle tend un parchemin », « Kaelin prend
+    # les objets ») — l'inventaire n'était jamais appliqué pour ce cas
+    # (partie réelle : amulette + carte de la Magister jamais ajoutés).
+    r"|tend\w*\s+un|remet\w*\s+(?:un|une|le|la|les)"
+    r"|re[çc]oi\w*\s+(?:un|une|le|la|les)|pren\w*\s+(?:un|une|le|la|les)"
+    r"|tend\w*|remet\w*|re[çc]oi\w*)\b",
     _re_mod.IGNORECASE,
 )
 # Acquisition ANCRÉE : verbe + déterminant INDÉFINI + nom (« vous trouvez
@@ -721,7 +738,8 @@ _ITEM_ACQUISITION_RE = _re_mod.compile(
 # exclus : « vous trouvez le passage / la sortie » ne concerne pas
 # l'inventaire.
 _ACQUISITION_ANCRE_RE = _re_mod.compile(
-    r"\b(?:ramass|trouv|r[ée]cup|obtien|pill|acquis|gagne|donn|offr|c[èe]d)"
+    r"\b(?:ramass|trouv|r[ée]cup|obtien|pill|acquis|gagne|donn|offr|c[èe]d"
+    r"|tend|remet|re[çc]oi|pr[ée]sent)"
     r"[a-zà-ÿ]*\w\s+(?:une?\s|des\s|plusieurs\s|\d+\s)"
     r"[a-zà-ÿœæ]",
     _re_mod.IGNORECASE,
@@ -5702,8 +5720,24 @@ async def _handle_say(
                     _etat_ent.get("phase") != "combat"
                     and not (_etat_ent.get("donjon") or {}).get("id")
                     and not _deja_entree
-                    and _entree_donjon_narree(
-                        (text or "") + " " + (result.narration or ""))
+                    and (
+                        _entree_donjon_narree(
+                            (text or "") + " " + (result.narration or ""))
+                        # 🔧 Bêta (résidu carte) : scénario À MANIFESTE dont
+                        # l'ouverture se déroule DANS le donjon (salle 0,0 du
+                        # plan — ex. « Duel au pinceau » : le duel a lieu sur
+                        # la place des Sept Royaumes) : la prose ne narre
+                        # JAMAIS d'« entrée » (la scène démarre en place) et
+                        # le plan restait à jamais non initialisé (carte du
+                        # monde affichée pendant que la narration vivait dans
+                        # le donjon). À l'ouverture avec un manifeste, on
+                        # initialise le plan DÉTERMINISTEMENT.
+                        or (
+                            str(_etat_ent.get("phase") or "").strip().lower()
+                            in ("opening", "opening_complete", "load")
+                            and not (_etat_ent.get("histoire"))
+                        )
+                    )
                 ):
                     from .tools.cartes import _manifest_pour
                     _man = _manifest_pour(ctx, "")

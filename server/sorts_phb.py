@@ -3139,6 +3139,19 @@ SORTS_SUPPLEMENTAIRES = [
 # Alias de recherche (noms du site -> noms canoniques du catalogue),
 # appliqués par sorts.sort_par_nom en secours de la recherche exacte.
 ALIAS_NOMS = {
+    # 🔧 Bêta : noms courants employés par le LLM (ou les tables 5e) que le
+    # petit modèle confond avec le nom officiel FR 3.5 — observé en partie
+    # réelle : « Détection magique » et « Bouclier de force » refusés alors
+    # que le PJ voulait clairement l'orison Détection de la magie / le sort
+    # Bouclier.
+    "detectionmagique": "Détection de la magie",
+    "detectiondelamagie": "Détection de la magie",
+    "detectiondemagie": "Détection de la magie",
+    "bouclierdeforce": "Bouclier",
+    "soinsmoderes": "Soins modérés",
+    "projectilesmagique": "Projectiles magiques",
+    "projectilemagique": "Projectiles magiques",
+    "armuremage": "Armure du mage",
     "armuredemage": "Armure du mage",
     "assistancedivine": "Orientation",
     "baiserduvampire": "Vampirisation",

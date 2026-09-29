@@ -3315,7 +3315,7 @@ async def _ws_envoi(ws: WebSocket, payload: dict) -> None:
 async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> None:
     """Envoie le payload « joined » (historique + participants) à un client.
 
-    Envoyé uniquement aux clients authentifiés — pour une partie protégée par
+    Envoyé uniquement aux clients authentifiés - pour une partie protégée par
     mot de passe, l'historique ne doit pas fuiter avant la vérification.
     """
     history_payload = [
@@ -3331,6 +3331,35 @@ async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> 
         "history": history_payload,
         "team_history": session.team_history[-100:],
     })
+    # ⚔️ Bêta : retour en cours de COMBAT — le joueur qui revient (après une
+    # déconnexion, un redémarrage serveur, une nuit…) doit savoir que le
+    # combat se poursuit et de qui est le tour. Sans lui, l'écran affiche
+    # le dernier échange et le combat semble « coincé ».
+    try:
+        etat = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
+        if etat.get("phase") == "combat":
+            courant = str(etat.get("courant_tour_pour") or "?")
+            pj = next(
+                (p for p in (etat.get("pj") or [])
+                 if p.get("nom") == courant), None
+            )
+            qui = (
+                f"{courant} (joué par {pj.get('joueur')})"
+                if pj is not None and pj.get("joueur")
+                else courant
+            )
+            await _ws_envoi(ws, {
+                "type": "sys",
+                "event": "combat_reprise",
+                "detail": (
+                    f"⚔️ Combat en cours — round {etat.get('tour', 1)}, "
+                    f"au tour de {qui}. Envoyez votre action."
+                ),
+            })
+    except Exception:                                            # noqa: BLE001
+        pass
 
 
 @app.websocket("/ws/{partie_id}")

@@ -203,6 +203,7 @@ export type WsMessage =
   | { type: "sys"; event: "auth_required"; detail?: string }
   | { type: "sys"; event: "auth_failed"; detail: string }
   | { type: "sys"; event: "join_refused"; detail: string }
+  | { type: "sys"; event: "combat_reprise"; detail: string }
   | { type: "sys"; event: "turn_blocked"; detail: string }
   | { type: "sys"; event: "error"; detail: string }
   | { type: "player"; player: string; text: string; client_id?: string }

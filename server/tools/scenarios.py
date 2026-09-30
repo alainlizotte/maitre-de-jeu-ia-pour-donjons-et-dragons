@@ -250,6 +250,23 @@ def _est_ligne_sommaire(propre: str, idx: int) -> bool:
     return False
 
 
+def _signalmarque(extrait: str, cible: int) -> str:
+    """Tronque sur une frontière de phrase et signale la coupe (m16).
+
+    Le résumé était coupé au caractère près, au milieu d'un mot ou d'une
+    phrase : le MJ recevait une fin incohérente et la prolongeait par
+    invention."""
+    extrait = " ".join(extrait.split())
+    if len(extrait) <= cible:
+        return extrait
+    coupe = extrait[:cible]
+    # Reviens à la dernière fin de phrase complète.
+    pos = max(coupe.rfind(". "), coupe.rfind("! "), coupe.rfind("? "))
+    if pos > int(cible * 0.5):
+        return coupe[:pos + 1].strip()
+    return coupe.rsplit(" ", 1)[0].rstrip(",;:") + " […]"
+
+
 def _resume_texte(texte: str, cible: int = 2200) -> str:
     """Condensé du début du scénario (synopsis/background/hook) pour la
     bible — suffisant au MJ sans noyer le contexte (~2 ko).
@@ -261,6 +278,19 @@ def _resume_texte(texte: str, cible: int = 2200) -> str:
     if not texte:
         return ""
     propre = texte.replace("\r", "")
+    # 🛡️ m16 (audit parties complètes) : l'extrait injecté comme « résumé »
+    # conservait la mise en page du PDF — marges, césures, doubles espaces,
+    # numéros de page — et était en ANGLAIS pour les modules AL. Le MJ
+    # recevait un document brut comme synopsis. Normalisation : espaces,
+    # césures, lignes orphelines, numéros de page, marqueurs de section.
+    propre = re.sub(r"[ \t]{2,}", " ", propre)
+    propre = re.sub(r"-\n(?=[a-zà-ÿ])", "", propre)        # césures
+    propre = re.sub(r"\n\s*\d{1,3}\s*\n", "\n", propre)  # n° de page
+    propre = re.sub(r"\n{3,}", "\n\n", propre)
+    propre = re.sub(r"^\s*(?:Background|Introduction|Read Aloud|"
+                    r"Adventure Background|Hooks?)\s*[:.]?\s*$",
+                    "", propre, flags=re.IGNORECASE | re.MULTILINE)
+    propre = propre.strip()
     bas = propre.lower()
     candidats: list[int] = []
     for section in _RESUME_SECTIONS:
@@ -280,8 +310,8 @@ def _resume_texte(texte: str, cible: int = 2200) -> str:
             debut = fin_en_tete + 1
         extrait = propre[debut:debut + cible].strip()
         if len(extrait) >= 120:
-            return extrait
-    return propre[:cible] + ("…" if len(propre) > cible else "")
+            return _signalmarque(extrait, cible)
+    return _signalmarque(propre[:cible], cible)
 
 
 def _construire_bible(
@@ -303,6 +333,12 @@ def _construire_bible(
         "etapes": [],              # étapes du scénario (voir scenario_etape)
         "etape_courante": "",
         "objectifs": [],           # objectifs/enjeux principaux
+        # 🛡️ m17 : `objectif` et `manquants` restaient vides sur les deux
+        # campagnes (null / []) : ni le MJ ni l'interface ne pouvaient afficher
+        # « objectif courant ». Ces champs sont remplis ci-dessous par
+        # `_remplir_objectifs` à partir du texte du module.
+        "objectif": None,
+        "manquants": [],
         # Campagne découpée en chapitres (champ `chapitre_suivant` du
         # catalogue) : réinjectés au MJ à chaque tour pour enchaîner les
         # chapitres dans la MÊME partie via `scenarios_laelith_charger`.
@@ -329,7 +365,95 @@ def _construire_bible(
         )
     else:
         bible["avertissement"] = ""
+    _remplir_objectifs(bible, pdf_texte)
+    if not bible.get("etapes"):
+        bible["etapes"] = _extraire_etapes(pdf_texte)
+        if bible["etapes"]:
+            bible["etape_courante"] = bible["etapes"][0]
     return bible
+
+
+# 🛡️ M11 (audit parties complètes) : `bible.etapes` restait TOUJOURS vide
+# (`etapes: []` en dur) et `etape_courante` vide : ni le MJ ni l'interface ne
+# pouvaient situer le groupe dans la trame. On extrait les titres de section
+# du livret (salles, rencontres, conclusion) pour donner une trame visible.
+_RE_TITRE_SECTION = re.compile(
+    r"^\s*(?:[A-D]?\d{1,2}\s*[).–—-]?\s*)?"
+    r"([A-ZÀ-Ü][A-ZÀ-Ü\s'’\-]{5,60})\s*$"
+    r"|^\s*(?:[A-D]?\d{1,2}\s*[).–—-]\s*)"
+    r"([A-ZÀ-Ü][\wà-ü'’\- ,:]{5,60})\s*$",
+    re.MULTILINE,
+)
+_MOTS_EXCLUS_ETAPE = frozenset({
+    "background", "introduction", "conclusion", "appendix", "appendice",
+    "read aloud", "treasure", "experience", "development",
+    "table of contents", "credits", "sidebars", "statistiques", "stat block",
+})
+
+
+def _extraire_etapes(pdf_texte: str, max_etapes: int = 12) -> list[str]:
+    """Titres de section du livret, dans l'ordre du document (M11)."""
+    if not pdf_texte:
+        return []
+    sortis: list[str] = []
+    vus: set[str] = set()
+    for m in _RE_TITRE_SECTION.finditer(str(pdf_texte)):
+        titre = (m.group(1) or m.group(2) or "").strip()
+        titre = re.sub(r"\s+", " ", titre).strip(" .:;-–—")
+        if not (6 <= len(titre) <= 60):
+            continue
+        cle = titre.lower()
+        if cle in vus:
+            continue
+        if any(x in cle for x in _MOTS_EXCLUS_ETAPE):
+            continue
+        # Un titre n'est pas une phrase : il ne se termine pas par un point.
+        if titre.endswith("."):
+            continue
+        vus.add(cle)
+        sortis.append(titre.title())
+        if len(sortis) >= max_etapes:
+            break
+    return sortis
+
+
+def _remplir_objectifs(bible: dict[str, Any], pdf_texte: str) -> None:
+    """Remplit `objectif` (courant) et `manquants` (m17).
+
+    Sans ces champs, `progression_objectifs` affichait « 0/4 » ou « 1/4 »
+    sans qu'aucun écran ne puisse dire CE QUI manque : le joueur ne savait
+    jamais quoi faire ensuite."""
+    texte = " ".join(str(pdf_texte or "").split())
+    if not texte:
+        return
+    pistes: list[str] = []
+    for mot in ("Objective", "Objectives", "Goals", "What Must Be Done",
+                "The characters must", "The PCs must", "Background"):
+        pos = texte.find(mot)
+        if pos >= 0:
+            extrait = texte[pos:pos + 400]
+            phrase = re.split(r"(?<=[.!?]) ", extrait)[0]
+            if 30 <= len(phrase) <= 380:
+                pistes.append(phrase)
+    # 🛡️ m22 (audit) : un objectif issu du TEXTE n'avait aucun `requis`,
+    # donc il était évalué sur la salle visitée seule et `progression` restait
+    # à 0/3 même après avoir récupéré la Couronne et une gemme. Si la phrase
+    # mentionne un objet, on pose un `requis` : l'objectif est alors validé
+    # par la POSSESSION de l'objet (règle 3.5 du module, cf. `objectifs.py`).
+    _MOTS_OBJET_QUETE = ("gemme", "couronne", "couronne de mystra")
+    objectifs_f = []
+    for phrase in pistes[:4]:
+        bas = phrase.lower()
+        requis: list[dict[str, str]] = []
+        for mot in _MOTS_OBJET_QUETE:
+            if mot in bas:
+                requis.append({"nom": mot.capitalize(), "portee": "quete"})
+        objectifs_f.append({"titre": phrase[:120], "detail": phrase,
+                            "type": "objet" if requis else "etape",
+                            "requis": requis, "statut": "en_cours"})
+    bible["objectifs"] = objectifs_f
+    bible["objectif"] = pistes[0] if pistes else None
+    bible["manquants"] = list(pistes)
 
 
 def _ennemis_du_texte(ctx: ToolContext, texte: str) -> list[str]:

@@ -297,13 +297,28 @@ def inventaire_quete(etat: dict[str, Any], data_dir: str,
 def _salle_visitee(etat: dict[str, Any], salle_txt: str) -> bool:
     """True si la salle "x,y" de n'importe quel étage du donjon courant a été
     visitée (les étages archivés de `donjons_exploreres` exclus : seul le
-    donjon actif compte pour la trame)."""
+    donjon actif compte pour la trame).
+
+    🛡️ B9 (audit parties complètes) : le même couple (x,y) existe souvent sur
+    PLUSIEURS étages avec des états `visitee` différents. La première
+    correspondance gagnait, quelle que soit la grille : un objectif de
+    l'étage 2 était évalué sur la grille de l'étage 1 (et inversement), et
+    `progression` RECULAIT d'un tour à l'autre (1/4 → 0/4 observé). La salle
+    est donc cherchée dans l'étage COURANT d'abord, et un objectif déjà marqué
+    terminé n'est jamais re-retiré (voir `_progression_ne_recula_pas`)."""
     if not salle_txt:
         return False
     donjon = etat.get("donjon") or {}
+    etage_courant = donjon.get("etage")
     grilles = [donjon.get("grille") or []]
-    for fl in (donjon.get("etages") or {}).values():
+    for cle, fl in (donjon.get("etages") or {}).items():
         if isinstance(fl, dict):
+            # L'étage courant est déjà en tête ; on n'y touche pas.
+            try:
+                if int(cle) == int(etage_courant or -999):
+                    continue
+            except (TypeError, ValueError):
+                pass
             grilles.append(fl.get("grille") or [])
     try:
         parts = [int(x) for x in salle_txt.split(",") if x.strip()]

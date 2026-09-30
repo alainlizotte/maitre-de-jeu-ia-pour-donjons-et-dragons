@@ -124,7 +124,10 @@ class GameConfig:
     block_messages_during_think: bool = False
     # ⚔️ Combat server-driven : délai (secondes) après lequel le tour d'un
     # joueur silencieux est passé automatiquement par le moteur (0 = jamais).
-    combat_turn_timeout_seconds: int = 300
+    # 🛡️ B5 (audit parties complètes) : 300 s dépassait le délai du verrou de
+    # tour (240 s) — le moteur de combat rejouait un tour déjà annulé par le
+    # verrou, et le joueur recevait « tour passé » sans avoir pu agir.
+    combat_turn_timeout_seconds: int = 200
     # 🎯 Phase de décision contrainte (correctif abd81275) : AVANT la
     # narration, un appel LLM court avec `response_format: json_schema`
     # (grammaire llama.cpp) choisit les outils mécaniques du tour. La sortie

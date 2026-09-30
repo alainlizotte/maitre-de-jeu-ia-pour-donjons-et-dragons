@@ -1131,9 +1131,28 @@ class PromptBuilder:
 
         pnjs = etat.get("pnj", []) or []
         if pnjs:
-            lignes.append("\nPNJ notables :")
+            # 🛡️ P5 (audit parties complètes) : un PNJ et un PJ peuvent porter
+            # le même nom (les modules livrent des PNJ nommés : Cassyt,
+            # Thukmuul Teleshann, Rorreth Monforoth…). Le récapitulatif listait
+            # le PNJ par son nom nu, indistinguable d'un PJ — le MJ mélangeait
+            # les deux. Les PNJ sont préfixés et les homonymes signalés.
+            _noms_pj_set = {
+                str(p.get("nom") or "").strip().casefold()
+                for p in (etat.get("pj") or []) if p.get("nom")
+            }
+            lignes.append(
+                "\nPNJ notables (⚠️ ce ne sont PAS des personnages joueurs — "
+                "ne les confonds PAS avec les PJ, et ne leur fais JAMAIS jouer "
+                "une action de joueur) :"
+            )
             for p in pnjs:
-                lignes.append(f"  - {p.get('nom','?')}: {p.get('role','?')}")
+                _nom = str(p.get("nom", "?") or "?")
+                _marque = (
+                    "  ⚠️ HOMONYME d'un PJ de la partie — "
+                    "précise toujours PNJ vs PJ quand tu parles de lui."
+                    if _nom.strip().casefold() in _noms_pj_set else ""
+                )
+                lignes.append(f"  - PNJ {_nom}: {p.get('role','?')}{_marque}")
 
         lieu = etat.get("lieu", {}) or {}
         if lieu:

@@ -619,7 +619,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu de la magie",
         "alignement": "Neutre",
         "races": [],
-        "classes": ["Magicien", "Sorcier"],
+        "classes": ["Clerc", "Magicien", "Sorcier"],
         "mal": False,
     },
     {
@@ -627,7 +627,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des elfes",
         "alignement": "Chaotique Bon",
         "races": ["Elfe", "Demi-elfe"],
-        "classes": ["Barde"],
+        "classes": ["Clerc", "Barde"],
         "mal": False,
     },
     {
@@ -635,7 +635,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "déesse des forêts",
         "alignement": "Neutre Bon",
         "races": ["Elfe", "Demi-elfe", "Gnome", "Halfelin"],
-        "classes": ["Druide", "Rodeur"],
+        "classes": ["Clerc", "Druide", "Rodeur"],
         "mal": False,
     },
     {
@@ -643,7 +643,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des carnages",
         "alignement": "Chaotique Mauvais",
         "races": [],
-        "classes": ["Guerrier", "Barbare", "Voleur"],
+        "classes": ["Clerc", "Guerrier", "Barbare", "Voleur"],
         "mal": True,
     },
     {
@@ -651,7 +651,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des routes",
         "alignement": "Neutre",
         "races": [],
-        "classes": ["Barde"],
+        "classes": ["Clerc", "Barde"],
         "mal": False,
     },
     {
@@ -659,7 +659,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des gnomes",
         "alignement": "Neutre Bon",
         "races": ["Gnome"],
-        "classes": [],
+        "classes": ["Clerc", ],
         "mal": False,
     },
     {
@@ -667,7 +667,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des orques",
         "alignement": "Chaotique Mauvais",
         "races": ["Demi-orc"],
-        "classes": [],
+        "classes": ["Clerc", ],
         "mal": False,
     },
     {
@@ -675,7 +675,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu de la bravoure",
         "alignement": "Loyal Bon",
         "races": [],
-        "classes": ["Paladin", "Guerrier", "Moine"],
+        "classes": ["Clerc", "Paladin", "Guerrier", "Moine"],
         "mal": False,
     },
     {
@@ -683,7 +683,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu de la tyrannie",
         "alignement": "Loyal Mauvais",
         "races": [],
-        "classes": ["Guerrier", "Moine"],
+        "classes": ["Clerc", "Guerrier", "Moine"],
         "mal": True,
     },
     {
@@ -691,7 +691,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu de la force",
         "alignement": "Chaotique Bon",
         "races": [],
-        "classes": ["Guerrier", "Barbare", "Voleur"],
+        "classes": ["Clerc", "Guerrier", "Barbare", "Voleur"],
         "mal": False,
     },
     {
@@ -699,7 +699,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des nains",
         "alignement": "Loyal Bon",
         "races": ["Nain"],
-        "classes": [],
+        "classes": ["Clerc", ],
         "mal": False,
     },
     {
@@ -707,7 +707,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu de la mort",
         "alignement": "Neutre Mauvais",
         "races": [],
-        "classes": ["Voleur", "Magicien"],
+        "classes": ["Clerc", "Voleur", "Magicien"],
         "mal": True,
     },
     {
@@ -715,7 +715,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu de la nature",
         "alignement": "Neutre",
         "races": [],
-        "classes": ["Druide", "Barbare", "Rodeur"],
+        "classes": ["Clerc", "Druide", "Barbare", "Rodeur"],
         "mal": False,
     },
     {
@@ -723,7 +723,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des voleurs",
         "alignement": "Chaotique Neutre",
         "races": [],
-        "classes": ["Voleur", "Barde"],
+        "classes": ["Clerc", "Voleur", "Barde"],
         "mal": False,
     },
     {
@@ -731,7 +731,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu du soleil",
         "alignement": "Neutre Bon",
         "races": [],
-        "classes": ["Rodeur", "Barde"],
+        "classes": ["Clerc", "Rodeur", "Barde"],
         "mal": False,
     },
     {
@@ -739,7 +739,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu de la vengeance",
         "alignement": "Loyal Neutre",
         "races": [],
-        "classes": ["Guerrier", "Moine"],
+        "classes": ["Clerc", "Guerrier", "Moine"],
         "mal": False,
     },
     {
@@ -747,7 +747,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "dieu des secrets",
         "alignement": "Neutre Mauvais",
         "races": [],
-        "classes": ["Magicien", "Sorcier", "Voleur"],
+        "classes": ["Clerc", "Magicien", "Sorcier", "Voleur"],
         "mal": True,
     },
     {
@@ -755,7 +755,7 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "déesse de la mort et de la magie",
         "alignement": "Loyal Neutre",
         "races": [],
-        "classes": ["Magicien", "Sorcier"],
+        "classes": ["Clerc", "Magicien", "Sorcier"],
         "mal": False,
     },
     {
@@ -763,10 +763,255 @@ DIEUX: list[dict[str, Any]] = [
         "titre": "déesse des halfelins",
         "alignement": "Loyal Bon",
         "races": ["Halfelin"],
-        "classes": [],
+        "classes": ["Clerc", ],
         "mal": False,
     },
 ]
+
+# 🛡️ P4 (audit parties complètes) : `DIEUX` ne contenait que le panthéon de
+# base PHB 3.5 (Greyhawk). Les DEUX scénarios livrés se déroulent en Faerûn :
+# Dues for the Dead commence sous l'acolyte de **Kelemvor**, Crown of Mystra
+# tourne autour de **Mystra** et de **Cyric** — aucun des trois n'était dans la
+# liste, et les 24 grandes divinités faerûniennes étaient absentes. Un joueur
+# de Faerûn ne pouvait donc choisir la divinité de sa propre campagne.
+# Ajout du panthéon faerûnien (Forgotten Realms Campaign Setting). Tous ces
+# dieux ont un clergé ; `races: []` = ouverts à toutes les races de Faerûn.
+FR_PANTHEON: list[dict[str, Any]] = [
+    {
+        "nom": "Azuth",
+        "titre": "dieu des mages",
+        "alignement": "Loyal Neutre",
+        "races": [],
+        "classes": ["Clerc", "Magicien", "Sorcier"],
+        "mal": False,
+    },
+    {
+        "nom": "Bane",
+        "titre": "dieu de la tyrannie",
+        "alignement": "Loyal Mauvais",
+        "races": [],
+        "classes": ["Clerc", "Guerrier", "Moine"],
+        "mal": True,
+    },
+    {
+        "nom": "Bhaal",
+        "titre": "dieu du meurtre",
+        "alignement": "Neutre Mauvais",
+        "races": [],
+        "classes": ["Clerc", "Voleur", "Guerrier"],
+        "mal": True,
+    },
+    {
+        "nom": "Chauntea",
+        "titre": "déesse des moissons",
+        "alignement": "Neutre Bon",
+        "races": [],
+        "classes": ["Clerc", "Druide", "Rodeur"],
+        "mal": False,
+    },
+    {
+        "nom": "Cyric",
+        "titre": "dieu du mensonge et de la discorde",
+        "alignement": "Chaotique Mauvais",
+        "races": [],
+        "classes": ["Clerc", "Voleur", "Magicien"],
+        "mal": True,
+    },
+    {
+        "nom": "Deneir",
+        "titre": "dieu de l'écriture",
+        "alignement": "Neutre Bon",
+        "races": [],
+        "classes": ["Clerc", "Magicien"],
+        "mal": False,
+    },
+    {
+        "nom": "Eldath",
+        "titre": "déesse de la paix",
+        "alignement": "Neutre Bon",
+        "races": [],
+        "classes": ["Clerc", "Druide"],
+        "mal": False,
+    },
+    {
+        "nom": "Gond",
+        "titre": "dieu de l'artisanat",
+        "alignement": "Neutre",
+        "races": [],
+        "classes": ["Clerc", "Magicien"],
+        "mal": False,
+    },
+    {
+        "nom": "Helm",
+        "titre": "dieu des gardiens",
+        "alignement": "Loyal Neutre",
+        "races": [],
+        "classes": ["Clerc", "Guerrier", "Paladin", "Moine"],
+        "mal": False,
+    },
+    {
+        "nom": "Ilmater",
+        "titre": "dieu de l'endurance",
+        "alignement": "Loyal Bon",
+        "races": [],
+        "classes": ["Clerc", "Moine", "Paladin"],
+        "mal": False,
+    },
+    {
+        "nom": "Kelemvor",
+        "titre": "dieu des morts",
+        "alignement": "Loyal Neutre",
+        "races": [],
+        "classes": ["Clerc", "Paladin", "Guerrier", "Moine"],
+        "mal": False,
+    },
+    {
+        "nom": "Lathander",
+        "titre": "dieu de l'aube et du renouveau",
+        "alignement": "Neutre Bon",
+        "races": [],
+        "classes": ["Clerc", "Paladin"],
+        "mal": False,
+    },
+    {
+        "nom": "Lliira",
+        "titre": "déesse de la joie",
+        "alignement": "Chaotique Bon",
+        "races": [],
+        "classes": ["Clerc", "Barde", "Sorcier"],
+        "mal": False,
+    },
+    {
+        "nom": "Mielikki",
+        "titre": "déesse des forêts",
+        "alignement": "Neutre Bon",
+        "races": [],
+        "classes": ["Clerc", "Rodeur", "Druide"],
+        "mal": False,
+    },
+    {
+        "nom": "Mystra",
+        "titre": "déesse de la magie",
+        "alignement": "Neutre Bon",
+        "races": [],
+        "classes": ["Clerc", "Magicien", "Sorcier"],
+        "mal": False,
+    },
+    {
+        "nom": "Myrkul",
+        "titre": "dieu des morts-vivants",
+        "alignement": "Neutre Mauvais",
+        "races": [],
+        "classes": ["Clerc", "Magicien", "Voleur"],
+        "mal": True,
+    },
+    {
+        "nom": "Oghma",
+        "titre": "dieu du savoir",
+        "alignement": "Neutre",
+        "races": [],
+        "classes": ["Clerc", "Barde", "Magicien"],
+        "mal": False,
+    },
+    {
+        "nom": "Selûne",
+        "titre": "déesse de la lune",
+        "alignement": "Chaotique Bon",
+        "races": [],
+        "classes": ["Clerc", "Barde", "Magicien", "Rodeur"],
+        "mal": False,
+    },
+    {
+        "nom": "Shar",
+        "titre": "déesse des ténèbres et de la perte",
+        "alignement": "Neutre Mauvais",
+        "races": [],
+        "classes": ["Clerc", "Magicien", "Sorcier", "Voleur"],
+        "mal": True,
+    },
+    {
+        "nom": "Silvanus",
+        "titre": "dieu de la nature sauvage",
+        "alignement": "Neutre",
+        "races": [],
+        "classes": ["Clerc", "Druide", "Rodeur"],
+        "mal": False,
+    },
+    {
+        "nom": "Sune",
+        "titre": "déesse de la beauté et de l'amour",
+        "alignement": "Chaotique Bon",
+        "races": [],
+        "classes": ["Clerc", "Barde", "Paladin"],
+        "mal": False,
+    },
+    {
+        "nom": "Talos",
+        "titre": "dieu des tempêtes et de la destruction",
+        "alignement": "Chaotique Mauvais",
+        "races": [],
+        "classes": ["Clerc", "Barbare", "Guerrier", "Magicien"],
+        "mal": True,
+    },
+    {
+        "nom": "Tempus",
+        "titre": "dieu de la guerre",
+        "alignement": "Chaotique Neutre",
+        "races": [],
+        "classes": ["Clerc", "Barbare", "Guerrier"],
+        "mal": False,
+    },
+    {
+        "nom": "Torm",
+        "titre": "dieu du devoir et du courage",
+        "alignement": "Loyal Bon",
+        "races": [],
+        "classes": ["Clerc", "Paladin", "Guerrier"],
+        "mal": False,
+    },
+    {
+        "nom": "Tymora",
+        "titre": "déesse de la chance",
+        "alignement": "Chaotique Bon",
+        "races": [],
+        "classes": ["Clerc", "Voleur", "Barde", "Guerrier"],
+        "mal": False,
+    },
+    {
+        "nom": "Tyr",
+        "titre": "dieu de la justice",
+        "alignement": "Loyal Bon",
+        "races": [],
+        "classes": ["Clerc", "Paladin", "Guerrier", "Moine"],
+        "mal": False,
+    },
+    {
+        "nom": "Umberlee",
+        "titre": "déesse de la mer et des tempêtes",
+        "alignement": "Chaotique Mauvais",
+        "races": [],
+        "classes": ["Clerc", "Sorcier", "Voleur"],
+        "mal": True,
+    },
+    {
+        "nom": "Waukeen",
+        "titre": "déesse du commerce",
+        "alignement": "Neutre",
+        "races": [],
+        "classes": ["Clerc", "Voleur", "Barde"],
+        "mal": False,
+    },
+    {
+        "nom": "Chevalier Rouge",
+        "titre": "déesse de la stratégie",
+        "alignement": "Loyal Neutre",
+        "races": [],
+        "classes": ["Clerc", "Guerrier"],
+        "mal": False,
+    },
+]
+
+DIEUX.extend(FR_PANTHEON)
 
 
 def _est_maléfique(alignement: str) -> bool:
@@ -779,14 +1024,22 @@ def dieux_disponibles(race: str, classe: str, alignement: str) -> list[dict[str,
     Un dieu qualifie le personnage si :
       - sa race figure parmi les races servies OU sa classe parmi les classes
         servies (un dieu peut servir plusieurs types de fidèles) ;
-      - les listes vides signifient « ouvert à tous » sur cette dimension ;
+      - `races: []` = ouvert à TOUTES les races (dieux du panthéon commun) ;
+        `classes: []` = dieu RACIAL, aucune classe servie en propre ;
       - les dieux `mal` exigent un alignement mauvais (serviteurs « maléfiques »).
+
+    🛡️ P1 (audit parties complètes) : le code appliquait l'inverse de la
+    documentation (`bool(d["races"]) and ...`), donc un dieu à `races: []`
+    n'acceptait personne par la race — et comme AUCUN dieu ne listait
+    « Clerc », la création d'un clerc était impossible. Aligné sur la
+    documentation et ajout de « Clerc » aux divinités qui en ont (chaque
+    divinité du Manuel des Joueurs a un clergé).
     """
     race_c = resoudre_race(race)
     classe_c = resoudre_classe(classe)
     eligibles = []
     for d in DIEUX:
-        par_race = bool(d["races"]) and race_c in d["races"]
+        par_race = (not d["races"]) or race_c in d["races"]
         par_classe = bool(d["classes"]) and classe_c in d["classes"]
         if not (par_race or par_classe):
             continue

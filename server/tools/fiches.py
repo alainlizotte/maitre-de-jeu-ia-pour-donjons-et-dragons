@@ -948,8 +948,25 @@ async def fiche_perso_mettre_a_jour(
     # "15 PV" ou du texte libre qui corromprait la fiche (puis ferait
     # crasher les tools de soins/dégâts à la lecture).
     pv_borne = None
-    if keys[0] in ("pv", "pv_max", "ca", "bab", "niveau", "or", "initiative") \
-            and len(keys) == 1:
+    # 🛡️ B34 (audit parties complètes) : la protection F2 ne couvrait que
+    # `pv_max`. `carac.CON` était écrivable par le MJ sans aucune borne —
+    # observé en jeu : CON 15 → 13 puis → 11 sur deux résurrections
+    # automatiques. Tout champ vital est désormais soit RÉSERVÉ, soit borné.
+    _RESERVES = {
+        # champ → raison (message joueur)
+        "pv_max": "il évolue uniquement par la progression de niveau / la "
+                  "pénalité de résurrection, gérées par le serveur",
+        "bab": "il se déduit de la classe et du niveau (recalcul serveur)",
+        "niveau": "il vient de l'XP (moteur de combat / tools MJ)",
+        "charge_max": "il se calcule depuis FOR et la race",
+    }
+    if keys[0] in _RESERVES and not interne:
+        return ToolResult(text=(
+            f"⛔ `{keys[0]}` est un champ RÉSERVÉ : {_RESERVES[keys[0]]}. "
+            "Pour faire remonter les PV : `fiche_perso_soigner` ; pour les "
+            "faire baisser : `fiche_perso_infliger_degats`."
+        ))
+    if keys[0] in ("pv", "ca", "or", "initiative") and len(keys) == 1:
         try:
             v = int(str(v))
         except (TypeError, ValueError):
@@ -970,6 +987,37 @@ async def fiche_perso_mettre_a_jour(
                     v = plafond
             except (TypeError, ValueError):
                 pass
+        if keys[0] == "or":
+            v = max(0, min(v, 1_000_000))
+        if keys[0] == "initiative":
+            v = max(-10, min(v, 30))
+        if keys[0] == "ca":
+            v = max(0, min(v, 60))
+
+    # Caractéristiques : bornes 3.5 (1 à 40, système de jeu — au-delà il
+    # s'agit d'un monstre, pas d'un PJ jouable).
+    if keys[0] == "carac" or (len(keys) == 2 and keys[0] == "carac"):
+        if len(keys) == 1:
+            return ToolResult(text=(
+                "⛔ `carac` ne se remplace pas en bloc : modifie chaque "
+                "caractéristique (`carac.FOR`, `carac.DEX`…), sinon les PV, "
+                "la CA et les sauvegardes ne seraient plus cohérentes."
+            ))
+        _cible = keys[1].upper()
+        if _cible not in ("FOR", "DEX", "CON", "INT", "SAG", "CHA"):
+            return ToolResult(text=(
+                f"❌ Caractéristique inconnue « {keys[1]} » — utilisez FOR, "
+                "DEX, CON, INT, SAG ou CHA."
+            ))
+        try:
+            _cv = int(str(v))
+        except (TypeError, ValueError):
+            return ToolResult(text=(
+                f"❌ Valeur non numérique pour {champ} : "
+                f"{json.dumps(v, ensure_ascii=False)!r}."
+            ))
+        _cv = max(1, min(_cv, 40))
+        v = _cv
 
     cur: Any = fiche
     for k in keys[:-1]:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Optional
 
 from ..game.state import PartyState
@@ -364,6 +365,64 @@ def _cr_numerique(fp: Any) -> Optional[float]:
         return None
 
 
+_RE_ESPECE_QTE = re.compile(r"^\s*([^×x(]+?)\s*(?:[×x]\s*(\d+))?\s*(?:\(|$)")
+
+
+def _split_espece_quantite(txt: str) -> tuple[str, int]:
+    """« Kobold ×5 (…note…) » → (« Kobold », 5). Quantité 1 par défaut."""
+    t = str(txt or "").strip()
+    m = _RE_ESPECE_QTE.match(t)
+    if not m:
+        return (t.strip(), 1)
+    esp = m.group(1).strip(" -,;")
+    try:
+        q = max(1, int(m.group(2) or 1))
+    except (TypeError, ValueError):
+        q = 1
+    return (esp, q)
+
+
+def _ennemis_canoniques_salle(etat: dict) -> list[str]:
+    """Liste `ennemis` canonique de la salle courante du donjon (B25/M6).
+
+    Vide si la salle n'en définit pas : dans ce cas aucune contrainte
+    d'espèce n'est imposée (salles libres, voyages, rencontres de trajet)."""
+    try:
+        dj = etat.get("donjon") or {}
+        cur = list(dj.get("courant") or [])
+        if len(cur) < 2:
+            return []
+        cx, cy = int(cur[0]), int(cur[1])
+    except (TypeError, ValueError):
+        return []
+    salle = next(
+        (sl for sl in (dj.get("grille") or [])
+         if isinstance(sl, dict)
+         and str(sl.get("x")) == str(cx) and str(sl.get("y")) == str(cy)),
+        None,
+    )
+    if not salle:
+        return []
+    brut = salle.get("ennemis")
+    if isinstance(brut, str):
+        brut = [x for x in re.split(r"[;,]", brut) if x.strip()]
+    if not isinstance(brut, list):
+        return []
+    sortie: list[str] = []
+    for e in brut:
+        txt = str(e or "").strip()
+        if not txt:
+            continue
+        # Retire la note entre parenthèses (« … (pendus au plafond — 3d6) »).
+        txt = re.sub(r"\([^)]*\)", " ", txt).strip(" -,;")
+        if txt:
+            sortie.append(txt)
+    return sortie
+
+
+# 🛡️ B25 : le décorateur manquait — l'outil n'était JAMAIS dans le registre,
+# donc ni exposé au modèle ni appelable par le rattrapage de combat prose
+# (« registre engager_combat absent »).
 @tool
 async def engager_combat(
     ctx: ToolContext, monstres: str, ajustement: str = ""
@@ -565,6 +624,39 @@ async def engager_combat(
                 "`combat_ajouter_combattant`."
             ))
 
+    # ── GARDE DE FIDÉLITÉ AU MODULE (🛡️ B25, audit parties complètes) ───
+    # Le MJ inventait des rencontres : une Goule de 16 PV dans une salle qui
+    # contenait un Squelette FP 1/3, un Assassin dans la salle d'entrée. La
+    # salle du donjon porte pourtant la liste canonique `ennemis` du module.
+    # Si elle est renseignée, on n'engage QUE ces créatures (espèce et
+    # quantité) ; une autre espèce est refusée avec la liste officielle.
+    _salle_canon = _ennemis_canoniques_salle(etat)
+    if _salle_canon:
+        from .fiches import _espece_cle as _ec_b25
+        _attendues = {}
+        for _e in _salle_canon:
+            _esp, _q = _split_espece_quantite(_e)
+            if _esp:
+                _attendues.setdefault(_ec_b25(_esp), (_esp, _q))
+        _inconnues = []
+        for _n in noms:
+            if _ec_b25(_n) not in _attendues:
+                _inconnues.append(_n)
+        if _inconnues:
+            _legitimes = ", ".join(
+                f"{esp} ×{q}" for esp, q in _attendues.values()
+            ) or "aucune"
+            return ToolResult(text=(
+                "⛔ **Rencontre hors module refusée** : la salle contient "
+                "canoniquement [" + _legitimes + "], pas "
+                + ", ".join(_inconnues) + ".\n"
+                "_Engage UNIQUEMENT les créatures listées ci-dessus, avec la "
+                "quantité indiquée. Si la fiction réclame autre chose, fais "
+                "d'abord sortir le groupe de la salle (déplacement), ou "
+                "adapte temporairement la créature canonique via "
+                "`ajustement`._"
+            ))
+
     # ── GARDE DE DIFFICULTÉ (conformité DMG 3.5) ────────────────────────
     # Une créature dont le FP dépasse largement le niveau du groupe produit
     # des rencontres SANS ESPOIR (TPK) et, hors scénario, trahit la trame
@@ -628,6 +720,50 @@ async def engager_combat(
                 + ", ".join(n for _, n, _ in candidats[:10]) + "._"
             )
         return ToolResult(text="\n".join(lignes_fp))
+
+    # ── 🛡️ M6 : la QUANTITÉ canonique de la salle est appliquée ────────
+    # « Kobold ×5 » était engagé comme UN Kobold : le module prévoyait cinq
+    # créatures, le combat n'en comptait qu'une, et l'équilibrage de la
+    # rencontre était faux dans un sens ou l'autre. Les noms demandés sont
+    # développés au compte canonique de la salle courante.
+    if _salle_canon:
+        from .fiches import _espece_cle as _ec_m6
+        _quantites = {}
+        for _e in _salle_canon:
+            _esp, _q = _split_espece_quantite(_e)
+            if _esp:
+                _quantites[_ec_m6(_esp)] = (_esp, _q)
+        if _quantites:
+            _developpes: list[str] = []
+            for _n in noms:
+                _info = _quantites.get(_ec_m6(_n))
+                if not _info:
+                    _developpes.append(_n)
+                    continue
+                _esp, _q = _info
+                _developpes.extend([_esp] * max(1, min(_q, 12)))
+            if len(_developpes) <= _MAX_MONSTRES_ENGAGEMENT:
+                if _developpes != noms:
+                    print("[dnd35] M6 : quantité canonique appliquée "
+                          f"({len(noms)} demandé(s) → {len(_developpes)} "
+                          "créatures)")
+                noms = _developpes
+                _counts = _Counter(
+                    str((m or {}).get("nom") or "").strip().casefold()
+                    for m in monstres_ok
+                )
+                _monstres_par_espece: dict[str, list[dict]] = {}
+                for _m in monstres_ok:
+                    _monstres_par_espece.setdefault(
+                        str((_m or {}).get("nom") or "").strip().casefold(),
+                        []).append(_m)
+                _nouveaux: list[dict] = []
+                for _n in noms:
+                    _lst = _monstres_par_espece.get(
+                        str(_n).strip().casefold()) or []
+                    if _lst:
+                        _nouveaux.append(_lst[0])
+                monstres_ok = _nouveaux
 
     # ── GOUVERNEUR DE TAILLE (même logique que les renforts) ──────────
     # Le plafond FP n'exclut pas les créatures à gros HP (Plasme FP 7 =

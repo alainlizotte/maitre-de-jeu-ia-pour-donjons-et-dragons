@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import os
 import tempfile
 from dataclasses import dataclass, field
@@ -43,6 +44,26 @@ class PartySession:
     # Indique que le MJ est en cours de traitement (pensée/génération).
     # Les messages "say" des joueurs sont rejetés tant que thinking est True.
     thinking: bool = False
+    # 🛡️ B31 (audit parties complètes) : instant (time.monotonic) du début du
+    # tour en cours. Un verrou resté True (coroutine annulée, exception hors
+    # `finally`, génération bloquée) verrouillait la partie DÉFINITIVEMENT :
+    # 16 messages refusés d'affilée pendant 25 minutes, sans aucun moyen
+    # d'interrompre. L'ancienneté sert au contournement automatique et à la
+    # commande d'annulation.
+    thinking_depuis: Optional[float] = None
+    # Annulations déjà demandées sur le tour courant (anti-spam).
+    thinking_annules: int = 0
+
+    def verrou_age(self) -> float:
+        """Ancienneté du verrou `thinking` en secondes (0.0 s'il est libre)."""
+        if not self.thinking or self.thinking_depuis is None:
+            return 0.0
+        return max(0.0, time.monotonic() - self.thinking_depuis)
+
+    def verrou_lever(self) -> None:
+        """Lève le verrou de tour et réinitialise son chronomètre."""
+        self.thinking = False
+        self.thinking_depuis = None
     # 🔒 Bêta (C2) : personnage incarné PAR CONNEXION (posé au `join`) — la
     # garde de tour compare le personnage de l'EXPÉDITEUR au personnage actif,
     # pas seulement le compte : deux PJ du même compte (deux onglets) doivent
@@ -87,6 +108,19 @@ class PartySession:
             Message(role="assistant", content=content, tool_calls=tool_calls)
         )
         self._truncate_and_persist()
+
+    def oublier_dernier_message_joueur(self) -> Optional[Message]:
+        """🛡️ B3 (audit parties complètes) : retire le DERNIER message joueur
+        de l'historique.
+
+        Un message refusé (mauvais personnage, personnage mourant, tour déjà
+        consommé) restait en historique : le MJ le rejouait plusieurs tours
+        plus tard comme si le joueur venait de le dire. On l'ôte donc quand
+        l'action est refusée."""
+        for i in range(len(self.history) - 1, -1, -1):
+            if self.history[i].role == "user":
+                return self.history.pop(i)
+        return None
 
     def remember_tool(self, name: str, tool_call_id: str, content: str) -> None:
         self.history.append(

@@ -60,6 +60,56 @@ def _armes_catalogue() -> dict:
     return _ARMES_CATALOGUE
 
 
+def _armes_portees(fiche: dict) -> list[dict]:
+    """Armes du catalogue présentes dans l'équipement ou l'inventaire d'une
+    fiche (B27) : liste de {nom, normalisé, entrée catalogue}."""
+    from .inventaire import _inventaire as _inv  # pylint: disable=C0415
+    try:
+        from ..catalogue import ARMES as _armes_cat  # pylint: disable=C0415
+        cat = {_norm_arme(a.get("nom")): a for a in _armes_cat}
+    except Exception:                                        # noqa: BLE001
+        cat = {}
+    vues: set[str] = set()
+    out: list[dict] = []
+    for e in (fiche.get("equipement") or []) + (_inv(fiche) or []):
+        if not isinstance(e, dict):
+            continue
+        nom = str(e.get("nom") or "").strip()
+        if not nom:
+            continue
+        n = _norm_arme(nom)
+        if n in vues or not n:
+            continue
+        vues.add(n)
+        entree = cat.get(n)
+        if entree:
+            out.append({"nom": nom, "norm": n, "cat": entree})
+    return out
+
+
+def _arme_correspondante(demandee: str, portees: list[dict]) -> Optional[dict]:
+    """Arme portée qui correspond le mieux au nom demandé (B27).
+
+    Retourne None si aucune arme portée ne correspond — le nom fourni par le
+    modèle désignait une arme que le personnage ne possède pas."""
+    cible = _norm_arme(demandee)
+    if not cible:
+        return None
+    for a in portees:
+        if a["norm"] == cible:
+            return a
+    # Correspondance partielle : « épée longue +1 » → « Épée longue ».
+    for a in portees:
+        if a["norm"] and (a["norm"] in cible or cible in a["norm"]):
+            return a
+    # Un mot significatif commun (≥ 4 lettres) : « dague » vs « dague de fer ».
+    for a in portees:
+        for mot in cible.split():
+            if len(mot) >= 4 and mot in a["norm"].split():
+                return a
+    return None
+
+
 def _de_arme_catalogue(nom: str) -> Optional[tuple[int, int, str]]:
     """(nb_des, faces, nom_canonique) des dégâts de base d'une arme du
     catalogue, ou None si `nom` ne désigne pas une arme (sort, objet…).
@@ -523,6 +573,22 @@ async def lancer_attaque(
                         "(seule cible valide encore debout)."
                     )
                     nom_cible = str(_nouvelle.get("nom") or nom_cible)
+            # 🛡️ B16 (audit parties complètes) : si un combat est en cours et
+            # que la cible ne correspond à AUCUNE créature engagée, le jet se
+            # résolvait quand même contre un ennemi imaginaire — et le serveur
+            # l'enrichissait depuis le bestiaire. On refuse et on liste les
+            # cibles réelles.
+            if _mc and not _matches and not cible_renote:
+                _valides = [str(m.get("nom") or "?") for m in _mc
+                            if _vivante(m)]
+                return ToolResult(text=(
+                    f"❌ **Cible absente du combat** : « {nom_cible} » n'est "
+                    "pas une créature engagée. Cibles réellement en jeu : "
+                    + (", ".join(_valides) if _valides else "aucune")
+                    + ". Rappelle `lancer_attaque` avec l'un de ces noms "
+                    "(ou `engager_combat` d'abord si la rencontre n'a pas été "
+                    "déclenchée)."
+                ))
     except Exception:                                           # noqa: BLE001
         pass  # hors combat / état indisponible → cible fournie
 
@@ -550,6 +616,7 @@ async def lancer_attaque(
     note_bonus = ""
     note_ammo = ""
     note_degats = ""
+    note_arme = ""
     try:
         from .fiches import _chemin  # pylint: disable=import-outside-toplevel
         import os as _os                             # noqa: I001
@@ -560,6 +627,33 @@ async def lancer_attaque(
             caracs = fiche.get("carac") or {}
             bab = int(fiche.get("bab") or 0)
             arme_l = (arme or "").lower()
+            # 🛡️ B27 (audit parties complètes) : le nom d'arme fourni par le
+            # modèle était recopié tel quel dans le bloc « officiel » — Aldric
+            # (clerc, matraque) attaquait « [épée longue] », Brann
+            # « [matraque] ». Le bloc censé faire foi mentait sur
+            # l'équipement. On substitue l'arme réellement portée.
+            _portees = _armes_portees(fiche)
+            _choisie = _arme_correspondante(arme or "", _portees)
+            if _portees and _choisie is None:
+                _sub = _portees[0]
+                note_arme = (
+                    f"\n- ⚠️ Arme corrigée : « {arme} » n'est pas dans "
+                    f"l'équipement de {nom_attaquant} → "
+                    f"**{_sub['nom']}** (la fiche fait foi ; armes portées : "
+                    + ", ".join(a["nom"] for a in _portees) + ")."
+                )
+                arme = _sub["nom"]
+                arme_l = arme.lower()
+            elif _portees and _choisie is not None \
+                    and _norm_arme(arme or "") != _choisie["norm"]:
+                note_arme = (
+                    f"\n- ℹ️ Arme « {arme} » interprétée comme "
+                    f"**{_choisie['nom']}**."
+                )
+                arme = _choisie["nom"]
+                arme_l = arme.lower()
+            else:
+                note_arme = ""
             a_distance = any(
                 m in arme_l for m in
                 ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard", "sarbacane")
@@ -570,11 +664,15 @@ async def lancer_attaque(
             officiel = bab + mod_car
             if bonus_attaque != officiel:
                 bonus_final = officiel
+                # 🛡️ B20 (audit parties complètes) : le bloc « officiel »
+                # affichait la valeur FAUSSE proposée par le modèle avant la
+                # bonne (« +5 → +2 »), 19 fois sur 19 en partie réelle : le
+                # joueur voyait l'erreur du modèle plutôt que la règle. On
+                # n'affiche plus que la valeur officielle et son calcul.
                 note_bonus = (
-                    f"\n- ⚠️ Bonus recalculé par le serveur "
-                    f"{bonus_attaque:+d} → {bonus_final:+d} (fiche de "
+                    f"\n- ℹ️ Bonus officiel : {bonus_final:+d} (fiche de "
                     f"{nom_attaquant} : BBA {bab:+d}, {cle_car} {val_car} "
-                    f"({mod_car:+d}) — la fiche fait foi)."
+                    f"({mod_car:+d}))."
                 )
             # 💪 Bonus de dégâts OFFICIEL (partie 263f82dc : le LLM passait
             # +4 puis +6 pour le MÊME attaquant — bonus improvisé au lieu du
@@ -623,11 +721,16 @@ async def lancer_attaque(
                            else "plus de munitions !")
                     )
                 else:
-                    note_ammo = (
-                        f"\n- ⚠️ Aucune {munition} dans l'inventaire — tir "
-                        "résolu cette fois, mais réapprovisionne-toi "
-                        "(inventaire_ajouter) : sans munition, plus de tir."
-                    )
+                    # 🛡️ B45 : un tir sans munition n'est pas résolu. On
+                    # l'annonçait « résolu cette fois » puis on jouait le jet :
+                    # le joueur apprenait que les munitions ne servent à rien
+                    # (l'Assassin a été tué par un tir sans flèche).
+                    return ToolResult(text=(
+                        f"❌ {nom_attaquant} n'a plus de {munition} — le tir "
+                        f"n'est PAS résolu. Rechargement nécessaire "
+                        "(inventaire_ajouter, achat au marché, ou arme de "
+                        "mêlée)."
+                    ))
     except Exception:                                           # noqa: BLE001
         pass  # fiche absente (monstre ?) → on trust le bonus fourni
 
@@ -636,7 +739,8 @@ async def lancer_attaque(
     lignes = [
         f"⚔️ **Attaque** : {nom_attaquant} [{arme}] vs {nom_cible} (CA {ca_cible})",
         f"- Jet brut d'attaque : {jet}",
-        f"- Bonus total : {bonus_final:+d}" + note_bonus + note_ca + note_ammo,
+        f"- Bonus total : {bonus_final:+d}"
+        + note_arme + note_bonus + note_ca + note_ammo,
         f"- **Total attaque : {total}**",
     ]
     if cible_renote:
@@ -727,9 +831,8 @@ async def lancer_degats(
                 )
             if bonus != bonus_off:
                 note_bonus_dm = (
-                    f"\n- ⚠️ Bonus dégâts recalculé par le serveur "
-                    f"{bonus:+d} → {bonus_off:+d} ({_detail}) — la fiche "
-                    f"de {attaquant} fait foi."
+                    f"\n- ℹ️ Bonus dégâts officiel : {bonus_off:+d} "
+                    f"({_detail})."
                 )
                 bonus = bonus_off
 
@@ -766,7 +869,20 @@ async def lancer_degats(
                         f"faces={_fa} (le bonus de Force reste inchangé)."
                     ))
     jets = [random.randint(1, faces) for _ in range(nb_des)]
-    total = max(0, sum(jets) + bonus)  # jamais de dégâts négatifs (min 0)
+    # 🛡️ B46 (audit parties complètes) : un coup qui touche inflige au minimum
+    # 1 point de dégâts en D&D 3.5. Un `lancer_degats` à 0 (le modèle confond
+    # bonus et total) produisait « ✅ Touché … subit 0 dégâts », et le MJ
+    # inventait une règle pour le justifier.
+    brut = sum(jets) + bonus
+    if brut <= 0 and not _est_nom_de_sort(arme_ou_sort):
+        note_min = (
+            "\n- ℹ️ Total nul ou négatif porté au minimum de 1 "
+            "(un coup qui touche blesse toujours, règle 3.5)."
+        )
+        total = 1
+    else:
+        note_min = ""
+        total = max(0, brut)   # jamais de dégâts négatifs (min 0)
     lignes = [
         f"💥 **Dégâts** : {arme_ou_sort} → {cible}",
         f"- Formule : {nb_des}d{faces}{'+' if bonus >= 0 else ''}{bonus}",
@@ -775,7 +891,9 @@ async def lancer_degats(
         f"- Bonus dégâts : {bonus:+d}" + note_bonus_dm,
         f"- **Dégâts infligés : {total}**",
     ]
-    if sum(jets) + bonus < 0:
+    if note_min:
+        lignes.append(note_min.strip("\n"))
+    elif brut < 0:
         lignes.append(
             "- ℹ️ Total négatif ramené à 0 (les dégâts ne soignent pas la cible)."
         )
@@ -810,6 +928,16 @@ async def lancer_sauvegarde(
         c for c in unicodedata.normalize("NFKD", t)
         if not unicodedata.combining(c)
     )
+    if t not in ("vigueur", "reflexes", "volonte"):
+        # 🛡️ (audit) : le modèle envoie parfois « Reflex », « reflex », ou la
+        # forme anglaise « Fortitude / Reflex / Will ». On normalise au lieu
+        # de refuser — le jet était sinon perdu et le tour ne se résolvait pas.
+        _alias_sv = {
+            "reflex": "reflexes", "reflexe": "reflexes",
+            "fortitude": "vigueur", "fort": "vigueur", "vig": "vigueur",
+            "will": "volonte", "willpower": "volonte", "vol": "volonte",
+        }
+        t = _alias_sv.get(t, t)
     if t not in ("vigueur", "reflexes", "volonte"):
         return ToolResult(
             text=(

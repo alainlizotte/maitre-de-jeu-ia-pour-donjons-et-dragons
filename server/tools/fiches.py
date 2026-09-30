@@ -281,7 +281,11 @@ def bonus_dons_effet(dons: Any, effet: str) -> int:
     helpers dédiés `bonus_attaque_dons` / `seuil_crit_dons`, qui tiennent
     compte de l'ARME utilisée.
     """
-    cles = _DONS_PASSIFS.get(effet)
+    # 🛡️ (correctif) : l'effet est normalisé (accents, apostrophes, espaces →
+    # underscore) — « comp_perception auditive » (construit par lancer_d20)
+    # doit retrouver la clé « comp_perception_auditive » des tables : sans
+    # cela, Alerte ne s'appliquait JAMAIS à la Perception auditive.
+    cles = _DONS_PASSIFS.get(_effet_cle(effet))
     if not cles or not dons:
         return 0
     if isinstance(dons, str):
@@ -341,6 +345,16 @@ FINESSE_ARMES = frozenset((
     "sai", "nunchaku", "siangham", "kama", "rapiere", "fouet",
     "chaine cloutee", "gourdin",
 ))
+
+
+def _effet_cle(effet: str) -> str:
+    """Clé d'effet normalisée : minuscule, sans accent, apostrophe/tiret →
+    espace puis espaces → underscore. « comp_perception auditive »
+    (construit par lancer_d20) → « comp_perception_auditive » (clé des
+    tables) ; « comp_collecte d'informations » →
+    « comp_collecte_d_informations ».
+    """
+    return _norm_key(effet).replace(" ", "_")
 
 
 def _parse_dons(dons: Any) -> list[str]:
@@ -599,6 +613,59 @@ def bonus_arme_magique(arme: str) -> int:
     """Bonus « +N » d'une arme enchantée (« Épée longue +1 » → +1 attaque
     ET +1 dégâts ; « arme +2 » → +2). 0 si le nom n'en porte pas."""
     return _plus_n(_norm_key(str(arme or "")))
+
+
+def bonus_race_familier(fiche: Optional[dict], effet: str) -> int:
+    """Bonus mécanique des CAPACITÉS RACIALES et du FAMILIER pour un effet
+    donné (`effet` ∈ comp_*, sauvegarde_*… — clés normalisées : minuscule,
+    sans accent, apostrophe/tiret → espace).
+
+    - Race : dérivée de `fiche["race"]` → `persos.BONUS_RACES` (« Sens
+      aiguisés » de l'elfe → +2 Détection, même à rang nul).
+    - Familier : `fiche["familier"]` (chaîne « Chat » ou dict
+      {"espece": "Chat"}) → `familiers.BONUS_FAMILIER` (le chat accorde +3
+      Déplacement silencieux au maître). Le familier n'est compté que si
+      son lien est actif (champ `invoque` absent ou vrai — le formulaire
+      stocke le lien dès la création).
+    Renvoie 0 si aucune source ne correspond.
+    """
+    if not isinstance(fiche, dict) or not effet:
+        return 0
+    cle = _effet_cle(effet)
+    bonus = 0
+    # --- Race ---------------------------------------------------------------
+    race = str(fiche.get("race") or "")
+    if race:
+        try:
+            from ..persos import BONUS_RACES, resoudre_race  # lazy : cycles
+            race_c = resoudre_race(race) or race
+            bonus += int((BONUS_RACES.get(race_c) or {}).get(cle, 0))
+        except Exception:                                    # noqa: BLE001
+            pass
+    # --- Familier -----------------------------------------------------------
+    fam = fiche.get("familier")
+    espece = ""
+    if isinstance(fam, dict):
+        if fam.get("invoque") is False:
+            fam = None   # lien choisi mais rituel non accompli → pas de bonus
+        else:
+            espece = str(fam.get("espece") or "")
+    elif isinstance(fam, str):
+        espece = fam
+    if espece:
+        try:
+            from ..familiers import BONUS_FAMILIER  # lazy : cycles
+            try:
+                from ..familiers import trouver_espece
+                entree = trouver_espece(espece)
+                cle_f = str((entree or {}).get("cle") or "") \
+                    if entree else _norm_key(espece)
+            except ImportError:
+                cle_f = _norm_key(espece)
+            bonus += int((BONUS_FAMILIER.get(cle_f) or {}).get(cle, 0))
+        except Exception:                                    # noqa: BLE001
+            pass
+    return bonus
 
 
 def _load_fiche(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:

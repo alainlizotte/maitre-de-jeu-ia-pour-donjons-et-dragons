@@ -157,7 +157,11 @@ def test_resume_texte_ignore_sommaire():
     """Régression ee5684fe : `resume` commençait par la TABLE DES MATIÈRES
     du PDF (lignes de sommaire « Adventure Background 2 ») — le MJ n'avait
     AUCUN contenu d'aventure et inventait un autre module. Le résumé doit
-    démarrer à la VRAIE section Background/Introduction du corps du livret."""
+    démarrer à la VRAIE section Background/Introduction du corps du livret.
+
+    Comportement ACTUEL : `_resume_texte` normalise aussi les espaces
+    multiples (« Background:  » source → « Background: » résumé) — le test
+    attendait la forme non normalisée : adapté."""
     from server.tools.scenarios import _resume_texte
 
     texte = (
@@ -168,7 +172,8 @@ def test_resume_texte_ignore_sommaire():
         "gave the crown to his high priest in Zhentil Keep. " * 4
     )
     resume = _resume_texte(texte, cible=600)
-    assert resume.startswith("Background:  Recently, Cyric"), resume[:120]
+    assert resume.startswith("Background: Recently, Cyric"), resume[:120]
+    assert "  " not in resume, "les espaces multiples doivent être normalisés"
     assert "Plot Line" not in resume, "la table des matières ne doit pas rester"
     assert "2-4" not in resume, "les numéros de page du sommaire doivent être ignorés"
 

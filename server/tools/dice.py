@@ -325,28 +325,60 @@ async def lancer_d20(
                     if _norm(nom_c) == _norm(competence):
                         rangs = int(r or 0)
                         break
+                # Facteur hors-classe (PHB 3.5) : les rangs d'une compétence
+                # HORS classe de la fiche comptent pour moitié (x0,5).
+                rangs_bruts = rangs
+                hors_classe = False
+                try:
+                    from ..catalogue import COMPETENCES_CLASSE  # noqa: PLC0415
+                    from ..persos import resoudre_classe        # noqa: PLC0415
+                    _classe_c = resoudre_classe(
+                        str(fiche.get("classe") or ""))
+                    _comp_classe = COMPETENCES_CLASSE.get(_classe_c, [])
+                    if _comp_classe and not any(
+                        _norm(c) == _norm(competence)
+                        for c in _comp_classe
+                    ):
+                        rangs = rangs // 2
+                        hors_classe = True
+                except Exception:                            # noqa: BLE001
+                    pass
                 # Dons passifs sur cette compétence (ex. Alerte → +2
                 # Détection / Perception auditive) : s'applique même à
                 # rang nul (guerrier avec Alerte et 0 rang en Détection).
                 bonus_don = bonus_dons_effet(
                     fiche.get("dons"), "comp_" + _norm(competence)
                 )
-                if rangs > 0 or bonus_don:
+                # Capacités raciales + faculté de familier (Sens aiguisés de
+                # l'elfe → +2 Détection ; le chat → +3 Déplacement
+                # silencieux au maître) : même règle, rangs nuls compris.
+                try:
+                    from .fiches import bonus_race_familier  # noqa: PLC0415
+                    bonus_rf = bonus_race_familier(
+                        fiche, "comp_" + _norm(competence))
+                except Exception:                            # noqa: BLE001
+                    bonus_rf = 0
+                if rangs > 0 or bonus_don or bonus_rf:
                     from ..catalogue import COMPETENCES  # pylint: disable=import-outside-toplevel
                     cara_cle = next(
                         (c["cara"] for c in COMPETENCES
                          if _norm(c["nom"]) == _norm(competence)), "DEX",
                     )
                     val = int((fiche.get("carac") or {}).get(cara_cle, 10) or 10)
-                    calc = rangs + (val - 10) // 2 + bonus_don
+                    calc = rangs + (val - 10) // 2 + bonus_don + bonus_rf
                     if calc != modificateur:
                         mod_final = calc
                         detail = (
-                            f"{competence} {rangs} rangs + "
-                            f"{cara_cle} {val} ({(val - 10) // 2:+d})"
+                            f"{competence} "
+                            + (f"{rangs} rangs" if not hors_classe else
+                               f"{rangs} rangs (½ de {rangs_bruts}, hors "
+                               "classe)")
+                            + f" + {cara_cle} {val} ({(val - 10) // 2:+d})"
                         )
                         if bonus_don:
                             detail += f" + {bonus_don} (dons)"
+                        if bonus_rf:
+                            detail += f" + {bonus_rf} (race/familier)"
                         note_mod = (
                             f"\n- ⚠️ Modificateur recalculé {modificateur:+d} → "
                             f"{calc:+d} (fiche de {nom_personnage} : {detail})."
@@ -603,17 +635,30 @@ async def lancer_attaque(
             # résolvait quand même contre un ennemi imaginaire — et le serveur
             # l'enrichissait depuis le bestiaire. On refuse et on liste les
             # cibles réelles.
+            # 🛡️ (complément B16 — bug réel) : ce refus visait les cibles
+            # IMAGINAIRES d'une attaque de PJ ; il s'appliquait aussi aux
+            # attaques du MONSTRE contre un PJ (flux légitime, moteur
+            # d'auto-attaque et tours LLM des monstres) — l'attaque
+            # automatique des monstres ne se résolvait JAMAIS (0 dégâts).
+            # Une cible qui est un PJ ENGAGÉ est valide : on ne refuse pas.
             if _mc and not _matches and not cible_renote:
-                _valides = [str(m.get("nom") or "?") for m in _mc
-                            if _vivante(m)]
-                return ToolResult(text=(
-                    f"❌ **Cible absente du combat** : « {nom_cible} » n'est "
-                    "pas une créature engagée. Cibles réellement en jeu : "
-                    + (", ".join(_valides) if _valides else "aucune")
-                    + ". Rappelle `lancer_attaque` avec l'un de ces noms "
-                    "(ou `engager_combat` d'abord si la rencontre n'a pas été "
-                    "déclenchée)."
-                ))
+                _pjs = [
+                    _nn2(str(p.get("nom") or ""))
+                    for p in (_etat_c.get("pj") or [])
+                    if isinstance(p, dict)
+                ]
+                if _nc not in _pjs:
+                    _valides = [str(m.get("nom") or "?") for m in _mc
+                                if _vivante(m)]
+                    return ToolResult(text=(
+                        f"❌ **Cible absente du combat** : « {nom_cible} » "
+                        "n'est pas une créature engagée. Cibles réellement "
+                        "en jeu : "
+                        + (", ".join(_valides) if _valides else "aucune")
+                        + ". Rappelle `lancer_attaque` avec l'un de ces noms "
+                        "(ou `engager_combat` d'abord si la rencontre n'a pas "
+                        "été déclenchée)."
+                    ))
     except Exception:                                           # noqa: BLE001
         pass  # hors combat / état indisponible → cible fournie
 

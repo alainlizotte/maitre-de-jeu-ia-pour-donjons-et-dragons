@@ -111,6 +111,19 @@ function donDisponible(d: DonModele, final: CaracMap, bab: number): boolean {
   return true;
 }
 
+/** Miroir de persos.calculer_ca_armure() côté dons : « Esquive » ajoute
+ *  +1 de CA (simplification serveur : contre tout adversaire). */
+function caEsquiveDons(dons: string[]): number {
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[-']/g, " ")
+      .trim();
+  return dons.some((d) => norm(d || "").includes("esquive")) ? 1 : 0;
+}
+
 /** Miroir de fiches._bonus_dons_pv() : bonus de PV apporté par les dons
  *  (« Dur à cuire » = +3 PV ; « Vigueur surhumaine » / « Robustesse » =
  *  +1 PV par niveau), insensible à la casse et aux accents. */
@@ -448,7 +461,8 @@ export function CharacterFormPage() {
       10 +
       (meilleureArmure?.ca ?? 0) +
       (meilleurBouclier?.ca ?? 0) +
-      Math.min(mods.DEX, dexMax);
+      Math.min(mods.DEX, dexMax) +
+      caEsquiveDons(donsTous);
 
     const bonnes = new Set(classeModele?.sauves_bonnes ?? []);
     const sauves = {

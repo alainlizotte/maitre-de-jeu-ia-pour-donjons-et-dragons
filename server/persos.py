@@ -1069,14 +1069,24 @@ def _save_base(bonne: bool, niveau: int) -> int:
     return 2 + niveau // 2 if bonne else niveau // 3
 
 
-def calculer_ca_armure(dex_mod: int, armures: Optional[list[str]] = None) -> int:
+def calculer_ca_armure(
+    dex_mod: int,
+    armures: Optional[list[str]] = None,
+    dons: Any = None,
+) -> int:
     """CA selon les règles 3.5 avec l'équipement porté.
 
     10 + bonus de la meilleure armure corporelle + meilleur bouclier +
     mod. DEX plafonné par le `dex_max` de l'armure (les boucliers ne
     plafonnent pas la Dex). Sans armure : 10 + mod. DEX.
+
+    Dons : « Esquive » ajoute +1 d'esquive. Simplification assumée (PHB 3.5 :
+    contre UN adversaire désigné) — ici contre tout adversaire, comme la CA
+    est stockée une fois pour toutes sur la fiche ; même logique que le
+    bonus de PV des dons (« Dur à cuire »), appliqué à la création.
     """
     from . import catalogue as _catalogue
+    from .tools.fiches import a_don_esquive
 
     par_nom = {a["nom"]: a for a in _catalogue.ARMURES}
     corps: list[tuple[int, int]] = []
@@ -1091,7 +1101,9 @@ def calculer_ca_armure(dex_mod: int, armures: Optional[list[str]] = None) -> int
             corps.append((int(a["ca"]), int(a["dex_max"])))
     bonus_armure, dex_max = max(corps, key=lambda x: x[0]) if corps else (0, 99)
     bonus_bouclier = max(boucliers) if boucliers else 0
-    return 10 + bonus_armure + bonus_bouclier + min(dex_mod, dex_max)
+    bonus_esquive = 1 if a_don_esquive(dons) else 0
+    return 10 + bonus_armure + bonus_bouclier + min(dex_mod, dex_max) \
+        + bonus_esquive
 
 
 def calculer_derivees(
@@ -1100,11 +1112,13 @@ def calculer_derivees(
     classe: str,
     niveau: int,
     armures: Optional[list[str]] = None,
+    dons: Any = None,
 ) -> dict[str, Any]:
     """Calcule les valeurs dérivées d'un personnage selon les règles 3.5.
 
     Renvoie un dict : mods, pv_max/pv, ca, bab, sauvegardes, initiative,
-    ajustements raciaux appliqués (`carac_final`).
+    ajustements raciaux appliqués (`carac_final`). `dons` (liste de noms)
+    alimente les effets passifs : « Esquive » → +1 CA.
     """
     niveau = max(1, int(niveau or 1))
     race_canon = resoudre_race(race) or race
@@ -1125,7 +1139,7 @@ def calculer_derivees(
     pv_autres = max(0, (niveau - 1)) * (dv // 2 + 1 + mod_con)
     pv_max = max(1, dv + mod_con + pv_autres)
 
-    ca = calculer_ca_armure(mod_carac(final["DEX"]), armures)
+    ca = calculer_ca_armure(mod_carac(final["DEX"]), armures, dons=dons)
     bab = _bab_par_niveau(infos["bab"], niveau)
     sauves = {
         s: _save_base(s in infos["sauves_bonnes"], niveau)

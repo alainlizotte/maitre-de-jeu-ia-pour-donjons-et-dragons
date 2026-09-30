@@ -243,9 +243,12 @@ _DONS_PASSIFS: dict[str, tuple[tuple[str, int], ...]] = {
     "sauvegarde_vigueur": (
         ("grande fortitude", 2), ("great fortitude", 2),
     ),
-    # Réflexes surprenants / Lightning Reflexes → +2 Réflexes
+    # Réflexes surprenants / surhumains / Lightning Reflexes → +2 Réflexes
+    # (« surhumains » = nom du catalogue ; sa variante FR officielle — ne
+    # pas la retirer : le don était sinon inerte, cf. test régression).
     "sauvegarde_reflexes": (
-        ("reflexes surprenants", 2), ("lightning reflexes", 2),
+        ("reflexes surprenants", 2), ("reflexes surhumains", 2),
+        ("lightning reflexes", 2),
     ),
     # Alerte (Alertness) / Vigilance → +2 Détection et Perception auditive
     "comp_detection": (
@@ -254,6 +257,16 @@ _DONS_PASSIFS: dict[str, tuple[tuple[str, int], ...]] = {
     "comp_perception_auditive": (
         ("alerte", 2), ("vigilance", 2), ("alertness", 2),
     ),
+    # Persuasion (Persuasive) → +2 Bluff, Diplomatie et Intimidation
+    "comp_bluff":          (("persuasion", 2),),
+    "comp_diplomatie":     (("persuasion", 2), ("negociateur", 2)),
+    "comp_intimidation":   (("persuasion", 2),),
+    # Négociateur (Negotiator) → +2 Diplomatie et Psychologie
+    "comp_psychologie":    (("negociateur", 2),),
+    # Athlète (Athlete) → +2 Escalade, Natation et Saut
+    "comp_escalade":       (("athlete", 2),),
+    "comp_natation":       (("athlete", 2),),
+    "comp_saut":           (("athlete", 2),),
 }
 
 
@@ -262,8 +275,11 @@ def bonus_dons_effet(dons: Any, effet: str) -> int:
 
     `effet` ∈ _DONS_PASSIFS (ex. « initiative », « sauvegarde_volonte »,
     « comp_detection »). Renvoie 0 si aucun don reconnu — les autres dons
-    (Attaque en puissance, Arme de prédilection…) restent à l'appréciation
-    du MJ dans les bornes des recoupements de lancer_attaque/lancer_degats.
+    (Attaque en puissance…) restent à l'appréciation du MJ dans les bornes
+    des recoupements de lancer_attaque/lancer_degats. Les dons « arme au
+    choix » (Arme de prédilection, Science de la critique) passent par les
+    helpers dédiés `bonus_attaque_dons` / `seuil_crit_dons`, qui tiennent
+    compte de l'ARME utilisée.
     """
     cles = _DONS_PASSIFS.get(effet)
     if not cles or not dons:
@@ -286,6 +302,303 @@ def bonus_dons_effet(dons: Any, effet: str) -> int:
                 bonus += val
                 break
     return bonus
+
+
+# --------------------------------------------------------------------------- #
+#  Dons « arme au choix » et dons d'attaque (PHB 3.5)
+# --------------------------------------------------------------------------- #
+# Le don est stocké sur la fiche avec l'arme visée ENTRE PARENTHEÈSES
+# (« Arme de prédilection (épée longue) »). Sans arme précisée (fiches
+# anciennes, saisie libre), le don s'applique à l'arme utilisée —
+# simplification assumée, signalée dans les notes de jet.
+_DONS_ARME_ATTAQUE: tuple[tuple[str, int], ...] = (
+    # Variantes « supérieures » d'abord : la comparaison est un « contient »,
+    # cet ordre évite qu'« arme de prédilection supérieure » compte aussi le
+    # don simple (+1) en plus du sien (+2).
+    ("arme de predilection superieure", 2),   # Greater Weapon Focus
+    ("greater weapon focus", 2),
+    ("arme de predilection", 1),              # Weapon Focus
+    ("weapon focus", 1),
+)
+_DONS_ARME_CRIT: tuple[str, ...] = (
+    "science de la critique",                 # Improved Critical
+    "improved critical",
+)
+_DON_TIR_DE_PRES: tuple[str, ...] = ("tir de pres", "point blank shot")
+_DON_ESQUIVE: tuple[str, ...] = ("esquive", "dodge")
+# Capacités de classe souvent recopiées dans les dons des fiches libres :
+# elles ne sont PAS le don « Esquive » (+1 CA).
+_DON_ESQUIVE_EXCLUS: tuple[str, ...] = ("extraordinaire", "totale")
+
+# Armes utilisables avec « Attaque en finesse » (PHB 3.5 : armes légères de
+# mêlée, rapière, fouet, chaîne cloutée). Noms normalisés (_norm_key) d'après
+# catalogue.ARMES + armes spéciales PHB. Hors liste (épée longue, espadon…)
+# le don ne s'applique pas, même si DEX > FOR.
+FINESSE_ARMES = frozenset((
+    "dague", "dague coup de poing", "gantelet", "gantelet cloute",
+    "faucille", "masse d armes legere", "marteau leger", "fleau d armes leger",
+    "pic de guerre leger", "epee courte", "cimeterre", "kukri", "hachette",
+    "sai", "nunchaku", "siangham", "kama", "rapiere", "fouet",
+    "chaine cloutee", "gourdin",
+))
+
+
+def _parse_dons(dons: Any) -> list[str]:
+    """Liste de noms de dons depuis JSON, chaîne à virgules ou liste."""
+    if not dons:
+        return []
+    if isinstance(dons, str):
+        try:
+            item = json.loads(dons)
+        except json.JSONDecodeError:
+            item = [x.strip() for x in dons.split(",")]
+        dons = item
+    if not isinstance(dons, (list, tuple)):
+        return []
+    return [str(d or "") for d in dons]
+
+
+def _arme_du_don(nom_don: str) -> str:
+    """Arme visée par un don « arme au choix » : texte entre parenthèses,
+    normalisé. Vide si le don ne précise pas d'arme."""
+    m = re.search(r"\(([^)]+)\)", nom_don or "")
+    return _norm_key(m.group(1)) if m else ""
+
+
+# Variantes EN courantes des armes (fiches libres / bestiaires importés) :
+# « Weapon Focus (dagger) » doit correspondre à une « Dague ».
+_ARME_ALIAS_EN_FR: dict[str, str] = {
+    "dagger": "dague", "longsword": "epee longue", "shortsword": "epee courte",
+    "rapier": "rapiere", "scimitar": "cimeterre", "falchion": "cimeterre",
+    "kukri": "kukri", "longbow": "arc long", "shortbow": "arc court",
+    "greatsword": "espadon", "greataxe": "grande hache",
+    "battleaxe": "hache d arme", "handaxe": "hachette",
+    "warhammer": "marteau de guerre", "light hammer": "marteau leger",
+    "morningstar": "etoile du matin", "flail": "fleau d armes",
+    "quarterstaff": "baton", "club": "gourdin", "sickle": "faucille",
+    "spear": "lance courte", "javelin": "javeline", "sling": "fronde",
+    "light crossbow": "arbalete legere", "heavy crossbow": "arbalete lourde",
+    "whip": "fouet", "mace": "masse d armes", "greatclub": "gourdin",
+    "halberd": "hallebarde", "glaive": "glaive", "trident": "trident",
+}
+
+
+def _don_correspond_arme(nom_don: str, arme_norm: str) -> bool:
+    """Vrai si le don s'applique à l'arme utilisée : arme du don absente →
+    oui (simplification fiches anciennes) ; sinon correspondance exacte ou
+    par inclusion (« épée longue » ↔ « épée longue de maître »), l'arme du
+    don pouvant être nommée en anglais (alias ci-dessus)."""
+    cible = _arme_du_don(nom_don)
+    if not cible or not arme_norm:
+        return True
+    if cible in arme_norm or arme_norm in cible:
+        return True
+    fr = _ARME_ALIAS_EN_FR.get(cible)
+    return bool(fr) and (fr in arme_norm or arme_norm in fr)
+
+
+def bonus_attaque_dons(dons: Any, arme: str) -> int:
+    """Bonus d'attaque des dons « Arme de prédilection » pour l'arme utilisée.
+
+    Arme de prédilection = +1 (supérieure = +2) avec l'arme visée ; chaque
+    don pris pour une arme différente s'additionne (règles PHB 3.5). Renvoie
+    0 si aucun don ne correspond.
+    """
+    arme_norm = _norm_key(str(arme or ""))
+    bonus = 0
+    for nom_don in _parse_dons(dons):
+        nom = _norm_key(nom_don)
+        if not nom:
+            continue
+        for cle, val in _DONS_ARME_ATTAQUE:
+            if cle in nom and _don_correspond_arme(nom_don, arme_norm):
+                bonus += val
+                break   # un seul niveau de don par entrée de fiche
+    return bonus
+
+
+def seuil_crit_arme(arme: str) -> int:
+    """Jet minimal qui MENACE un critique pour l'arme du catalogue
+    (`catalogue.ZONES_CRITIQUES` ; 20 par défaut — multiplicateur exclu)."""
+    try:
+        from ..catalogue import ZONES_CRITIQUES  # lazy : évite les cycles
+    except Exception:                                        # noqa: BLE001
+        return 20
+    arme_norm = _norm_key(str(arme or ""))
+    if not arme_norm:
+        return 20
+    for nom, seuil in ZONES_CRITIQUES.items():
+        n = _norm_key(nom)
+        if n == arme_norm or n in arme_norm or arme_norm in n:
+            return int(seuil)
+    return 20
+
+
+def seuil_crit_dons(dons: Any, arme: str) -> int:
+    """Seuil de menace effectif : zone de critique DOUBLÉE par « Science de
+    la critique » quand l'arme visée correspond (20 → 19-20, 19-20 → 17-20,
+    18-20 → 15-20), sinon le seuil de base de l'arme."""
+    arme_norm = _norm_key(str(arme or ""))
+    seuil = seuil_crit_arme(arme)
+    for nom_don in _parse_dons(dons):
+        nom = _norm_key(nom_don)
+        if not nom:
+            continue
+        if any(cle in nom for cle in _DONS_ARME_CRIT) \
+                and _don_correspond_arme(nom_don, arme_norm):
+            # Doubler la taille de la zone : 2*(21-seuil) jets → nouveau plan.
+            seuil = max(1, 2 * seuil - 21)
+            break   # le don ne se cumule pas avec lui-même (PHB 3.5)
+    return seuil
+
+
+def attaque_en_finesse_possible(dons: Any, arme: str) -> bool:
+    """Vrai si le don « Attaque en finesse » s'applique à l'arme (mêlée :
+    armes légères, rapière, fouet, chaîne cloutée). L'appelant vérifie que
+    DEX > FOR avant de substituer (la finesse ne pénalise jamais)."""
+    arme_norm = _norm_key(str(arme or ""))
+    if not arme_norm:
+        return False
+    for nom_don in _parse_dons(dons):
+        nom = _norm_key(nom_don)
+        if not nom:
+            continue
+        if any(cle in nom for cle in ("attaque en finesse", "weapon finesse")):
+            return any(
+                a == arme_norm or a in arme_norm for a in FINESSE_ARMES
+            )
+    return False
+
+
+def a_don_tir_de_pres(dons: Any) -> bool:
+    """Vrai si le personnage possède « Tir de près » (Point-Blank Shot)."""
+    for nom_don in _parse_dons(dons):
+        nom = _norm_key(nom_don)
+        if any(cle in nom for cle in _DON_TIR_DE_PRES):
+            return True
+    return False
+
+
+def a_don_esquive(dons: Any) -> bool:
+    """Vrai si le personnage possède « Esquive » (Dodge) — +1 CA à la
+    création (simplification : esquive contre tout adversaire). Les
+    capacités « Esquive extraordinaire / totale » ne comptent pas."""
+    for nom_don in _parse_dons(dons):
+        nom = _norm_key(nom_don)
+        if any(cle in nom for cle in _DON_ESQUIVE) and not any(
+            x in nom for x in _DON_ESQUIVE_EXCLUS
+        ):
+            return True
+    return False
+
+
+# --------------------------------------------------------------------------- #
+#  Objets magiques portés (PHB 3.5) — effets AUTOMATIQUES
+# --------------------------------------------------------------------------- #
+# Détection générique dans les objets portés (equipement + inventaire) : le
+# nom contient un mot-clé ET un bonus « +N » —
+#   « Anneau de protection +2 »        → +2 CA (déflection, max par type) ;
+#   « Amulette naturelle +1 »          → +1 CA (naturelle) ;
+#   « Brassards d'armure +3 »          → +3 CA (armure) ;
+#   « Épée longue +1 »                 → +1 attaque ET +1 dégâts ;
+#   « Gantelets d'ogre de force +2 »   → +2 FOR effective (attaque/dégâts) ;
+#   « Bottes de dextérité +2 » / « Casque de sagesse +2 » → +2 carac.
+# Les bonus de MÊME type ne s'empilent pas entre objets jumeaux (RAW :
+# déflection/naturelle/armure ne se cumulent pas avec eux-mêmes) ; les types
+# DIFFÉRENTS s'additionnent. La détection ignore la casse et les accents.
+def _plus_n(nom: str) -> int:
+    """Bonus « +N » lu dans un nom d'objet (« Anneau de protection +2 » → 2)."""
+    m = re.search(r"\+(\d+)", str(nom or ""))
+    return int(m.group(1)) if m else 0
+
+
+def _objets_portes(fiche: Optional[dict]) -> list[str]:
+    """Noms des objets portés (equipement + inventaire, dédoublonnés)."""
+    if not isinstance(fiche, dict):
+        return []
+    vus: set[str] = set()
+    noms: list[str] = []
+    for e in list(fiche.get("equipement") or []):
+        nom = str((e or {}).get("nom") or "").strip() if isinstance(e, dict) else ""
+        if nom and nom not in vus:
+            vus.add(nom)
+            noms.append(nom)
+    try:
+        from .inventaire import _inventaire  # lazy : évite les cycles
+        for e in _inventaire(fiche):
+            nom = str((e or {}).get("nom") or "").strip()
+            if nom and nom not in vus:
+                vus.add(nom)
+                noms.append(nom)
+    except Exception:                                        # noqa: BLE001
+        pass
+    return noms
+
+
+# Objets de CA magique par TYPE (le max s'applique PAR type, les types
+# s'additionnent entre eux) : mot-clé normalisé → groupe.
+_OBJETS_CA_MAGIE: tuple[tuple[str, str], ...] = (
+    ("protection", "deflection"), ("proteger", "deflection"),
+    ("deflection", "deflection"), ("bague", "deflection"),
+    ("anneau", "deflection"), ("casque", "deflection"),
+    ("amulette", "naturelle"),
+    ("brassard", "armure"),
+)
+
+
+def bonus_ca_magie(fiche: Optional[dict]) -> int:
+    """Bonus de CA des objets magiques portés : max PAR type (déflection /
+    naturelle / armure), les types s'additionnent. « Anneau de protection
+    +1 » + « Amulette naturelle +1 » → +2 ; deux anneaux +1 → +1 seulement.
+    """
+    groupes: dict[str, int] = {}
+    for nom in _objets_portes(fiche):
+        n = _norm_key(nom)
+        v = _plus_n(n)
+        if not v:
+            continue
+        for cle, groupe in _OBJETS_CA_MAGIE:
+            if cle in n:
+                groupes[groupe] = max(groupes.get(groupe, 0), v)
+                break   # un objet compte dans UN seul groupe (premier match)
+    return sum(groupes.values())
+
+
+# Objets de caractéristique (gantelets d'ogre de force, bottes de dextérité,
+# casque de sagesse…) : mots-clés avec frontière de mot (évite « for » dans
+# « forme », « dex » dans « dextérité » y répond, etc.).
+_CARACS_EQUIP: tuple[tuple[str, str], ...] = (
+    ("force", "FOR"), ("ogre de force", "FOR"), ("for", "FOR"),
+    ("dexterite", "DEX"), ("dex", "DEX"),
+    ("sagesse", "SAG"), ("sag", "SAG"),
+    ("constitution", "CON"), ("con", "CON"),
+    ("intelligence", "INT"), ("int", "INT"),
+    ("charisme", "CHA"), ("cha", "CHA"),
+)
+
+
+def bonus_carac_equipement(fiche: Optional[dict], carac: str) -> int:
+    """Bonus de caractéristique des objets magiques portés (« Gantelets
+    d'ogre de force +2 » → +2 FOR). Le max s'applique entre objets jumeaux.
+    """
+    cible = str(carac or "").upper()
+    total = 0
+    for nom in _objets_portes(fiche):
+        n = _norm_key(nom)
+        v = _plus_n(n)
+        if not v:
+            continue
+        for cle, c in _CARACS_EQUIP:
+            if c == cible and re.search(r"\b" + re.escape(cle) + r"\b", n):
+                total = max(total, v)
+                break
+    return total
+
+
+def bonus_arme_magique(arme: str) -> int:
+    """Bonus « +N » d'une arme enchantée (« Épée longue +1 » → +1 attaque
+    ET +1 dégâts ; « arme +2 » → +2). 0 si le nom n'en porte pas."""
+    return _plus_n(_norm_key(str(arme or "")))
 
 
 def _load_fiche(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:

@@ -148,6 +148,22 @@ ARMES: list[dict[str, Any]] = [
 
 _ARMES_PAR_NOM = {a["nom"]: a for a in ARMES}
 
+# Zone de critique de base (PHB 3.5, Table 7-5) : jet minimal qui MENACE un
+# critique, par arme du catalogue. Tout ce qui n'y figure pas menace
+# uniquement sur 20 — le multiplicateur (×2/×3/×4), lui, n'affecte pas ce
+# seuil. Utilisée par `lancer_attaque` (menace de critique) et par le don
+# « Science de la critique » (zone de critique doublée). Noms canoniques du
+# catalogue ; la comparaison se fait normalisée (fiches._norm_key).
+ZONES_CRITIQUES: dict[str, int] = {
+    # 18-20
+    "Rapière": 18, "Cimeterre": 18, "Kukri": 18,
+    # 19-20
+    "Dague": 19, "Épée courte": 19, "Épée longue": 19, "Épée bâtarde": 19,
+    "Espadon": 19, "Fléchette": 19, "Coutille": 19,
+    "Arbalète légère": 19, "Arbalète lourde": 19, "Arbalète de poing": 19,
+    "Arbalète légère à répétition": 19, "Arbalète lourde à répétition": 19,
+}
+
 
 # --------------------------------------------------------------------------- #
 #  Armures et boucliers (liste complète PHB 3.5)

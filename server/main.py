@@ -2700,11 +2700,18 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         gains_carac_precedents = []
 
     equipement = _normaliser_equipement(payload.get("equipement"))
+    # Dons parsés tôt : ils alimentent les valeurs dérivées (comme les PV
+    # plus bas via _bonus_dons_pv) — « Esquive » ajoute +1 de CA.
+    dons = payload.get("dons") or []
+    if isinstance(dons, str):
+        dons = [ligne.strip() for ligne in dons.splitlines() if ligne.strip()]
     # Armures/boucliers portés (présents au catalogue) → comptés dans la CA
     # (10 + armure + bouclier + Dex plafonnée par l'armure, règles PHB 3.5).
     noms_armures_catalogue = {a["nom"] for a in catalogue_mod.ARMURES}
     armures_portees = [e["nom"] for e in equipement if e["nom"] in noms_armures_catalogue]
-    calculs = persos_mod.calculer_derivees(carac, race, classe, niveau, armures=armures_portees)
+    calculs = persos_mod.calculer_derivees(
+        carac, race, classe, niveau, armures=armures_portees, dons=dons,
+    )
 
     # Dieu : s'il correspond à une divinité du panthéon, elle doit accepter le
     # personnage comme serviteur. Un nom libre (ancienne fiche, dieu maison…)
@@ -2741,9 +2748,6 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
             )
 
     apparence_in = payload.get("apparence") or {}
-    dons = payload.get("dons") or []
-    if isinstance(dons, str):
-        dons = [ligne.strip() for ligne in dons.splitlines() if ligne.strip()]
     # Budget de dons (règles 3.5) : 1 au niveau 1 puis 1 supplémentaire aux
     # niveaux 3, 6, 9… ; les humains gagnent +1 don.
     max_dons = 1 + max(0, niveau // 3) + (
@@ -5116,6 +5120,7 @@ async def _ressusciter_pj_oublie(
                     fiche.get("carac") or {}, fiche.get("race") or "",
                     fiche.get("classe") or "",
                     int(fiche.get("niveau", 1) or 1), armures=_armures,
+                    dons=fiche.get("dons"),
                 )
                 for _cle, _val in (("sauvegardes", _calc.get("sauvegardes")),
                                    ("ca", _calc.get("ca")),

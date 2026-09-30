@@ -230,6 +230,11 @@ def verifier_tour(avant: dict, apres: dict, trace: list, bilan: Bilan):
         nom_outil, args = tc.get("name"), tc.get("args") or {}
         texte = tc.get("text") or ""
 
+        # ♻️ Garde anti-doublon du serveur (re-narration détectée) : l'état
+        # n'a PAS été modifié par cet appel → hors simulation, hors échec.
+        if "Doublon ignoré" in texte:
+            continue
+
         if nom_outil == "fiche_perso_infliger_degats":
             try:
                 d = max(0, int(float(str(args.get("degats") or "0").strip())))

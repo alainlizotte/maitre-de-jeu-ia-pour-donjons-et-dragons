@@ -214,7 +214,16 @@ def _ca_officielle(ctx: ToolContext, nom_cible: str) -> tuple[Optional[int], str
     fiche = _fiche_pj(ctx, nom_cible)
     if fiche is not None and fiche.get("ca") is not None:
         try:
-            return int(fiche["ca"]), f"fiche de {nom_cible}"
+            # ✨ Objets magiques de protection (anneau de protection,
+            # amulette naturelle, brassards d'armure, casque…) : +N CA au
+            # moment du jet — l'équipement peut être ajouté EN JEU, la CA
+            # stockée à la création serait sinon obsolète.
+            from .fiches import bonus_ca_magie  # lazy : évite les cycles
+            mag = bonus_ca_magie(fiche)
+            return int(fiche["ca"]) + mag, (
+                f"fiche de {nom_cible}"
+                + (f" (+{mag} CA magique)" if mag else "")
+            )
         except (TypeError, ValueError):
             pass
     # Combat en cours : l'entrée suivie prime sur le bestiaire (elle porte
@@ -472,6 +481,16 @@ def _munition_pour_arme(arme_txt: str) -> str:
     return ""
 
 
+def _distance_proche(distance_m: Any) -> bool:
+    """Vrai si `distance_m` est fournie et ≤ 9 m (portée du Tir de près,
+    PHB 3.5 : 30 pieds). Absente ou illisible → False (pas de bonus)."""
+    try:
+        d = float(str(distance_m).strip().replace(",", ".").rstrip("m "))
+    except (TypeError, ValueError):
+        return False
+    return 0 < d <= 9
+
+
 @tool
 async def lancer_attaque(
     ctx: ToolContext,
@@ -480,6 +499,7 @@ async def lancer_attaque(
     nom_attaquant: str = "",
     arme: str = "",
     nom_cible: str = "",
+    distance_m: Any = None,
 ) -> ToolResult:
     """
     Effectue un jet d'attaque D&D 3.5 contre une Classe d'Armure (CA) cible.
@@ -489,13 +509,18 @@ async def lancer_attaque(
     :param bonus_attaque (int): bonus total = BBA + mod. FOR (mêlée) ou
         mod. DEX (distance), lus sur la fiche du personnage — ne jamais
         inventer de bonus. Un recoupement automatique avec la fiche borne
-        les valeurs manifestement erronées.
+        les valeurs manifestement erronées et APPLIQUE les dons passifs
+        (Arme de prédilection +1, Tir de près +1 à ≤ 9 m, Attaque en
+        finesse → DEX au lieu de FOR).
     :param ca_cible (int): Classe d'Armure de la cible. Recoupée
         automatiquement avec la fiche du PJ ou le bestiaire local — la valeur
         officielle prime toujours sur celle fournie.
     :param nom_attaquant (str): nom du personnage qui attaque.
     :param arme (str): nom de l'arme utilisée.
     :param nom_cible (str): nom de la cible.
+    :param distance_m (float): distance estimée en mètres jusqu'à la cible
+        (optionnel). À ≤ 9 m, le don « Tir de près » donne +1 à l'attaque
+        (et +1 aux dégâts dans `lancer_degats`).
     """
     # --- CA officielle de la cible ------------------------------------------
     # Un petit LLM « arrange » parfois la CA pour faire toucher. On impose la
@@ -617,6 +642,12 @@ async def lancer_attaque(
     note_ammo = ""
     note_degats = ""
     note_arme = ""
+    # 🎯 Seuil de menace de critique : zone de base de l'ARME (cimeterre
+    # 18-20, épée longue 19-20…) doublée par « Science de la critique ».
+    # Monstres (sans fiche PJ) : 20 — leurs statblocks intègrent déjà dons
+    # et zones de critique du bestiaire.
+    seuil_crit = 20
+    detail_crit = ""
     try:
         from .fiches import _chemin  # pylint: disable=import-outside-toplevel
         import os as _os                             # noqa: I001
@@ -659,9 +690,63 @@ async def lancer_attaque(
                 ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard", "sarbacane")
             )
             cle_car = "DEX" if a_distance else "FOR"
-            val_car = int(caracs.get(cle_car, 10) or 10)
+            # ✨ Objets magiques portés (PHB 3.5) — effets AUTOMATIQUES :
+            # - arme enchantée « +N » → +N à l'attaque (et +N aux dégâts) ;
+            # - gantelets d'ogre de force / bottes de dextérité → FOR/DEX
+            #   EFFECTIVES (attaque, et dégâts de mêlée pour la FOR).
+            bonus_mag = 0
+            detail_mag = ""
+            caracs_eff = dict(caracs)
+            try:
+                from .fiches import (                     # pylint: disable=import-outside-toplevel
+                    bonus_arme_magique, bonus_carac_equipement,
+                )
+                bonus_mag = bonus_arme_magique(arme)
+                caracs_eff["FOR"] = (
+                    int(caracs.get("FOR", 10) or 10)
+                    + bonus_carac_equipement(fiche, "FOR"))
+                caracs_eff["DEX"] = (
+                    int(caracs.get("DEX", 10) or 10)
+                    + bonus_carac_equipement(fiche, "DEX"))
+                if caracs_eff["FOR"] != int(caracs.get("FOR", 10) or 10):
+                    detail_mag += f", FOR effective {caracs_eff['FOR']}"
+                if caracs_eff["DEX"] != int(caracs.get("DEX", 10) or 10):
+                    detail_mag += f", DEX effective {caracs_eff['DEX']}"
+            except Exception:                                 # noqa: BLE001
+                pass  # fiches.py indisponible → scores de fiche bruts
+            val_car = int(caracs_eff.get(cle_car, 10) or 10)
             mod_car = (val_car - 10) // 2
-            officiel = bab + mod_car
+            # 🗡️ Dons passifs d'attaque (PHB 3.5) — appliqués au calcul
+            # officiel, jamais au-dessus de la valeur du LLM :
+            # - Arme de prédilection : +1 (supérieure +2) avec l'arme visée ;
+            # - Tir de près : +1 à l'attaque à ≤ 9 m (arme à distance) ;
+            # - Attaque en finesse : DEX remplace FOR pour l'attaque (armes
+            #   légères, rapière, fouet, chaîne cloutée) — DÉGÂTS exclus.
+            dons_pj = fiche.get("dons")
+            detail_attaque = ""
+            bonus_focus = 0
+            bonus_tdp = 0
+            try:
+                from .fiches import (                     # pylint: disable=import-outside-toplevel
+                    a_don_tir_de_pres, attaque_en_finesse_possible,
+                    bonus_attaque_dons,
+                )
+                if not a_distance and attaque_en_finesse_possible(dons_pj, arme):
+                    _mod_dex_eff = (int(caracs_eff.get("DEX", 10) or 10) - 10) // 2
+                    if _mod_dex_eff > mod_car:
+                        cle_car = "DEX"
+                        val_car = int(caracs_eff.get("DEX", 10) or 10)
+                        mod_car = _mod_dex_eff
+                        detail_attaque = (
+                            " — Attaque en finesse (DEX au lieu de FOR)"
+                        )
+                bonus_focus = bonus_attaque_dons(dons_pj, arme)
+                if a_distance and a_don_tir_de_pres(dons_pj) \
+                        and _distance_proche(distance_m):
+                    bonus_tdp = 1
+            except Exception:                                 # noqa: BLE001
+                pass  # fiches.py indisponible → attaque sans dons
+            officiel = bab + mod_car + bonus_focus + bonus_tdp + bonus_mag
             if bonus_attaque != officiel:
                 bonus_final = officiel
                 # 🛡️ B20 (audit parties complètes) : le bloc « officiel »
@@ -672,21 +757,61 @@ async def lancer_attaque(
                 note_bonus = (
                     f"\n- ℹ️ Bonus officiel : {bonus_final:+d} (fiche de "
                     f"{nom_attaquant} : BBA {bab:+d}, {cle_car} {val_car} "
-                    f"({mod_car:+d}))."
+                    f"({mod_car:+d}){detail_attaque}"
+                    + (f", {bonus_focus:+d} Arme de prédilection"
+                       if bonus_focus else "")
+                    + (f", {bonus_tdp:+d} Tir de près (≤ 9 m)"
+                       if bonus_tdp else "")
+                    + (f", {bonus_mag:+d} arme enchantée"
+                       if bonus_mag else "")
+                    + (detail_mag if detail_mag else "")
+                    + ")."
                 )
+            # 🎯 Zone de critique : base de l'arme + « Science de la
+            # critique » (doublée quand l'arme visée correspond).
+            try:
+                from .fiches import (                     # pylint: disable=import-outside-toplevel
+                    seuil_crit_arme, seuil_crit_dons,
+                )
+                seuil_base = seuil_crit_arme(arme)
+                seuil_crit = seuil_crit_dons(dons_pj, arme)
+                if seuil_crit < 20:
+                    fragments = []
+                    if seuil_base < 20:
+                        fragments.append(f"{arme} {seuil_base}-20")
+                    if seuil_crit < seuil_base:
+                        fragments.append(
+                            "Science de la critique : zone doublée")
+                    detail_crit = (
+                        f"\n- 🎯 Zone de critique {seuil_crit}-20"
+                        + (" (" + " ; ".join(fragments) + ")" if fragments
+                           else "")
+                        + "."
+                    )
+            except Exception:                                 # noqa: BLE001
+                pass  # zones indisponibles → menace sur 20 uniquement
             # 💪 Bonus de dégâts OFFICIEL (partie 263f82dc : le LLM passait
             # +4 puis +6 pour le MÊME attaquant — bonus improvisé au lieu du
-            # calcul 3.5). Mêlée = mod. FOR, ×1,5 (arrondi vers le bas) pour
-            # une arme à deux mains ; distance = +0 (mod. DEX ne s'applique
-            # pas aux dégâts). Le LLM recopie CE bonus dans lancer_degats.
+            # calcul 3.5). Mêlée = mod. FOR (effectif : gantelets de force),
+            # ×1,5 (arrondi vers le bas) pour une arme à deux mains ;
+            # distance = +0 (mod. DEX ne s'applique pas aux dégâts) SAUF
+            # l'arme enchantée. Le LLM recopie CE bonus dans lancer_degats.
+            # NB : l'Attaque en finesse change l'ATTAQUE, jamais les dégâts
+            # → le mod. FOR est repris ici même si l'attaque a basculé en DEX.
+            _val_for_att = int(caracs_eff.get("FOR", 10) or 10)
+            _mod_for_att = (_val_for_att - 10) // 2
             if not a_distance:
                 deux_mains = any(
                     m in arme_l for m in ("deux mains", "2 mains")
                 )
-                bonus_deg_off = mod_car * 3 // 2 if deux_mains else mod_car
+                bonus_deg_off = (_mod_for_att * 3 // 2 if deux_mains
+                                 else _mod_for_att) + bonus_mag
                 detail_deg = (
-                    f"FOR {val_car} ({mod_car:+d})"
+                    f"FOR {_val_for_att} ({_mod_for_att:+d})"
                     + (" ×1,5 arme à deux mains" if deux_mains else "")
+                    + (f" + {bonus_mag} arme enchantée" if bonus_mag else "")
+                    + (" — l'Attaque en finesse ne s'applique pas aux dégâts"
+                       if detail_attaque else "")
                 )
                 note_degats = (
                     f"\n- 💪 **Bonus dégâts officiel : {bonus_deg_off:+d}** "
@@ -695,9 +820,12 @@ async def lancer_attaque(
                 )
             else:
                 note_degats = (
-                    "\n- 💪 **Bonus dégâts officiel : +0** (arme à distance : "
-                    "le mod. DEX ne s'applique pas aux dégâts) — recopie CE "
-                    "bonus dans `lancer_degats`."
+                    f"\n- 💪 **Bonus dégâts officiel : {bonus_mag + bonus_tdp:+d}** "
+                    "(arme à distance : le mod. DEX ne s'applique pas aux "
+                    "dégâts"
+                    + (f", +{bonus_mag} arme enchantée" if bonus_mag else "")
+                    + (f", +{bonus_tdp} Tir de près" if bonus_tdp else "")
+                    + ") — recopie CE bonus dans `lancer_degats`."
                 )
             # 🏹 Munition auto (a6d11005, règles d'usage) : chaque tir à
             # distance déduit 1 projectile de l'inventaire du PJ — sans
@@ -740,18 +868,18 @@ async def lancer_attaque(
         f"⚔️ **Attaque** : {nom_attaquant} [{arme}] vs {nom_cible} (CA {ca_cible})",
         f"- Jet brut d'attaque : {jet}",
         f"- Bonus total : {bonus_final:+d}"
-        + note_arme + note_bonus + note_ca + note_ammo,
+        + note_arme + note_bonus + note_ca + note_ammo + detail_crit,
         f"- **Total attaque : {total}**",
     ]
     if cible_renote:
         lignes.append(cible_renote)
     if note_degats:
         lignes.append(note_degats.strip().lstrip("\n"))
-    if jet == 20:
+    if jet >= seuil_crit:
         lignes.append(
-            "- ⭐ **20 naturel** → toucher automatique + menace de critique "
-            "(effectuer un second jet d'attaque pour confirmer ; si réussi, "
-            "dégâts doublés/triplés selon arme)."
+            f"- ⭐ **{jet} naturel** → toucher automatique + menace de "
+            "critique (effectuer un second jet d'attaque pour confirmer ; "
+            "si réussi, dégâts doublés/triplés selon arme)."
         )
     elif jet == 1:
         lignes.append(
@@ -775,6 +903,7 @@ async def lancer_degats(
     arme_ou_sort: str,
     cible: str,
     attaquant: str = "",
+    distance_m: Any = None,
 ) -> ToolResult:
     """
     Effectue le jet de dégâts D&D 3.5 selon la formule NdF + bonus. Renvoie les
@@ -789,6 +918,9 @@ async def lancer_degats(
         (optionnel). Si c'est un monstre du bestiaire, les dés de SON arme
         sont validés contre sa fiche (tailles spéciales) ; sinon contre le
         catalogue d'armes.
+    :param distance_m (float): distance estimée en mètres jusqu'à la cible
+        (optionnel). À ≤ 9 m, le don « Tir de près » d'un PJ ajoute +1
+        dégâts (arme à distance uniquement).
     """
     nb_des = max(1, _as_int(nb_des, 1))
     faces = _as_int(faces, 6)
@@ -804,30 +936,62 @@ async def lancer_degats(
     note_bonus_dm = ""
     if not _est_nom_de_sort(arme_ou_sort):
         try:
-            _fiche_pj = _fiche_pj(ctx, attaquant or "")
+            # 🛡️ (correctif dons passifs) : la variable locale se nommait
+            # `_fiche_pj` COMME la fonction de module — Python la classait
+            # locale, le membre droit levait UnboundLocalError, avalé par le
+            # `except` → le recoupement PJ des dégâts était du CODE MORT (le
+            # bonus du LLM était cru tel quel, « Tir de près » impossible).
+            _fiche_attaquant = _fiche_pj(ctx, attaquant or "")
         except Exception:                                    # noqa: BLE001
-            _fiche_pj = None
-        if _fiche_pj is not None:
-            _caracs = _fiche_pj.get("carac") or {}
+            _fiche_attaquant = None
+        if _fiche_attaquant is not None:
+            _caracs = _fiche_attaquant.get("carac") or {}
             _arme_l = (arme_ou_sort or "").lower()
             _a_distance = any(
                 m in _arme_l for m in
                 ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard",
                  "sarbacane", "shuriken")
             )
+            # ✨ Objets magiques : arme enchantée « +N » → +N dégâts,
+            # gantelets de force → FOR effective (mêlée).
+            _mag = 0
+            try:
+                from .fiches import (               # pylint: disable=C0415
+                    bonus_arme_magique, bonus_carac_equipement,
+                )
+                _mag = bonus_arme_magique(arme_ou_sort)
+                _for_eff = (int(_caracs.get("FOR", 10) or 10)
+                            + bonus_carac_equipement(_fiche_attaquant, "FOR"))
+            except Exception:                        # noqa: BLE001
+                _for_eff = int(_caracs.get("FOR", 10) or 10)
             if _a_distance:
-                bonus_off = 0
+                bonus_off = 0 + _mag
                 _detail = "arme à distance : le mod. DEX ne s'applique pas"
+                # 🎯 Tir de près (PHB 3.5) : +1 dégâts à ≤ 9 m avec une
+                # arme à distance, pour un PJ portant le don.
+                try:
+                    from .fiches import (               # pylint: disable=C0415
+                        a_don_tir_de_pres,
+                    )
+                    if a_don_tir_de_pres(_fiche_attaquant.get("dons")) \
+                            and _distance_proche(distance_m):
+                        bonus_off += 1
+                        _detail += " + 1 Tir de près (≤ 9 m)"
+                except Exception:                        # noqa: BLE001
+                    pass  # fiches.py indisponible → sans le don
+                if _mag:
+                    _detail += f" + {_mag} arme enchantée"
             else:
-                _val_for = int(_caracs.get("FOR", 10) or 10)
-                _mod_for = (_val_for - 10) // 2
+                _mod_for = (_for_eff - 10) // 2
                 _deux_mains = any(
                     m in _arme_l for m in ("deux mains", "2 mains")
                 )
-                bonus_off = _mod_for * 3 // 2 if _deux_mains else _mod_for
+                bonus_off = (_mod_for * 3 // 2 if _deux_mains
+                             else _mod_for) + _mag
                 _detail = (
-                    f"FOR {_val_for} ({_mod_for:+d})"
+                    f"FOR {_for_eff} ({_mod_for:+d})"
                     + (" ×1,5 arme à deux mains" if _deux_mains else "")
+                    + (f" + {_mag} arme enchantée" if _mag else "")
                 )
             if bonus != bonus_off:
                 note_bonus_dm = (

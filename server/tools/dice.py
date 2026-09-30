@@ -1038,7 +1038,7 @@ async def lancer_degats(
                     + (" ×1,5 arme à deux mains" if _deux_mains else "")
                     + (f" + {_mag} arme enchantée" if _mag else "")
                 )
-            if bonus != bonus_off:
+            if bonus != bonus_off or _mag:
                 note_bonus_dm = (
                     f"\n- ℹ️ Bonus dégâts officiel : {bonus_off:+d} "
                     f"({_detail})."

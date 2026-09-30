@@ -102,7 +102,12 @@ def test_2b_catalogue_connu_mais_pas_de_cle_dans_la_fiche():
 #  3. Les bonus de RACE annoncés sont-ils appliqués ?
 # --------------------------------------------------------------------------- #
 def test_3_bonus_de_race_appliques():
-    """Un elfe doit avoir +2 Détection de race même à 0 rang."""
+    """Un elfe doit avoir +2 Détection de race, même à rang nul.
+
+    Comportement ACTUEL : Détection est HORS classe du Roublard → le rang
+    compte pour moitié (RAW 3.5 : 1 rang saisi = ½ rang) — le total attendu
+    est 0 (½ de 1) + 1 (SAG 13) + 2 (Sens aiguisés) = +3, la note doit
+    porter les DEUX mentions (hors-classe et race)."""
     with tempfile.TemporaryDirectory() as tmp:
         _fiche(tmp, {
             "nom": "Sylve", "race": "Elfe", "classe": "Roublard",
@@ -112,31 +117,36 @@ def test_3_bonus_de_race_appliques():
         })
         t = _jet(tmp, modificateur=0, raison="Écouter",
                  nom_personnage="Sylve", competence="Détection")
-        print("\n[elfe, 1 rang Détection, SAG 13] " + t)
-        # Attendu 1 rang + 1 (SAG 13) + 2 (Sens aiguisés) = +4
+        print("\n[elfe, 1 rang Détection (hors classe), SAG 13] " + t)
+        attendu = 0 + (13 - 10) // 2 + 2
         assert "recalculé" in t, t
-        attendu = 1 + (13 - 10) // 2 + 2
         assert f"→ {attendu:+d}" in t, f"bonus de race NON appliqué (attendu {attendu:+d})\n{t}"
+        assert "hors classe" in t, "le facteur hors-classe doit être signalé"
+        assert "race/familier" in t, "le bonus de race doit être signalé"
 
 
 # --------------------------------------------------------------------------- #
 #  4. Les facultés de FAMILIER sont-elles appliquées ?
 # --------------------------------------------------------------------------- #
 def test_4_faculte_de_familier_appliquee():
-    """Un chat = +3 Discrétion : doit se voir dans le modificateur."""
+    """Le familier « Chat » accorde +3 Déplacement silencieux au maître
+    (table PHB 3.5 du projet, server/familiers.py) : doit se voir dans le
+    modificateur. Le test initial citait « Discrétion » — une AUTRE
+    compétence (Move Silently ≠ Stealth) : adapté à la table officielle."""
     with tempfile.TemporaryDirectory() as tmp:
         _fiche(tmp, {
             "nom": "Ned", "race": "Humain", "classe": "Roublard",
             "niveau": 3, "carac": {"FOR": 10, "DEX": 14, "CON": 12,
                                    "INT": 12, "SAG": 13, "CHA": 10},
-            "competences": {"Discrétion": 3},
+            "competences": {"Déplacement silencieux": 3},
             "familier": "Chat",
         })
         t = _jet(tmp, modificateur=0, raison="Se glisser dans la foule",
-                 nom_personnage="Ned", competence="Discrétion")
-        print("\n[chat attendu +3 discretion] " + t)
+                 nom_personnage="Ned", competence="Déplacement silencieux")
+        print("\n[chat attendu +3 deplacement silencieux] " + t)
         attendu = 3 + (14 - 10) // 2 + 3
         assert f"→ {attendu:+d}" in t, f"faculte de familier NON appliquee ({attendu:+d})\n{t}"
+        assert "race/familier" in t, "le bonus du familier doit être signalé"
 
 
 # --------------------------------------------------------------------------- #

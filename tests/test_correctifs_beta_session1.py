@@ -469,14 +469,18 @@ def _ctx_stub(data_dir: str, pid: str):
 
 
 def test_r3_resurrection_repart_en_exploration():
-    """La levée du game over (résurrection) ramène la phase en exploration."""
+    """La levée du game over (résurrection) ramène la phase en exploration.
+
+    Chaînes adaptées au code refactoré (le bloc `Levée du flag GAME OVER`
+    d'origine est devenu la synchrone post-résurrection) : la levée pose
+    `game_over=False` ET `phase=exploration` dans l'état ET le patch front."""
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(base, "server", "main.py"), encoding="utf-8").read()
-    i = src.find("Levée du flag GAME OVER")
+    i = src.find("Résurrection appliquée par le serveur")
     assert i >= 0
-    bloc = src[i : i + 700]
-    assert '"phase"] = "exploration"' in bloc
-    assert '"phase": "exploration"' in bloc
+    bloc = src[max(0, i - 2500) : i + 200]
+    assert '"game_over"] = False' in bloc or '"game_over": False' in bloc
+    assert '"phase"] = "exploration"' in bloc or '"phase": "exploration"' in bloc
 
 
 # --------------------------------------------------------------------------- #
@@ -485,10 +489,12 @@ def test_r3_resurrection_repart_en_exploration():
 def test_r1_penalie_con_niveau_1_est_officielle():
     """Le PV max qui baisse après une résurrection de niveau 1 N'EST PAS un
     bug : Raise Dead (DMG 3.5) sur un personnage de niveau 1 coûte −2 CON
-    (irréparable) et le mod. CON réduit les PV max. Le code l'applique."""
+    (irréparable) et le mod. CON réduit les PV max. Le code l'applique —
+    chaînes adaptées à la version refactorée : plancher CON à 6 et perte de
+    PV max calculée par différence de modificateur (plus précise)."""
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(base, "server", "main.py"), encoding="utf-8").read()
-    assert "nouvelle_con = max(1, con - 2)" in src
+    assert "nouvelle_con = max(6, con - 2)" in src
     assert "perte_pvmax" in src
 
 

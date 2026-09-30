@@ -505,13 +505,16 @@ async def test_jets_nat_20_nat_1_et_degats_bornes():
                        arme="Grande hache", bonus_attaque=30,
                        nom_cible="Gobelin", ca_cible=5)
         assert "❌ **1 naturel**" in r.text
-        # Dégâts au total négatif → plafonnés à 0 (jamais de soin involontaire).
+        # Dégâts au total négatif → portés au minimum de 1 (🛡️ B46, règle 3.5 :
+        # un coup qui touche blesse toujours — le test attendait l'ancien
+        # comportement « 0 dégâts » : adapté).
         random.seed(_seed_for_dice(1, 4, 1))  # dé = 1
         r = await tool(d, "lancer_degats", nb_des=1, faces=4, bonus=-3,
                        arme_ou_sort="Dague rouillée", cible="Groth")
-        assert "Dégâts infligés : 0" in r.text
+        assert "Dégâts infligés : 1" in r.text
+        assert "minimum de 1" in r.text
         m = RE_DEGATS.search(r.text)
-        assert m and int(m.group(1)) == 0
+        assert m and int(m.group(1)) == 1
         ri = await tool(d, "fiche_perso_infliger_degats", nom="Groth",
                         degats=0)
         assert "subit 0 dégâts" in ri.text

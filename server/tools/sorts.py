@@ -193,6 +193,29 @@ async def incanter_sort(
     ]
     if details:
         lignes.append(f"- {details}")
+    # 🎯 Jet de CONCENTRATION effectif quand le sort exige une concentration
+    # (durée « concentration… ») : le DD de contexte (blessures, interruption)
+    # dépend de la scène — le MJ compare ce total au DD du moment. La
+    # compétence Concentration (CON) est recoupée depuis la fiche (rangs +
+    # mod. CON), elle n'est plus jamais inapplicable.
+    if "concentration" in str(sort.get("duree") or "").lower():
+        try:
+            _rangs = 0
+            for _nom_c, _r in (fiche.get("competences") or {}).items():
+                if _norm(_nom_c) == "concentration":
+                    _rangs = int(_r or 0)
+                    break
+            _val_con = int((fiche.get("carac") or {}).get("CON", 10) or 10)
+            _mod_con = (_val_con - 10) // 2
+            _jet = random.randint(1, 20)
+            lignes.append(
+                f"- 🎯 Jet de Concentration — Concentration {_rangs} rangs "
+                f"+ CON {_val_con} ({_mod_con:+d}) : jet brut {_jet} → "
+                f"**{_jet + _rangs + _mod_con}** (à comparer au DD de "
+                "contexte : 10 + dégâts subis…)"
+            )
+        except Exception:                                    # noqa: BLE001
+            pass  # fiche illisible → pas de jet de concentration
 
     # 6) Effet mécanique -------------------------------------------------------
     effet = sort.get("effet") or {}

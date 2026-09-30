@@ -5510,11 +5510,15 @@ def _detecter_combat_prose(
         for _w in _re_mod.split(r"[^a-z']+", _sans_accents(str(_n or "").lower())):
             if len(_w) >= 3:
                 _exclure_mots.add(_w)
-    from .. import persos as _persos_m20  # pylint: disable=C0415
+    # 🛡️ (correctif) : `from .. import persos` dépassait le package
+    # `server` (persos.py est dans le MÊME package) → ImportError
+    # systématique avalée nulle part : la détection de combat prose était
+    # MORTE en production (les monstres surgissant dans la prose ne
+    # déclenchaient plus le rattrapage, cf. tests m20/ee5684fe).
+    from . import persos as _persos_m20  # pylint: disable=C0415
     try:
-        for _cl in list(_persos_m20.CAPACITES_CLASSES) + list(
-                _persos_m20.CAPACITES_RACES) + list(_persos_m20.resoudre_race(
-                    "Humain") and []) or []:
+        for _cl in (list(_persos_m20.CAPACITES_CLASSES)
+                    + list(_persos_m20.CAPACITES_RACES)):
             for _w in _re_mod.split(r"[^a-z']+",
                                     _sans_accents(str(_cl or "").lower())):
                 if len(_w) >= 3:

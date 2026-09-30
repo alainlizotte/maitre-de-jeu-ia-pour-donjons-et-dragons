@@ -244,7 +244,12 @@ def test_tir_a_larc_consomme_une_fleche(tmp_path):
     assert fleches["qte"] == 19
 
 
-def test_tir_sans_munition_avertit_sans_bloquer(tmp_path):
+def test_tir_sans_munition_n_est_pas_resolu(tmp_path):
+    """🛡️ B45 (comportement ACTUEL) : un tir sans munition n'est PAS résolu
+    — l'ancien comportement (« Aucune flèche », jet joué quand même)
+    apprenait au joueur que les munitions ne servaient à rien (l'Assassin a
+    été tué par un tir sans flèche). Le test attendait cet ancien
+    comportement : adapté au refus explicite actuel."""
     d = str(tmp_path)
     _fiche_avec_inventaire(d, "Archer", [
         {"nom": "Arc court", "qte": 1, "poids": 0.9},
@@ -253,8 +258,10 @@ def test_tir_sans_munition_avertit_sans_bloquer(tmp_path):
     tr = asyncio.run(lancer_attaque(
         ctx, bonus_attaque=1, ca_cible=12, nom_attaquant="Archer",
         arme="Arc court", nom_cible="Squelette"))
-    assert "Aucune flèche" in tr.text
-    assert "Total attaque" in tr.text  # le jet reste résolu
+    assert "n'a plus de" in tr.text
+    assert "PAS résolu" in tr.text
+    assert "Rechargement" in tr.text
+    assert "Total attaque" not in tr.text  # le jet n'est PAS joué
 
 
 def test_attaque_melee_ne_consomme_rien(tmp_path):

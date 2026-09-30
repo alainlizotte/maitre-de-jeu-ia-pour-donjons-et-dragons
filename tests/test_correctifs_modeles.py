@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from server.llm.client import Message, _normaliser_messages  # noqa: E402
 from server.llm.orchestrator import tronquer_degeneration  # noqa: E402
+from server.llm.orchestrator import _DEGEN_PLANCHER_CHARS  # noqa: E402
 from server.tools.base import ToolContext  # noqa: E402
 from server.tools.fiches import _joueur_valide  # noqa: E402
 
@@ -125,13 +126,27 @@ def test_tool_messages_groupes_intacts():
 #  3. Troncature de dégénérescence intra-réponse
 # --------------------------------------------------------------------------- #
 def test_boucle_tronquee():
+    """🛡️ B29 (comportement ACTUEL) : une troncature réelle ne descend
+    jamais sous le plancher de 400 chars — le test attendait l'ancien
+    comportement (coupe nette sur une narration courte) : adapté avec une
+    intro assez longue (non répétitive, sinon ELLE déclencherait la
+    détection) pour dépasser le plancher avant la 3e occurrence."""
     phrase = ("La grande hache de Groth s'abat avec toute sa force "
               "sur le zombie.")
-    texte = "Intro correcte. " + " ".join([phrase] * 4)
+    intro = (
+        "Le donjon résonne d'un fracas sourd. Des échos lointains "
+        "roulent le long des couloirs voûtés. Une brise glacée s'engouffre "
+        "par la porte entrouverte, éteignant les torches fixées aux murs. "
+        "Groth lève une main pour protéger sa vision de la poussière qui "
+        "tombe des voûtes fissurées. Plus loin, l'obscurité semble "
+        "vivre : quelque chose rampe, lentement, dans les profondeurs. "
+    )
+    texte = intro + " ".join([phrase] * 4)
     coupe, motif = tronquer_degeneration(texte)
     assert motif
     assert coupe.count("grande hache") == 2          # 1re + 2e occurrence
-    assert "Intro correcte" in coupe
+    assert "fracas sourd" in coupe
+    assert len(coupe) >= _DEGEN_PLANCHER_CHARS
 
 
 def test_texte_normal_intact():

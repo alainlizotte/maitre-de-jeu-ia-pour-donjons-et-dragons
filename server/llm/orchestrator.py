@@ -169,6 +169,11 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "lancer_degats",
         "lancer_sauvegarde",
         "lancer_des",
+        # Jet de compétence/caractéristique EN combat (Équilibre pour ne pas
+        # tomber, Concentration pour maintenir un sort, Escalade…) : le
+        # recoupement fiche (rangs + mod. carac + dons) est le même qu'en
+        # exploration — `lancer_attaque` n'est PAS un test de compétence.
+        "lancer_d20",
         "incanter_sort",
         "combat_ajouter_combattant",
         # Familier/compagnon animal : rappel en cours de mêlée → rejoint

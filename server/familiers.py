@@ -59,6 +59,22 @@ FAMILIERS: list[dict[str, str]] = [
      "faculte": "Le maître obtient un bonus de +3 aux tests de Bluff."},
 ]
 
+# Bonus mécaniques des FAMILIERS EFFECTIFS en jeu (extraits des facultés
+# ci-dessus) : cle → effets (comp_*, sauvegarde_*) — le bonus du familier
+# s'applique aux jets du MAÎTRE, même à rang nul. « Crapaud » (+3 PV) est
+# appliqué à la création (miroir de _bonus_dons_pv), hors jets de dés.
+BONUS_FAMILIER: dict[str, dict[str, int]] = {
+    "belette": {"sauvegarde_reflexes": 2},
+    "chat": {"comp_deplacement_silencieux": 3},
+    "chauve_souris": {"comp_perception_auditive": 3},
+    "chouette": {"comp_detection": 3},
+    "corbeau": {"comp_estimation": 3},
+    "faucon": {"comp_detection": 3},
+    "lezard": {"comp_escalade": 2},
+    "rat": {"sauvegarde_vigueur": 2},
+    "serpent_venimeux_tres_petit": {"comp_bluff": 3},
+}
+
 # Niveau de classe du maître → (min, max, Aj. armure naturelle, Int, pouvoirs).
 # Table PHB 3.5 : 1-2 → +1/6 ; 3-4 → +2/7 ; … 19-20 → +10/15.
 _PROGRESSION_FAMILIER: list[tuple[int, int, int, int, list[str]]] = [

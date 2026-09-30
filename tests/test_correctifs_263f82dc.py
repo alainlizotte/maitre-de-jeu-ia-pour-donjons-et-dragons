@@ -252,6 +252,10 @@ def test_p2_bonus_degats_officiel_distance_nul(tmp_path):
         "carac": {"FOR": 14, "DEX": 18, "CON": 10, "INT": 10,
                   "SAG": 10, "CHA": 10},
         "pv": 8, "pv_max": 8, "ca": 14,
+        # 🛡️ B45 (comportement ACTUEL) : un tir à distance SANS munition
+        # n'est PAS résolu (le test attendait un jet quand même) —
+        # l'archer porte donc ses flèches.
+        "inventaire": [{"nom": "flèche", "qte": 20}],
     }
     with open(_chemin(ctx, "Archer"), "w", encoding="utf-8") as f:
         import json

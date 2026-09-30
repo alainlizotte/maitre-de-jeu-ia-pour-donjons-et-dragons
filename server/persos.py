@@ -450,6 +450,30 @@ CAPACITES_RACES: dict[str, list[dict[str, str]]] = {
     ],
 }
 
+# Bonus mécaniques raciaux EFFECTIFS en jeu (extraits des descriptions
+# ci-dessus — hors traits conditionnels : « Connaissance de la pierre » du
+# nain ne s'applique que sur la pierre, hors moteur). Clés = effets
+# normalisés (cf. fiches.bonus_pj_effets : comp_*, sauvegarde_*).
+# Utilisés par le recoupement `lancer_d20` (jets de compétence) — les bonus
+# raciaux s'appliquent MÊME à rang nul (un elfe écoute mieux, période).
+BONUS_RACES: dict[str, dict[str, int]] = {
+    "Elfe": {
+        "comp_detection": 2, "comp_perception_auditive": 2,
+        "comp_fouille": 2,
+    },
+    "Halfelin": {
+        "comp_discretion": 4, "comp_deplacement_silencieux": 4,
+        "comp_escalade": 2, "comp_saut": 2,
+        "ca_petite_taille": 1, "attaque_petite_taille": 1,
+    },
+    "Gnome": {
+        "comp_alchimie": 2, "comp_perception_auditive": 2,
+    },
+    "Demi-elfe": {
+        "comp_diplomatie": 2, "comp_collecte_d_informations": 2,
+    },
+}
+
 CAPACITES_CLASSES: dict[str, list[dict[str, Any]]] = {
     "Barbare": [
         {"niveau": 1, "nom": "Fureur",

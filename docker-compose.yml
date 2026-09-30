@@ -101,6 +101,7 @@ services:
       -ngl 99
       -c 32768
       -n 2048
+      -np 1
       -ctk q8_0
       -ctv q8_0
       --jinja

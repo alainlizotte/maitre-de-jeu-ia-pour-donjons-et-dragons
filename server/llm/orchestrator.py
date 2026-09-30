@@ -148,6 +148,10 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "fiche_perso_gagner_xp",
         "inventaire_ramasser",
         "inventaire_ajouter",
+        "inventaire_retirer",
+        # Munitions hors combat (chasse, entraînement, tir de couverture) :
+        # sans ce tool le compteur de flèches n'existe qu'en combat.
+        "inventaire_consommer_munition",
         "inventaire_consulter",
         # Scénario : relire le livret et suivre les étapes de la trame.
         "scenarios_laelith_lister",
@@ -200,6 +204,18 @@ _MEMOIRE_ECRITURE_TOOLS = frozenset({
 
 
 _log = logging.getLogger("dnd35.orchestrator")
+
+# 🛡️ B32 (audit parties complètes) : cinq sites indépendants incrémentaient
+# `result.corrections`, dont trois SANS borne. Un tour consommait ainsi jusqu'à
+# 12 appels `chat/completions` (boucle d'outils + corrections + rattrapages
+# serveur) et pouvait durer 25 minutes. Budget GLOBAL par tour, partagé par
+# tous les sites : au-delà, on narre avec ce qu'on a.
+_CORRECTIONS_MAX_PAR_TOUR = 2
+
+
+def _correction_autorisee(result: "OrchestratedResult") -> bool:
+    """Vrai tant que le budget global de corrections du tour n'est pas épuisé."""
+    return result.corrections < _CORRECTIONS_MAX_PAR_TOUR
 
 # --------------------------------------------------------------------------- #
 # 🎯 Phase de décision contrainte (correctif abd81275)
@@ -266,6 +282,11 @@ _COMBAT_PRIORITAIRES = frozenset({
     "inventaire_consommer_munition", "retraite_combat",
     "combat_ajouter_combattant", "appeler_familier",
 })
+
+# Plafond BASSE d'exposition des outils : en dessous de cette taille, un jeu
+# d'outils de phase est présenté EN ENTIER (réordonné) plutôt que tronqué par
+# `max_tools_exposed`. Voir `_sous_ensemble_prioritaire` (B22).
+_PLAFOND_EXPOSITION_MIN = 48
 
 # 🧱 Budget TOTAL du contexte d'une requête (en CARACTÈRES) : work + schémas
 # d'outils + template. Les schémas natifs (function-calling « auto ») sont
@@ -1050,6 +1071,32 @@ _DEGEN_MIN_MOTS = 6          # phrase significative (pas « Et puis. »)
 _DEGEN_OCCURRENCES = 3       # seuil de boucle
 
 
+# 🛡️ B29 (audit parties complètes) : la garde ne doit PAS déclencher sur la
+# ligne de statut que le serveur lui-même injecte (« **Phase : Combat** —
+# Initiative 14 — C'est au tour de Brann. ») : le modèle la répète en tête de
+# réponse comme un rituel, et la troncature supprimait alors 6,7 ko de
+# narration d'un coup. Les phrases de statut sont donc ignorées, et une
+# troncature réelle laisse une marque visible + ne descend jamais sous un
+# plancher (une narration de 400 chars coupée net est pire qu'une répétition).
+_DEGEN_MOTIFS_EXCLUS = (
+    "phase :",
+    "initiative",
+    "c est au tour de",
+    "au tour de",
+    "ennemis vivants",
+    "jets officiels",
+    "que faites-vous",
+    "que souhaitez-vous",
+)
+_DEGEN_PLANCHER_CHARS = 400
+
+
+def _est_motif_statut(phrase: str) -> bool:
+    """Vrai pour une ligne de statut de combat injectée par le serveur."""
+    c = _normalise_pour_compare(phrase)
+    return any(m in c for m in _DEGEN_MOTIFS_EXCLUS)
+
+
 def tronquer_degeneration(texte: str) -> tuple[str, str]:
     """Renvoie (texte_tronqué, phrase_en_boucle). Si aucune phrase d'au moins
     `_DEGEN_MIN_MOTS` mots (normalisée) ne revient `_DEGEN_OCCURRENCES` fois,
@@ -1060,18 +1107,28 @@ def tronquer_degeneration(texte: str) -> tuple[str, str]:
     compteur: dict[str, int] = {}
     for i, p in enumerate(phrases):
         cle = _normalise_pour_compare(p)
-        if len(cle.split()) < _DEGEN_MIN_MOTS:
+        if len(cle.split()) < _DEGEN_MIN_MOTS or _est_motif_statut(p):
             continue
         compteur[cle] = compteur.get(cle, 0) + 1
         if compteur[cle] >= _DEGEN_OCCURRENCES:
             # Garde le texte jusqu'AVANT la 3e occurrence de la phrase.
             coupe = " ".join(x.strip() for x in phrases[:i]).strip()
+            if len(coupe) < _DEGEN_PLANCHER_CHARS:
+                # Narration trop courte pour être coupée : on garde tout et
+                # on laisse la répétition (moins dommageable qu'un texte
+                # tronqué au milieu d'une phrase).
+                _log.info(
+                    "dégénérescence intra-réponse détectée (« %s… » ×%d) "
+                    "mais narration de %d chars seulement : conservation",
+                    cle[:60], compteur[cle], len(coupe),
+                )
+                return texte, ""
             _log.warning(
                 "dégénérescence intra-réponse détectée (« %s… » ×%d) — "
                 "troncature %d → %d chars",
                 cle[:60], compteur[cle], len(texte), len(coupe),
             )
-            return coupe, cle[:80]
+            return coupe.rstrip(" ,;:.!?…") + "\n\n[… _la répétition a été supprimée par le serveur_]", cle[:80]
     return texte, ""
 
 
@@ -2193,6 +2250,31 @@ class Orchestrator:
         """
         if self.max_tools_exposed <= 0:
             return filtered
+        # 🛡️ B22 (audit parties complètes) : un plafond plus petit que le jeu
+        # d'outils de la phase masquait DÉFINITIVEMENT les outils non
+        # prioritaires — en exploration, les 15 places étaient occupées par
+        # _OUTILS_DECISION (28) et en combat par _COMBAT_PRIORITAIRES (14), si
+        # bien que inventaire_ramasser, memoire_*, scenario_etape, repos_long
+        # et carte_donjon_explorer n'étaient JAMAIS présentés. Un outil masqué
+        # n'est pas « moins prioritaire », il est impossible. On ne tronque
+        # donc que si la phase expose vraiment trop d'outils ; sinon tout est
+        # présenté, simplement RÉORDONNÉ (les outils mécaniques en tête).
+        plafond = max(self.max_tools_exposed, _PLAFOND_EXPOSITION_MIN)
+        if len(filtered) <= plafond:
+            ordre_total: list[str] = []
+            deja: list[str] = []
+            for tc in result.tool_calls_trace:
+                nom = tc.get("name")
+                if nom and nom in filtered and nom not in deja:
+                    deja.append(nom)
+            for n in (deja + sorted(_COMBAT_PRIORITAIRES)
+                      + sorted(_OUTILS_DECISION)):
+                if n in filtered and n not in ordre_total:
+                    ordre_total.append(n)
+            for n in filtered:
+                if n not in ordre_total:
+                    ordre_total.append(n)
+            return {n: filtered[n] for n in ordre_total}
         deja_vus: list[str] = []
         for tc in result.tool_calls_trace:
             nom = tc.get("name")
@@ -2208,7 +2290,7 @@ class Orchestrator:
                 prioritaires.append(n)
         exposes: list[str] = []
         for n in prioritaires + list(filtered):
-            if len(exposes) >= self.max_tools_exposed:
+            if len(exposes) >= plafond:
                 break
             if n in filtered and n not in exposes:
                 exposes.append(n)
@@ -2624,7 +2706,7 @@ class Orchestrator:
 
         for _ in range(self.max_iterations):
             result.iterations += 1
-            if (not elage_fait and result.iterations >= 2 and work
+            if (False and not elage_fait and result.iterations >= 2 and work
                     and work[0].role == "system"
                     and _SECTIONS_MARKER in work[0].content):
                 _sys_court, _sep, _reste = work[0].content.partition(
@@ -2639,7 +2721,7 @@ class Orchestrator:
                     ),
                 )
                 elage_fait = True
-                _log.info(
+                _log.info(  # pragma: no cover — branche désactivée (B30)
                     "itération %d : sections narratives élaguées du system "
                     "prompt (-%d chars).",
                     result.iterations, len(_sep) + len(_reste),
@@ -2660,9 +2742,12 @@ class Orchestrator:
             exposes = self._sous_ensemble_prioritaire(filtered, result)
             if cles_filtre_prec is not None and set(filtered) != cles_filtre_prec:
                 outils_noms = ", ".join(sorted(exposes))
+                # 🛡️ M12 : la liste des outils était journalisée EN ENTIER à
+                # chaque changement de phase (jusqu'à 47 noms, à chaque tour),
+                # noyant les logs utiles. On ne trace que le nombre.
                 _log.info(
-                    "phase changée en cours de tour : outils réinjectés (%s)",
-                    outils_noms,
+                    "phase changée en cours de tour : outils réinjectés "
+                    "(%d outils)", len(exposes),
                 )
                 section_maj = (
                     tools_prompt_section(exposes)
@@ -2755,6 +2840,14 @@ class Orchestrator:
                 try:
                     if result.iterations == 1:
                         await on_status("Résout l'action avec les outils…")
+                    elif result.corrections > 0:
+                        # 🛡️ m19 : le compteur « (2/4) » laissait croire à un
+                        # pourcentage de progression. On nomme ce qui se passe
+                        # réellement (une passe de correction du modèle).
+                        await on_status(
+                            f"Corrige la résolution "
+                            f"({result.corrections} correction(s))…"
+                        )
                     else:
                         await on_status(
                             f"Résout l'action ({result.iterations}/"
@@ -3223,7 +3316,7 @@ class Orchestrator:
                 )
                 if sim:
                     result.simulation_attempted = True
-                    if result.corrections < 2:
+                    if _correction_autorisee(result):
                         result.corrections += 1
                         # Correctif ciblé : attaque adverse et dégâts SUBIS
                         # INVENTÉS (« vous avez été touché pour 8 dégâts ») —
@@ -3351,7 +3444,8 @@ class Orchestrator:
                 # phase de décision contrainte : la relance ne concerne que
                 # combat / opening / opening_complete (où l'action demandée
                 # est mécanique et aucun choix contraint ne tourne).
-                if _phase_a3 and _phase_a3 not in _PHASES_DECISION:
+                if (_phase_a3 and _phase_a3 not in _PHASES_DECISION
+                        and _correction_autorisee(result)):
                     retry_requis_envoye = True
                     result.corrections += 1
                     _log.warning(
@@ -3468,7 +3562,7 @@ class Orchestrator:
                     include_gains=not gain_rolled_final,
                     include_pj_damage=not trust_damage_prose,
                 )
-                if sim_final:
+                if sim_final and _correction_autorisee(result):
                     result.simulation_attempted = True
                     result.corrections += 1
                     # (c) L'aperçu déjà streamé va être remplacé par la relance :
@@ -3606,7 +3700,7 @@ class Orchestrator:
                     None if revisite_froide
                     else trouve_repetition(narration, reference, seuil=seuil_repet)
                 )
-                if echo:
+                if echo and _correction_autorisee(result):
                     result.corrections += 1
                     result.corrections_echo += 1
                     # (c) L'aperçu streamé est une répétition périmée : reset
@@ -3665,7 +3759,7 @@ class Orchestrator:
             # visible = "" sans tool_calls. Sans intervention, on sortirait avec
             # une narration vide. On injecte un correctif et on relance.
             if not narration.strip():
-                if result.corrections < 3:
+                if _correction_autorisee(result):
                     result.corrections += 1
                     # (c) Rien de viable à l'écran : efface l'aperçu streamé
                     # (le cas échéant) avant la relance.

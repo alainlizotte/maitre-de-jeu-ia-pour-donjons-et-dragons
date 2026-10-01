@@ -85,6 +85,14 @@ class LLMConfig:
     #           modèle (gain de plusieurs secondes par tour).
     unload_after_turn: bool = True
     unload_delay_minutes: float = 5.0
+    # Décharge le modèle LLM AVANT chaque génération d'image (hors tour LLM).
+    # Nécessaire sur GPU à 8 Go avec Qwen3.5-9B-Q4_K_M-MTP (6,27 Go en VRAM) :
+    # sans unload, ComfyUI (lowvram) bascule en fallback CPU. `True` est le
+    # comportement recommandé avec cette config.
+    unload_before_image: bool = True
+    # Délai avant rechargement proactif du modèle après la dernière image
+    # (annulé si un tour LLM démarre avant l'expiration).
+    reload_after_image_seconds: float = 3.0
     # Options natives transmises via le champ `options` du payload
     # OpenAI-compatible (Ollama : num_ctx, top_k, seed, …). llama.cpp les
     # ignore — ctx-size, KV cache, etc. se règlent via les flags du serveur

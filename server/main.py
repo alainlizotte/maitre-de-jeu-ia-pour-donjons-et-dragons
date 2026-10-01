@@ -1439,6 +1439,16 @@ async def lifespan(app: FastAPI):
     app.state.client = client
     app.state.prompt_builder = PromptBuilder(cfg)
 
+    # Arbitrage VRAM LLM ↔ ComfyUI : le modèle est déchargé avant chaque
+    # génération d'image hors tour et rechargé peu après (voir server/gpu.py).
+    # Sans cela ComfyUI n'a que ~950 Mo de VRAM libre et bascule en CPU.
+    _gpu.configure_llm(
+        unload=client.unload_model,
+        load=client.ensure_model_loaded,
+        before_comfy=cfg.llm.unload_before_image,
+        reload_delay_s=cfg.llm.reload_after_image_seconds,
+    )
+
     # Store RAG ChromaDB — désactivé si `rag.enabled: false` dans la config.
     rag_store: Optional[RagStore] = None
     if cfg.rag.enabled:
@@ -3983,7 +3993,11 @@ _bg_tasks: set[asyncio.Task] = set()
 _pending_unload: Optional[asyncio.Task] = None
 # Verrou autour du déchargement : un tour qui démarre pendant l'unload
 # (≈1 s) l'attend au lieu de perdre le modèle en cours de route.
-_unload_guard: asyncio.Lock = asyncio.Lock()
+# C'est le VERROU PARTAGÉ de server/gpu.py : il sérialise aussi les
+# unload/reload autour des générations d'image. Deux verrous distincts
+# permettraient à un unload d'image et à un unload de fin de tour de se
+# croiser, et le tour suivant pourrait perdre le modèle entre les deux.
+_unload_guard: asyncio.Lock = _gpu.model_lock()
 
 
 def _cancel_pending_unload() -> None:
@@ -3996,8 +4010,12 @@ def _cancel_pending_unload() -> None:
 
 async def _turn_begin() -> None:
     _cancel_pending_unload()
-    async with _unload_guard:
-        await _gpu.turn_begin()
+    # ⚠️ PAS de `async with _unload_guard` ici : c'est le même verrou que
+    # `_gpu.model_lock()`, et `_gpu.turn_begin()` l'acquiert LUI-MÊME.
+    # asyncio.Lock n'étant pas réentrant, l'imbriquer deadlockait le MJ à
+    # chaque tour. La sérialisation avec l'unload différé est assurée par
+    # turn_begin, qui prend le verrou avant d'entrer dans le tour.
+    await _gpu.turn_begin()
 
 
 async def _turn_end() -> bool:

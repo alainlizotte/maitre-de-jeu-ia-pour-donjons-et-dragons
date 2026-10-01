@@ -90,9 +90,12 @@ class LLMConfig:
     # sans unload, ComfyUI (lowvram) bascule en fallback CPU. `True` est le
     # comportement recommandé avec cette config.
     unload_before_image: bool = True
-    # Délai avant rechargement proactif du modèle après la dernière image
-    # (annulé si un tour LLM démarre avant l'expiration).
-    reload_after_image_seconds: float = 3.0
+    # Attente maximale (secondes) AVANT de recharger le modèle APRÈS la fin des
+    # images. Le rechargement n'est PAS basé uniquement sur ce délai : on
+    # attend surtout que ComfyUI ait relâché la VRAM (poll nvidia-smi, seuil
+    # ~6,5 Go libres). Ce paramètre devient un timeout de sécurité (0 = sans
+    # timeout). Annulé si un tour LLM démarre avant rechargement.
+    reload_after_image_seconds: float = 30.0
     # Options natives transmises via le champ `options` du payload
     # OpenAI-compatible (Ollama : num_ctx, top_k, seed, …). llama.cpp les
     # ignore — ctx-size, KV cache, etc. se règlent via les flags du serveur

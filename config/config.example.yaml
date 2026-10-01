@@ -90,10 +90,12 @@ llm:
   # (lancé en --lowvram) bascule en fallback CPU et chaque image prend des
   # minutes. Recommandé : true.
   unload_before_image: true
-  # Délai avant rechargement proactif après la dernière image. Un tour LLM
-  # qui démarre dans cette fenêtre annule le rechargement (il chargera le
-  # modèle lui-même, au bon moment). 0 = rechargement immédiat.
-  reload_after_image_seconds: 3
+  # Attente maximale (secondes) avant de recharger le modèle APRÈS la fin
+  # des images. Le rechargement attend QUE ComfyUI ait relâché la VRAM
+  # (poll nvidia-smi, seuil ~6,5 Go libres) — ce n'est pas un délai fixe.
+  # Ce paramètre est un timeout de sécurité (0 = sans timeout). Un tour LLM
+  # qui démarre avant le rechargement l'annule.
+  reload_after_image_seconds: 30.0
 
 server:
   host: "127.0.0.1"

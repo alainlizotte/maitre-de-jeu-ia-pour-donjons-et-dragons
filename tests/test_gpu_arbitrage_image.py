@@ -71,15 +71,15 @@ def _etat_propre():
 async def test_unload_avant_image_hors_tour():
     """Image en arrière-plan (aucun tour actif) → modèle déchargé d'abord."""
     j = _Journal()
-    gpu.configure_llm(unload=j.unload, load=j.load, before_comfy=True, reload_delay_s=0)
+    gpu.configure_llm(unload=j.unload, load=j.load, before_comfy=True, reload_delay_s=0.01)
 
     await gpu.comfy_begin()
     # Le unload doit avoir eu lieu AVANT que la génération démarre.
     assert j.appels == ["unload"]
     await gpu.comfy_end()
 
-    # Rechargement après la génération.
-    await asyncio.sleep(0.05)
+    # Rechargement après la génération (attend la libération VRAM simulée).
+    await asyncio.sleep(0.5)
     assert j.appels == ["unload", "load"]
 
 
@@ -181,12 +181,12 @@ async def test_tour_attend_un_unload_en_vol():
 async def test_reload_annule_si_tour_demarre_pendant_le_delai():
     """Un tour dans la fenêtre de délai annule le rechargement inutile."""
     j = _Journal()
-    gpu.configure_llm(unload=j.unload, load=j.load, before_comfy=True, reload_delay_s=5)
+    gpu.configure_llm(unload=j.unload, load=j.load, before_comfy=True, reload_delay_s=0.5)
 
     await gpu.comfy_begin()
-    await gpu.comfy_end()            # programme un reload dans 5 s
+    await gpu.comfy_end()            # programme un reload (attend VRAM)
     await gpu.turn_begin()           # le tour reprend la main
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.1)
     assert j.appels == ["unload"]    # toujours pas de load
     await gpu.turn_end()
 
@@ -217,13 +217,13 @@ async def test_sans_hooks_aucun_unload():
 async def test_images_simultanees_rechargement_unique():
     """Deux images qui se chevauchent → un seul rechargement final."""
     j = _Journal()
-    gpu.configure_llm(unload=j.unload, load=j.load, before_comfy=True, reload_delay_s=0)
+    gpu.configure_llm(unload=j.unload, load=j.load, before_comfy=True, reload_delay_s=0.01)
 
     await gpu.comfy_begin()
     await gpu.comfy_begin()
     await gpu.comfy_end()
     await gpu.comfy_end()
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(0.5)
     assert j.appels.count("load") == 1
 
 

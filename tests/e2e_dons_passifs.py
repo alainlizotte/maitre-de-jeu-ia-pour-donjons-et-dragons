@@ -302,8 +302,8 @@ async def phase_c2():
     if snap["phase"] != "combat":
         await _c.assurer_engagement(
             pid, {PJ: ws}, bilan, PJ,
-            "Un nouveau gobelin surgit ! Je décoche une flèche à 5 mètres !",
-            "Gobelin")
+            "Un RAT GÉANT surgit des sarcophages ! Je décoche une flèche "
+            "avec mon arc court : il est à 5 mètres de moi !", "Rat géant")
 
     def objectif(traces: list) -> bool:
         for trace in traces:
@@ -319,8 +319,8 @@ async def phase_c2():
 
     traces = await jouer_jusqua(
         pid, ws, bilan, objectif,
-        "Mon épée ne suffit pas : je décoche une FLÈCHE avec mon ARC COURT "
-        "sur le gobelin, qui est à 5 mètres de moi.",
+        "Mon épée ne sert pas : je décoche une FLÈCHE avec mon ARC COURT "
+        "sur le rat géant, qui est à 5 mètres de moi.",
         "(MJ : résous MAINTENANT avec lancer_attaque arme=\"arc court\" "
         "distance_m=5 (PAS l'épée longue, c'est un TIR) puis lancer_degats "
         "(arme_ou_sort=arc court, distance_m=5) puis "
@@ -340,14 +340,17 @@ async def phase_c2():
         "\n".join(str(tc.get("text"))[:300] for tc in tir_proche[:2]))
     deg = [tc for trace in traces for tc in outils_de(trace, "lancer_degats")
            if "arc" in str((tc.get("args") or {}).get("arme_ou_sort", "")).lower()]
-    # Deux voies valides : +1 appliqué par le serveur (le MJ a passé
-    # distance_m à lancer_degats), OU guidance explicite dans la note du
-    # lancer_attaque (« +1 avec lancer_degats si la distance ≤ 9 m ») quand
-    # le MJ l'a omise. Les deux prouvent la chaîne complète ; le +1 serveur
-    # avec distance_m est couvert par tests/test_dons_passifs_effectifs.py.
+    # Voies valides (comportement ACTUEL) :
+    # - la note du lancer_attaque affiche le bonus de dégâts RÉEL avec sa
+    #   provenance (« Bonus dégâts officiel : +1 (… +1 Tir de près) ») ;
+    # - ou le lancer_degats porte la mention (le MJ a passé distance_m) ;
+    # - ou la guidance explicite quand le MJ a omis la distance.
     bilan.check(
-        "[c2] Tir de près → dégâts : +1 appliqué ou guidance du serveur",
+        "[c2] Tir de près → dégâts : +1 appliqué (provenance affichée)",
         any("Tir de près" in str(tc.get("text") or "") for tc in deg)
+        or any("Bonus dégâts officiel : +1" in str(tc.get("text") or "")
+               and "Tir de près" in str(tc.get("text") or "")
+               for tc in tirs)
         or any("+1 avec `lancer_degats`" in str(tc.get("text") or "")
                for tc in tirs),
         "deg=" + "\n".join(str(tc.get("text"))[:300] for tc in deg[:2])

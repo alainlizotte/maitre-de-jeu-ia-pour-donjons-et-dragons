@@ -19,7 +19,7 @@ connectent depuis leur navigateur sur le réseau local.
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD |
-| **Qualité** | **662 tests pytest** (moteur de combat, carte, fiches, scénarios, robustesse bêta, E2E sans LLM) |
+| **Qualité** | **745 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) |
 | **Images** | ComfyUI (monstres, portraits, salles, scènes) — optionnel |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
 
@@ -129,6 +129,12 @@ connectent depuis leur navigateur sur le réseau local.
 - **Descriptions canoniques figées** par salle (protégées contre la réinvention) : en
   revenant sur ses pas, le groupe retrouve la salle **à l'identique** (décor + état des
   lieux : monstres vaincus, coffres vidés…), y compris après sortie/retour du donjon.
+- **Trésor canonique crédité mécaniquement** : les trésors rédigés à la main des salles
+  de scénario (« gemmes et pièces pour 200 po au total », « une bourse de 15 po »,
+  « 75 pc ») sont **crédités au PJ qui fouille** par le serveur — plus besoin que le MJ
+  écrive « +200 po » lui-même. Prix unitaire reconnu (« 10 po pièce » = pas un total),
+  un seul crédit par salle (marqueur persistant), bornes anti-fiction, et
+  **anti-double-crédit** quand le MJ a déjà chiffré le gain.
 - **Voyage hors donjon** conforme au SRD : durée réelle (vitesse, terrain, marche forcée),
   rencontres aléatoires, risque de s'égarer et météo.
 - **Carte du monde interactive** (Côte des Épées / Faerûn) : position du groupe par ville
@@ -183,6 +189,30 @@ correctifs, chacun couvert par des tests déterministes :
   résurrection appliquée par le serveur (pénalité officielle −1 niveau ou
   −2 CON au niveau 1) et retour à l'exploration.
 
+### 🔒 Passe « trésors, or & XP » (10/2026)
+Audit des trésors de donjon, de la récolte d'or et de l'XP, suivi de correctifs
+vérifiés par des tests déterministes :
+
+- **Rattrapage d'or débloqué** : le rattrapage des gains d'or narrés était du
+  **code mort** (import `_fiche_pj` inexistant → `ImportError` avalé) — l'or
+  narré n'avait donc jamais été crédité. Corrigé, et le bonus de dégâts PJ
+  (`_bonus_degats_pj`) également débloqué.
+- **Or au PJ actif** : le rattrapage d'or et d'objets crédite le **PJ actif**
+  (celui qui a trouvé le trésor) au lieu du premier de la liste — en 2J, le
+  joueur 2 ne recevait jamais l'or qu'il ramassait.
+- **« Ajouté à l'inventaire » honnête** : un objet hors catalogue sans poids est
+  refusé par `inventaire_ajouter` ; le rattrapage annonçait pourtant le succès.
+  Nouvelle tentative avec un poids par défaut, note seulement si l'ajout a eu lieu.
+- **Trésor canonique des salles crédité** : voir la section exploration.
+- **XP : documentation alignée** : la table DMG 3.5 est fidèle ; le commentaire
+  annonçait « la diagonale (CR = niveau) vaut 300 partout », faux aux niveaux
+  9/11/13/15/17 (267, valeur exacte de la table) — le code était juste, c'est le
+  commentaire qui mentait.
+- **Arbitrage VRAM robuste** : le garde de délai du rechargement VRAM ne se
+  déclenchait jamais quand `reload_delay_s = 0` (signifiant « recharger
+  immédiatement », pas « attendre indéfiniment ») — la borne s'applique désormais
+  toujours.
+
 ## 🚀 Démarrage rapide (Docker)
 
 Prérequis : Docker Desktop, et un modèle de chat pour **llama.cpp** (ou Ollama). Les images
@@ -220,10 +250,11 @@ py -m uvicorn server.main:app --port 8000            # → http://127.0.0.1:8000
 
 ## 🧪 Tests
 
-623 tests déterministes (sans LLM ni GPU) couvrent le moteur de combat complet (initiative,
+**745 tests déterministes** (sans LLM ni GPU) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
-refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, les
-scénarios et le pipeline d'orchestration :
+refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, le
+crédit du trésor canonique et le partage de l'or, les scénarios et le pipeline
+d'orchestration :
 
 ```bash
 py -m pytest tests -q
@@ -239,6 +270,8 @@ py -m pytest tests -q
 | `llm.tool_mode` | `prompt` | `native` / `prompt` (balises `<tool>`) / `auto` |
 | `llm.detect_simulation` | `true` | Corrige les « simulations » textuelles d'outils |
 | `llm.unload_after_turn` | `true` | Libère la VRAM après le tour (ou délai `unload_delay_minutes`) |
+| `llm.unload_before_image` | `true` | Décharge le modèle AVANT chaque image ComfyUI, le recharge après (`reload_after_image_seconds`) |
+| `llm.reload_after_image_seconds` | `30.0` | Attente max de VRAM libre avant rechargement (0 = recharger immédiatement) |
 | `game.combat_turn_timeout_seconds` | `300` | Passe automatiquement le tour d'un joueur silencieux |
 | `llm.stream_to_clients` | `false` | Narration livrée en bloc (`true` = token par token) |
 | `llm.max_stream_seconds` | `300` | Durée max d'une génération streamée (watchdog anti-blocage) |
@@ -260,15 +293,16 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 3. Le **PromptBuilder** assemble le system prompt : instructions MJ + état de partie
    (phase, combat, quête/bible de scénario, **carte du donjon**, mémoire de campagne) +
    sections dynamiques par phase + extraits RAG si actif.
-4. L'**Orchestrator** boucle en function-calling : le LLM choisit parmi **68 tools Python**
+4. L'**Orchestrator** boucle en function-calling : le LLM choisit parmi **76 tools Python**
    (`lancer_attaque`, `engager_combat`, `fiche_perso_*`, `carte_donjon_*`, `incanter_sort`,
    `inventaire_*`, `memoire_*`, …) **filtrés par phase de jeu** ; toute « simulation » de jet
    est détectée et rejetée.
 5. Chaque tool touche l'état persistant JSON (partie, fiches, bestiaire) ; les patches
    résultants sont broadcastés à tous les clients (PV, XP, carte, charge mis à jour en direct).
 6. Le **post-tour serveur** avance la rotation (action consommée = tour suivant), applique
-   les rattrapages (dégâts oubliés, combat narré en prose, exploration, soins, inventaire),
-   clôture le combat avec **XP officielle** et lance les générations d'images en arrière-plan.
+   les rattrapages (dégâts oubliés, combat narré en prose, exploration, soins, inventaire,
+   **trésor canonique de la salle**), clôture le combat avec **XP officielle** et lance les
+   générations d'images en arrière-plan.
 
 ## 📁 Structure
 
@@ -281,7 +315,8 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 │   ├── persos.py           ← calcul des caractéristiques, charge, apparence (fiches)
 │   ├── sorts.py            ← sorts 3.5 (niveaux, écoles, préparation)
 │   ├── llm/                ← client LLM, orchestrator (boucle tools), prompt_builder
-│   ├── game/               ← PartyState, moteur de combat (combat.py), XP/niveaux (xp.py)
+│   ├── game/               ← PartyState, moteur de combat (combat.py), XP/niveaux (xp.py),
+│   │                         arbitrage VRAM LLM ↔ ComfyUI (gpu.py)
 │   ├── tools/              ← dés, état, fiches, monstres, cartes (monde + donjon),
 │   │                         inventaire, manuels, scénarios, mémoire de campagne, voyage
 │   ├── rag/                ← chunker, embeddings, ChromaDB store, CLI ingestion
@@ -294,8 +329,9 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 ├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées,
 │                             génération de manifestes de donjons par scénario,
 │                             simulation)
-└── tests/                  ← 623 tests pytest déterministes (combat, carte,
-                              manifestes de scénario, fiches, E2E)
+└── tests/                  ← 745 tests pytest déterministes (combat, carte,
+                              manifestes de scénario, fiches, trésors/or,
+                              E2E)
 ```
 
 ## 🔒 Note juridique

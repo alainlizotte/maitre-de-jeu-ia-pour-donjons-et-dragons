@@ -1059,6 +1059,32 @@ def _dedupliquer_phrases(narration: str, seuil: int = 25) -> str:
     return "\n".join(sortie)
 
 
+# 🛡️ (correctif bandeau) — les tool texts contiennent des INSTRUCTIONS
+# destinées au LLM (function-calling) qui n'ont rien à faire dans le bandeau
+# affiché à la table : « — recopie CE bonus dans `lancer_degats` (jamais un
+# bonus improvisé) » est une consigne de recopie du modèle, pas une règle
+# visible du joueur. Les blocs player-facing (jets officiels du tour,
+# résolution automatique, events) sont épurés SANS toucher au texte envoyé
+# AU LLM (le MJ garde ses consignes de recopie).
+_RE_FRAGMENTS_LLM_TABLE = _re_mod.compile(
+    r"\s*—\s*recopie CE bonus dans `?lancer_degats`?[^.\n]*\.?"
+    r"|\s*\(jamais un bonus improvisé\)"
+)
+
+
+def _epure_pour_table(texte: str) -> str:
+    """Retire les fragments d'instruction LLM d'un texte affiché à la table.
+
+    « 💪 Bonus dégâts officiel : +3 (FOR 17 (+3)) — recopie CE bonus dans
+    `lancer_degats` (jamais un bonus improvisé). » →
+    « 💪 Bonus dégâts officiel : +3 (FOR 17 (+3)) » — le chiffre et sa
+    provenance restent, la consigne au modèle disparaît.
+    """
+    if not texte:
+        return ""
+    return _RE_FRAGMENTS_LLM_TABLE.sub("", texte).rstrip()
+
+
 # --------------------------------------------------------------------------- #
 #  🧹 Bêta (M3) — Assainissement de la narration FINALE avant diffusion.
 #
@@ -3380,7 +3406,8 @@ async def combat_engager(partie_id: str, payload: dict[str, Any]) -> dict[str, A
     return {
         "ok": not tr.text.startswith("⛔") and not tr.text.startswith("❌"),
         "text": tr.text,
-        "events": res_boucle.events,
+        # 🛡️ (correctif bandeau) : consignes LLM épurées des events affichés.
+        "events": [_epure_pour_table(ev) for ev in res_boucle.events],
         "patches": res_boucle.patches,
         "phase": etat.get("phase"),
         "courant": etat.get("courant_tour_pour"),
@@ -3413,7 +3440,8 @@ async def combat_boucle(partie_id: str, payload: dict[str, Any] | None = None) -
         ).load()
     return {
         "ok": True,
-        "events": res.events,
+        # 🛡️ (correctif bandeau) : consignes LLM épurées des events affichés.
+        "events": [_epure_pour_table(ev) for ev in res.events],
         "patches": res.patches,
         "phase": etat.get("phase"),
         "courant": etat.get("courant_tour_pour"),
@@ -3491,7 +3519,10 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
             if spec is None:
                 return None
             tr = await invoke_tool(spec, ctx, args)
-            events.append(tr.text)
+            # 🛡️ (correctif bandeau) : les consignes LLM (« recopie CE bonus
+            # dans lancer_degats… ») sont épurées du texte AFFICHÉ ; les
+            # contrôles ci-dessus lisent toujours le texte complet.
+            events.append(_epure_pour_table(tr.text))
             return tr
 
         tr_atk = await _run("lancer_attaque", {
@@ -3514,7 +3545,8 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
                 })
 
         res = await _boucle_combat(ctx, force_avance=True)
-        events.extend(res.events)
+        # 🛡️ (correctif bandeau) : consignes LLM épurées des events affichés.
+        events.extend(_epure_pour_table(ev) for ev in res.events)
         etat = PartyState(
             data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
         ).load()
@@ -8614,7 +8646,12 @@ on_status=on_status)
                         result.narration = (
                             (result.narration or "").rstrip()
                             + "\n\n⚔️ _Résolution automatique du tour :_\n\n"
-                            + "\n\n".join(_deja)
+                            + "\n\n".join(
+                                # 🛡️ (correctif bandeau) : consignes LLM
+                                # épurées du texte affiché à la table.
+                                _epure_pour_table(ev)
+                                for ev in _deja
+                            )
                         ).strip()
             except Exception as e_cp:                          # noqa: BLE001
                 print(f"[dnd35] Affichage clôture pre-run échoué (ignoré) : {e_cp}")
@@ -8630,7 +8667,10 @@ on_status=on_status)
                     "lancer_attaque", "lancer_degats", "lancer_sauvegarde",
                 )
                 _jets_txt = [
-                    (tc.get("text") or "").strip()
+                    # 🛡️ (correctif bandeau) : les consignes LLM (« recopie
+                    # CE bonus dans lancer_degats… ») sont épurées du texte
+                    # affiché à la table.
+                    _epure_pour_table((tc.get("text") or "").strip())
                     for tc in result.tool_calls_trace
                     if tc.get("name") in _JETS_AFFICHES and tc.get("ok")
                     and (tc.get("text") or "").strip()

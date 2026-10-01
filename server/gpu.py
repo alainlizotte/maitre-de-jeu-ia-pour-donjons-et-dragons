@@ -153,8 +153,14 @@ async def _recharger_apres_image() -> None:
                 if not _reload_needed:
                     return
 
-            if timeout_max > 0 and (asyncio.get_running_loop().time() - t0) >= timeout_max:
-                break  # sécurité : on recharge malgré tout après timeout
+            # 🛡️ Chantier sécurité : la borne devait s'appliquer « après le
+            # délai », mais le garde `timeout_max > 0` la court-circuitait
+            # quand `reload_delay_s = 0` — la boucle d'attente VRAM ne
+            # sortait alors JAMAIS (reload_delay_s=0 signifie « recharger
+            # immédiatement », pas « attendre indéfiniment la VRAM »).
+            # Observé en test : test_image_attend_la_fin_du_tour bloqué.
+            if (asyncio.get_running_loop().time() - t0) >= timeout_max:
+                break  # sécurité : on recharge malgré tout après le délai
 
             await asyncio.sleep(POLL)
 

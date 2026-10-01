@@ -250,17 +250,18 @@ def test_6_tresor_de_salle_est_du_texte():
 # --------------------------------------------------------------------------- #
 #  7. Rattrapage d'or narré : à qui est-il crédité ?
 # --------------------------------------------------------------------------- #
-def test_7_rattrapage_or_cible_le_premier_pj():
-    """Le rattrapage d'or crédite le PREMIER PJ de la liste, pas celui qui a
-    trouvé le trésor : la fonction ne reçoit aucun nom de PJ."""
+def test_7_rattrapage_or_cible_le_pj_actif():
+    """CHANTIER 2 appliqué : le rattrapage d'or crédite le PJ ACTIF (celui qui
+    a trouvé le trésor), pas le premier de la liste. Retombe sur le premier PJ
+    si le nom n'est pas résolvable (comportement antérieur conservé)."""
     from server import main as m
     src = inspect.getsource(m._appliquer_gains_inventaire_narres)
     sig = inspect.signature(m._appliquer_gains_inventaire_narres)
-    assert list(sig.parameters) == ["orch", "ctx", "on_event", "result"], (
-        f"signature modifiée : {list(sig.parameters)} — re-vérifier le test")
-    # Sélection par « première fiche trouvée » + break
-    assert re.search(r"for pj in etat\.get\(.pj.\)", src), "boucle de sélection modifiée"
-    assert "break" in src, "le break de sélection a disparu"
+    assert "nom_pj" in sig.parameters, (
+        "le rattrapage ne reçoit pas le nom du PJ crédité (chantier 2 non appliqué)")
+    # Sélection par le PJ ACTIF d'abord, repli sur le premier trouvé
+    assert "nom_pj" in src, "la sélection par le PJ actif a disparu"
+    assert "break" in src, "le break de repli a disparu"
     # Borne anti-fiction
     assert "200" in src, "la borne de 200 po a disparu"
 

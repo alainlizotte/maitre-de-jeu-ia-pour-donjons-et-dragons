@@ -475,11 +475,206 @@ def _objet_revendique_nom(narration: str) -> str:
     return ""
 
 
+# --------------------------------------------------------------------------- #
+#  🪙 Trésor canonique de salle → effet mécanique (chantier 3).
+#  Les 197 salles de scénario portent un `tresor` rédigé à la main avec des
+#  montants en clair (« gemmes et pièces pour 200 po au total », « une bourse
+#  de 15 po », « 75 pc »). Le MJ le NARRE mais n'écrit jamais « +200 po » :
+#  le rattrapage générique ne capte que « +N pièces » et l'or restait
+#  fantôme. On parse ici le trésor canonique de la salle COURANTE pour
+#  créditer LUI-MÊME le montant au PJ qui fouille.
+# --------------------------------------------------------------------------- #
+_RE_MONTANT_TRESOR = _re_mod.compile(
+    r"(?:(?:pour|de|en|total(?:e)?(?:\s*:)?|valeur)\s*)?"
+    r"(\d{1,4})\s*(?:po\b|pi[èe]ces?\s+d'or\b|pi[èe]ces?\s+dor\b|gp\b)",
+    _re_mod.IGNORECASE,
+)
+_RE_MONTANT_PC = _re_mod.compile(
+    r"(\d{1,5})\s*(?:pc\b|pi[èe]ces?\s+de\s+cuivre\b|cp\b)",
+    _re_mod.IGNORECASE,
+)
+# Mots qui signalent que le groupe CHERCHE / prend le trésor (et non qu'il
+# le voit de loin ou qu'on le mentionne en décor).
+_RE_FOUILLE_TRESOR = _re_mod.compile(
+    r"\b(fouill\w+|fouillez|fouille|ouvr\w+|ouvrez|ouvrez le coffre"
+    r"|ouvre le coffre|saisiss\w+|saisissez|prenez|prend\w+|ramass\w+"
+    r"|ramassez|videz|vide\w+|empt\w+|butin|pillage|pillez|recueill\w+"
+    r"|recueillez|empoch\w+|empopez|pochez)\b",
+    _re_mod.IGNORECASE,
+)
+# Mots qui signalent que le trésor est DÉJÀ pris (ne jamais re-créditer).
+_RE_TRESOR_DEJA_PRIS = _re_mod.compile(
+    r"\b(d[ée]j[àa]\s+(?:pris|vide|vid[ée]e|ramass\w+|empoch\w+)"
+    r"|plus\s+r[ie]en|coffre\s+vide|sarcophage\s+vide|bourse\s+vide)\b",
+    _re_mod.IGNORECASE,
+)
+
+
+def tresor_canonique_salle(etat: dict) -> str:
+    """Texte du trésor canonique de la salle COURANTE du donjon actif — ""
+    si aucun donjon, aucune salle ou aucun trésor."""
+    donjon = etat.get("donjon") or {}
+    if not donjon.get("id"):
+        return ""
+    pos = donjon.get("courant") or [0, 0]
+    try:
+        cx, cy = int(pos[0]), int(pos[1])
+    except (TypeError, ValueError, IndexError):
+        return ""
+    for salle in donjon.get("grille", []) or []:
+        if not isinstance(salle, dict):
+            continue
+        try:
+            sx, sy = int(salle.get("x", -1)), int(salle.get("y", -1))
+        except (TypeError, ValueError):
+            continue
+        if (sx, sy) == (cx, cy):
+            return str(salle.get("tresor") or "").strip()
+    return ""
+
+
+def _montants_tresor(texte: str) -> tuple[int, int]:
+    """Parse un texte de trésor → (or en pc, objets) ; (0, 0) si rien.
+
+    Gère les formulations réelles des 197 salles :
+    - « gemmes et pièces pour 200 po au total » → 2000 pc
+    - « une bourse de 15 po » → 150 pc
+    - « bourse du culte (75 pc) » → 75 pc
+    - « 10 po pièce » (prix unitaire) → 0 pc (pas un total) ;
+    - « gemmes de sardonyx … 10 po pièce » → 0 pc.
+    """
+    if not texte:
+        return 0, 0
+    t = texte
+    # Un « N po pièce/unité » est un PRIX UNITAIRE, pas un total : on le
+    # neutralise avant de chercher un total.
+    t = _re_mod.sub(r"\d{1,4}\s*po\b\s*(?:pi[èe]ce|unit[ée])", "", t,
+                    flags=_re_mod.IGNORECASE)
+    or_po = _RE_MONTANT_TRESOR.search(t)
+    or_pc = _RE_MONTANT_PC.search(t)
+    # La plus grande valeur en pc gagne (un « pour 200 po » écrase un « 15 po »).
+    candidats = []
+    if or_po:
+        candidats.append(int(or_po.group(1)) * 10)
+    if or_pc:
+        candidats.append(int(or_pc.group(1)))
+    total_pc = max(candidats) if candidats else 0
+    return total_pc, 0
+
+
+async def _appliquer_tresor_canonique(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Optional[Any],
+    result: Any,
+    nom_pj: str = "",
+) -> str:
+    """Crédite le trésor canonique de la salle courante quand le MJ narre la
+    fouille mais n'appelle AUCUN outil d'inventaire (chantier 3).
+
+    Bornes anti-fiction : or ≤ 2000 po, une seule fois par salle (marqueur
+    `tresor_pris` sur la salle). Renvoie la note mécanique ("" si rien)."""
+    if not nom_pj:
+        return ""
+    narration = result.narration or ""
+    if not _RE_FOUILLE_TRESOR.search(narration):
+        return ""
+    if _RE_TRESOR_DEJA_PRIS.search(narration):
+        return ""
+    # ⛔ Double-crédit : si le MJ a déjà écrit un gain chiffré (« +200 po »),
+    # le rattrapage générique (`_appliquer_gains_inventaire_narres`) l'a
+    # appliqué. Ne jamais re-créditer le même montant. Mêmes motifs que le
+    # rattrapage générique (le chiffre et l'unité peuvent être séparés par la
+    # fin de ligne).
+    if _re_mod.search(
+        r"inventaire\s+mis\s+à\s+jour[^+]*\+\s*\d+|"
+        r"\+\s*\d+\s*(?:pi[èe]ces?|objets?|po\b|or\b|pc\b)",
+        narration,
+        _re_mod.IGNORECASE,
+    ):
+        return ""
+    try:
+        from .tools.fiches import _load_fiche, _save_fiche
+        etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+    except Exception:                                            # noqa: BLE001
+        return ""
+    texte = tresor_canonique_salle(etat)
+    if not texte:
+        return ""
+    # ⛔ Déjà crédité pour cette salle : marqueur persistant sur la salle.
+    donjon = etat.get("donjon") or {}
+    try:
+        cx, cy = int((donjon.get("courant") or [0, 0])[0]), \
+            int((donjon.get("courant") or [0, 0])[1])
+    except (TypeError, ValueError, IndexError):
+        return ""
+    deja_pris = False
+    for salle in donjon.get("grille", []) or []:
+        if not isinstance(salle, dict):
+            continue
+        try:
+            if (int(salle.get("x", -1)), int(salle.get("y", -1))) == (cx, cy):
+                deja_pris = bool(salle.get("tresor_pris"))
+                break
+        except (TypeError, ValueError):
+            continue
+    if deja_pris:
+        return ""
+    total_pc, _objets = _montants_tresor(texte)
+    if total_pc <= 0:
+        return ""
+    # Borne anti-fiction (le trésor canonique est écrit par l'auteur, mais un
+    # parseur déréglé ne doit jamais créditer une fortune).
+    if total_pc > 20_000:
+        return ""
+    try:
+        fiche = _load_fiche(ctx, nom_pj)
+        if fiche is None:
+            return ""
+        fiche["or"] = int(fiche.get("or", 0) or 0) + total_pc
+        _save_fiche(ctx, nom_pj, fiche)
+    except Exception as e_or:                                    # noqa: BLE001
+        print(f"[dnd35] Trésor canonique échoué : {e_or}")
+        return ""
+    # Marque la salle pour ne jamais re-créditer.
+    try:
+        for salle in donjon.get("grille", []) or []:
+            if not isinstance(salle, dict):
+                continue
+            try:
+                if (int(salle.get("x", -1)), int(salle.get("y", -1))) == (cx, cy):
+                    salle["tresor_pris"] = True
+                    break
+            except (TypeError, ValueError):
+                continue
+        # 🛡️ Sauvegarde dans le MÊME data_dir que la lecture (ctx.data_dir) :
+        # l'ancien helper écrivait dans cfg.paths.data_dir, un autre dossier —
+        # le marqueur `tresor_pris` ne survivait pas à l'écriture.
+        _err_save = PartyState(data_dir=ctx.data_dir,
+                               partie_id=ctx.partie_id).save(etat)
+        _etat_save = None if _err_save else donjon
+    except Exception:                                            # noqa: BLE001
+        _etat_save = None
+    idx = next(
+        (i for i, p in enumerate(etat.get("pj") or []) if p.get("nom") == nom_pj),
+        0,
+    )
+    result.state_patches.append(
+        {"pj.%d.or" % idx: fiche["or"], "pj_updated": True})
+    if _etat_save:
+        result.state_patches.append({"donjon": donjon})
+    return (
+        f"🪙 **Trésor du scénario crédité à {nom_pj}** : {total_pc // 10} po "
+        f"(or total : {fiche['or'] // 10} po) — « {texte[:80]}»"
+    )
+
+
 async def _appliquer_gains_inventaire_narres(
     orch: Orchestrator,
     ctx: ToolContext,
     on_event: Optional[Any],
     result: Any,
+    nom_pj: str = "",
 ) -> str:
     """Rattrapage DÉTERMINISTE des gains d'inventaire que le MJ a NARRÉS dans
     un bloc « Inventaire mis à jour » (partie réelle : « Pièces d'or : +3 »
@@ -516,17 +711,28 @@ async def _appliquer_gains_inventaire_narres(
             # en pièces d'OR (po) → ×10 pc. Bornes : ≤ 200 po.
             if montant > 200:
                 continue
-            from .tools.fiches import _fiche_pj as _charger_fiche
+            from .tools.fiches import _load_fiche as _charger_fiche
             etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+            # 🛡️ Chantier 2 : le créditaire est le PJ ACTIF (celui qui a
+            # trouvé le trésor), pas le premier de la liste. En 2J, l'ancien
+            # code créditait toujours le joueur 1 — le joueur 2 ne recevait
+            # JAMAIS l'or qu'il ramassait. Retombe sur le premier PJ si le
+            # nom n'est pas résolvable (comportement antérieur conservé).
             cible_or = None
-            for pj in etat.get("pj") or []:
-                try:
-                    fiche = _charger_fiche(ctx, str(pj.get("nom") or ""))
-                except Exception:                            # noqa: BLE001
-                    fiche = None
-                if fiche is not None:
-                    cible_or = str(fiche.get("nom"))
-                    break
+            if nom_pj:
+                for pj in etat.get("pj") or []:
+                    if str(pj.get("nom") or "") == nom_pj:
+                        cible_or = nom_pj
+                        break
+            if cible_or is None:
+                for pj in etat.get("pj") or []:
+                    try:
+                        fiche = _charger_fiche(ctx, str(pj.get("nom") or ""))
+                    except Exception:                        # noqa: BLE001
+                        fiche = None
+                    if fiche is not None:
+                        cible_or = str(fiche.get("nom"))
+                        break
             if cible_or is None:
                 continue
             # Patch direct de l'or de la fiche (pas de tool dédié : le champ
@@ -557,10 +763,18 @@ async def _appliquer_gains_inventaire_narres(
             if not nom_objet or nom_objet.lower().startswith("total"):
                 continue
             etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
-            cible_obj = next(
-                (str(p.get("nom") or "") for p in (etat.get("pj") or [])),
-                None,
-            )
+            # 🛡️ Chantier 2 : même règle pour les objets — le PJ ACTIF.
+            cible_obj = None
+            if nom_pj:
+                for pj in etat.get("pj") or []:
+                    if str(pj.get("nom") or "") == nom_pj:
+                        cible_obj = nom_pj
+                        break
+            if cible_obj is None:
+                cible_obj = next(
+                    (str(p.get("nom") or "") for p in (etat.get("pj") or [])),
+                    None,
+                )
             if not cible_obj:
                 continue
             tr = await orch.execute_tool_direct(
@@ -569,7 +783,20 @@ async def _appliquer_gains_inventaire_narres(
                  "portee": "quete"},
                 ctx, on_event, result,
             )
-            if tr is not None and not tr.text.startswith(("❌", "⛔")):
+            # 🛡️ Chantier 2 : un objet HORS catalogue sans `poids` est REFUSÉ
+            # par `inventaire_ajouter` (charge non calculable) — le code
+            # antérieur annonçait « ajouté » alors que l'outil avait refusé.
+            # Nouvelle tentative avec un poids par défaut (0,1 kg) : le loot
+            # atterrit réellement dans l'inventaire.
+            if tr is not None and tr.text.startswith("⚠️") \
+                    and "inconnu du catalogue" in tr.text:
+                tr = await orch.execute_tool_direct(
+                    "inventaire_ajouter",
+                    {"nom": cible_obj, "objet": nom_objet, "quantite": montant,
+                     "poids": 0.1, "portee": "quete"},
+                    ctx, on_event, result,
+                )
+            if tr is not None and not tr.text.startswith(("❌", "⛔", "⚠️")):
                 notes.append(
                     f"📦 **Rattrapage serveur** : {nom_objet} ×{montant} "
                     f"ajouté à l'inventaire de {cible_obj}.")
@@ -4262,7 +4489,7 @@ async def _bonus_degats_pj(ctx: ToolContext, attaquant: str, arme: str) -> int:
     """Bonus de dégâts officiel d'un PJ (mod. FOR, ×1,5 à deux mains, +0
     distance) lu sur sa fiche — 0 si fiche absente ou cas non couvert."""
     try:
-        from .tools.fiches import _fiche_pj as _charger_fiche
+        from .tools.fiches import _load_fiche as _charger_fiche
         fiche = _charger_fiche(ctx, attaquant)
         if fiche is None:
             return 0
@@ -8146,8 +8373,10 @@ on_status=on_status)
                     # 📦 Gain chiffré dans un bloc « Inventaire mis à jour » →
                     # application DÉTERMINISTE (le rejeu LLM ne produisait pas
                     # l'appel — partie réelle : loot narré jamais crédité).
+                    # 🛡️ Chantier 2 : le PJ actif est crédité, pas le premier
+                    # de la liste.
                     _note_inv = await _appliquer_gains_inventaire_narres(
-                        orch, ctx, on_event, result)
+                        orch, ctx, on_event, result, nom_pj=actif_avant)
                     if _note_inv:
                         result.narration = (
                             (result.narration or "").rstrip()
@@ -8172,6 +8401,28 @@ on_status=on_status)
                                                 on_event, _obj_inv,
                                                 "inventaire objet",
 on_status=on_status)
+
+                # --- 5quater-f. 🪙 Trésor canonique de salle → effet mécanique
+                # (chantier 3). Les 197 salles de scénario portent un `tresor`
+                # rédigé à la main avec des montants en clair, mais le MJ le
+                # narre sans jamais écrire « +200 po » : le rattrapage
+                # générique ne capte que « +N pièces ». Le serveur crédite
+                # LUI-MÊME le montant canonique au PJ actif qui fouille —
+                # une seule fois par salle (marqueur `tresor_pris`).
+                if inv_pas_appele:
+                    try:
+                        _note_tres = await _appliquer_tresor_canonique(
+                            orch, ctx, on_event, result, nom_pj=actif_avant)
+                        if _note_tres:
+                            result.narration = (
+                                (result.narration or "").rstrip()
+                                + "\n\n" + _note_tres
+                            ).strip()
+                            print("[dnd35] Trésor canonique de salle crédité "
+                                  f"({actif_avant}).")
+                    except Exception as e_tres:                 # noqa: BLE001
+                        print(f"[dnd35] Rattrapage trésor canonique échoué "
+                              f"(ignoré) : {e_tres}")
 
                 # --- 5quater-d2. ⚔️ Engagement de combat NARRÉ sans outil
                 # (phase exploration). Le LLM écrit « Engagement du combat /

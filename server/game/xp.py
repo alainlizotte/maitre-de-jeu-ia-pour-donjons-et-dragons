@@ -24,9 +24,14 @@ from typing import Any, Optional
 #  - BASE = ligne « niveau 1 » de la table (progression officielle par CR) ;
 #  - FACTEUR double tous les 2 niveaux à partir du niveau 5 :
 #    1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, …, 1024 (niveau 20).
-#  Invariants garantis : la diagonale (CR = niveau) vaut 300 partout et un
-#  groupe de 4 PJ monte d'un niveau toutes les ~13 rencontres équivalentes
-#  (DMG 3.5 « Awarding Experience »).
+#  Structure fidèle à la table DMG 3.5 p.38 : la ligne « niveau 1 » est la
+#  colonne CR officielle, et chaque ligne supérieure la divise par le facteur
+#  de niveau. Conséquence : la diagonale (CR = niveau) ne vaut 300 QUE pour
+#  les CR dont la valeur de niveau 1 est un multiple exact de 300 × facteur
+#  (CR 1-8, 10, 12, 14, 16, 18, 19, 20). Pour CR 9, 11, 13, 15 et 17, la
+#  division tombe sur 266,67 → 267 : c'est la VALEUR DE LA TABLE, pas un bug.
+#  Un groupe de 4 PJ monte d'un niveau toutes les ~13 rencontres équivalentes
+#  au niveau 4 (DMG 3.5 « Awarding Experience »).
 #  NB : le Manuel arrondit quelques cellules « joliment » (2100 pour 2133) ;
 #  on utilise ici l'arrondi standard au supérieur (int(x+0.5)).
 # --------------------------------------------------------------------------- #

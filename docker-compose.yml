@@ -61,8 +61,7 @@ services:
   #   3. Avoir Docker Desktop avec support GPU (WSL2)
   #
   # Flags :
-  #   -ngl 99           : toutes les couches sur GPU (modèle entier en VRAM,
-  #                       gemma-4-E4B-it-Q4_0 ~2,5 Go de poids)
+  #   -ngl 99           : toutes les couches sur GPU (modèle entier en VRAM)
   #   -c 32768          : taille du contexte (= max_context_tokens projet)
   #   -n 8192           : max tokens générés par réponse (= max_tokens projet)
   #   -ctk q8_0         : KV cache K en 8-bit
@@ -72,15 +71,26 @@ services:
   #   --sleep-idle-seconds 300 : unload après 5 min d'inactivité
   #   --spec-type draft-mtp --spec-draft-n-max 4 : MTP (speculative decoding, ~1.6-2x plus rapide)
   #
-  # VRAM estimée (Q4_0 + Q8 KV 32768 ctx, -ngl 99) : ~5-6 Go / 8 Go disponible.
+  # ⚠️ VRAM MESURÉE (nvidia-smi, RTX 3060 Ti 8192 Mo) — et non estimée :
+  #   poids Qwen3.5-9B-Q4_K_M-MTP (fichier 5,47 Go) ................... 5 601 Mo
+  #   KV cache 32k q8_0 (qwen35 = hybride SSM/attention,
+  #     full_attention_interval=4 → 9 couches K/V sur 33) ..............   576 Mo
+  #   contexte CUDA + buffers compute/graph ...........................   246 Mo
+  #   TOTAL modèle chargé ............................................. 6 423 Mo
+  # → il ne reste que ~950 Mo : de quoi tenir le contexte CUDA, PAS un
+  #   checkpoint SD. D'où `llm.unload_before_image: true` — le modèle est
+  #   déchargé avant chaque génération ComfyUI, rechargé ~3 s après.
+  # ⚠️ `-ngl 99` force l'offload TOTAL même quand le modèle ne tient pas
+  #   (log « failed to fit params to free device memory: n_gpu_layers already
+  #   set by user to 99, abort »). Baisser à `-ngl 33` si la VRAM manque.
   llamacpp:
-    # 🚀 MTP (Multi-Token Prediction, ~1,6-2x sur la génération) : requiert
-    # l'image fork « llamacpp-spark:server-cuda » (XHToken). État actuel :
-    # image ABSENTE du poste — pour activer :
-    #   1) docker pull/construire llamacpp-spark:server-cuda
-    #   2) image: llamacpp-spark:server-cuda
-    #   3) décommenter --spec-type draft-mtp et --spec-draft-n-max ci-dessous
-    # (le llama.cpp standard ignore/échoue sur ces flags : ne PAS activer tel quel)
+    # 🚀 MTP (Multi-Token Prediction) : ACTIVÉ et vérifié en production sur
+    # l'image officielle (le MTP est fusionné dans llama.cpp, PR 20533) —
+    # plus besoin du fork « llamacpp-spark ». Preuve dans les logs :
+    #   common_speculative_init_result: creating MTP draft context against…
+    #   slot print_timing: draft acceptance = 0.98 (71 accepted / 72)
+    # L'acceptance varie fortement selon le tour (0,18 sur un tour
+    # tool-calling dense, 0,98 sur de la narration) : c'est normal.
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: llamacpp
     ports:

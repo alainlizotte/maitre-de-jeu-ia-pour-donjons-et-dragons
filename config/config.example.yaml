@@ -82,6 +82,19 @@ llm:
   unload_after_turn: true
   unload_delay_minutes: 5
 
+  # Décharge le modèle LLM AVANT chaque génération d'image ComfyUI (demandée
+  # hors tour — illustrations d'arrière-plan, portraits, salles), et le
+  # recharge peu après. Sur un GPU 8 Go avec Qwen3.5-9B-Q4_K_M-MTP (ctx 32k
+  # q8_0, MTP actif) le modèle chargé occupe 6,27 Go : il ne reste que
+  # ~950 Mo, pas assez pour un checkpoint SD. Sans ce unload, ComfyUI
+  # (lancé en --lowvram) bascule en fallback CPU et chaque image prend des
+  # minutes. Recommandé : true.
+  unload_before_image: true
+  # Délai avant rechargement proactif après la dernière image. Un tour LLM
+  # qui démarre dans cette fenêtre annule le rechargement (il chargera le
+  # modèle lui-même, au bon moment). 0 = rechargement immédiat.
+  reload_after_image_seconds: 3
+
 server:
   host: "127.0.0.1"
   port: 8000

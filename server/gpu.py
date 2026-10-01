@@ -106,30 +106,72 @@ async def _decharger_avant_image() -> bool:
 
 
 async def _recharger_apres_image() -> None:
-    """Recharge le modèle après la dernière génération d'image.
+    """Recharge le modèle APRÈS que ComfyUI a relâché la VRAM.
 
-    Attend `_reload_delay_s` : si un tour démarre (ou si une autre image est
-    soumise) dans la fenêtre, le rechargement est inutile — le tour luira
-    `ensure_model_loaded()` lui-même, au bon moment.
+    On attend que la VRAM libre soit suffisante pour charger le modèle LLM
+    (~6,4 Go sur cette config), plutôt qu'un délai fixe arbitraire. Cela évite
+    de recharger pendant que ComfyUI conserve encore ses allocations CUDA.
+
+    Si un tour démarre (ou une autre image est soumise) dans la fenêtre,
+    le rechargement est annulé — le tour/flux se chargera lui-même au bon moment.
     """
     global _reload_task, _reload_needed
+
+    async def _vram_libre_mo() -> int:
+        try:
+            import subprocess
+
+            p = await asyncio.create_subprocess_exec(
+                "nvidia-smi",
+                "--query-gpu=memory.free",
+                "--format=csv,noheader,nounits",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            out, _ = await p.communicate()
+            return int(out.decode("utf-8", "replace").strip())
+        except Exception:
+            return 0
+
+    # Seuil de sécurité : ~6,5 Go libres pour charger Qwen3.5-9B-Q4_K_M-MTP
+    # (6,42 Go mesurés) sans pousser ComfyUI à basculer au mauvais moment.
+    SEUIL_VRAM_LIBRE_MO = 6500
+    POLL = 0.5
+    timeout_max = max(0.0, float(_reload_delay_s)) if "_reload_delay_s" in globals() else 30.0
+    t0 = asyncio.get_running_loop().time()
+
     try:
-        if _reload_delay_s:
-            await asyncio.sleep(_reload_delay_s)
+        while True:
+            libre = await _vram_libre_mo()
+            if libre >= SEUIL_VRAM_LIBRE_MO:
+                break
+
+            # Conditions d'annulation
+            async with _cv:
+                if _turns > 0 or _jobs > 0:
+                    return
+                if not _reload_needed:
+                    return
+
+            if timeout_max > 0 and (asyncio.get_running_loop().time() - t0) >= timeout_max:
+                break  # sécurité : on recharge malgré tout après timeout
+
+            await asyncio.sleep(POLL)
+
         async with _cv:
             if _turns > 0 or _jobs > 0:
-                return  # un tour / une image a repris la main
-            # Images qui se chevauchent : une seule recharge pour toutes.
+                return
             if not _reload_needed:
                 return
             _reload_needed = False
+
         async with _model_lock:
             if _load_llm is not None:
                 await _load_llm()
     except asyncio.CancelledError:
         pass
-    except Exception:                                          # noqa: BLE001
-        pass  # le prochain ensure_model_loaded() reprendra le relais
+    except Exception:  # noqa: BLE001
+        pass
     finally:
         _reload_task = None
 

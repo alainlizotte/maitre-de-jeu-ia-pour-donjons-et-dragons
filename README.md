@@ -208,10 +208,15 @@ vérifiés par des tests déterministes :
   annonçait « la diagonale (CR = niveau) vaut 300 partout », faux aux niveaux
   9/11/13/15/17 (267, valeur exacte de la table) — le code était juste, c'est le
   commentaire qui mentait.
-- **Arbitrage VRAM robuste** : le garde de délai du rechargement VRAM ne se
-  déclenchait jamais quand `reload_delay_s = 0` (signifiant « recharger
+- **Arbitrage VRAM robuste** : deux correctifs — (1) la création et la lecture du
+  sous-processus `nvidia-smi` sont désormais **bornées** (5 s) : un nvidia-smi figé
+  (GPU saturé, contention pilote) ne bloque plus jamais le rechargement, et l'annulation
+  d'une tâche en attente reste délivrable ; (2) le garde de délai du rechargement VRAM ne
+  se déclenchait jamais quand `reload_delay_s = 0` (signifiant « recharger
   immédiatement », pas « attendre indéfiniment ») — la borne s'applique désormais
-  toujours.
+  toujours. **Ces deux défauts bloquaient la suite de tests complète** (interblocage
+  dans le teardown de pytest-asyncio, tâche `nvidia-smi` jamais terminée) : réparés,
+  les 745 tests tournent verts en ~2 min.
 
 ## 🚀 Démarrage rapide (Docker)
 
@@ -250,11 +255,11 @@ py -m uvicorn server.main:app --port 8000            # → http://127.0.0.1:8000
 
 ## 🧪 Tests
 
-**745 tests déterministes** (sans LLM ni GPU) couvrent le moteur de combat complet (initiative,
+**745 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
 refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, le
 crédit du trésor canonique et le partage de l'or, les scénarios et le pipeline
-d'orchestration :
+d'orchestration — **suite verte en ~2 min** :
 
 ```bash
 py -m pytest tests -q

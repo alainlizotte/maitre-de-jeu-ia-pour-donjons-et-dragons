@@ -118,20 +118,42 @@ async def _recharger_apres_image() -> None:
     global _reload_task, _reload_needed
 
     async def _vram_libre_mo() -> int:
+        """VRAM libre (Mo) — 0 si indisponible ou bloqué.
+
+        🛡️ Chantier sécurité : la création du sous-processus et sa lecture
+        sont BORNÉES. Observé en test : `BaseSubprocessTransport.
+        _connect_pipes` ne se résolvait JAMAIS dans la boucle de
+        pytest-asyncio — la tâche restait pendante indéfiniment (l'appel
+        n'avait aucun timeout, et `Task.cancel()` n'était jamais délivré
+        pendant l'attente I/O brute), si bien que le teardown de
+        pytest-asyncio attendait sa fin à l'infini.
+        En production : un nvidia-smi figé (GPU saturé, contention pilote)
+        ne doit JAMAIS bloquer le rechargement du modèle."""
+        p = None
         try:
             import subprocess
 
-            p = await asyncio.create_subprocess_exec(
-                "nvidia-smi",
-                "--query-gpu=memory.free",
-                "--format=csv,noheader,nounits",
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+            p = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    "nvidia-smi",
+                    "--query-gpu=memory.free",
+                    "--format=csv,noheader,nounits",
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                ),
+                timeout=5.0,
             )
-            out, _ = await p.communicate()
+            out, _ = await asyncio.wait_for(p.communicate(), timeout=5.0)
             return int(out.decode("utf-8", "replace").strip())
         except Exception:
             return 0
+        finally:
+            # Ne laisse jamais un sous-processus en vol derrière soi.
+            if p is not None and p.returncode is None:
+                try:
+                    p.kill()
+                except Exception:                        # noqa: BLE001
+                    pass
 
     # Seuil de sécurité : ~6,5 Go libres pour charger Qwen3.5-9B-Q4_K_M-MTP
     # (6,42 Go mesurés) sans pousser ComfyUI à basculer au mauvais moment.

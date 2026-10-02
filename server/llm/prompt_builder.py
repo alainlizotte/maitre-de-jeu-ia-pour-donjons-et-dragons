@@ -567,6 +567,18 @@ def _scenario_bible_bloc(
                         + _lbl_o.get(_o.get("statut", ""), str(_o.get("statut") or ""))
                         + (f" — {_req_txt}" if _req_txt else "")
                     )
+                    # Partie 5819af94 : le `detail` de l'objectif (« PRÉREQUIS
+                    # ABSOLU : vaincre Nulentok dans son groove » ; « Au départ,
+                    # Teleshann remet au groupe le parchemin de la route et la
+                    # fiole de vérité ») n'était injecté QUE via le bloc CARTE
+                    # DU DONJON (trame du manifeste) — absent au tour d'INTRO,
+                    # AVANT `carte_donjon_entrer`. Le MJ matérialisait donc
+                    # l'objet-clé (la Couronne remise en boîte par Teleshann)
+                    # au lieu de l'ancrer chez Zendar Nulentok. Injection du
+                    # détail ICI aussi : visible dès le premier tour.
+                    _det_o = str(_o.get("detail") or "").strip()
+                    if _det_o:
+                        lignes.append(f"     ↳ {_det_o[:400]}")
                 _manq_o = _info_o.get("manquants") or []
                 if _manq_o:
                     lignes.append(

@@ -107,10 +107,89 @@ def _lieu_depart_canonique(etat: dict[str, Any]) -> str:
     )
 
 
+def _ouverture_deja_jouee(etat: dict[str, Any]) -> bool:
+    """La scène d'ouverture a-t-elle déjà été jouée (et journalisée) ?
+
+    L'événement « Début de l'aventure : … » est consigné par
+    `_journaliser_ouverture_si_besoin` (main.py) au premier tour narré —
+    sa présence dans `histoire` est le marqueur fiable : l'ouverture est
+    DERNIÈRE, ne plus jamais la rejouer (partie 7177d819 : le MJ a
+    re-narré l'acceptation de la mission et la remise du matériel alors
+    que l'ouverture était jouée depuis cinq tours)."""
+    for e in etat.get("histoire") or []:
+        if isinstance(e, dict) and str(
+            e.get("evenement") or ""
+        ).strip().startswith("Début de l'aventure"):
+            return True
+    return False
+
+
+def _est_salle_entree(donjon: dict[str, Any], salle: dict[str, Any]) -> bool:
+    """La salle donnée est-elle la salle d'entrée canonique du plan (la
+    première salle `visitee=True` de la grille — celle où l'ouverture
+    s'est jouée) ?"""
+    try:
+        cxy = (int(salle.get("x")), int(salle.get("y")))
+    except (TypeError, ValueError):
+        return False
+    for s in donjon.get("grille") or []:
+        if not isinstance(s, dict) or not s.get("visitee"):
+            continue
+        try:
+            return (int(s.get("x")), int(s.get("y"))) == cxy
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def _portes_salle(salle: dict[str, Any]) -> list[str]:
     """Portes OUVERTES d'une salle, dans l'ordre géographique."""
     p = salle.get("portes") or {}
     return [d for d in ("nord", "est", "sud", "ouest") if p.get(d)]
+
+
+# Marqueurs de GENRE dans les entrées PNJ du manifeste (description entre
+# parenthèses) : « Thukmuul Teleshann (magesteresse NG de la Tour de
+# l'Équilibre…) », « Le prêtre de Cyric (gardien de l'oasis…) », « NG hf
+# W17 »… Marqueurs NON ambigus uniquement : on ne devine JAMAIS le genre
+# d'un PNJ sans marque claire — un contresens de genre est une erreur de jeu.
+_GENRE_FEMININ_RE = re.compile(
+    r"(magesteresse|prêtresse|sorcière|déesse|femme|\bhf\b)", re.IGNORECASE,
+)
+_GENRE_MASCULIN_RE = re.compile(
+    r"(\bprêtre\b|\bdieu\b|\bhomme\b|\bhm\b)", re.IGNORECASE,
+)
+
+
+def _genres_pnj_donjon(etat: dict[str, Any]) -> list[str]:
+    """Lignes « PNJ — GENRE » extraites des entrées `pnj` des salles du
+    donjon (manifeste du scénario). Seuls les PNJ avec un marqueur de genre
+    NON ambigu sont listés ; les autres sont ignorés (jamais de supposition).
+
+    Partie ae358455 : le MJ disait « Il tend la fiole… », « murmure le
+    magicien » de Thukmuul Teleshann (magesteresse — FÉMININ) : le genre des
+    PNJ du module n'était injecté nulle part dans le prompt."""
+    vus: dict[str, str] = {}
+    for s in ((etat.get("donjon") or {}).get("grille") or []):
+        if not isinstance(s, dict):
+            continue
+        for p in (s.get("pnj") or []):
+            if not isinstance(p, str) or not p.strip():
+                continue
+            # « Nom (description — rôle) »
+            m = re.match(r"\s*([^()]+?)\s*\((.+)\)\s*$", p)
+            if not m:
+                continue
+            nom = m.group(1).strip()
+            desc = m.group(2)
+            cle = nom.lower()
+            if cle in vus:
+                continue
+            if _GENRE_FEMININ_RE.search(desc):
+                vus[cle] = f"{nom} — FÉMININ"
+            elif _GENRE_MASCULIN_RE.search(desc):
+                vus[cle] = f"{nom} — MASCULIN"
+    return list(vus.values())
 
 
 def _salle_visitee(donjon: dict[str, Any], salle: str) -> bool:
@@ -249,6 +328,22 @@ def _donjon_bloc(etat: dict[str, Any]) -> str:
         "PNJ NI clé NI objet de quête NI créature absents de ce bloc et du "
         "manifeste du scénario."
     )
+    # Partie 7177d819 : la description figée de la salle d'entrée EST la
+    # scène d'ouverture (Teleshann confie la quête) — l'ancre « reprends-la
+    # à l'identique » a re-attiré le MJ dans la re-narration de l'intro
+    # (quête re-acceptée, parchemin et fiole re-remis) alors que l'ouverture
+    # était jouée et journalisée dans `histoire`. L'anti-répétition ne voit
+    # pas ces reformulations (chevauchement 20 % < seuil 40 %) : avertissement
+    # dédié tant que le groupe se trouve dans la salle d'entrée.
+    if _ouverture_deja_jouee(etat) and _est_salle_entree(donjon, cur):
+        lignes.append(
+            "  ⚠️ SCÈNE D'OUVERTURE DÉJÀ JOUÉE : cette salle est celle de "
+            "l'ouverture (événement « Début de l'aventure » journalisé) — ne "
+            "la REJOUE PAS : ni acceptation de mission à nouveau, ni remise "
+            "d'objets de quête une seconde fois. Le groupe poursuit son "
+            "action EN COURS (voir l'historique récent) : narre la suite "
+            "(voyage, exploration, rencontre) à partir de là."
+        )
     lignes.append(
         "  Portes EXISTANTES : "
         + (", ".join(portes_cur) if portes_cur else "AUCUNE (cul-de-sac)")
@@ -287,21 +382,57 @@ def _donjon_bloc(etat: dict[str, Any]) -> str:
     etapes_trame = donjon.get("etapes") or []
     if etapes_trame:
         lignes.append("📜 TRAME DU SCÉNARIO (ordre à respecter) :")
+        _courante_passee = False
+        # Salle d'entrée du plan : sa `visitee=True` vaut dès la création —
+        # elle ne peut PAS servir à marquer une étape ACCOMPLIE (partie
+        # 7177d819 : l'étape finale « Restaurer la Couronne — salle (0,0) »
+        # s'affichait ✅ ACCOMPLIE dès le départ, en contradiction avec le
+        # bloc OBJECTIFS DE QUÊTE qui la montre ⚪ à venir).
+        _entree_xy = None
+        for s in donjon.get("grille") or []:
+            if isinstance(s, dict) and s.get("visitee"):
+                try:
+                    _entree_xy = (int(s.get("x")), int(s.get("y")))
+                    break
+                except (TypeError, ValueError):
+                    continue
         for i, e in enumerate(etapes_trame, 1):
             if not isinstance(e, dict):
                 continue
             statut = ""
             salle = str(e.get("salle") or "").strip()
             if salle:
-                statut = (
-                    " — ✅ ACCOMPLIE" if _salle_visitee(donjon, salle)
-                    else " — ⬜ À FAIRE (salle " + salle + ")"
-                )
+                try:
+                    _xy = [int(p) for p in salle.split(",") if p.strip()]
+                    _salle_xy = (int(_xy[-2]), int(_xy[-1]))
+                except (TypeError, ValueError, IndexError):
+                    _salle_xy = None
+                if _salle_visitee(donjon, salle) and _salle_xy != _entree_xy:
+                    statut = " — ✅ ACCOMPLIE"
+                else:
+                    statut = " — ⬜ À FAIRE (salle " + salle + ")"
             detail = str(e.get("detail") or "").strip()
+            # Partie 7177d819 : le détail d'une étape À VENIR (liste des
+            # sites-gemmes « Beljuril — Ruines de Sarr (4,1) ; … ») était
+            # injecté tel quel — le MJ l'a recollé comme destination du
+            # parchemin de la route au lieu de suivre la note de la salle
+            # d'entrée. Marquage explicite + TRONCATURE à la première phrase
+            # (partie ae358455 : le garde de marquage seul n'a PAS suffi —
+            # le modèle recollait « Ruines de Sarr » comme lieu de Nulentok
+            # sur une partie NEUVE ; la liste des sites n'est injectée en
+            # clair que quand l'étape DEVIENT courante).
+            if detail and _courante_passee and "ACCOMPLIE" not in statut:
+                detail = (
+                    "[ÉTAPE À VENIR — ses lieux et coordonnées ne sont PAS "
+                    "une destination actuelle] "
+                    + detail.split(". ")[0][:220]
+                )
             lignes.append(
                 f"  {i}. {e.get('titre', '?')}{statut}"
                 + (f" — {detail}" if detail else "")
             )
+            if "À FAIRE" in statut:
+                _courante_passee = True
         lignes.append(
             "⚠️ SUIVIS CET ORDRE : ne commence pas une étape ultérieure (ni "
             "un voyage vers une locale future) tant que la première étape "
@@ -434,6 +565,18 @@ def _scenario_bible_bloc(
             "Ennemis/monstres DU SCÉNARIO (à utiliser EN PRIORITÉ pour toute "
             "rencontre) : " + ", ".join(ennemis)
         )
+    # 👤 GENRE DES PNJ (partie ae358455) : le récap ne transporte pas le
+    # genre des PNJ du module — le MJ disait « Il tend la fiole… », « murmure
+    # le magicien » de Thukmuul Teleshann (magesteresse — FÉMININ). Ligne
+    # dédiée, extraite des entrées `pnj` du manifeste (marqueurs non ambigus
+    # uniquement — jamais de supposition).
+    _genres_pnj = _genres_pnj_donjon(etat) if etat is not None else []
+    if _genres_pnj:
+        lignes.append(
+            "👤 GENRE DES PNJ DU SCÉNARIO (respecte STRICTEMENT les pronoms "
+            "et les accords — un contresens de genre est une erreur de jeu) : "
+            + " · ".join(_genres_pnj)
+        )
     # ⚠️ CRÉATURES DÉJÀ AFFRONTÉES — le petit modèle (9B) retombe sur le même
     # monstre générique du bestiaire pour « remplir » les tours de rencontre
     # (partie 5b4e2bbe : 6 Gobelins d'affilée après le Squelette du module,
@@ -545,6 +688,9 @@ def _scenario_bible_bloc(
                     f"objectif courant : "
                     f"{_info_o.get('objectif_courant') or '(tous accomplis)'}"
                 )
+                _courant_titre = str(
+                    _info_o.get("objectif_courant") or ""
+                ).strip()
                 for _o in _objs_o:
                     _req_o = _o.get("requis") or []
                     _req_txt = ""
@@ -576,9 +722,37 @@ def _scenario_bible_bloc(
                     # l'objet-clé (la Couronne remise en boîte par Teleshann)
                     # au lieu de l'ancrer chez Zendar Nulentok. Injection du
                     # détail ICI aussi : visible dès le premier tour.
+                    # Partie 7177d819 : le détail des objectifs FUTURS (sites
+                    # gemmes « Beljuril — Ruines de Sarr (4,1) ; … ») était
+                    # injecté tel quel — le MJ l'a recollé comme destination
+                    # du parchemin. Garde explicite sur les détails des
+                    # étapes non courantes.
                     _det_o = str(_o.get("detail") or "").strip()
                     if _det_o:
-                        lignes.append(f"     ↳ {_det_o[:400]}")
+                        if (
+                            _courant_titre
+                            and str(_o.get("titre") or "").strip()
+                            != _courant_titre
+                            and str(_o.get("statut") or "") != "complet"
+                        ):
+                            # Partie ae358455 : le garde de marquage seul n'a
+                            # PAS suffi — le modèle recollait « Ruines de
+                            # Sarr » (liste des sites-gemmes du détail) comme
+                            # lieu de Nulentok sur une partie NEUVE.
+                            # Troncature à la première phrase : l'explication
+                            # du verrou reste, la liste des sites saute (elle
+                            # n'est injectée en clair que quand l'objectif
+                            # DEVIENT courant — pas de troncature alors).
+                            lignes.append(
+                                "     ↳ [ÉTAPE À VENIR — les lieux et "
+                                "coordonnées ci-dessous ne sont PAS une "
+                                "destination actuelle : ne t'y rends PAS "
+                                "tant que l'objectif courant n'est pas "
+                                "accompli] "
+                                + _det_o.split(". ")[0][:220]
+                            )
+                        else:
+                            lignes.append(f"     ↳ {_det_o[:400]}")
                 _manq_o = _info_o.get("manquants") or []
                 if _manq_o:
                     lignes.append(

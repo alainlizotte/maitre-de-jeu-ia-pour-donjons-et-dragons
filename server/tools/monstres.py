@@ -14,6 +14,7 @@ Spécificité de l'app standalone (vs OpenWebUI) :
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import logging
@@ -816,7 +817,32 @@ def _find_monstre_strict(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]
         if all(w in nk for w in mots):
             if meilleur is None or len(nk) > meilleur[0]:
                 meilleur = (len(nk), m)
-    return meilleur[1] if meilleur else None
+    if meilleur:
+        return meilleur[1]
+    # 🛡️ Tolérance de FRAPPE (partie ae358455) : le petit modèle déforme des
+    # noms du bestiaire (« Percer », « Perce » pour « Perceur ») — l'engagement
+    # était REFUSÉ EN ENTIER pour une seule coquille et le combat était narré
+    # en prose sans mécanique (aucun jet, aucune initiative). Dernier recours :
+    # correspondance FLUE (difflib, ratio ≥ 0.85) contre les clés ET les noms
+    # affichés du bestiaire — une coquille passe, une invention réelle (hors
+    # ratio : « dragon de feu », « gobeleen géant des glaces »…) reste
+    # refusée avec ses suggestions.
+    cles: dict[str, str] = {}
+    for k, m in monstres.items():
+        nk = _normalise_nom(k)
+        if nk:
+            cles.setdefault(nk, k)
+        nm = _normalise_nom(m.get("nom", ""))
+        if nm:
+            cles.setdefault(nm, k)
+    for cand in _candidats_noms(nom):
+        n = _normalise_nom(cand)
+        if len(n) < 4:
+            continue
+        proches = difflib.get_close_matches(n, list(cles), n=1, cutoff=0.85)
+        if proches:
+            return monstres[cles[proches[0]]]
+    return None
 
 
 def _find_monstre_with_fallback(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:

@@ -36,6 +36,23 @@ class LLMConfig:
     # repetition_penalty : pénalité de répétition (1.0 = neutre).
     presence_penalty: float = 0.0
     repetition_penalty: float = 1.0
+    # 🧬 Sampler DRY (Don't Repeat Yourself) — pénalité de SÉQUENCES répétées
+    # (pas de tokens) : c'est lui qui cible la dégénérescence de PHRASE
+    # (« Thukmuul Teleshann observe Margoth'r avec une expression grave… » ×3)
+    # que repetition_penalty/presence_penalty (par token, fenêtre 64) ne
+    # voient plus dès que la répétition dépasse la fenêtre (partie ae358455 :
+    # troncatures serveur à chaque tour, ~4× de tokens gaspillés).
+    # - multiplier 0.0 = désactivé ; 0.8 = valeur communautaire de référence.
+    # - base 1.75 / allowed_length 2 : pénalise toute séquence de ≥ 2 tokens
+    #   déjà générée, d'autant plus fort qu'elle est longue.
+    # - penalty_last_n 256 : fenêtre de détection (le défaut 64 est trop
+    #   court pour les répétitions de phrase).
+    # Transmis par requête (payload) au backend llamacpp uniquement ; les
+    # backends qui ne les connaissent pas les ignorent (aucun risque).
+    dry_multiplier: float = 0.8
+    dry_base: float = 1.75
+    dry_allowed_length: int = 2
+    dry_penalty_last_n: int = 256
     max_context_tokens: int = 16384
     # Budget max de tokens générés par réponse (llama.cpp / Ollama).
     # 0 ou négatif = illimité (défaut serveur).

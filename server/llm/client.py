@@ -46,6 +46,15 @@ def _payload_base(cfg: LLMConfig, messages: list[Message], stream: bool) -> dict
         payload["min_p"] = cfg.min_p
         if cfg.top_k and cfg.top_k > 0:
             payload["top_k"] = cfg.top_k
+        # 🧬 Sampler DRY (pénalité de SÉQUENCES répétées) : cible la
+        # dégénérescence de PHRASE (« … avec une expression grave… » ×3)
+        # que les pénalités par token ne voient plus dès que la répétition
+        # dépasse leur fenêtre (partie ae358455). multiplier 0 = désactivé.
+        if getattr(cfg, "dry_multiplier", 0) and cfg.dry_multiplier > 0:
+            payload["dry_multiplier"] = cfg.dry_multiplier
+            payload["dry_base"] = cfg.dry_base
+            payload["dry_allowed_length"] = cfg.dry_allowed_length
+            payload["dry_penalty_last_n"] = cfg.dry_penalty_last_n
     # Budget de génération (llama.cpp : -1 par défaut ; on borne pour
     # éviter les réponses interminables et libérer le tour plus vite).
     if getattr(cfg, "max_tokens", 0) and cfg.max_tokens > 0:

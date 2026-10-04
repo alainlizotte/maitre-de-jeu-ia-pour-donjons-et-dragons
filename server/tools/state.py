@@ -639,9 +639,30 @@ async def engager_combat(
             if _esp:
                 _attendues.setdefault(_ec_b25(_esp), (_esp, _q))
         _inconnues = []
+        import difflib as _difflib_b25
+
+        _cles_attendues = list(_attendues)
         for _n in noms:
-            if _ec_b25(_n) not in _attendues:
-                _inconnues.append(_n)
+            _cle_n = _ec_b25(_n)
+            if _cle_n in _attendues:
+                continue
+            # 🛡️ Tolérance de FRAPPE (partie ae358455) : le petit modèle
+            # déforme les noms (« Pierceur » pour « Perceur ») et oublie les
+            # singuliers (« perceurs ») — la garde refusait l'engagement EN
+            # ENTIER pour une coquille et le combat était ensuite narré en
+            # prose sans mécanique. Pluriel puis correspondance flue (set
+            # réduit aux espèces canoniques de LA SALLE) : une coquille passe
+            # vers l'espèce attendue, une invention réelle reste refusée.
+            _sing_n = (
+                _cle_n[:-1]
+                if _cle_n.endswith("s") and len(_cle_n) > 3 else _cle_n
+            )
+            if _sing_n in _attendues:
+                continue
+            if _difflib_b25.get_close_matches(
+                    _cle_n, _cles_attendues, n=1, cutoff=0.78):
+                continue
+            _inconnues.append(_n)
         if _inconnues:
             _legitimes = ", ".join(
                 f"{esp} ×{q}" for esp, q in _attendues.values()

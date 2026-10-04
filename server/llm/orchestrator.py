@@ -596,6 +596,19 @@ _GAIN_PROSE_PATTERNS = [
         r"(?:inventaire|sac|sacoche)",
         re.IGNORECASE,
     ),
+    # 🎁 Remise d'OBJET de la main à la main (partie e55cc855) : « Thukmuul
+    # tend la fiole de vérité vers Margoth », « remet le parchemin de la
+    # route », « vous donne une amulette » — l'objet n'atteignait JAMAIS
+    # l'inventaire (l'appel `inventaire_ajouter` n'était pas émis) : le
+    # joueur ne pouvait pas l'utiliser (« tu ne l'as pas »). Désactivée
+    # quand un tool d'inventaire a déjà tourné (include_gains=False) : la
+    # narration de la remise APRÈS l'appel est légitime.
+    re.compile(
+        r"\b(?:remets?|tends?|donnes?|passe?s?)\b[^.!?;\n]{0,80}?"
+        r"\b(?:fiole|parchemin|baguette|couronne|gemme|amulette|anneau|"
+        r"cl[ée]|artefact)\b",
+        re.IGNORECASE,
+    ),
 ]
 
 # Dégâts SUBIS PAR LES PJ narrés en prose SANS résultat mécanique officiel :
@@ -943,6 +956,118 @@ _RE_QUANTIFIANT_FR = re.compile(
 _ENNEMIS_MOTS_GENERIQUES = {
     "ombre", "silhouette",
 }
+
+# Signaux de DÉPLACEMENT NARRÉ : le modèle raconte l'entrée dans un LIEU
+# (grotte, salle, donjon, temple…) sans avoir appelé l'outil de déplacement.
+# Partie ae358455 : « pénètre dans la grotte de Nulentok » narré 3 tours de
+# suite sans `carte_donjon_explorer` — la carte restait en (0,0) pendant que
+# la narration était déjà au fond de la grotte. Volontairement restreint aux
+# entrées de lieu closes : les micro-déplacements libres d'une même zone
+# (l'auberge, la rue du village) ne doivent PAS déclencher la correction.
+_DEPLACEMENT_NARRE_RE = re.compile(
+    r"(pénètre\s+dans|franchit\s+(?:la|le|l')\s|débouche\s+(?:dans|sur)|"
+    r"arrive\s+(?:devant|enfin\s+devant)\s+(?:la|le|l')|"
+    r"entre\s+dans\s+(?:la|le|l'|cette)\s*(?:grotte|caverne|salle|donjon|"
+    r"temple|crypte|tour|pièce|ruine)|s'engage\s+sur\s+la\s+route|"
+    r"quitte\s+(?:la|le|l')\s*(?:grotte|caverne|salle|donjon|temple|"
+    r"crypte|tour|pièce|ruine|couloir))",
+    re.IGNORECASE,
+)
+_OUTILS_DEPLACEMENT = frozenset({
+    "carte_donjon_entrer", "carte_donjon_explorer", "carte_donjon_etage",
+    "voyage_demarrer",
+})
+
+
+def _deplacement_narre(narration: str) -> Optional[str]:
+    """Renvoie un extrait de la narration qui raconte un déplacement de lieu
+    (entrée dans une salle/grotte), ou None si aucun."""
+    m = _DEPLACEMENT_NARRE_RE.search(narration or "")
+    if not m:
+        return None
+    debut = max(0, m.start() - 40)
+    return (narration[debut:m.end() + 60]).replace("\n", " ").strip()
+
+
+# Verbes de DÉPLACEMENT dans l'action du JOUEUR : la décision « narrer » pour
+# une telle action se fie à une narration désynchronisée (partie ae358455 :
+# « j'avance prudemment dans la grotte » — la décision répondait « narrer »
+# en se basant sur la dernière narration (« déjà dans la grotte ») pendant
+# que la carte restait figée en (0,0) 3 tours de suite). La re-consultation
+# de la décision avec la consigne explicite force la résolution mécanique.
+_ACTION_DEPLACEMENT_RE = re.compile(
+    r"\b(j'?avance|j'?entre|je\s+pénètre|je\s+franchis|je\s+traverse|"
+    r"je\s+vais\s+(?:vers|à|au|aux|dans)|je\s+me\s+dirige|je\s+monte|"
+    r"je\s+descends?|je\s+quitte|"
+    r"je\s+continue\s+(?:vers|dans|sur\s+la\s+route))",
+    re.IGNORECASE,
+)
+
+
+def _action_deplacement_dans_donjon(action: str, etat: dict[str, Any]) -> bool:
+    """L'action du joueur réclame-t-elle un déplacement alors que le groupe
+    est dans un donjon ACTIF (portes ouvertes dans la salle courante) ?"""
+    if not _ACTION_DEPLACEMENT_RE.search(action or ""):
+        return False
+    donjon = etat.get("donjon") or {}
+    if not (donjon.get("id") and donjon.get("grille")):
+        return False
+    cr = list(donjon.get("courant") or [0, 0])
+    cx, cy = (cr[0], cr[1]) if len(cr) >= 2 else (0, 0)
+    salle = next(
+        (s for s in (donjon.get("grille") or [])
+         if s.get("x") == cx and s.get("y") == cy), {},
+    )
+    return any((salle.get("portes") or {}).values())
+
+
+# 🎁 Remises d'OBJETS DE QUÊTE narrées (partie e55cc855) : « Thukmuul tend la
+# fiole de vérité vers Margoth », « Margoth range la fiole de vérité, le
+# parchemin de la route et la baguette de téléportation dans son sac à dos »
+# — la remise était narrée sans JAMAIS appeler `inventaire_ajouter` :
+# l'objet n'atteignait pas l'inventaire (le joueur ne pouvait pas
+# l'utiliser), et les rejeux correctifs n'y changeaient rien (le modèle
+# ré-échoit la remise sans appeler l'outil).
+_NOMS_QUETE_RE = re.compile(
+    r"\b((?:une?|le|la|les|l'|son|sa)\s*"
+    r"(?:fiole(?:\s+de\s+v[ée]rit[ée])?|parchemin(?:\s+de\s+la\s+route)?|"
+    r"baguette(?:\s+de\s+t[ée]l[ée]portation)?|couronne(?:\s+de\s+mystra)?|"
+    r"gemme|cl[ée]|amulette|anneau|potion|carte|lettre|relique|talisman|"
+    r"[ée]meraude|saphir|rubis|diamant|jacinthe|beljuril))\b",
+    re.IGNORECASE,
+)
+_REMISE_VERBE_RE = re.compile(
+    r"\b(?:remets?|tends?|donnes?|passe?s?|glisse?s?|range|rangea|"
+    r"saisi[tz]?|attrape|empoches?|accepte)\b",
+    re.IGNORECASE,
+)
+
+
+def _objets_remettes_narration(narration: str) -> list[str]:
+    """Objets de quête REMIS dans la narration (remise main à la main ou
+    rangement dans le sac), avec leur déterminant : « la fiole de vérité »,
+    « le parchemin de la route ». Dédupliqués (clé normalisée), dans
+    l'ordre d'apparition. Une phrase sans verbe de remise/rangement ne
+    compte pas (« la Couronne est entre les mains de Nulentok » : mention,
+    pas remise)."""
+    objets: dict[str, str] = {}
+    if not narration:
+        return []
+    try:
+        from ..tools.inventaire import _cle_objet  # lazy : évite un cycle
+    except Exception:                                    # noqa: BLE001
+        def _cle_objet(x):                               # type: ignore[misc]
+            n = re.sub(r"\s+", " ", str(x or "").strip().lower())
+            return re.sub(r"^(le|la|les|l'|une?|son|sa)\s+", "", n)
+    for phrase in re.split(r"(?<=[.!?…])\s+|\n", narration):
+        if not phrase.strip() or not _REMISE_VERBE_RE.search(phrase):
+            continue
+        for m in _NOMS_QUETE_RE.finditer(phrase):
+            nom = m.group(0).strip()
+            cle = _cle_objet(nom)
+            if cle and cle not in objets:
+                objets[cle] = nom
+    return list(objets.values())
 
 
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
@@ -2063,7 +2188,11 @@ _BUDGET_OUTILS_TOUR: dict[str, int] = {
     "fiche_perso_mettre_a_jour": 2,   # ⛔ 4→2 (audit eb46aeef : le MJ écrasait les fiches — pv_max bloqué, on borne aussi)
     "fiche_perso_recuperer": 3,
     "inventaire_consulter": 2,
-    "inventaire_ajouter": 3,
+    # Partie ae358455 : 3→4 — la remise d'ouverture porte DEUX objets de
+    # quête (fiole de vérité + parchemin de la route) ; à 3, le spam du
+    # modèle épuisait le quota et le 4ᵉ appel (le parchemin) était REFUSÉ :
+    # l'objet narré « ajouté à l'inventaire » n'y était jamais arrivé.
+    "inventaire_ajouter": 4,
     "carte_donjon_get": 1,
     "carte_joueurs_get": 2,
     "monstre_consulter": 3,
@@ -2448,54 +2577,86 @@ class Orchestrator:
         noms = sorted(set(filtered) & _OUTILS_DECISION)
         if not noms:
             return []
-        messages_dec = [
-            Message(role="system", content=self._prompt_decision(
-                noms, filtered, contexte)),
-            Message(role="user", content=(
-                f"[Message du joueur] {dernier_user}\n\n"
-                "Résous la décision mécanique (objet JSON attendu)."
-            )),
-        ]
-        try:
-            res = await self.client.chat(
-                messages_dec,
-                temperature=0.0,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "decision_outil",
-                        "schema": self._schema_decision(noms),
-                    },
-                },
+        # 🚶 D0 (partie ae358455) : re-consultation UNIQUE si l'action du
+        # joueur réclame un déplacement (avancer/entrer/franchir/continuer
+        # vers un autre lieu) alors que le groupe est dans un donjon ACTIF —
+        # la décision « narrer » se fiait à une narration désynchronisée
+        # (« déjà dans la grotte ») pendant que la carte restait figée en
+        # (0,0). Avec la consigne explicite, la décision contrainte
+        # (température 0.0, enum) choisit `carte_donjon_explorer`.
+        _consigne_depl = ""
+        if _action_deplacement_dans_donjon(dernier_user, etat):
+            _consigne_depl = (
+                "⚠️ L'action du joueur réclame un DÉPLACEMENT (avancer, "
+                "entrer, franchir, continuer vers un autre lieu) — action "
+                "\"outils\" OBLIGATOIRE avec `carte_donjon_explorer("
+                "direction=…)` et une porte OUVERTE de la salle courante "
+                "(liste ci-dessus). La carte DOIT avancer : ne réponds PAS "
+                "\"narrer\"."
             )
-        except Exception as e:                                   # noqa: BLE001
-            # Backend sans support json_schema ou panne : repli transparent.
-            _log.warning(
-                "décision contrainte indisponible (repli boucle normale) : %s",
-                e,
-            )
-            return []
-        # Parse robuste : le contenu contraint DEVRAIT être l'objet JSON
-        # exact ; on tolère un emballage résiduel (fences, prose courte).
-        brut = (res.content or "").strip()
-        if brut.startswith("```"):
-            brut = re.sub(r"^```[a-zA-Z0-9]*\s*|\s*```$", "", brut).strip()
-        try:
-            decision = json.loads(brut)
-        except json.JSONDecodeError:
-            m = re.search(r"\{.*\}", brut, re.DOTALL)
-            if not m:
-                _log.warning("décision non parsable : %.200s", brut)
-                return []
+        messages_dec = []
+        decision: Optional[dict[str, Any]] = None
+        for _tentative in range(2):
+            messages_dec = [
+                Message(role="system", content=self._prompt_decision(
+                    noms, filtered, contexte)),
+                Message(role="user", content=(
+                    f"[Message du joueur] {dernier_user}\n\n"
+                    "Résous la décision mécanique (objet JSON attendu)."
+                )),
+            ]
+            if _consigne_depl:
+                messages_dec.append(
+                    Message(role="system", content=_consigne_depl))
             try:
-                decision = json.loads(m.group(0))
-            except json.JSONDecodeError:
-                _log.warning("décision non parsable (2e essai) : %.200s", brut)
+                res = await self.client.chat(
+                    messages_dec,
+                    temperature=0.0,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "decision_outil",
+                            "schema": self._schema_decision(noms),
+                        },
+                    },
+                )
+            except Exception as e:                               # noqa: BLE001
+                # Backend sans support json_schema ou panne : repli
+                # transparent.
+                _log.warning(
+                    "décision contrainte indisponible (repli boucle "
+                    "normale) : %s", e,
+                )
                 return []
-        if not isinstance(decision, dict):
-            return []
-        if str(decision.get("action") or "") != "outils":
-            return []
+            # Parse robuste : le contenu contraint DEVRAIT être l'objet JSON
+            # exact ; on tolère un emballage résiduel (fences, prose courte).
+            brut = (res.content or "").strip()
+            if brut.startswith("```"):
+                brut = re.sub(
+                    r"^```[a-zA-Z0-9]*\s*|\s*```$", "", brut).strip()
+            try:
+                decision = json.loads(brut)
+            except json.JSONDecodeError:
+                m = re.search(r"\{.*\}", brut, re.DOTALL)
+                if not m:
+                    _log.warning("décision non parsable : %.200s", brut)
+                    return []
+                try:
+                    decision = json.loads(m.group(0))
+                except json.JSONDecodeError:
+                    _log.warning(
+                        "décision non parsable (2e essai) : %.200s", brut)
+                    return []
+            if not isinstance(decision, dict):
+                return []
+            if str(decision.get("action") or "") == "outils":
+                break
+            if not _consigne_depl:
+                break       # pas de motif de re-consultation : une passe
+            _log.warning(
+                "décision « narrer » pour un déplacement demandé — "
+                "re-consultation avec consigne"
+            )
         calls: list[dict[str, Any]] = []
         for o in (decision.get("outils") or [])[:_MAX_OUTILS_DECISION]:
             if not isinstance(o, dict):
@@ -3758,6 +3919,57 @@ class Orchestrator:
                     ))
                     continue
 
+            # --- D1quater. Déplacement narré SANS outil ----------------------
+            # Le modèle raconte l'entrée dans une salle ou un lieu (« pénètre
+            # dans la grotte », « arrive devant la grotte ») SANS avoir appelé
+            # `carte_donjon_explorer`/`voyage_demarrer` : le déplacement n'a
+            # PAS eu lieu mécaniquement — la carte et l'état restent figés
+            # (courant (0,0) pendant que la narration est déjà au fond de la
+            # grotte ; partie ae358455 : 3 tours pour faire entrer le groupe,
+            # l'outil jamais appelé). On relance avec l'outil d'abord, puis la
+            # narration d'après le résultat officiel.
+            if narration.strip() and _correction_autorisee(result):
+                _depl_outil = any(
+                    tc.get("name") in _OUTILS_DEPLACEMENT
+                    for tc in result.tool_calls_trace
+                )
+                _depl_narre = (
+                    None if _depl_outil else _deplacement_narre(narration)
+                )
+                if _depl_narre:
+                    result.corrections += 1
+                    if on_delta is not None and on_event is not None:
+                        try:
+                            await on_event({"type": "stream_reset"})
+                        except Exception:                     # noqa: BLE001
+                            pass
+                    _log.warning(
+                        "déplacement narré sans outil (« %s », correction %d)"
+                        " — relance",
+                        _depl_narre[:80], result.corrections,
+                    )
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "⚠️ CORRECTION : ta narration raconte un "
+                            f"DÉPLACEMENT (« {_depl_narre} ») sans qu'AUCUN "
+                            "outil de déplacement n'ait été appelé ce tour — "
+                            "le déplacement n'a PAS eu lieu : la carte et "
+                            "l'état restent figés, le groupe est toujours en "
+                            "salle COURANTE. Appelle D'ABORD l'outil adéquat :"
+                            " dans un donjon, `carte_donjon_explorer("
+                            "direction=\"nord\"|\"est\"|\"sud\"|\"ouest\")` "
+                            "avec une porte OUVERTE de la salle courante (voir"
+                            " le bloc CARTE DU DONJON) ; hors donjon, "
+                            "`voyage_demarrer(destination=..., distance_km=...,"
+                            " terrain=...)`. Attends le résultat OFFICIEL puis "
+                            "narre la salle/le voyage d'après ce résultat — "
+                            "JAMAIS le déplacement en prose seule."
+                            + _CORRECTIF_INTERNE
+                        ),
+                    ))
+                    continue
+
             # --- D2. Rattrapage : contenu vide après stripping thinking -----
             # Gemma 4 E4B renvoie parfois des réponses entièrement thinking
             # (tout le texte est dans <|channel>thought...<channel|>), résultat
@@ -3844,6 +4056,64 @@ class Orchestrator:
         # NB : `notes_mecaniques` (dégâts auto-appliqués) n'est PAS concaténé
         # ici — main.py l'ajoute à la dm finale APRÈS les rejeux correctifs
         # (qui remplacent la narration), pour ne rien perdre.
+
+        # 🎁 Rattrapage DÉTERMINISTE de la remise d'objets de quête (partie
+        # e55cc855) : la remise était narrée (« range la fiole de vérité… dans
+        # son sac ») sans JAMAIS appeler `inventaire_ajouter` — l'objet
+        # n'atteignait pas l'inventaire (le joueur ne pouvait pas l'utiliser)
+        # et les rejeux correctifs n'y changeaient rien (le modèle ré-échoit
+        # la remise sans appeler l'outil). Comme pour les sorts narrés sans
+        # tool (rattrapage déterministe des règles), le serveur applique
+        # l'ajout : les objets de quête nommés dans une phrase de
+        # remise/rangement sont ajoutés à l'inventaire de quête du PJ
+        # (portée "quete" forcée — inventaire_ajouter gère le poids léger par
+        # défaut et la déduplication).
+        if result.narration.strip() and not any(
+            tc.get("name") in ("inventaire_ajouter", "inventaire_ramasser")
+            and tc.get("ok")
+            for tc in result.tool_calls_trace
+        ):
+            _objets_remis = _objets_remettes_narration(result.narration)
+            if _objets_remis:
+                _pj_nom = None
+                try:
+                    from ..game.state import PartyState
+                    _etat_r = PartyState(
+                        data_dir=str(ctx.data_dir),
+                        partie_id=ctx.partie_id, max_history=0,
+                    ).load()
+                    _pj_nom = next(
+                        (str(p.get("nom"))
+                         for p in (_etat_r.get("pj") or []) if p.get("nom")),
+                        None,
+                    )
+                except Exception:                            # noqa: BLE001
+                    _pj_nom = None
+                if _pj_nom:
+                    _ajoutes: list[str] = []
+                    for _objet in _objets_remis:
+                        try:
+                            _tr_r = await self.execute_tool_direct(
+                                "inventaire_ajouter",
+                                {"nom": _pj_nom, "objet": _objet,
+                                 "portee": "quete"},
+                                ctx, on_event, result,
+                            )
+                            if _tr_r and _tr_r.text and "DÉJÀ" not in \
+                                    _tr_r.text[:80]:
+                                _ajoutes.append(_objet)
+                        except Exception:                    # noqa: BLE001
+                            continue
+                    if _ajoutes:
+                        _log.info(
+                            "rattrapage remise de quête : %s ajouté(s) à %s",
+                            ", ".join(_ajoutes), _pj_nom,
+                        )
+                        result.notes_mecaniques.append(
+                            "🎁 Objets de quête ajoutés par le serveur "
+                            "(remise narrée sans appel d'outil) : "
+                            + ", ".join(_ajoutes) + "."
+                        )
 
         return result
 

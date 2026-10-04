@@ -80,8 +80,18 @@ _OBJETS_SYNONYMES: dict[str, str] = {
 
 
 def _cle_objet(nom: Any) -> str:
-    """Clé de fusion d'un objet : synonymes d'abord, `_norm` sinon."""
+    """Clé de fusion d'un objet : synonymes d'abord, `_norm` sinon — SANS les
+    articles, la même normalisation que `objectifs._cle_objet` : les
+    comparaisons inventaire ↔ requis du scénario doivent coïncider (partie
+    e55cc855 : « Le Beljuril » ajouté — requis « beljuril » — n'était pas
+    reconnu requis, la portée restait « permanent » et l'objet était
+    invisible de l'inventaire de quête : progression bloquée)."""
     n = _norm(nom)
+    try:
+        from ..game.objectifs import _sans_article  # lazy : évite un cycle
+        n = _sans_article(n)
+    except Exception:                                    # noqa: BLE001
+        pass
     return _OBJETS_SYNONYMES.get(n, n)
 
 
@@ -744,13 +754,16 @@ async def inventaire_ajouter(
     portee_n = _norm(portee)
     if portee_n not in ("quete", "permanent"):
         portee_n = _portee_auto(objet)
-        # ❤️ Objets REQUIS au scénario (manifeste `.donjon.json`, étapes
-        # structurées) : quel que soit leur nom (même une gemme, un joyau ou
-        # un trésor), ils doivent vivre dans l'inventaire de QUÊTE de LA
-        # PARTIE — la mécanique de déblocage (objectifs.py) les y cherche.
-        _requis_objets = _requis_scenario(ctx)
-        if _cle_objet(objet) in _requis_objets:
-            portee_n = "quete"
+    # ❤️ Objets REQUIS au scénario (manifeste `.donjon.json`, étapes
+    # structurées) : quel que soit leur nom (même une gemme, un joyau ou un
+    # trésor) et QUELLE QUE SOIT la portée demandée par le MJ, ils vivent
+    # dans l'inventaire de QUÊTE de LA PARTIE — la mécanique de déblocage
+    # (objectifs.py) les y cherche. Partie e55cc855 : la baguette de
+    # téléportation (objet REQUIS de l'étape 2) ajoutée portee="permanent"
+    # — invisible de l'inventaire de quête, la progression restait bloquée.
+    _requis_objets = _requis_scenario(ctx)
+    if _cle_objet(objet) in _requis_objets:
+        portee_n = "quete"
 
     inv = _inventaire(fiche)
     cible = _cle_objet(objet)
@@ -785,13 +798,26 @@ async def inventaire_ajouter(
                 )
     pu = _poids_unitaire(objet, poids)
     if pu is None:
-        return ToolResult(
-            text=(
-                f"⚠️ Objet « {objet} » inconnu du catalogue d'équipement "
-                "(PHB 3.5) : fournis `poids` (kg par unité) pour que la charge "
-                "soit correctement comptée — sinon l'encombrement sera faux."
+        # 🛡️ Défaut LÉGER pour les objets de quête (parties 7177d819,
+        # ae358455, e55cc855) : la fiole de vérité, le parchemin de la route
+        # et la baguette de téléportation sont HORS catalogue PHB — le tool
+        # REFUSAIT l'ajout sans `poids` (ok=True, message d'avertissement,
+        # mais RIEN n'était ajouté) et l'objet narré « remis » n'atteignait
+        # JAMAIS l'inventaire, 3 parties d'affilée. Un objet de quête
+        # (fiole, parchemin, gemme, clé, baguette…) est toujours léger :
+        # 100 g par défaut — l'encombrement reste juste à l'approximation
+        # près, et l'ajout n'est JAMAIS bloqué.
+        if portee_n == "quete" or _cle_objet(objet) in _requis_objets:
+            pu = 0.1
+        else:
+            return ToolResult(
+                text=(
+                    f"⚠️ Objet « {objet} » inconnu du catalogue d'équipement "
+                    "(PHB 3.5) : fournis `poids` (kg par unité) pour que la "
+                    "charge soit correctement comptée — sinon "
+                    "l'encombrement sera faux."
+                )
             )
-        )
     fusionne = False
     for e in inv:
         if (

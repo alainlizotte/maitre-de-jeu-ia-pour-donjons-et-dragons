@@ -13,9 +13,11 @@ Reproduit la logique de `Filtre_EtatPartie_INJECT.py` :
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -77,34 +79,152 @@ _MAX_SALLES_BLOC = 40       # plafond de salles listées dans le bloc donjon
 _MAX_DESC_BLOC = 400        # plafond de la description reprise par salle
 
 
-def _lieu_depart_canonique(etat: dict[str, Any]) -> str:
+_ENTREE_DISQUE_CACHE: dict[
+    tuple[str, str], tuple[float, Optional[dict[str, Any]]]
+] = {}
+_ENTREE_DISQUE_TTL = 2.0   # s — une édition du manifeste reste prise en compte presque en direct
+
+
+def _entree_manifeste_disque(
+    etat: dict[str, Any], data_dir: str
+) -> Optional[dict[str, Any]]:
+    """Salle d'entrée canonique lue FROIDE du manifeste de scénario
+    (`.donjon.json`) quand le donjon n'est PAS encore initialisé dans
+    l'état — l'ouverture précède `carte_donjon_entrer`, or l'ancre d'intro
+    exigeait un donjon déjà chargé (parties Dead of Night 241ece89 /
+    Dues for the Dead 451746d7 : manifeste jamais consulté, intro
+    improvisée depuis le résumé anglais — fusion PJ/PNJ « Margoth, barde »).
+
+    Découverte identique à `objectifs._manifest_etapes` : manifeste dont
+    `scenario` == id du scénario de la quête (`[id] ` en tête de
+    `quete.source`, id de CHAPITRE inclus — les manifestes listent les
+    ids de tous les chapitres). Renvoie la salle portée par
+    `etages[0].entree` (défaut (0,0)) — None si aucun manifeste."""
+    if not data_dir:
+        return None
+    try:
+        sid = str(
+            (etat.get("quete") or {}).get("source") or ""
+        ).split("]", 1)[0].lstrip("[").strip()
+    except Exception:                                               # noqa: BLE001
+        sid = ""
+    if not sid:
+        return None
+    cache_key = (data_dir, sid)
+    _now = time.monotonic()
+    _hit = _ENTREE_DISQUE_CACHE.get(cache_key)
+    if _hit and (_now - _hit[0]) < _ENTREE_DISQUE_TTL:
+        return _hit[1]
+
+    def _finish(salle: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        _ENTREE_DISQUE_CACHE[cache_key] = (time.monotonic(), salle)
+        return salle
+
+    base = os.path.join(data_dir, "scenarios")
+    if not os.path.isdir(base):
+        return _finish(None)
+    for racine, _dirs, fichiers in os.walk(base):
+        for f in fichiers:
+            if not f.endswith(".donjon.json"):
+                continue
+            try:
+                with open(os.path.join(racine, f), encoding="utf-8") as fh:
+                    man = json.load(fh)
+            except Exception:                                       # noqa: BLE001
+                continue
+            if not isinstance(man, dict):
+                continue
+            scen = man.get("scenario")
+            ids = scen if isinstance(scen, list) else [scen]
+            if sid not in {str(x).strip() for x in ids if x}:
+                continue
+            etages = [
+                e for e in (man.get("etages") or []) if isinstance(e, dict)
+            ]
+            if not etages:
+                continue
+            salles = [
+                s for s in (etages[0].get("salles") or [])
+                if isinstance(s, dict)
+            ]
+            ent = etages[0].get("entree") or [0, 0]
+            try:
+                ex, ey = int(ent[0]), int(ent[1])
+            except Exception:                                       # noqa: BLE001
+                ex, ey = 0, 0
+
+            def _cxy(s: dict[str, Any]) -> tuple[int, int] | None:
+                try:
+                    return (int(s.get("x")), int(s.get("y")))
+                except (TypeError, ValueError):
+                    return None
+
+            s0 = next(
+                (s for s in salles if _cxy(s) == (ex, ey)),
+                salles[0] if salles else None,
+            )
+            return _finish(s0)
+    return _finish(None)
+
+
+def _lieu_depart_canonique(
+    etat: dict[str, Any], data_dir: str = ""
+) -> str:
     """Ligne d'ancrage « lieu de départ canonique » pour la scène d'ouverture.
 
     Partie c1f4e547 : au premier tour, le petit modèle a improvisé
     l'ouverture dans un donjon inventé (« donjon de Khundrukar », nom repris
     de l'exemple du schéma d'outils) au lieu de suivre le pitch. Quand le
     donjon du scénario est déjà initialisé, on ancre la scène d'ouverture
-    sur la salle canonique de départ (visitee=True du plan). Renvoie '' si
-    rien n'ancre (donjon absent, ou pas au premier tour)."""
+    sur la salle canonique de départ (visitee=True du plan).
+
+    Parties Dead of Night (241ece89) / Dues for the Dead (451746d7) :
+    quand le donjon n'est PAS encore initialisé — l'intro PRÉCÈDE
+    `carte_donjon_entrer` — l'ancre restait muette et le modèle
+    improvisait depuis le résumé anglais : fusion PJ/PNJ (« Margoth,
+    barde aux soieries » = Karragen le PNJ du module), contradiction
+    interne (tavernier vivant ET ses « corps déchiquetés »), intro
+    tronquée. On lit alors la salle d'entrée du manifeste FROIDE du
+    disque (`_entree_manifeste_disque`), et on y ajoute les PNJ du module
+    — leurs noms propres désambiguïsent (« Karragen, barde » est un PNJ,
+    pas le PJ) — ainsi que la note du module (doppelgangers, antidote,
+    jets de sauvegarde…).
+
+    Renvoie '' si rien n'ancre (pas au premier tour, aucun manifeste)."""
     if etat.get("histoire"):
         return ""
+    s0: Optional[dict[str, Any]] = None
     donjon = etat.get("donjon") or {}
-    if not (donjon.get("id") and donjon.get("grille")):
-        return ""
-    s0 = next(
-        (s for s in (donjon.get("grille") or []) if s.get("visitee")),
-        None,
-    )
+    if donjon.get("id") and donjon.get("grille"):
+        s0 = next(
+            (s for s in (donjon.get("grille") or []) if s.get("visitee")),
+            None,
+        )
+    elif data_dir:
+        s0 = _entree_manifeste_disque(etat, data_dir)
     if not (s0 and str(s0.get("description") or "").strip()):
         return ""
-    return (
+    lignes = [
         "LIEU DE DÉPART CANONIQUE — la scène d'ouverture s'y déroule : "
         f"{str(s0.get('type') or '?').strip()} "
         f"({s0.get('x')},{s0.get('y')}) — « "
         f"{str(s0.get('description')).strip()[:_MAX_DESC_BLOC]} » . "
         "N'invente AUCUN autre lieu (pas de « donjon de… » absent d'ici) "
         "et n'y entre PAS : c'est déjà où se trouve le groupe."
-    )
+    ]
+    pnj = [str(p).strip() for p in (s0.get("pnj") or []) if str(p or "").strip()]
+    if pnj:
+        lignes.append(
+            "🧑‍🎭 PNJ PRÉSENTS ICI (module) : " + " ; ".join(pnj[:3]) + " — "
+            "ce sont des PNJ avec LEURS noms propres : ne les confonds "
+            "JAMAIS avec un personnage-joueur et ne fais JAMAIS agir, "
+            "parler ou décider à la place d'un PJ (aucun « murmure "
+            "<nom du PJ> » attribuant au PJ un rôle du module)."
+        )
+    note = str(s0.get("note") or "").strip()
+    if note:
+        lignes.append(f"NOTE DU MODULE : {note[:400]}")
+    return "\n".join(lignes)
 
 
 def _ouverture_deja_jouee(etat: dict[str, Any]) -> bool:
@@ -1109,7 +1229,7 @@ class PromptBuilder:
                 )
                 if not (etat.get("histoire") or []):
                     lignes.append(_DEBUT_AVENTURE)
-                    _ancre = _lieu_depart_canonique(etat)
+                    _ancre = _lieu_depart_canonique(etat, data_dir)
                     if _ancre:
                         lignes.append(_ancre)
             bible_min = _scenario_bible_bloc(
@@ -1386,7 +1506,7 @@ class PromptBuilder:
                 etat.get("histoire") or []
             ):
                 lignes.append(_DEBUT_AVENTURE)
-                _ancre_riche = _lieu_depart_canonique(etat)
+                _ancre_riche = _lieu_depart_canonique(etat, data_dir)
                 if _ancre_riche:
                     lignes.append(_ancre_riche)
             # Bible du scénario : la trame, les étapes et la difficulté,

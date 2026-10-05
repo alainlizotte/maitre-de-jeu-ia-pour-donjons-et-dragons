@@ -1010,7 +1010,11 @@ _ACTION_DEPLACEMENT_RE = re.compile(
     # la porte est », « je prends la route ») restaient invisibles du D0.
     r"j'explore|on\s+avance|nous\s+avan[çc]ons|je\s+pars|"
     r"j'emprunte|je\s+prends\s+(?:la\s+route|le\s+passage|le\s+couloir|"
-    r"la\s+porte|le\s+sentier))",
+    r"la\s+porte|le\s+sentier)|"
+    # Partie d9f65ed2 : « je continue ma route vers le puits de Nulentok »
+    # — la variante possessive passait au travers du D0.
+    r"je\s+(?:continue|reprends)\s+(?:ma\s+route|mon\s+chemin|le\s+chemin|"
+    r"la\s+route)|en\s+route\s+vers)",
     re.IGNORECASE,
 )
 

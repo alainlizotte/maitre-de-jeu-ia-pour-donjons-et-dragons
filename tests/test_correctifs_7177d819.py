@@ -512,6 +512,35 @@ def test_objets_remettes_narration():
         "Elle vous donnera la baguette au retour de la Couronne.") == []
 
 
+def test_objets_remettes_narration_verbes_tirage_et_anaphore():
+    """Partie b59b4a9a (intro Crown avec le code ancré) : « Thukmuul SORT de
+    ses vêtements une fiole de vérité et un parchemin de la route. Elle
+    DÉPOSE les objets dans vos mains. » — ni « sort » ni « dépose » n'étaient
+    des verbes de remise, et « les objets » (anaphore) ne nommait rien :
+    l'inventaire de quête restait VIDE après l'intro."""
+    from server.llm.orchestrator import _objets_remettes_narration
+
+    # Verbe « sort » (tirer un objet) + anaphore « dépose les objets ».
+    objets = _objets_remettes_narration(
+        "Thukmuul sort de ses vêtements une fiole de vérité et un parchemin "
+        "de la route. Elle dépose les objets dans vos mains.")
+    cles = [o.lower() for o in objets]
+    assert any("fiole" in c for c in cles), objets
+    assert any("parchemin" in c for c in cles), objets
+
+    # Le NOM « un sort » (sortilège) n'est PAS le verbe : pas de tirage
+    # fantôme, et la mention de la Couronne ne doit pas être rapatriée par
+    # l'anaphore de la phrase suivante.
+    assert _objets_remettes_narration(
+        "La Couronne est entre les mains de Nulentok. Il lance un sort de "
+        "feu puis s'avance. Elle dépose les objets sur la table.") == []
+
+    # « sort une dague » reste un verbe de tirage (« confie la cle » captée).
+    objets2 = _objets_remettes_narration(
+        "Il sort une dague de sa ceinture. Elle confie la cle de fer à Margoth.")
+    assert any("cle" in o.lower() for o in objets2), objets2
+
+
 def test_tolérance_frappe_noms_bestiaire():
     """Partie ae358455 : le MJ a passé « Perceur, Perceur, Perceur, Percer,
     Perceur, Perce » — la coquille « Percer » REFUSAIT l'engagement EN ENTIER

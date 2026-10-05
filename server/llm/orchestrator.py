@@ -921,10 +921,15 @@ def trouve_repetition(
 
 # Signaux d'ATTAQUE ENNEMIE dans une narration : créatures qui passent à
 # l'offensive contre le groupe (embuscade, surgissement, encerclement).
+# Partie b59b4a9a : l'embuscade des perceurs était narrée SANS les nommer
+# (« des pierres tombent du plafond, frappant Margoth avec violence ») —
+# ces motifs évitent que l'attaque passe inaperçue du garde-fou.
 _NARRATION_ATTAQUE_RE = re.compile(
     r"(combat\s+imminent|surgissent|s'élancent|se précipitent|se ruent|"
     r"encercl\w+|fondent\s+sur|vous\s+attaqu\w+|prêts\s+à\s+attaquer|"
-    r"passent\s+à\s+l'attaque)",
+    r"passent\s+à\s+l'attaque|"
+    r"embuscade|s'abattent\s+sur|tomb\w+\s+du\s+plafond|"
+    r"frapp\w+\s+\w+\s+avec\s+violence|pris(?:es?)?\s+sous\s+coups)",
     re.IGNORECASE,
 )
 # Marqueurs de combat DÉJÀ RÉSOLU (récit) : inhibent le garde.
@@ -999,7 +1004,13 @@ _ACTION_DEPLACEMENT_RE = re.compile(
     r"\b(j'?avance|j'?entre|je\s+pénètre|je\s+franchis|je\s+traverse|"
     r"je\s+vais\s+(?:vers|à|au|aux|dans)|je\s+me\s+dirige|je\s+monte|"
     r"je\s+descends?|je\s+quitte|"
-    r"je\s+continue\s+(?:vers|dans|sur\s+la\s+route))",
+    r"je\s+continue\s+(?:vers|dans|sur\s+la\s+route)|"
+    # Partie b59b4a9a : actions COMPOSÉES (« je demande…, puis j'explore
+    # la galerie vers l'est ») et départs (« je pars de… », « j'emprunte
+    # la porte est », « je prends la route ») restaient invisibles du D0.
+    r"j'explore|on\s+avance|nous\s+avan[çc]ons|je\s+pars|"
+    r"j'emprunte|je\s+prends\s+(?:la\s+route|le\s+passage|le\s+couloir|"
+    r"la\s+porte|le\s+sentier))",
     re.IGNORECASE,
 )
 
@@ -1038,7 +1049,16 @@ _NOMS_QUETE_RE = re.compile(
 )
 _REMISE_VERBE_RE = re.compile(
     r"\b(?:remets?|tends?|donnes?|passe?s?|glisse?s?|range|rangea|"
-    r"saisi[tz]?|attrape|empoches?|accepte)\b",
+    r"saisi[tz]?|attrape|empoches?|accepte|"
+    # parties 7177d819/b59b4a9a : « Thukmuul sort de ses vêtements une fiole
+    # de vérité… », « Elle dépose les objets dans vos mains » — la remise
+    # avec ces verbes passait inaperçue (inventaire resté vide).
+    r"d[ée]p[ôo]ses?|d[ée]posa|offr[ei]t?|confi[ei]t?|"
+    # « sort » verbe UNIQUEMENT en contexte de tirer un objet (« sort de
+    # ses vêtements », « sort une dague », « sortit son épée ») — jamais le
+    # NOM « un sort » (sortilège) : on exige un complément d'objet direct ou
+    # « de + son/sa/ses » juste après.
+    r"sort(?:it|s)?\s+(?:de\s+)?(?:ses|sa|son|une?|le|la|les)\s)\b",
     re.IGNORECASE,
 )
 
@@ -1049,7 +1069,14 @@ def _objets_remettes_narration(narration: str) -> list[str]:
     « le parchemin de la route ». Dédupliqués (clé normalisée), dans
     l'ordre d'apparition. Une phrase sans verbe de remise/rangement ne
     compte pas (« la Couronne est entre les mains de Nulentok » : mention,
-    pas remise)."""
+    pas remise).
+
+    Partie b59b4a9a : l'anaphore inter-phrases (« Thukmuul sort de ses
+    vêtements une fiole de vérité et un parchemin de la route. Elle dépose
+    les objets dans vos mains. ») laissait l'inventaire vide — la 2ᵉ phrase
+    porte le verbe de remise mais « les objets » ne nomme rien. Quand une
+    phrase à verbe de remise ne nomme AUCUN objet, on reprend donc les noms
+    d'objets de quête de la phrase précédente."""
     objets: dict[str, str] = {}
     if not narration:
         return []
@@ -1059,14 +1086,32 @@ def _objets_remettes_narration(narration: str) -> list[str]:
         def _cle_objet(x):                               # type: ignore[misc]
             n = re.sub(r"\s+", " ", str(x or "").strip().lower())
             return re.sub(r"^(le|la|les|l'|une?|son|sa)\s+", "", n)
+    noms_precedents: dict[str, str] = {}
+    _remise_precedente = False
     for phrase in re.split(r"(?<=[.!?…])\s+|\n", narration):
-        if not phrase.strip() or not _REMISE_VERBE_RE.search(phrase):
+        if not phrase.strip():
             continue
+        noms_phrase: dict[str, str] = {}
         for m in _NOMS_QUETE_RE.finditer(phrase):
             nom = m.group(0).strip()
             cle = _cle_objet(nom)
-            if cle and cle not in objets:
-                objets[cle] = nom
+            if cle:
+                noms_phrase.setdefault(cle, nom)
+        if _REMISE_VERBE_RE.search(phrase):
+            # Anaphore : « … une fiole de vérité et un parchemin de la
+            # route. Elle dépose les objets dans vos mains. » — on ne tire
+            # les noms de la phrase précédente que si ELLE aussi portait un
+            # verbe de remise/tirage (sinon une simple mention — « la
+            # Couronne est entre les mains de Nulentok » — se retrouverait
+            # ajoutée par la phrase suivante sans lien).
+            candidats = noms_phrase or (
+                noms_precedents if _remise_precedente else {}
+            )
+            for cle, nom in candidats.items():
+                objets.setdefault(cle, nom)
+        if noms_phrase:
+            noms_precedents = noms_phrase
+        _remise_precedente = bool(_REMISE_VERBE_RE.search(phrase))
     return list(objets.values())
 
 
@@ -1138,6 +1183,72 @@ def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
     if not vus:
         return None
     return ", ".join(vus[:6])
+
+
+def _ennemis_salle_courante(texte: str, ctx: Any) -> Optional[str]:
+    """Ennemis CANONIQUES de la salle courante (manifeste de scénario,
+    champ `ennemis`) si la narration décrit une ATTAQUE — pour forcer
+    `engager_combat` quand le modèle narre l'embuscade du module en prose
+    SANS nommer les créatures (partie b59b4a9a : « des pierres tombent du
+    plafond, frappant Margoth avec violence » dans la salle « Perceur ×6 » —
+    la détection par noms du bestiaire ne voyait rien, le combat canonique
+    était esquivé, le modèle inventait même une « attaque magique » qui
+    désintégrait les ennemis sans un seul dé).
+
+    Les ennemis DÉJÀ VAINCUS dans la partie (mémoire de campagne) sont
+    exclus — pas de re-engagement des salles nettoyées. None si rien à
+    engager (pas d'attaque narrée, salle sans `ennemis`, tous vaincus)."""
+    if not texte or not _NARRATION_ATTAQUE_RE.search(texte):
+        return None
+    t = _normalise_pour_compare(texte)
+    if _NARRATION_PASSE_RE.search(t):
+        return None
+    try:
+        from ..game.state import PartyState
+        etat = PartyState(
+            data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+            max_history=0,
+        ).load()
+    except Exception:                                        # noqa: BLE001
+        return None
+    donjon = etat.get("donjon") or {}
+    courant = donjon.get("courant") or [0, 0]
+    try:
+        cx, cy = int(courant[0]), int(courant[1])
+    except (TypeError, ValueError, IndexError):
+        return None
+    salle = next(
+        (s for s in (donjon.get("grille") or [])
+         if isinstance(s, dict) and s.get("x") == cx and s.get("y") == cy),
+        None,
+    )
+    declares = salle.get("ennemis") if isinstance(salle, dict) else None
+    if not declares:
+        return None
+    # Créatures déjà battues dans cette partie (mémoire de campagne).
+    battus: set[str] = set()
+    for ent in ((etat.get("memoire") or {}).get("monstres_combattus") or []):
+        for nom in (ent or {}).get("noms") or []:
+            n = _normalise_pour_compare(str(nom or ""))
+            if n:
+                battus.add(n)
+    noms: list[str] = []
+    for brut in declares:
+        item = re.sub(r"\([^)]*\)", "", str(brut or "")).strip()
+        m = re.match(r"^(.*?)(?:\s*[×xX]\s*(\d+))?$", item)
+        nom = (m.group(1) if m else "").strip(" .-–—")
+        if not nom:
+            continue
+        if _normalise_pour_compare(nom) in battus:
+            continue
+        try:
+            nb = int((m.group(2) if m else None) or 1)
+        except ValueError:
+            nb = 1
+        noms.extend([nom] * max(1, min(nb, 6)))
+    if not noms:
+        return None
+    return ", ".join(noms[:6])
 
 
 def _assemble_narrations(intermediaires: list[str], finale: str) -> list[str]:
@@ -3415,6 +3526,13 @@ class Orchestrator:
                 # d'équilibre interne arbitre ensuite la quantité).
                 if not en_combat:
                     monstres_str = _ennemis_annonces(chat.content or "", ctx)
+                    if not monstres_str:
+                        # Partie b59b4a9a : l'embuscade CANONIQUE de la
+                        # salle (ennemis du manifeste) narrée en prose sans
+                        # engager — le modèle évitait même le nom de la
+                        # créature (« des pierres tombent du plafond »).
+                        monstres_str = _ennemis_salle_courante(
+                            chat.content or "", ctx)
                     if monstres_str:
                         _log.warning(
                             "combat narré sans engager_combat → appel forcé "
@@ -3438,11 +3556,56 @@ class Orchestrator:
                                 "nombre)."
                             ),
                         ))
-                        await self._exec_tool_calls_prompt(
-                            [{"name": "engager_combat",
-                              "arguments": {"monstres": monstres_str}}],
-                            ctx, work, result, on_event,
-                        )
+                        # Partie b59b4a9a : la rencontre canonique peut être
+                        # AU-DELÀ du plafond d'équilibre (« Crawler charognard
+                        # ×6 » = 150 PV contre 17 PV pour le groupe — refus
+                        # « Rencontre écrasante » en BOUCLE : le modèle
+                        # re-narrait l'attaque, le garde re-forçait, refus
+                        # encore). Dégradation EN DEUX TEMPS : (1) la
+                        # quantité canonique est CONSERVÉE et la rencontre
+                        # est adaptée via `ajustement` (pv −x%, attaque/dégâts
+                        # réduits — c'est ce que la note [AJUSTEMENT REQUIS]
+                        # du manifeste demande et ce que suggère le refus) ;
+                        # (2) en dernier recours, vague réduite. Le résultat
+                        # officiel fait foi pour la narration.
+                        _essai = monstres_str
+                        _ajust = ""
+                        for _palier in range(3):
+                            await self._exec_tool_calls_prompt(
+                                [{"name": "engager_combat",
+                                  "arguments": {"monstres": _essai,
+                                                "ajustement": _ajust}}],
+                                ctx, work, result, on_event,
+                            )
+                            _tr_txt = str(
+                                (result.tool_calls_trace or [{}])[-1]
+                                .get("text") or ""
+                            )
+                            if ("écrasante" not in _tr_txt.lower()
+                                    or _palier == 2):
+                                break
+                            if _palier == 0:
+                                # PV canoniques → facteur pour entrer sous le
+                                # plafond (le refus affiche « X PV cumulés …
+                                # (plafond : Y, 2,5×) »).
+                                _m_pv = re.search(
+                                    r"(\d+)\s+PV\s+cumulés", _tr_txt)
+                                _m_pl = re.search(
+                                    r"plafond\s*:\s*(\d+)", _tr_txt)
+                                if _m_pv and _m_pl:
+                                    _somme = max(1, int(_m_pv.group(1)))
+                                    _cible = max(8, int(_m_pl.group(1)) - 10)
+                                    _pct = max(10, min(90, int(
+                                        100 * _cible / _somme)))
+                                    _ajust = (
+                                        f"pv {_pct}%, attaque -2, degats -2")
+                                    continue
+                            _parties = [p.strip()
+                                        for p in _essai.split(",") if p.strip()]
+                            if len(_parties) <= 1:
+                                break
+                            _essai = ", ".join(
+                                _parties[:max(1, len(_parties) // 3)])
                         continue
 
             # --- A. Détection de simulation textuelle ----------------------

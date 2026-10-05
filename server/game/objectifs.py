@@ -470,6 +470,34 @@ def requis_scenario_noms(etat: dict[str, Any], data_dir: str) -> set[str]:
     return noms
 
 
+def salle_objet_requis(
+    etat: dict[str, Any], data_dir: str, objet: str
+) -> Optional[list[tuple[int, int]]]:
+    """Salles (x, y) où l'objet requis `objet` peut être GAGNÉ — champ
+    `salle` (singulier) de la PREMIÈRE étape du manifeste qui l'exige.
+
+    Partie b59b4a9a : le modèle a appelé `inventaire_ajouter("La Couronne
+    de Mystra")` pendant le puits (3,0) — la Couronne se gagne chez
+    Nulentok (4,0) — et l'ajout a RÉUSSI : l'acte 1 passait « accompli »,
+    la zone-gemme se débloquait sans combat. `salles` (pluriel, la liste
+    de suivi de zone) n'est PAS une contrainte de gain — seul `salle`
+    l'est. None = objet non requis ou non contraint."""
+    cle = _cle_objet(objet)
+    for e in _etapes_manifeste(etat, data_dir):
+        reqs = [_cle_objet(n) for n in _liste_requis(e.get("requis") or [])]
+        if cle not in reqs:
+            continue
+        brut = e.get("salle")
+        if not brut:
+            return []
+        try:
+            xs, ys = str(brut).split(",")
+            return [(int(xs.strip()), int(ys.strip()))]
+        except (ValueError, AttributeError):
+            return []
+    return None
+
+
 def actualiser_objectifs(etat: dict[str, Any], data_dir: str,
                          partie_id: str = "") -> bool:
     """Évalue les objectifs et les écrit dans `quete.bible["objectifs"]` (+

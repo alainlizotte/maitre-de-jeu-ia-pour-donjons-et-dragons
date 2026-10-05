@@ -79,6 +79,18 @@ _OBJETS_SYNONYMES: dict[str, str] = {
 }
 
 
+def _cles_prefixe(a: str, b: str) -> bool:
+    """Vrai si les clés normalisées `a`/`b` désignent probablement le MÊME
+    objet par relation de préfixe (≥ 4 caractères communs au début) :
+    « fiole » ⊂ « fiole de verite », « parchemin » ⊂ « parchemin de la
+    route » — les libellés abrégés du modèle (partie b59b4a9a)."""
+    x, y = str(a or "").strip(), str(b or "").strip()
+    if not x or not y or x == y:
+        return False
+    court, long = sorted((x, y), key=len)
+    return len(court) >= 4 and long.startswith(court + " ")
+
+
 def _cle_objet(nom: Any) -> str:
     """Clé de fusion d'un objet : synonymes d'abord, `_norm` sinon — SANS les
     articles, la même normalisation que `objectifs._cle_objet` : les
@@ -764,6 +776,39 @@ async def inventaire_ajouter(
     _requis_objets = _requis_scenario(ctx)
     if _cle_objet(objet) in _requis_objets:
         portee_n = "quete"
+        # 🔒 Partie b59b4a9a : un objet REQUIS ne se gagne que dans la salle
+        # de SON étape (`salle` du manifeste — la Couronne de Mystra chez
+        # Nulentok (4,0), pas dans le puits (3,0)). Le modèle s'était ajouté
+        # la Couronne en plein combat ailleurs : l'acte 1 passait « accompli
+        # » et la zone-gemme se débloquait sans le boss. Refus explicite.
+        try:
+            from ..game.objectifs import salle_objet_requis  # noqa: E501 pylint: disable=import-outside-toplevel
+            from ..game.state import PartyState              # noqa: E501 pylint: disable=import-outside-toplevel
+            _etat_i = PartyState(
+                data_dir=ctx.data_dir, partie_id=ctx.partie_id,
+            ).load()
+            _salles_gain = salle_objet_requis(
+                _etat_i or {}, ctx.data_dir, objet)
+            if _salles_gain:
+                _courant = ((_etat_i.get("donjon") or {}).get("courant")
+                            or [0, 0])
+                try:
+                    _ici = (int(_courant[0]), int(_courant[1]))
+                except (TypeError, ValueError, IndexError):
+                    _ici = None
+                if _ici is not None and _ici not in _salles_gain:
+                    _ou = " ou ".join(f"({x},{y})" for x, y in _salles_gain)
+                    return ToolResult(text=(
+                        f"🚫 **« {objet} » ne peut pas être gagné ICI** : "
+                        "cet objet de quête se remporte dans la salle "
+                        f"{_ou} du scénario (mécanique anti-triche : "
+                        "l'objectif exige d'y parvenir réellement). "
+                        "Narrez l'obtention seulement une fois la salle "
+                        "atteinte et la rencontre résolue — sans appeler "
+                        "l'outil d'inventaire avant."
+                    ))
+        except Exception:                                    # noqa: BLE001
+            pass
 
     inv = _inventaire(fiche)
     cible = _cle_objet(objet)
@@ -796,6 +841,34 @@ async def inventaire_ajouter(
                         "persistée)."
                     )
                 )
+        # Partie b59b4a9a : le modèle ajoute le MÊME objet de quête sous un
+        # libellé ABRÉGÉ (« la fiole », « un parchemin ») alors que la forme
+        # longue existe déjà (« la fiole de vérité », « le parchemin de la
+        # route ») — clés différentes, l'inventaire se polluait de doublons
+        # approximatifs. Une entrée de quête de CETTE partie dont la clé est
+        # un PRÉFIXE de la clé demandée (ou l'inverse) désigne le même objet
+        # : on fusionne vers le libellé LE PLUS PRÉCIS (le plus long).
+        _pre = next(
+            (
+                e for e in inv
+                if _entree_portee_ok(e, portee_n, ctx.partie_id)
+                and _cles_prefixe(_cle_objet(e.get("nom")), cible)
+            ),
+            None,
+        )
+        if _pre is not None:
+            _cle_ex = str(_cle_objet(_pre.get("nom")))
+            _long = _pre.get("nom") if len(_cle_ex) >= len(cible) else objet
+            _pre["nom"] = _long
+            _pre["qte"] = int(_pre.get("qte", 1) or 1)
+            return ToolResult(
+                text=(
+                    f"ℹ️ **{objet}** désigne déjà « {_pre.get('nom')} » dans "
+                    f"l'inventaire de {fiche.get('nom', nom)} ({portee_lbl}) "
+                    "— même objet de quête sous un libellé abrégé, fusion "
+                    "effectuée (pas de doublon)."
+                )
+            )
     pu = _poids_unitaire(objet, poids)
     if pu is None:
         # 🛡️ Défaut LÉGER pour les objets de quête (parties 7177d819,

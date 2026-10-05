@@ -915,6 +915,25 @@ async def fiche_perso_creer(
         fiche["charge_max"] = _charge_max_inv(fiche)
     except Exception:                                        # noqa: BLE001
         pass
+    # 🔒 Partie b59b4a9a : une RE-création écrasait la fiche existante —
+    # inventaire remis au kit de départ et objets de quête PERDUS (fiole de
+    # vérité + parchemin de la route disparus en pleine partie). Une fiche
+    # existante ne se remplace JAMAIS par une création : mise à jour via
+    # `fiche_perso_mettre_a_jour`, remplacement délibéré via
+    # `fiche_perso_supprimer` puis re-création.
+    try:
+        _existante = _load_fiche(ctx, nom)
+    except Exception:                                        # noqa: BLE001
+        _existante = None
+    if isinstance(_existante, dict) and (
+            _existante.get("nom") or _existante.get("inventaire") is not None):
+        return ToolResult(text=(
+            f"🚫 **« {nom} » existe déjà** : la création est refusée pour "
+            "ne pas écraser la fiche en cours (inventaire, XP et objets de "
+            "quête seraient PERDUS). Utilisez `fiche_perso_mettre_a_jour` "
+            "pour corriger un champ, ou `fiche_perso_supprimer` si le "
+            "remplacement est vraiment voulu."
+        ))
     try:
         path = _save_fiche(ctx, nom, fiche)
     except ValueError as e:
@@ -1155,6 +1174,21 @@ async def fiche_perso_creer_rapide(
         fiche["charge_max"] = _charge_max_inv(fiche)
     except Exception:                                        # noqa: BLE001
         pass
+    # 🔒 Même garde que `fiche_perso_creer` (partie b59b4a9a) : pas de
+    # re-création écrasante d'une fiche existante.
+    try:
+        _existante = _load_fiche(ctx, nom)
+    except Exception:                                        # noqa: BLE001
+        _existante = None
+    if isinstance(_existante, dict) and (
+            _existante.get("nom") or _existante.get("inventaire") is not None):
+        return ToolResult(text=(
+            f"🚫 **« {nom} » existe déjà** : la création est refusée pour "
+            "ne pas écraser la fiche en cours (inventaire, XP et objets de "
+            "quête seraient PERDUS). Utilisez `fiche_perso_mettre_a_jour` "
+            "pour corriger un champ, ou `fiche_perso_supprimer` si le "
+            "remplacement est vraiment voulu."
+        ))
     try:
         path = _save_fiche(ctx, nom, fiche)
     except ValueError as e:

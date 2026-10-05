@@ -193,6 +193,10 @@ def test_d0_actions_composees_et_departs():
         "Je prends le sentier qui descend",
         "On avance prudemment dans le couloir",
         "Nous avançons vers la sortie",
+        # Partie d9f65ed2 : « je continue ma route vers le puits » —
+        # la variante possessive passait au travers du D0.
+        "je continue ma route vers le puits de Nulentok",
+        "Je reprends mon chemin vers la grotte",
     ):
         assert _action_deplacement_dans_donjon(action, etat), action
 
@@ -366,6 +370,57 @@ def test_objet_non_requis_non_contraind(tmp_path):
         tools["inventaire_ajouter"], ctx,
         {"nom": "Margoth", "objet": "corde (15 m)", "poids": 5}))
     assert "ne peut pas être gagné ICI" not in r.text, r.text
+
+
+def test_objet_requis_abrege_refuse_hors_salle(tmp_path):
+    """Partie d9f65ed2 : « la Couronne » (clé abrégée) ne matchait AUCUN
+    requis « La Couronne de Mystra » — l'anti-triche était contourné et
+    l'acte 1 passait accompli. La relation de préfixe applique la contrainte."""
+    import asyncio
+
+    from server.tools.base import ToolContext, invoke_tool
+    from server.tools.registry import discover_tools
+
+    data = _ctx_anti_triche(tmp_path, courant=(3, 0))
+    ctx = ToolContext(partie_id="test_b59b4a9a", joueur="Alain",
+                      data_dir=str(data))
+    tools = discover_tools()
+    r = asyncio.run(invoke_tool(
+        tools["inventaire_ajouter"], ctx,
+        {"nom": "Margoth", "objet": "le Trophée", "portee": "quete"}))
+    assert "ne peut pas être gagné ICI" in r.text, r.text
+    fiche = json.loads(
+        (data / "fiches" / "fiche_margoth.json").read_text(encoding="utf-8"))
+    assert fiche.get("inventaire") == [], fiche.get("inventaire")
+
+
+def test_objet_requis_refuse_pendant_combat(tmp_path):
+    """Partie d9f65ed2 (« à l'entrée du puits, la couronne a été ajoutée ») :
+    même dans la BONNE salle, l'objet ne se gagne pas pendant un combat —
+    la rencontre doit être résolue d'abord."""
+    import asyncio
+
+    from server.tools.base import ToolContext, invoke_tool
+    from server.tools.registry import discover_tools
+
+    data = _ctx_anti_triche(tmp_path, courant=(4, 0))
+    # un combat est en cours dans la salle du boss
+    partie = json.loads(
+        (data / "partie_test_b59b4a9a.json").read_text(encoding="utf-8"))
+    partie["monstres_combat"] = [
+        {"nom": "Boss du test", "pv": 24, "pv_max": 24}]
+    (data / "partie_test_b59b4a9a.json").write_text(
+        json.dumps(partie, ensure_ascii=False), encoding="utf-8")
+    ctx = ToolContext(partie_id="test_b59b4a9a", joueur="Alain",
+                      data_dir=str(data))
+    tools = discover_tools()
+    r = asyncio.run(invoke_tool(
+        tools["inventaire_ajouter"], ctx,
+        {"nom": "Margoth", "objet": "le Trophée", "portee": "quete"}))
+    assert "un combat est EN COURS" in r.text, r.text
+    fiche = json.loads(
+        (data / "fiches" / "fiche_margoth.json").read_text(encoding="utf-8"))
+    assert fiche.get("inventaire") == [], fiche.get("inventaire")
 
 
 # --------------------------------------------------------------------------- #

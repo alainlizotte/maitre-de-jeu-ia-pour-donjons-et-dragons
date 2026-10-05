@@ -774,7 +774,17 @@ async def inventaire_ajouter(
     # téléportation (objet REQUIS de l'étape 2) ajoutée portee="permanent"
     # — invisible de l'inventaire de quête, la progression restait bloquée.
     _requis_objets = _requis_scenario(ctx)
-    if _cle_objet(objet) in _requis_objets:
+    # Partie d9f65ed2 : l'ajout « la Couronne » (clé « couronne ») ne
+    # matchait AUCUN requis « La Couronne de Mystra » (clé « couronne de
+    # mystra ») — l'anti-triche était contourné par le nom abrégé et
+    # l'alias des objectifs marquait l'acte 1 « accompli ». La contrainte
+    # s'applique aussi par RELATION DE PRÉFIXE (≥ 4 car.) avec un requis.
+    _est_requis = _cle_objet(objet) in _requis_objets or any(
+        _cles_prefixe(_cle_objet(objet), _r)
+        or _cles_prefixe(_r, _cle_objet(objet))
+        for _r in _requis_objets
+    )
+    if _est_requis:
         portee_n = "quete"
         # 🔒 Partie b59b4a9a : un objet REQUIS ne se gagne que dans la salle
         # de SON étape (`salle` du manifeste — la Couronne de Mystra chez
@@ -806,6 +816,20 @@ async def inventaire_ajouter(
                         "Narrez l'obtention seulement une fois la salle "
                         "atteinte et la rencontre résolue — sans appeler "
                         "l'outil d'inventaire avant."
+                    ))
+                # 🔒 Partie d9f65ed2 : même dans la BONNE salle, l'objet ne
+                # se gagne qu'une fois la rencontre RÉSOLUE — pas « à
+                # l'entrée », pas en plein combat (le boss vivant gardait
+                # encore la Couronne que le modèle s'était déjà mise).
+                if _etat_i.get("monstres_combat"):
+                    return ToolResult(text=(
+                        f"🚫 **« {objet} » ne peut pas être gagné "
+                        "MAINTENANT** : un combat est EN COURS — la "
+                        "rencontre doit être résolue (monstres vaincus via "
+                        "`engager_combat` + attaques officielles) avant que "
+                        "l'objet de quête ne soit gagné. Narre le combat "
+                        "d'abord ; l'ajout se fera une fois la victoire "
+                        "acquise."
                     ))
         except Exception:                                    # noqa: BLE001
             pass

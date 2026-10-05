@@ -470,6 +470,19 @@ def requis_scenario_noms(etat: dict[str, Any], data_dir: str) -> set[str]:
     return noms
 
 
+def _cles_prefixe_rel(a: str, b: str) -> bool:
+    """Relation de préfixe entre deux clés d'objet normalisées (≥ 4 car. au
+    début commun) — même règle que `inventaire._cles_prefixe` sans cycle
+    d'import : « couronne » ⊂ « couronne de mystra », « trophee » ⊂
+    « trophee du boss » (partie d9f65ed2 : le nom abrégé d'un objet requis
+    contournait l'anti-triche)."""
+    x, y = str(a or "").strip(), str(b or "").strip()
+    if not x or not y or x == y:
+        return False
+    court, long = sorted((x, y), key=len)
+    return len(court) >= 4 and long.startswith(court + " ")
+
+
 def salle_objet_requis(
     etat: dict[str, Any], data_dir: str, objet: str
 ) -> Optional[list[tuple[int, int]]]:
@@ -484,8 +497,15 @@ def salle_objet_requis(
     l'est. None = objet non requis ou non contraint."""
     cle = _cle_objet(objet)
     for e in _etapes_manifeste(etat, data_dir):
+        # Partie d9f65ed2 : le nom ABRÉGÉ (« la Couronne » ⊂ « La Couronne
+        # de Mystra ») doit aussi trouver l'étape qui exige l'objet — la
+        # relation de préfixe (≥ 4 car.) comme dans `inventaire_ajouter`.
         reqs = [_cle_objet(n) for n in _liste_requis(e.get("requis") or [])]
-        if cle not in reqs:
+        if not any(
+            cle == r
+            or _cles_prefixe_rel(cle, r)
+            for r in reqs
+        ):
             continue
         brut = e.get("salle")
         if not brut:

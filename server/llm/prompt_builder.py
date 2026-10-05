@@ -868,7 +868,13 @@ def _scenario_bible_bloc(
                                 "coordonnées ci-dessous ne sont PAS une "
                                 "destination actuelle : ne t'y rends PAS "
                                 "tant que l'objectif courant n'est pas "
-                                "accompli] "
+                                "accompli. N'ANTICIPE PAS non plus les "
+                                "remises d'objets de cette étape (partie "
+                                "d9f65ed2 : la baguette de téléportation "
+                                "était remise dès l'intro alors que le "
+                                "module ne la confie qu'AU RETOUR de la "
+                                "Couronne) — chaque objet est gagné/remis "
+                                "QUAND l'étape le prévoit] "
                                 + _det_o.split(". ")[0][:220]
                             )
                         else:

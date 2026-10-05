@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -408,3 +409,175 @@ def test_fiche_perso_creer_refuse_existant(tmp_path):
     quete = [e for e in fiche.get("inventaire") or []
              if e.get("portee") == "quete"]
     assert len(quete) == 1, fiche.get("inventaire")
+
+
+# --------------------------------------------------------------------------- #
+#  7. Genre du PJ : consigne de pronoms dans le récap ALLÉGÉ
+# --------------------------------------------------------------------------- #
+
+def _recap_avec_pj(sexe: str) -> str:
+    """Récap allégé (exploration + PJ) pour un PJ du sexe donné — c'est le
+    SEUL chemin utilisé en jeu normal (garde `build_recap`)."""
+    from dataclasses import replace
+
+    from server.config import PathsConfig, load_config
+    from server.llm.prompt_builder import PromptBuilder
+
+    cfg = load_config()
+    cfg2 = replace(cfg, paths=PathsConfig(
+        data_dir=str(Path(tempfile.gettempdir()) / "dnd35_genre_test"),
+        prompts_dir=str(cfg.paths.prompts_dir),
+        sections_dir=str(cfg.paths.sections_dir),
+    ))
+    etat = {
+        "phase": "exploration",
+        "pj": [{"nom": "Margoth", "race": "Demi-orc", "classe": "Barbare",
+                "niveau": 1, "pv": 17, "pv_max": 17, "ca": 15,
+                "joueur": "Alain", "conditions": [],
+                "apparence": {"sexe": sexe}}],
+    }
+    return PromptBuilder(cfg2).build_recap(etat, partie_id="test_genre")
+
+
+def test_recap_allege_identite_pj_masculin():
+    """Partie b59b4a9a : « Margoth… Elle franchit l'entrée » pour un PJ
+    sexe M — la ligne IDENTITÉ DE RÔLE du récap complet n'était JAMAIS
+    atteinte (la garde `build_recap` bascule exploration+PJ sur le récap
+    allégé). Elle doit figurer dans le chemin allégé avec les pronoms."""
+    recap = _recap_avec_pj("M")
+    assert "IDENTITÉ DE RÔLE" in recap, "ligne absente du récap allégé"
+    assert "MASCULIN" in recap
+    assert "JAMAIS « elle »" in recap
+    assert "il avance" in recap
+    # Rappel FINAL en queue de récap (effet de récence contre l'écho du
+    # mauvais genre dans l'historique — des dizaines de « Elle »).
+    assert "RAPPEL IDENTITÉ" in recap
+    assert recap.index("IDENTITÉ DE RÔLE") < recap.index("RAPPEL IDENTITÉ")
+    assert recap.rindex("Margoth = MASCULIN") > recap.index("IDENTITÉ DE RÔLE")
+
+
+def test_recap_allege_identite_pj_feminin():
+    """Variante féminine : pronoms « elle » imposés, « il » interdit."""
+    recap = _recap_avec_pj("F")
+    assert "IDENTITÉ DE RÔLE" in recap
+    assert "FÉMININ" in recap
+    assert "JAMAIS « il »" in recap
+    assert "elle avance" in recap
+    assert "FÉMININ → « elle », JAMAIS « il »" in recap
+
+
+def test_recap_riche_identite_et_rappel_en_combat():
+    """Phase combat : le récap RICHE est utilisé — la ligne IDENTITÉ + le
+    rappel final doivent y figurer aussi (b59b4a9a : le combat narrait
+    « Elle » à chaque tour)."""
+    from dataclasses import replace
+
+    from server.config import PathsConfig, load_config
+    from server.llm.prompt_builder import PromptBuilder
+
+    cfg = load_config()
+    cfg2 = replace(cfg, paths=PathsConfig(
+        data_dir=str(Path(tempfile.gettempdir()) / "dnd35_genre_test"),
+        prompts_dir=str(cfg.paths.prompts_dir),
+        sections_dir=str(cfg.paths.sections_dir),
+    ))
+    etat = {
+        "phase": "combat",
+        "tour": 4,
+        "courant_tour_pour": "Margoth",
+        "pj": [{"nom": "Margoth", "race": "Demi-orc", "classe": "Barbare",
+                "niveau": 1, "pv": 2, "pv_max": 17, "ca": 15,
+                "joueur": "Alain", "conditions": [],
+                "apparence": {"sexe": "M"}}],
+        "monstres_combat": [{"nom": "Zendar Nulentok (anti-druide)",
+                             "pv": 24, "pv_max": 24}],
+        "initiative": [
+            {"nom": "Zendar Nulentok (anti-druide)", "init": 12},
+            {"nom": "Margoth", "init": 1},
+        ],
+    }
+    recap = PromptBuilder(cfg2).build_recap(etat, partie_id="test_genre")
+    assert "IDENTITÉ DE RÔLE" in recap
+    assert "RAPPEL IDENTITÉ" in recap
+    assert "Margoth = MASCULIN" in recap
+
+
+def test_bloc_identite_pj_sans_genre_vide():
+    """Pas de genre connu → pas de ligne (pas d'invention)."""
+    from server.llm.prompt_builder import _bloc_identite_pj, _rappel_final_pj
+    assert _bloc_identite_pj("Margoth", "") == ""
+    assert _bloc_identite_pj("", "Masculin") == ""
+    assert _rappel_final_pj("", [{"nom": "Margoth"}]) == ""
+    assert _rappel_final_pj("x", [{"nom": ""}]) == ""
+
+
+# --------------------------------------------------------------------------- #
+#  8. Correction déterministe des pronoms PJ (fichier + état)
+# --------------------------------------------------------------------------- #
+
+_ETAT_MARGOTH_M = {
+    "pj": [{"nom": "Margoth", "apparence": {"sexe": "M"}}],
+    "donjon": {"grille": [{"x": 0, "y": 0, "pnj": [
+        "Thukmuul Teleshann (magesteresse NG — donne la quête)"]}]},
+}
+
+
+def test_correction_pronoms_pj_masculin():
+    """« Margoth …, elle » / « … Margoth. Elle se relève » → « il » ;
+    les accords et possessifs ne sont PAS touchés."""
+    from server.llm.orchestrator import _corriger_pronoms_pj
+
+    n = ("Margoth se relève difficilement, mais elle n'en reste pas moins "
+         "blessée. Elle se tient prêt à frapper. Son armure d'écailles "
+         "absorbe le choc.")
+    corr = _corriger_pronoms_pj(n, _ETAT_MARGOTH_M, "")
+    assert "mais il n'en reste pas moins blessée" in corr
+    assert "Il se tient prêt à frapper" in corr
+    # Possessif « Son armure » : correct en français (accord avec l'objet).
+    assert "Son armure" in corr
+
+
+def test_correction_pronoms_veto_pnj_feminin():
+    """La phrase qui cite un PNJ FÉMININ connu (Teleshann) n'est pas
+    retouchée — le pronom peut se rapporter à ELLE."""
+    from server.llm.orchestrator import _corriger_pronoms_pj
+
+    n = ("Margoth regarde Thukmuul Teleshann, elle semble inquiète. "
+         "Margoth frappe. Elle sourit.")
+    corr = _corriger_pronoms_pj(n, _ETAT_MARGOTH_M, "")
+    # Phrase 1 : veto (Teleshann citée) — inchangée.
+    assert "elle semble inquiète" in corr
+    # Phrase 3 : Margoth sujet à la phrase précédente → corrigée.
+    assert "Il sourit" in corr
+
+
+def test_correction_pronoms_pj_feminin_miroir():
+    """PJ féminin mal narré « il » → « elle » (miroir du cas Margoth)."""
+    from server.llm.orchestrator import _corriger_pronoms_pj
+
+    etat = {"pj": [{"nom": "Elandra", "apparence": {"sexe": "F"}}],
+            "donjon": {"grille": []}}
+    n = "Elandra avance d'un pas ferme, il lève son épée. Il frappe."
+    corr = _corriger_pronoms_pj(n, etat, "")
+    assert "elle lève son épée" in corr
+    assert "Elle frappe" in corr
+
+
+def test_correction_pronoms_complement_pas_de_fix():
+    """« la hache de Margoth, elle tranche » — Margoth est COMPLÉMENT :
+    le pronom peut désigner la hache → pas de correction (conservateur)."""
+    from server.llm.orchestrator import _corriger_pronoms_pj
+
+    n = "La hache de Margoth vibre, elle tranche l'air."
+    corr = _corriger_pronoms_pj(n, _ETAT_MARGOTH_M, "")
+    assert corr == n
+
+
+def test_rappel_final_et_note_echo_dans_recap():
+    """Le récap allégé contient : IDENTITÉ DE RÔLE + note anti-écho sur
+    `derniere_narration` + RAPPEL final."""
+    recap = _recap_avec_pj("M")
+    etat_dbg = recap  # la note n'apparaît que si derniere_narration existe
+    # Sans derniere_narration : pas de note, mais les deux autres oui.
+    assert "IDENTITÉ DE RÔLE" in etat_dbg
+    assert "RAPPEL IDENTITÉ" in etat_dbg

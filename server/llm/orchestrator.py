@@ -1115,6 +1115,132 @@ def _objets_remettes_narration(narration: str) -> list[str]:
     return list(objets.values())
 
 
+def _corriger_pronoms_pj(narration: str, etat: dict[str, Any],
+                         data_dir: str) -> str:
+    """Corrige les PRONOMS du mauvais genre attribués aux PJ dans la
+    narration finale (partie b59b4a9a : « Margoth… Elle se relève » pour un
+    PJ sexe M — l'écho du mauvais genre dans l'historique domine toute
+    consigne de prompt, même explicite ; le correctif est DÉTERMINISTE).
+
+    Contextes corrigés (conservateurs) :
+    - le PJ est SUJET dans la phrase (« Margoth … , elle ») → pronoms fixés ;
+    - le PJ était sujet à la phrase PRÉCÉDENTE et la phrase courante ne cite
+      aucun PNJ de genre opposé connu (veto : le pronom peut être LEURS).
+
+    Les accords (« blessée », « prête ») ne sont PAS retouchés (trop
+    risqué) ; les possessifs non plus (« sa hache » est correct en
+    français — accord avec l'objet). Renvoie la narration corrigée."""
+    if not narration or not narration.strip():
+        return narration
+    try:
+        from .prompt_builder import _genre_pj, _genres_pnj_donjon
+    except Exception:                                        # noqa: BLE001
+        return narration
+    pj_genres: list[tuple[str, str]] = []
+    for _p in (etat.get("pj") or []):
+        _nom = str((_p or {}).get("nom") or "").strip()
+        if not _nom:
+            continue
+        _g = _genre_pj(data_dir, _p)
+        if _g in ("Masculin", "Féminin"):
+            pj_genres.append((_nom, _g))
+    if not pj_genres:
+        return narration
+    # PNJ de genre connu (manifeste) : une phrase qui les cite n'est pas
+    # retouchée — le pronom peut se rapporter à EUX.
+    pnj_fem: list[str] = []
+    pnj_masc: list[str] = []
+    try:
+        for _l in _genres_pnj_donjon(etat):
+            _m = re.match(r"(.+?)\s+—\s+(FÉMININ|MASCULIN)$", _l or "")
+            if not _m:
+                continue
+            (pnj_fem if _m.group(2) == "FÉMININ" else pnj_masc).append(
+                _m.group(1))
+    except Exception:                                        # noqa: BLE001
+        pass
+
+    def _sujet(nom: str, phrase: str) -> bool:
+        """Le nom apparaît-il comme SUJET (pas complément « de/à/par N ») ?"""
+        m = re.search(
+            r"(?<![A-Za-zÀ-ÿ])" + re.escape(nom) + r"(?![A-Za-zÀ-ÿ])",
+            phrase)
+        if not m:
+            return False
+        avant = phrase[max(0, m.start() - 4):m.start()].lower()
+        return not avant.rstrip().endswith(
+            ("de", "du", "à", "par", "avec", "sur", "dans"))
+
+    phrases = [m.group(0) for m in re.finditer(
+        r"[^.!?…]+(?:[.!?…]+|$)", narration)]
+
+    # Passe 1 (gauche → droite) : chaque phrase est-elle LIÉE au PJ (sujet
+    # nommé, ou chaîne prononciale continuée sans nouveau référent) ?
+    lie: list[bool] = []
+    veto: list[bool] = []
+    for i, phrase in enumerate(phrases):
+        bas = phrase.lower()
+        _veto_i = False
+        _lie_i = False
+        for nom, genre in pj_genres:
+            bon = "il" if genre == "Masculin" else "elle"
+            mauvais = "elle" if genre == "Masculin" else "il"
+            if genre == "Masculin" and any(
+                    ff.lower() in bas for ff in pnj_fem):
+                _veto_i = True
+            if genre == "Féminin" and any(
+                    m2.lower() in bas for m2 in pnj_masc):
+                _veto_i = True
+            if _sujet(nom, phrase):
+                _lie_i = True
+            elif lie and lie[i - 1] and not _veto_i:
+                # Chaîne prononciale : la phrase précédente était liée et
+                # celle-ci démarre par un pronom / possessif du même référent
+                # (« Elle s'appuie… », « Son armure… et elle sent… »).
+                if re.match(
+                        r"\s*(" + mauvais.capitalize() + r"|" + mauvais
+                        + r"|Son |Sa |Ses |et " + mauvais + r"|, "
+                        + mauvais + r")", phrase):
+                    _lie_i = True
+        lie.append(_lie_i)
+        veto.append(_veto_i)
+
+    # Passe 2 (droite → gauche) : application des remplacements — les spans
+    # des phrases encore à traiter ne bougent pas.
+    resultats = list(phrases)
+    for i in range(len(phrases) - 1, -1, -1):
+        phrase = phrases[i]
+        if not lie[i] or veto[i]:
+            continue
+        for nom, genre in pj_genres:
+            if not _sujet(nom, phrase) and not (
+                    i and lie[i - 1]):
+                continue
+            bon_l = "il" if genre == "Masculin" else "elle"
+            mauvais = "elle" if genre == "Masculin" else "il"
+            bon_fort = "Il" if genre == "Masculin" else "Elle"
+            # Élisions d'abord : « d'elle » → « de lui », préposition + elle
+            # → + lui (jamais « d'il »).
+            if genre == "Masculin":
+                phrase = re.sub(r"d[''\u2019]" + mauvais + r"\b",
+                                "de lui", phrase, flags=re.IGNORECASE)
+                phrase = re.sub(
+                    r"\b(à|vers|pour|avec|sans|chez|sur) " + mauvais
+                    + r"\b", r"\1 lui", phrase, flags=re.IGNORECASE)
+            phrase = re.sub(
+                r"(?<![A-Za-zÀ-ÿ])" + mauvais + r"-même\b",
+                ("lui-même" if genre == "Masculin" else "elle-même"),
+                phrase, flags=re.IGNORECASE)
+            phrase = re.sub(
+                r"(?<![A-Za-zÀ-ÿ])" + mauvais.capitalize()
+                + r"(?![A-Za-zÀ-ÿ'])", bon_fort, phrase)
+            phrase = re.sub(
+                r"(?<![A-Za-zÀ-ÿ])" + mauvais + r"(?![A-Za-zÀ-ÿ'])",
+                bon_l, phrase)
+        resultats[i] = phrase
+    return "".join(resultats)
+
+
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
     """True si au moins une occurrence du nom normalisé `n` dans le texte
     normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
@@ -4220,6 +4346,25 @@ class Orchestrator:
         # ici — main.py l'ajoute à la dm finale APRÈS les rejeux correctifs
         # (qui remplacent la narration), pour ne rien perdre.
 
+        # 🧍 Partie b59b4a9a : correction DÉTERMINISTE des pronoms du mauvais
+        # genre attribués aux PJ (« Margoth… Elle se relève », PJ masculin) —
+        # l'écho du mauvais genre dans l'historique domine toute consigne de
+        # prompt ; le serveur corrige les contextes non ambigus.
+        try:
+            from ..game.state import PartyState
+            _etat_g = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                max_history=0,
+            ).load()
+            _avant_g = result.narration
+            result.narration = _corriger_pronoms_pj(
+                result.narration, _etat_g or {}, str(ctx.data_dir))
+            if result.narration != _avant_g:
+                _log.info(
+                    "pronoms de PJ corrigés (genre) dans la narration finale")
+        except Exception:                                    # noqa: BLE001
+            pass
+
         # 🎁 Rattrapage DÉTERMINISTE de la remise d'objets de quête (partie
         # e55cc855) : la remise était narrée (« range la fiole de vérité… dans
         # son sac ») sans JAMAIS appeler `inventaire_ajouter` — l'objet
@@ -4294,6 +4439,14 @@ class Orchestrator:
                 "maintenant une réponse de narration complète au joueur "
                 "en t'appuyant sur les résultats des tools ci-dessus. "
                 "N'invoque plus aucun tool — raconte la suite au joueur."
+                # Partie b59b4a9a : la narration de fallback écrivait
+                # « Margoth… elle » (PJ masculin) — rappel d'identité +
+                # interdit d'inventer des nombres hors résultats officiels.
+                " 🧍 RESPECTE l'identité des PJ du récapitulatif : nom, "
+                "race, classe et surtout GENRE → pronoms et accords "
+                "(un PJ « MASCULIN » est « il », JAMAIS « elle »). "
+                "N'invente AUCUN nombre : reprends ceux des résultats "
+                "officiels ci-dessus."
                 + _CORRECTIF_INTERNE
             ),
         )

@@ -934,6 +934,55 @@ def _genre_pj(data_dir: str, p: dict[str, Any]) -> str:
     return _sexe_libelle(sexe_brut)
 
 
+def _bloc_identite_pj(nom: str, genre: str) -> str:
+    """Ligne « IDENTITÉ DE RÔLE » d'un PJ (pronoms + accords explicites).
+
+    Partie b59b4a9a : le genre figurait dans le récap (« genre Masculin »
+    noyé dans la parenthèse) mais le modèle écrivait « Margoth… elle ».
+    Consigne EXPLICITE de pronoms + accords, avec exemples concrets —
+    injectée DANS LE CHEMIN ALLÉGÉ (phase exploration) : la ligne du récap
+    complet n'était jamais atteinte (la garde `build_recap` bascule
+    exploration+PJ sur le récap minimal)."""
+    if not genre or not str(nom or "").strip():
+        return ""
+    if genre == "Masculin":
+        _pronom = ("il / lui / le / le sien — écris « il avance », "
+                   "« il frappe », JAMAIS « elle »")
+    elif genre == "Féminin":
+        _pronom = ("elle / lui / la / la sienne — écris « elle avance », "
+                   "« elle frappe », JAMAIS « il »")
+    else:
+        _pronom = "il·le / elle·la (au choix, constant)"
+    return (
+        f"    · ⚠️ IDENTITÉ DE RÔLE — {str(nom).strip()} est de genre "
+        f"{genre.upper()} : accords et pronoms TOUJOURS {_pronom}, dans "
+        "toute la narration (récits ET dialogues du MJ)."
+    )
+
+
+def _rappel_final_pj(data_dir: str, pj: list[dict[str, Any]]) -> str:
+    """Rappel FINAL compact des genres des PJ (effet de récence) — l'écho
+    du mauvais genre dans l'historique (« Elle » répété des tours durant,
+    partie b59b4a9a) écrase la consigne d'identité placée en tête du
+    récapitulatif. Une courte ligne en QUEUE rééquilibre. '' si aucun
+    genre connu."""
+    lignes: list[str] = []
+    for p in pj or []:
+        nom = str((p or {}).get("nom") or "").strip()
+        genre = _genre_pj(data_dir, p or {})
+        if not nom or not genre:
+            continue
+        if genre == "Masculin":
+            lignes.append(f"{nom} = MASCULIN → « il », JAMAIS « elle »")
+        elif genre == "Féminin":
+            lignes.append(f"{nom} = FÉMININ → « elle », JAMAIS « il »")
+        else:
+            lignes.append(f"{nom} = genre neutre (accords constants)")
+    if not lignes:
+        return ""
+    return "⚠️ RAPPEL IDENTITÉ (pronoms) : " + " ; ".join(lignes) + "."
+
+
 def _dons_competences_pj(data_dir: str, nom: str) -> str:
     """Dons + rangs de compétences d'un PJ, lus dans sa fiche sur disque —
     l'entrée `pj` de l'état ne transporte ni les dons ni les rangs. Sans
@@ -1209,6 +1258,15 @@ class PromptBuilder:
                     lignes.append(
                         f"  · {p.get('nom','?')} — " + " · ".join(det)
                     )
+                # 🧍 Identité de rôle : le chemin ALLÉGÉ est le SEUL utilisé
+                # en exploration (garde `build_recap`) — sans cette ligne
+                # ici, la consigne de pronoms du récap complet n'atteignait
+                # jamais le modèle (« Margoth… elle » pour un PJ masculin,
+                # partie b59b4a9a).
+                _ident = _bloc_identite_pj(
+                    str(p.get("nom") or ""), _genre_pj(data_dir, p))
+                if _ident:
+                    lignes.append(_ident)
             if pj:
                 lignes.append(
                     "  (Sac listé = contenu OFFICIEL de l'inventaire : ne dis "
@@ -1247,8 +1305,13 @@ class PromptBuilder:
                 "(lancer_caracteristiques, fiche_perso_creer, etat_partie_patch, "
                 "monstre_consulter, carte_donjon_entrer, carte_donjon_explorer…) "
                 "— ne raconte pas simplement le résultat et NE TE RE-PRÉSENTE PAS.",
-                "================================================",
             ]
+            # 🧍 Rappel FINAL des pronoms (effet de récence contre l'écho du
+            # mauvais genre dans l'historique — partie b59b4a9a).
+            _rappel_min = _rappel_final_pj(data_dir, pj)
+            if _rappel_min:
+                lignes.append(_rappel_min)
+            lignes.append("=" * 48)
             return "\n".join(lignes)
 
         # État riche (partie en cours) : récap complet.
@@ -1380,17 +1443,12 @@ class PromptBuilder:
                 )
                 # 🔧 Bêta : identité de rôle — le genre était dans le récap
                 # mais le petit modèle écrivait « Margoth, armée… elle » pour
-                # un PJ masculin. Consigne EXPLICITE de pronoms + accords.
-                _g = _genre_pj(data_dir, p)
-                if _g:
-                    _pronom = ("il / lui / le sien" if _g == "Masculin"
-                               else "elle / la sienne" if _g == "Féminin"
-                               else "il·le / elle·la (au choix, constant)")
-                    lignes.append(
-                        f"    · ⚠️ IDENTITÉ DE RÔLE — {_g} : accords et "
-                        f"pronoms TOUJOURS {_pronom} (JAMAIS l'autre genre) "
-                        "dans toute la narration."
-                    )
+                # un PJ masculin. Consigne EXPLICITE de pronoms + accords
+                # (helper partagé avec le chemin allégé — b59b4a9a).
+                _ident_riche = _bloc_identite_pj(
+                    str(p.get("nom") or ""), _genre_pj(data_dir, p))
+                if _ident_riche:
+                    lignes.append(_ident_riche)
                 # Fiche PJ (valeurs officielles) : sac, dons/rangs, sorts —
                 # l'entrée `pj` de l'état n'en transporte aucune.
                 for detail in _fiche_pj_lignes(
@@ -1523,7 +1581,34 @@ class PromptBuilder:
                 "— ne le RE-NARRE PAS, ne redonne PAS ce qui a déjà été "
                 "remis ou dit ; poursuis l'histoire À PARTIR de cet état) :"
             )
+            # 🧍 Partie b59b4a9a : la narration précédente injectée verbatim
+            # était truffée du MAUVAIS genre (« Elle » pour Margoth, PJ
+            # masculin) — le modèle copiait ce style à chaque tour, écrasant
+            # toute consigne d'identité. Note corrective AVANT l'écho.
+            _genres_connus = [
+                (str(_p.get("nom") or "").strip(), _genre_pj(data_dir, _p))
+                for _p in (pj or [])
+            ]
+            _faux = [
+                f"{_n} = {_g.upper()} (les « "
+                f"{'elle' if _g == 'Masculin' else 'il'} » le concernant "
+                "ci-dessous sont des ERREURS à ne PAS reproduire)"
+                for _n, _g in _genres_connus if _g in ("Masculin", "Féminin")
+            ]
+            if _faux:
+                lignes.append(
+                    "🧍 ATTENTION — le texte ci-dessous contient des erreurs "
+                    "de genre à NE PAS IMITER : " + " ; ".join(_faux) + "."
+                )
             lignes.append(derniere[:1500])
+
+        # 🧍 Rappel FINAL (effet de récence) : l'historique peut contenir des
+        # dizaines de références au MAUVAIS genre (« Elle » pour un PJ
+        # masculin — partie b59b4a9a) qui écrasent la consigne d'identité
+        # placée en tête. Une ligne courte en QUEUE du récap rééquilibre.
+        _rappel = _rappel_final_pj(data_dir, pj)
+        if _rappel:
+            lignes.append(_rappel)
 
         recap = "\n".join(lignes)
         if len(recap) > self.cfg.game.max_recap_chars:

@@ -320,7 +320,7 @@ def _articles_phb() -> list[dict[str, Any]]:
     E(_art("Potion de soins légers", "substance", po=50, kg=0.1))
 
     # --- Munitions -----------------------------------------------------------
-    E(_art("Flèches (20)", "munition", po=1, kg=1.36))
+    E(_art("Flèches (10)", "munition", po=1, kg=0.45))
     E(_art("Carreaux (10)", "munition", po=1, kg=0.45))
     E(_art("Balles de fronde (10)", "munition", pa=1, kg=1.36))
 

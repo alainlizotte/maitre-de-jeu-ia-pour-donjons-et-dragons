@@ -72,14 +72,14 @@ async def test_ajout_flèches_poids_et_encombrement():
         await _creer_rodeur(d)
         r = await tool(d, "inventaire_ajouter", nom="Arwen", objet="flèche",
                        quantite=20)
-        # 20 flèches = 3 lb (lot) → 20 × 0.068 kg ≈ 1.36 kg ; FOR 12 taille M
-        # → charge max 59 kg → encombrement Légère.
-        assert "1.36 kg" in r.text
+        # PHB 3.5 : 10 flèches = 1 lb (0,45 kg) → 20 × 0.045 = 0.9 kg ;
+        # FOR 12 taille M → charge max 59 kg → encombrement Légère.
+        assert "0.9 kg" in r.text
         f = _fiche(d, "Arwen")
         fl = next(i for i in f["inventaire"] if i["nom"] == "flèche")
         assert fl["qte"] == 20
         assert f.get("etat_encumbrance") == "Legere"  # ASCII (schéma de fiche)
-        assert abs(f.get("poids_transporte", 0) - 1.36) < 0.01
+        assert abs(f.get("poids_transporte", 0) - 0.9) < 0.01
         assert f.get("charge_max") == 59
     finally:
         shutil.rmtree(d, ignore_errors=True)

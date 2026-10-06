@@ -1336,7 +1336,11 @@ _VOYAGE_INTENT_RE = re.compile(
     r"\bje\s+me\s+dirige\s+vers\b|\bje\s+pars\s+(?:vers|pour)\b|"
     r"\bje\s+vais\s+vers\b|\ben\s+route\s+(?:vers|pour)\b|"
     r"\bje\s+rejoins\b|\ballons?\s+vers\b|"
-    r"\bje\s+prends\s+la\s+route\b", re.IGNORECASE,
+    r"\bje\s+prends\s+la\s+route\b|"
+    # Partie 1808ebab (suite) : « Je retourne à la ville pour voir
+    # Thukmuul Teleshann » — un retour à 30 km est un vrai voyage.
+    r"\bje\s+(?:retourne|rentre)\s+(?:à|au|aux|en|vers)\b",
+    re.IGNORECASE,
 )
 _DEST_VOYAGE_RE = re.compile(
     r"(?:vers|pour)\s+(?:le\s+|la\s+|les\s+|l'\s*|au\s+|à la\s+)?"
@@ -4541,13 +4545,51 @@ class Orchestrator:
                 _achat = _extraire_achat(
                     _intention, list(_phb_articles.articles()))
                 if _pj_nom_achat and _achat.get("type") == "auberge":
+                    _args_ach = {
+                        "nom": _pj_nom_achat, "repas": _achat.get("repas", ""),
+                        "logement": _achat.get("logement", ""),
+                        "nuits": int(_achat.get("nuits") or 1)}
                     _tr_ach = await self.execute_tool_direct(
-                        "auberge_commander",
-                        {"nom": _pj_nom_achat, "repas": _achat.get("repas", ""),
-                         "logement": _achat.get("logement", ""),
-                         "nuits": int(_achat.get("nuits") or 1)},
-                        ctx, on_event, result,
+                        "auberge_commander", _args_ach, ctx, on_event, result,
                     )
+                    # 🔧 Partie 1808ebab (suite) : Silverymoon (Cité) ne sert
+                    # que la qualité « bonne » — le défaut « mediocre » (et le
+                    # « bon » du modèle) était REFUSÉ 3× et le repas
+                    # n'arrivait jamais. Sur refus d'indisponibilité, reprends
+                    # la qualité PROPOSÉE la plus proche du rang demandé.
+                    if _tr_ach is not None and "indisponible" in (
+                            _tr_ach.text or ""):
+                        _m_prop = re.search(
+                            r"proposé\s*:\s*\[([^\]]+)\]",
+                            _tr_ach.text or "")
+                        if _m_prop:
+                            _proposes = [
+                                _q.strip(" '\"") for _q in
+                                _m_prop.group(1).split(",") if _q.strip()
+                            ]
+                            _rang = {"mediocre": 0, "convenable": 1,
+                                     "bonne": 2}
+                            _rq = _rang.get(
+                                _normalise_pour_compare(_achat.get("repas")
+                                            or _achat.get("logement") or ""),
+                                1)
+                            _choix = min(
+                                _proposes,
+                                key=lambda _q: abs(
+                                    _rang.get(_normalise_pour_compare(_q), 1) - _rq),
+                                default="",
+                            )
+                            if _choix:
+                                _cle_q = ("repas" if _achat.get("repas")
+                                          else "logement")
+                                _args_ach[_cle_q] = _choix
+                                _achat["libelle"] = (
+                                    _cle_q + " " + _choix
+                                    + " (qualité adaptée à la ville)")
+                                _tr_ach = await self.execute_tool_direct(
+                                    "auberge_commander", _args_ach,
+                                    ctx, on_event, result,
+                                )
                 elif _achat.get("type") == "marche":
                     _tr_ach = await self.execute_tool_direct(
                         "marche_acheter",
@@ -4585,9 +4627,23 @@ class Orchestrator:
                 str(_m.content or "") for _m in work
                 if getattr(_m, "role", "") == "user"
             ]
+            from ..game.state import PartyState  # noqa: E501 pylint: disable=import-outside-toplevel
+            from ..tools.voyage import voyage_demarrer as _voy_dem  # noqa: E501 pylint: disable=import-outside-toplevel
+            _etat_v = PartyState(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                max_history=0,
+            ).load()
             _dest_voy = None
             if _voy_msgs and _VOYAGE_INTENT_RE.search(_voy_msgs[-1]):
                 _dest_voy = _extraire_voyage(_voy_msgs[-1])
+                if _dest_voy and _dest_voy.lower() in (
+                        "ville", "cité", "cite", "village", "bourg",
+                        "la ville"):
+                    # Destination vague (« retourne à la ville ») : la ville
+                    # OÙ SE TROUVE le groupe (lieu courant, ex. Silverymoon).
+                    _dest_voy = str(
+                        (_etat_v.get("lieu") or {}).get("nom") or ""
+                    ).strip() or _dest_voy
             _tools_depl = {
                 tc.get("name") for tc in result.tool_calls_trace
             }
@@ -4595,12 +4651,6 @@ class Orchestrator:
                     and not (_tools_depl & {
                         "voyage_demarrer", "carte_donjon_entrer",
                         "carte_donjon_explorer", "carte_donjon_sortir"})):
-                from ..game.state import PartyState  # noqa: E501 pylint: disable=import-outside-toplevel
-                from ..tools.voyage import voyage_demarrer as _voy_dem  # noqa: E501 pylint: disable=import-outside-toplevel
-                _etat_v = PartyState(
-                    data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
-                    max_history=0,
-                ).load()
                 if not (_etat_v.get("voyage") or {}).get("en_cours"):
                     _tr_voy = await self.execute_tool_direct(
                         "voyage_demarrer",

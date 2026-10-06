@@ -1808,12 +1808,8 @@ async def fiche_perso_infliger_degats(
         if _DEDUP_DEGATS.get(cle_dedup):
             return ToolResult(
                 text=(
-                    f"♻️ **Doublon ignoré** : « {nom} » a DÉJÀ subi "
-                    f"exactement {d} dégâts CE TOUR (re-narration "
-                    "détectée). L'état est déjà à jour — narre la suite "
-                    "sans tool supplémentaire, ou frappe une AUTRE cible / "
-                    "un montant DIFFÉRENT si un vrai nouveau coup le "
-                    "justifie."
+                    f"♻️ Re-narration ignorée : « {nom} » a DÉJÀ subi "
+                    f"{d} dégâts ce tour — état déjà à jour, poursuis."
                 )
             )
     fiche = _load_fiche(ctx, nom)

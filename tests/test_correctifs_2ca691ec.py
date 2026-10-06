@@ -80,7 +80,7 @@ def test_dedup_degats_identiques_meme_tour_refuse():
     r2 = asyncio.run(invoke_tool(
         TOOLS["fiche_perso_infliger_degats"], ctx,
         {"nom": "Utturgut", "degats": 5}))
-    assert "Doublon ignoré" in r2.text, r2.text
+    assert "Re-narration ignorée" in r2.text, r2.text
     assert _pv_utturgut(d) == 11, "les dégâts dupliqués ont été appliqués !"
     # Un montant DIFFÉRENT au même tour reste légitime.
     r3 = asyncio.run(invoke_tool(

@@ -469,6 +469,18 @@ _ALIAS_EN_FR: dict[str, str] = {
     "remorhaz": "remorhaz",
 }
 
+# 🔤 Partie 0e615b81 : synonymes/qualificatifs de VARIANTES de créatures —
+# « un Loup (Lycanthrope) d'environ 2 mètres » était narré mais
+# `engager_combat(monstres="Loup")` engageait un simple loup (FP 1, 11 PV)
+# au lieu du Loup-garou (FP 3, 32 PV). alias normalisé → clé bestiaire.
+_ALIASES_VARIANTE: dict[str, str] = {
+    "lycanthrope": "loup_garou",
+    "loup_garou": "loup_garou",
+    "garou": "loup_garou",
+    "homme_loup": "loup_garou",
+    "loup_polaire": "loup_arctique",
+}
+
 # Traduction mot à mot (secours pour les noms composés non listés ci-dessus :
 # « young_red_dragon » → « jeune_rouge_dragon » ≈ inclusion dans
 # `dragon_rouge_jeune` grâce à la recherche par inclusion).
@@ -788,6 +800,16 @@ def _find_monstre_strict(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]
     « dragon_rouge_jeune » reste accepté (l'entrée est un sur-ensemble)."""
     best = _load_bestiaire(ctx)
     monstres: dict[str, Any] = best.get("monstres", {})
+
+    # 🔤 Partie 0e615b81 : alias de variante (« Lycanthrope » → loup_garou) —
+    # résolution directe avant les heuristiques de sous-chaîne (qui auraient
+    # matché le simple « loup »).
+    n0 = _normalise_nom(nom)
+    for a, cle_var in _ALIASES_VARIANTE.items():
+        if n0 == _normalise_nom(a) or n0 in _normalise_nom(a).split("_"):
+            m_var = monstres.get(cle_var)
+            if isinstance(m_var, dict):
+                return m_var
 
     def _sing(w: str) -> str:
         return w[:-1] if w.endswith("s") and len(w) > 3 else w
@@ -1618,3 +1640,60 @@ async def monstre_ajouter_bestiaire(
     return ToolResult(
         text=f"✅ Monstre **{nom}** ajouté au bestiaire (clé `{cle}`, FP {fp}).",
     )
+
+
+def _maj_variante_specifique(monstres_ok: list[dict[str, Any]],
+                             best: dict[str, Any],
+                             texte_contexte: str) -> list[str]:
+    """Partie 0e615b81 : monte chaque créature résolue vers sa VARIANTE plus
+    spécifique quand la NARRATION la mentionne.
+
+    « un Loup (Lycanthrope) d'environ 2 mètres » + engagement « Loup »
+    engageait un simple loup (FP 1, 11 PV). Si une entrée du bestiaire est un
+    SUR-ENSEMBLE de mots de la créature résolue (« Loup-garou (humain) » ⊃
+    « Loup ») et que le texte de contexte contient un MOT QUALIFICATIF
+    (« garou », « humain ») ou un ALIAS (« lycanthrope »), la variante
+    remplace la créature simple. Le gouverneur d'équilibre arbitre ensuite.
+
+    Renvoie les notes des montées appliquées (pour le texte du tool)."""
+    if not monstres_ok or not (texte_contexte or "").strip():
+        return []
+    t = " " + _normalise_nom(texte_contexte).replace("_", " ") + " "
+    notes: list[str] = []
+    mons = best.get("monstres", {}) or {}
+    for i, m in enumerate(monstres_ok):
+        if not isinstance(m, dict):
+            continue
+        nom_n = _normalise_nom(str(m.get("nom") or ""))
+        if not nom_n:
+            continue
+        mots_nom = set(nom_n.split("_"))
+        meilleure: Optional[tuple[int, str, dict[str, Any]]] = None
+        for cle2, m2 in mons.items():
+            if not isinstance(m2, dict):
+                continue
+            nom2_n = _normalise_nom(str(m2.get("nom") or cle2))
+            if nom2_n == nom_n:
+                continue
+            mots2 = set(nom2_n.split("_"))
+            if not mots_nom or not mots2.issuperset(mots_nom):
+                continue
+            qualifs = mots2 - mots_nom
+            alias_var = [a for a, k in _ALIASES_VARIANTE.items()
+                         if k == cle2]
+            score = sum(1 for q in qualifs
+                        if len(q) >= 4 and (" " + q + " ") in t)
+            score += sum(2 for a in alias_var
+                         if (" "
+                             + _normalise_nom(a).replace("_", " ") + " ") in t)
+            if score and (meilleure is None or score > meilleure[0]):
+                meilleure = (score, cle2, m2)
+        if meilleure is not None:
+            _, cle2, m2 = meilleure
+            monstres_ok[i] = dict(m2)
+            notes.append(
+                "⚡ Variante du scénario appliquée : « "
+                + str(m.get("nom") or "?") + " » → **"
+                + str(m2.get("nom") or cle2) + "** (la narration la "
+                + "mentionnait).")
+    return notes

@@ -1286,11 +1286,12 @@ def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
     vus: list[str] = []
     # 🔤 Partie 0e615b81 : alias de variante — « le lycanthrope attaque »
     # doit détecter le Loup-garou (le mot « lycanthrope » ne figure dans
-    # AUCUN nom du bestiaire).
+    # AUCUN nom du bestiaire). Alias = table de départ + champ « alias »
+    # éditable dans le bestiaire.
     try:
-        from ..tools.monstres import _ALIASES_VARIANTE
+        from ..tools.monstres import _aliases_variante
         _alias_par_cle: dict[str, list[str]] = {}
-        for _a, _cle in _ALIASES_VARIANTE.items():
+        for _a, _cle in _aliases_variante(mons).items():
             _alias_par_cle.setdefault(_cle, []).append(
                 _normalise_pour_compare(_a))
     except Exception:                                        # noqa: BLE001

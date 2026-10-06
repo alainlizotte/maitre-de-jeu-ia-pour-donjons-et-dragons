@@ -473,6 +473,11 @@ _ALIAS_EN_FR: dict[str, str] = {
 # « un Loup (Lycanthrope) d'environ 2 mètres » était narré mais
 # `engager_combat(monstres="Loup")` engageait un simple loup (FP 1, 11 PV)
 # au lieu du Loup-garou (FP 3, 32 PV). alias normalisé → clé bestiaire.
+# ⚠️ TABLE DE DÉPART uniquement : la source recommandée est le champ
+# « alias » de chaque entrée de `server/data/bestiaire.json` (éditable à la
+# main, pris en compte à chaud) :
+#   "loup_garou": { "nom": "Loup-garou (humain)", …,
+#                   "alias": ["lycanthrope", "garou", "homme-loup"] }
 _ALIASES_VARIANTE: dict[str, str] = {
     "lycanthrope": "loup_garou",
     "loup_garou": "loup_garou",
@@ -480,6 +485,21 @@ _ALIASES_VARIANTE: dict[str, str] = {
     "homme_loup": "loup_garou",
     "loup_polaire": "loup_arctique",
 }
+
+
+def _aliases_variante(best: dict[str, Any]) -> dict[str, str]:
+    """Alias de variante FUSIONNÉS : table de départ (ci-dessus) + champ
+    « alias » de chaque entrée du bestiaire (donnée éditable à la main dans
+    `server/data/bestiaire.json`). Renvoie {alias normalisé: clé bestiaire}."""
+    fusion: dict[str, str] = dict(_ALIASES_VARIANTE)
+    for cle, m in (best.get("monstres") or best).items():
+        if cle == "_meta" or not isinstance(m, dict):
+            continue
+        for a in (m.get("alias") or []):
+            na = _normalise_nom(str(a or ""))
+            if na:
+                fusion[na] = cle
+    return fusion
 
 # Traduction mot à mot (secours pour les noms composés non listés ci-dessus :
 # « young_red_dragon » → « jeune_rouge_dragon » ≈ inclusion dans
@@ -803,9 +823,10 @@ def _find_monstre_strict(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]
 
     # 🔤 Partie 0e615b81 : alias de variante (« Lycanthrope » → loup_garou) —
     # résolution directe avant les heuristiques de sous-chaîne (qui auraient
-    # matché le simple « loup »).
+    # matché le simple « loup »). Alias = table de départ + champ « alias »
+    # éditable dans le bestiaire.
     n0 = _normalise_nom(nom)
-    for a, cle_var in _ALIASES_VARIANTE.items():
+    for a, cle_var in _aliases_variante(best).items():
         if n0 == _normalise_nom(a) or n0 in _normalise_nom(a).split("_"):
             m_var = monstres.get(cle_var)
             if isinstance(m_var, dict):
@@ -1661,6 +1682,7 @@ def _maj_variante_specifique(monstres_ok: list[dict[str, Any]],
     t = " " + _normalise_nom(texte_contexte).replace("_", " ") + " "
     notes: list[str] = []
     mons = best.get("monstres", {}) or {}
+    alias_map = _aliases_variante(best)
     for i, m in enumerate(monstres_ok):
         if not isinstance(m, dict):
             continue
@@ -1679,8 +1701,7 @@ def _maj_variante_specifique(monstres_ok: list[dict[str, Any]],
             if not mots_nom or not mots2.issuperset(mots_nom):
                 continue
             qualifs = mots2 - mots_nom
-            alias_var = [a for a, k in _ALIASES_VARIANTE.items()
-                         if k == cle2]
+            alias_var = [a for a, k in alias_map.items() if k == cle2]
             score = sum(1 for q in qualifs
                         if len(q) >= 4 and (" " + q + " ") in t)
             score += sum(2 for a in alias_var

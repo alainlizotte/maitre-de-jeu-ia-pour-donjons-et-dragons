@@ -4490,6 +4490,56 @@ class Orchestrator:
         # ici — main.py l'ajoute à la dm finale APRÈS les rejeux correctifs
         # (qui remplacent la narration), pour ne rien perdre.
 
+        # 📏 Partie dfbb4846 : garde « INTRO TROP COURTE » — le tour
+        # d'ouverture, fragilisé par une coupure de stream (le modèle
+        # déchargé entre les tours recharge en lazy et la connexion meurt :
+        # « Server disconnected »), se terminait par une synthèse de 775
+        # caractères SANS amorce de scène (le décor sauté, remise d'objets
+        # directe, glitch de tokens). Si l'ouverture n'a produit QU'UN
+        # événement d'histoire et une narration < ~700 caractères, UNE
+        # relance force la scène d'ouverture complète (4-6 paragraphes).
+        try:
+            from ..game.state import PartyState as _PS_intro
+            _etat_intro = _PS_intro(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                max_history=0,
+            ).load()
+            _hist_intro = [
+                _ev for _ev in (_etat_intro.get("histoire") or [])
+                if isinstance(_ev, dict)
+                and str(_ev.get("evenement") or "").startswith(
+                    "Début de l'aventure")
+            ]
+            if (
+                _hist_intro
+                and len(_etat_intro.get("histoire") or []) <= 2
+                and len((result.narration or "").strip()) < 700
+            ):
+                from .prompt_builder import _DEBUT_AVENTURE
+                _log.warning(
+                    "intro trop courte (%d car.) — relance scène complète",
+                    len(result.narration.strip()))
+                _msg_intro = (
+                    "⚠️ CORRECTION : ton introduction est TROP COURTE et "
+                    "INCOMPLÈTE (un résumé expédié au lieu de la scène). "
+                    "Reprends la SCÈNE D'OUVERTURE COMPLÈTE, en 4 à 6 "
+                    "paragraphes immersifs, SANS rappeler d'outil : "
+                    + _DEBUT_AVENTURE
+                )
+                if on_delta is not None and on_event is not None:
+                    try:
+                        await on_event({"type": "stream_reset"})
+                    except Exception:                     # noqa: BLE001
+                        pass
+                _narr_intro = await self._force_final_narration(
+                    work, on_delta, message=_msg_intro)
+                if len((_narr_intro or "").strip()) > len(
+                        result.narration.strip()):
+                    result.narration = _narr_intro
+                    result.corrections += 1
+        except Exception as _e_intro:                    # noqa: BLE001
+            _log.warning("garde intro courte échouée (ignoré) : %s", _e_intro)
+
         # 🧍 Partie b59b4a9a : correction DÉTERMINISTE des pronoms du mauvais
         # genre attribués aux PJ (« Margoth… Elle se relève », PJ masculin) —
         # l'écho du mauvais genre dans l'historique domine toute consigne de
@@ -4736,11 +4786,15 @@ class Orchestrator:
         self,
         work: list[Message],
         on_delta: Optional[Callable[[str], Awaitable[None]]],
+        message: str = "",
     ) -> str:
-        """Dernier appel SANS tools pour forcer une narration clôturante."""
+        """Dernier appel SANS tools pour forcer une narration clôturante.
+        `message` : consigne de remplacement (garde « intro trop courte »)."""
         fallback_msg = Message(
             role="system",
             content=(
+                message
+                or (
                 "Tu as épuisé tes tours d'appels d'outils. Synthétise "
                 "maintenant une réponse de narration complète au joueur "
                 "en t'appuyant sur les résultats des tools ci-dessus. "
@@ -4748,11 +4802,12 @@ class Orchestrator:
                 # Partie b59b4a9a : la narration de fallback écrivait
                 # « Margoth… elle » (PJ masculin) — rappel d'identité +
                 # interdit d'inventer des nombres hors résultats officiels.
-                " 🧍 RESPECTE l'identité des PJ du récapitulatif : nom, "
+                + " 🧍 RESPECTE l'identité des PJ du récapitulatif : nom, "
                 "race, classe et surtout GENRE → pronoms et accords "
                 "(un PJ « MASCULIN » est « il », JAMAIS « elle »). "
                 "N'invente AUCUN nombre : reprends ceux des résultats "
                 "officiels ci-dessus."
+                )
                 + _CORRECTIF_INTERNE
             ),
         )

@@ -637,6 +637,30 @@ class OllamaClient:
                 body = (r2.text if r2 is not None else r.text)[:200]
                 code = r2.status_code if r2 is not None else r.status_code
                 _log.warning("llamacpp load failed (%s): %s", code, body)
+                # 🔥 Partie dfbb4846 : sur un serveur MONO-modèle (pas de
+                # router), `/models/load` répond 400 et `ensure_model_loaded`
+                # échoue — le VRAI chat démarre alors PENDANT le chargement
+                # lazy (~10-20 s de silence) et la connexion de stream meurt
+                # (« Server disconnected », intro perdue). Échauffement :
+                # une complétion à 1 token force le chargement AVANT l'appel
+                # réel ; le stream démarre modèle en VRAM. (Client dédié :
+                # le chargement des poids peut dépasser 30 s.)
+                async with httpx.AsyncClient(timeout=180.0) as tmp_w:
+                    warm = await tmp_w.post(
+                        f"{root.rstrip('/')}/v1/chat/completions",
+                        json={"model": self.cfg.model,
+                              "messages": [{"role": "user",
+                                            "content": "ok"}],
+                              "max_tokens": 1, "stream": False},
+                    )
+                    if warm.status_code == 200:
+                        _log.info(
+                            "llamacpp modèle échauffé (chargement lazy "
+                            "forcé avant le vrai appel)")
+                        return True
+                    _log.warning(
+                        "llamacpp warmup échoué (%s): %s",
+                        warm.status_code, warm.text[:120])
                 return False
         except Exception as e:
             _log.warning("llamacpp load error: %s", e)

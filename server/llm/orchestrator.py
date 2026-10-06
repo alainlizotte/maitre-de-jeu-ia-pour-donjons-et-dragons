@@ -4510,9 +4510,16 @@ class Orchestrator:
                 and str(_ev.get("evenement") or "").startswith(
                     "Début de l'aventure")
             ]
+            # 📏 Correctif 33d8f18e : le simple fait que l'histoire soit
+            # courte ne fait PAS du tour courant une ouverture — au tour du
+            # repas (histoire encore ≤ 2 événements), la garde a relancé la
+            # « scène complète » et le modèle a RE-NARRÉ le briefing avec un
+            # second parchemin. Le drapeau `ouverture_tour` (phase opening +
+            # aucune narration antérieure, calculé au début de run()) est la
+            # seule autorisation.
             if (
-                _hist_intro
-                and len(_etat_intro.get("histoire") or []) <= 2
+                ouverture_tour
+                and _hist_intro
                 and len((result.narration or "").strip()) < 700
             ):
                 from .prompt_builder import _DEBUT_AVENTURE
@@ -4575,6 +4582,11 @@ class Orchestrator:
             if _intention and result.narration.strip() and not any(
                 tc.get("name") in ("marche_acheter", "auberge_commander")
                 and tc.get("ok")
+                # 🔧 Partie 33d8f18e : un appel REFUSÉ (args corrompus du
+                # modèle : « repas": true » → « Qualité « true » inconnue »)
+                # porte ok=True mais n'a RIEN acheté — il ne doit pas bloquer
+                # le rattrapage. Seul un ✅ (transaction réelle) le bloque.
+                and "✅" in (tc.get("text") or "")
                 for tc in result.tool_calls_trace
             ):
                 from ..tools.marche import (       # noqa: E501 pylint: disable=import-outside-toplevel

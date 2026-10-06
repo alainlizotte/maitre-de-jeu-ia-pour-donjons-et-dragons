@@ -1332,6 +1332,36 @@ def _extraire_achat(message: str, articles: list[dict[str, Any]]) -> dict[str, A
             "quantite": qte, "libelle": str(art.get("nom") or "")}
 
 
+_VOYAGE_INTENT_RE = re.compile(
+    r"\bje\s+me\s+dirige\s+vers\b|\bje\s+pars\s+(?:vers|pour)\b|"
+    r"\bje\s+vais\s+vers\b|\ben\s+route\s+(?:vers|pour)\b|"
+    r"\bje\s+rejoins\b|\ballons?\s+vers\b|"
+    r"\bje\s+prends\s+la\s+route\b", re.IGNORECASE,
+)
+_DEST_VOYAGE_RE = re.compile(
+    r"(?:vers|pour)\s+(?:le\s+|la\s+|les\s+|l'\s*|au\s+|à la\s+)?"
+    r"([A-Za-zÀ-ÿ'’\- ]{4,60})", re.IGNORECASE,
+)
+
+
+def _extraire_voyage(message: str) -> Optional[str]:
+    """Destination de voyage exprimée par le joueur (« Je me dirige vers le
+    repère de Zendar » → « repère de Zendar »). None si pas de destination."""
+    m = None
+    for m in _DEST_VOYAGE_RE.finditer(message or ""):
+        pass
+    if m is None:
+        return None
+    dest = (m.group(1) or "").strip(" .!,« »'")
+    # Articles résiduels (« l'est », « le repère… ») — hors capture quand la
+    # classe les recouvre.
+    dest = re.sub(r"^(?:le\s+|la\s+|les\s+|au\s+|aux\s+|à la\s+|l')",
+                  "", dest, flags=re.IGNORECASE)
+    # Coupe les compléments de but (« pour lui demander la Couronne »).
+    dest = re.split(r"\s+(?:pour|afin|et|puis)\s+", dest, maxsplit=1)[0]
+    return dest.strip() or None
+
+
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
     """True si au moins une occurrence du nom normalisé `n` dans le texte
     normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
@@ -4542,6 +4572,54 @@ class Orchestrator:
                     )
         except Exception as _e_achat:                        # noqa: BLE001
             _log.warning("rattrapage achat échoué (ignoré) : %s", _e_achat)
+
+        # 🧭 Partie 1808ebab : rattrapage de VOYAGE — « Je me dirige vers le
+        # repère de Zendar » narré comme une ARRIVÉE instantanée sans
+        # `voyage_demarrer` (aucune journée, aucune rencontre, `voyage` vide).
+        # Intention de voyage explicite + aucun tool de déplacement appelé →
+        # le serveur lance le voyage (distance par défaut ~1 journée, la
+        # destination extraite du message ; le garde de trame est passé avec
+        # `forcer` car le choix du joueur est explicite).
+        try:
+            _voy_msgs = [
+                str(_m.content or "") for _m in work
+                if getattr(_m, "role", "") == "user"
+            ]
+            _dest_voy = None
+            if _voy_msgs and _VOYAGE_INTENT_RE.search(_voy_msgs[-1]):
+                _dest_voy = _extraire_voyage(_voy_msgs[-1])
+            _tools_depl = {
+                tc.get("name") for tc in result.tool_calls_trace
+            }
+            if (_dest_voy and result.narration.strip()
+                    and not (_tools_depl & {
+                        "voyage_demarrer", "carte_donjon_entrer",
+                        "carte_donjon_explorer", "carte_donjon_sortir"})):
+                from ..game.state import PartyState  # noqa: E501 pylint: disable=import-outside-toplevel
+                from ..tools.voyage import voyage_demarrer as _voy_dem  # noqa: E501 pylint: disable=import-outside-toplevel
+                _etat_v = PartyState(
+                    data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                    max_history=0,
+                ).load()
+                if not (_etat_v.get("voyage") or {}).get("en_cours"):
+                    _tr_voy = await self.execute_tool_direct(
+                        "voyage_demarrer",
+                        {"destination": _dest_voy, "distance_km": 30,
+                         "mode": "marche", "terrain": "route", "piste": True,
+                         "forcer": True},
+                        ctx, on_event, result,
+                    )
+                    result.notes_mecaniques.append(
+                        "🧭 Voyage appliqué par le serveur (destination « "
+                        + _dest_voy + " », ~30 km ≈ 1 journée — "
+                        "rencontres et risque de s'égarer officiels) : "
+                        + str(_tr_voy.text)[:220]
+                        + " Narre le voyage JOUR PAR JOUR d'après ce "
+                        "résultat — l'arrivée instantanée était une "
+                        "téléportation interdite."
+                    )
+        except Exception as _e_voy:                          # noqa: BLE001
+            _log.warning("rattrapage voyage échoué (ignoré) : %s", _e_voy)
 
         # 🎁 Rattrapage DÉTERMINISTE de la remise d'objets de quête (partie
         # e55cc855) : la remise était narrée (« range la fiole de vérité… dans

@@ -470,6 +470,19 @@ async def auberge_commander(
     fiche, err = _charger_fiche(ctx, nom)
     if err:
         return err
+    # 🔧 Partie 33d8f18e : le modèle 9B émet des args corrompus —
+    # `repas: true`, `logement: false`, `nuits: 0` → « Qualité « true »
+    # inconnue ». Sanitation : booléens/None = NON précisé (chaîne vide),
+    # nuits ≤ 0 → 1 nuit.
+    if not isinstance(repas, str) or not repas.strip():
+        repas = ""
+    if not isinstance(logement, str) or not logement.strip():
+        logement = ""
+    try:
+        nuits = int(nuits or 1)
+    except (TypeError, ValueError):
+        nuits = 1
+    nuits = max(1, nuits)
     nom_ville, type_ville = _ville(ctx, ville)
     qualites = villes.auberge_qualites(type_ville)
 

@@ -1245,6 +1245,93 @@ def _corriger_pronoms_pj(narration: str, etat: dict[str, Any],
     return "".join(resultats)
 
 
+_ACHAT_INTENT_RE = re.compile(
+    r"\bj['’]ach[eè]te?\b|\bach[eè]ter\b|\bje\s+commande\b|"
+    r"\bach[eè]te(?:z)?[-\s]moi\b|je\s+v[eè]ux\s+(?:acheter|un|une)\b|"
+    r"je\s+(?:prends|demande)\s+(?:un|une)\s+(?:repas|chambre|logement)|"
+    r"^\s*(?:repas|chambre|logement)\s+(?:m[ée]diocre|convenable|bonne?)\s*$",
+    re.IGNORECASE,
+)
+_RE_QUALITE_REPAS = re.compile(
+    r"\b(m[ée]diocre|convenable|bonne?|poor|common|good)\b", re.IGNORECASE)
+_RE_QTE_ACHAT = re.compile(r"\b(\d{1,3})\b")
+
+
+def _intention_achat(user_msgs: list[str]) -> Optional[str]:
+    """Intention d'ACHAT explicite du joueur dans ses 2 derniers messages —
+    None si aucune (« je visite l'auberge » ne suffit pas, partie 1808ebab :
+    il faut j'achète / je commande / un choix de menu explicite)."""
+    for msg in reversed(user_msgs[-2:]):
+        if _ACHAT_INTENT_RE.search(msg or ""):
+            return msg
+    return None
+
+
+def _extraire_achat(message: str, articles: list[dict[str, Any]]) -> dict[str, Any]:
+    """Décompose une intention d'achat : type (auberge/marché), article du
+    catalogue, qualité, quantité (lots pour les munitions)."""
+    from ..tools.inventaire import _norm  # pylint: disable=import-outside-toplevel
+
+    def _sing_mot(w: str) -> str:
+        """Pluriel grossier mot à mot (fleches → fleche, carreaux → carreau)."""
+        if w.endswith(("aux", "eaux")):
+            return w[:-3] + "au"
+        if w.endswith("s") and len(w) > 3:
+            return w[:-1]
+        return w
+
+    msg = message or ""
+    q_qual = _RE_QUALITE_REPAS.search(msg)
+    qualite = q_qual.group(1).lower() if q_qual else ""
+    if qualite == "poor":
+        qualite = "mediocre"
+    elif qualite in ("common",):
+        qualite = "convenable"
+    elif qualite in ("good", "bon", "bonne"):
+        qualite = "bonne"
+    if qualite:
+        qualite = _norm(qualite)          # sans accent (médiocre → mediocre)
+        if qualite == "bon":
+            qualite = "bonne"
+
+    # Repas / logement → auberge_commander.
+    if re.search(r"repas", msg, re.I):
+        return {"type": "auberge", "repas": qualite or "mediocre",
+                "logement": "", "nuits": 1,
+                "libelle": "repas " + (qualite or "mediocre")}
+    if re.search(r"chambre|logement|nuit", msg, re.I):
+        return {"type": "auberge", "repas": "",
+                "logement": qualite or "mediocre", "nuits": 1,
+                "libelle": "logement " + (qualite or "mediocre")}
+
+    # Sinon : meilleur article du catalogue par mots communs (singuliers des
+    # DEUX côtés — « flèches » demandé vs « Flèches (10) » en catalogue).
+    mots = {_sing_mot(w) for w in _norm(msg).split() if len(w) >= 4}
+    meilleure: tuple[int, dict[str, Any]] | None = None
+    for art in articles:
+        na = _norm(str(art.get("nom") or ""))
+        mots_art = {_sing_mot(w) for w in na.split()}
+        communs = mots & mots_art
+        score = len(communs) * 2 + (1 if _norm(na) in _norm(msg) else 0)
+        if score and (meilleure is None or score > meilleure[0]):
+            meilleure = (score, art)
+    if meilleure is None:
+        return {}
+    art = meilleure[1]
+    # Quantité : le premier nombre du message, converti en LOTS si l'article
+    # en est un (« Flèches (10) », 5 flèches demandées = 1 lot).
+    qte = 1
+    m_q = _RE_QTE_ACHAT.search(msg)
+    if m_q:
+        qte = max(1, int(m_q.group(1)))
+    m_lot = re.search(r"\((\d+)\)\s*$", str(art.get("nom") or ""))
+    if m_lot:
+        lot = max(1, int(m_lot.group(1)))
+        qte = max(1, -(-qte // lot))   # ceil
+    return {"type": "marche", "article": str(art.get("nom") or ""),
+            "quantite": qte, "libelle": str(art.get("nom") or "")}
+
+
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
     """True si au moins une occurrence du nom normalisé `n` dans le texte
     normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
@@ -4387,6 +4474,74 @@ class Orchestrator:
                     "pronoms de PJ corrigés (genre) dans la narration finale")
         except Exception:                                    # noqa: BLE001
             pass
+
+        # 🪙 Partie 1808ebab : rattrapage DÉTERMINISTE des ACHATS — le joueur
+        # demande explicitement (« j'achète 5 flèches », « Repas médiocre »),
+        # le modèle narre la transaction en prose (prix inventés) SANS
+        # `marche_acheter` ni `auberge_commander` : or non débité, objet non
+        # ajouté. Comme pour les remises de quête, le serveur applique
+        # l'achat aux tarifs OFFICIELS (le prix narré, s'il est inventé, est
+        # simplement ignoré).
+        try:
+            _msgs_user = [
+                str(_m.content or "") for _m in work
+                if getattr(_m, "role", "") == "user"
+            ]
+            _intention = _intention_achat(_msgs_user)
+            if _intention and result.narration.strip() and not any(
+                tc.get("name") in ("marche_acheter", "auberge_commander")
+                and tc.get("ok")
+                for tc in result.tool_calls_trace
+            ):
+                from ..tools.marche import (       # noqa: E501 pylint: disable=import-outside-toplevel
+                    auberge_commander as _aub_cmd,
+                    marche_acheter as _marche_ach,
+                )
+                from .. import equipement_phb as _phb_articles  # noqa: E501 pylint: disable=import-outside-toplevel
+                from ..game.state import PartyState  # noqa: E501 pylint: disable=import-outside-toplevel
+                _etat_ach = PartyState(
+                    data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                    max_history=0,
+                ).load()
+                _pj_nom_achat = next(
+                    (str(_p.get("nom")) for _p in (_etat_ach.get("pj") or [])
+                     if _p.get("nom")),
+                    None,
+                )
+                _achat = _extraire_achat(
+                    _intention, list(_phb_articles.articles()))
+                if _pj_nom_achat and _achat.get("type") == "auberge":
+                    _tr_ach = await self.execute_tool_direct(
+                        "auberge_commander",
+                        {"nom": _pj_nom_achat, "repas": _achat.get("repas", ""),
+                         "logement": _achat.get("logement", ""),
+                         "nuits": int(_achat.get("nuits") or 1)},
+                        ctx, on_event, result,
+                    )
+                elif _achat.get("type") == "marche":
+                    _tr_ach = await self.execute_tool_direct(
+                        "marche_acheter",
+                        {"nom": _pj_nom_achat,
+                         "article": _achat.get("article", ""),
+                         "quantite": int(_achat.get("quantite") or 1)},
+                        ctx, on_event, result,
+                    )
+                else:
+                    _tr_ach = None
+                    if not _achat:
+                        _log.info(
+                            "rattrapage achat : intention sans article "
+                            "reconnu (%.120s)", _intention)
+                if _tr_ach is not None:
+                    result.notes_mecaniques.append(
+                        "🪙 Achat appliqué par le serveur ("
+                        + str(_achat.get("libelle") or "achat")
+                        + ") : " + str(_tr_ach.text)[:220]
+                        + " — les prix narrés éventuellement inventés sont "
+                        "ignorés au profit des tarifs officiels."
+                    )
+        except Exception as _e_achat:                        # noqa: BLE001
+            _log.warning("rattrapage achat échoué (ignoré) : %s", _e_achat)
 
         # 🎁 Rattrapage DÉTERMINISTE de la remise d'objets de quête (partie
         # e55cc855) : la remise était narrée (« range la fiole de vérité… dans

@@ -219,10 +219,11 @@ def _kg(lb: float, qte_pour_poids: int = 1) -> dict[str, Any]:
 
 _POIDS_OFFICIELS: dict[str, dict[str, Any]] = {
     # --- Munitions (vendues par lots, poids par lot officiel PHB) ----------
-    "fleche":       _kg(3.0, qte_pour_poids=20),    # 20 flèches = 3 lb
+    # PHB 3.5 : flèches (10) = 1 lb (0,45 kg) — partie d9f65ed2 : l'entrée
+    # « 3 lb pour 20 » gonflait le poids et le prix apparent du lot.
+    "fleche":       _kg(1.0, qte_pour_poids=10),    # 10 flèches = 1 lb
     "carreau":      _kg(1.0, qte_pour_poids=10),    # 10 carreaux = 1 lb
     "balle de fronde": _kg(3.0, qte_pour_poids=10), # 10 balles = 3 lb
-    "balle de fronde": _kg(3.0, qte_pour_poids=10),
     "pierre de fronde": _kg(0.0, qte_pour_poids=1),
     "balle":        _kg(3.0, qte_pour_poids=10),
     # --- Armes de corps à corps -------------------------------------------
@@ -423,7 +424,27 @@ def _poids_unitaire(nom: str, explicite: Optional[float]) -> Optional[float]:
             return max(0.0, float(explicite))
         except (TypeError, ValueError):
             return None
-    info = _POIDS_OFFICIELS.get(_norm(nom))
+    info = _POIDS_OFFICIELS.get(_norm(nom)) or _POIDS_OFFICIELS.get(
+        _norm(nom).replace("_", " "))
+    if not info:
+        # Lot numéroté (« Flèches (50) », « Carreaux (10) ») : la taille du
+        # lot ne change pas le poids UNITAIRE — on retire le nombre final et
+        # on retente (partie d9f65ed2 : « Flèches (10) » restait sans poids).
+        n_sans_lot = re.sub(r"[\s_]*\d+$", "", _norm(nom)).strip("_")
+        # pluriel grossier mot à mot (« balles de fronde » → « balle de
+        # fronde ») : le pluriel n'est pas toujours le dernier mot.
+        n_sans_lot = " ".join(
+            w[:-3] + "au" if w.endswith(("aux", "eaux"))
+            else w[:-1] if w.endswith("s") and len(w) > 3
+            else w
+            for w in n_sans_lot.split(" ")
+        )
+        if n_sans_lot:
+            info = (
+                _POIDS_OFFICIELS.get(n_sans_lot)
+                # les clés du dictionnaire sont écrites avec espaces
+                or _POIDS_OFFICIELS.get(n_sans_lot.replace("_", " "))
+            )
     if info:
         lot = int(info.get("lot") or 1)
         return round(float(info["poids_kg"]) / lot, 4)

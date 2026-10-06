@@ -1284,6 +1284,17 @@ def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
     if not isinstance(mons, dict):
         return None
     vus: list[str] = []
+    # 🔤 Partie 0e615b81 : alias de variante — « le lycanthrope attaque »
+    # doit détecter le Loup-garou (le mot « lycanthrope » ne figure dans
+    # AUCUN nom du bestiaire).
+    try:
+        from ..tools.monstres import _ALIASES_VARIANTE
+        _alias_par_cle: dict[str, list[str]] = {}
+        for _a, _cle in _ALIASES_VARIANTE.items():
+            _alias_par_cle.setdefault(_cle, []).append(
+                _normalise_pour_compare(_a))
+    except Exception:                                        # noqa: BLE001
+        _alias_par_cle = {}
     for k, v in mons.items():
         if k == "_meta" or not isinstance(v, dict):
             continue
@@ -1294,21 +1305,28 @@ def _ennemis_annonces(texte: str, ctx: Any) -> Optional[str]:
             continue
         if n in _ENNEMIS_MOTS_GENERIQUES:
             continue
-        if n not in t and n + "s" not in t:
+        aliases_k = _alias_par_cle.get(str(k)) or []
+        present = n in t or n + "s" in t or any(a in t for a in aliases_k)
+        if not present:
             continue
         # Quantité OBLIGATOIRE : nombre (chiffre ou mot) juste avant la
         # mention — sans elle, la mention est du décor et on passe.
-        if not _mention_monstre_quantifiee(t, n):
+        motifs = [n, n + "s"] + list(aliases_k)
+        if not any(_mention_monstre_quantifiee(t, mo) for mo in motifs):
             continue
         # Compte de la première occurrence quantifiée.
         compte = 1
-        for m in re.finditer(re.escape(n) + r"s?", t):
-            avant = t[max(0, m.start() - 20):m.start()]
-            mn = _RE_QUANTIFIANT_FR.search(avant)
-            if mn:
-                j = mn.group(1)
-                compte = int(j) if j.isdigit() else _NOMBRES_FR.get(j, 1)
-                break
+        for mo in motifs:
+            for m in re.finditer(re.escape(mo) + r"s?", t):
+                avant = t[max(0, m.start() - 20):m.start()]
+                mn = _RE_QUANTIFIANT_FR.search(avant)
+                if mn:
+                    j = mn.group(1)
+                    compte = int(j) if j.isdigit() else _NOMBRES_FR.get(j, 1)
+                    break
+            else:
+                continue
+            break
         vus.extend([nom] * max(1, min(compte, 6)))
     if not vus:
         return None

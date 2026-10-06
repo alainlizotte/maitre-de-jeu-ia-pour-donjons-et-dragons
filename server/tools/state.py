@@ -519,6 +519,22 @@ async def engager_combat(
     state = _party(ctx)
     etat = state.load()
 
+    # 🔤 Partie 0e615b81 : upgrade VARIANTE d'après la narration — « un Loup
+    # (Lycanthrope) d'environ 2 mètres » + engagement « Loup » engageait le
+    # simple loup (FP 1, 11 PV) au lieu du Loup-garou (FP 3). Si une créature
+    # du bestiaire est un sur-ensemble de mots de la créature résolue et que
+    # la dernière narration mentionne le qualificatif ou un alias, on monte
+    # vers la variante (le gouverneur d'équilibre arbitre ensuite).
+    _notes_variante: list[str] = []
+    try:
+        from .monstres import _maj_variante_specifique  # noqa: E501 pylint: disable=import-outside-toplevel
+        _notes_variante = _maj_variante_specifique(
+            monstres_ok, _load_bestiaire(ctx),
+            str(etat.get("derniere_narration") or ""),
+        )
+    except Exception:                                        # noqa: BLE001
+        _notes_variante = []
+
     # ── GARDE DE RE-ENGAGEMENT ──────────────────────────────────────────
     # `engager_combat` OUVRE un combat : il réécrit initiative/monstres_combat/
     # tours. Si un combat est DÉJÀ en cours avec des combattants vivants, un
@@ -850,6 +866,7 @@ async def engager_combat(
     participants: list[dict] = []
     monstres_combat: list[dict] = []
     lignes: list[str] = ["🎲 **Initiative du combat**"]
+    lignes[:0] = _notes_variante  # ⚡ montées de variante (loup → loup-garou…)
     lignes_ajust: list[str] = []
 
     def _mod_initiative_pj(nom_pj: str, mod_dex: int) -> int:

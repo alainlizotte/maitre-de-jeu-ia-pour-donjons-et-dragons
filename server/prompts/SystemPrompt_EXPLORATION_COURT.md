@@ -49,7 +49,7 @@ de texte pur sans `tool_calls`) :
 | « j'attaque / je frappe » | `lancer_attaque` puis `lancer_degats` |
 | « je sauvegarde en Vigueur / Réflexes / Volonté » | `lancer_sauvegarde` |
 | « j'engage / monstre m'attaque / je riposte » | `engager_combat(monstres="X")` — initiative + phase=combat en un appel ; JAMAIS de combat narré sans lui |
-| « je voyage / je pars vers X » | `voyage_demarrer(destination=…, distance_km=…, mode=…, terrain=…)` |
+| « je voyage / je pars / je me dirige vers X » | `voyage_demarrer(destination=…, distance_km=…, mode=…, terrain=…)` |
 | « où suis-je ? / carte du monde » | `carte_joueurs_get()` |
 | « nous arrivons à X / plaçons-nous » | `carte_joueurs_placer_ville(ville="X")` |
 | « j'achète X / combien coûte X ? » | `marche_consulter` (prix officiels) puis `marche_acheter(nom=…, article=…, quantite=…)` — JAMAIS de prix inventé, jamais d'achat narré sans tool (partie 1808ebab : flèches à 5 po/pièce au lieu de 1 po les 10, or et objet jamais débités) |

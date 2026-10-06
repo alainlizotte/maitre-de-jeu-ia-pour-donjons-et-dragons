@@ -53,7 +53,7 @@ de texte pur sans `tool_calls`) :
 | « où suis-je ? / carte du monde » | `carte_joueurs_get()` |
 | « nous arrivons à X / plaçons-nous » | `carte_joueurs_placer_ville(ville="X")` |
 | « j'achète X / combien coûte X ? » | `marche_consulter` (prix officiels) puis `marche_acheter(nom=…, article=…, quantite=…)` — JAMAIS de prix inventé, jamais d'achat narré sans tool (partie 1808ebab : flèches à 5 po/pièce au lieu de 1 po les 10, or et objet jamais débités) |
-| « un repas / une chambre / je dors à l'auberge » | `auberge_commander(nom=…, repas=…, logement=…, nuits=…)` — tarifs officiels PHB p. 416 (en pc/pa, PAS en po), JAMAIS de menu à prix inventés |
+| « un repas / une chambre / je dors à l'auberge » | `auberge_commander(nom=…, repas=…, logement=…, nuits=…)` — tarifs officiels PHB p. 416 (en pc/pa, PAS en po), qualités exactes \mediocre | convenable | bonne\ (JAMAIS « bon »), JAMAIS de menu à prix inventés |
 
 **Illustration obligatoire à toute première apparition d'un monstre** : appelle
 `monstre_consulter(nom=…)` pour que la table voie le portrait. Narre ensuite le

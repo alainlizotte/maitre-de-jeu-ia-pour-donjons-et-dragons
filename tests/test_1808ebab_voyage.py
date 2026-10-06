@@ -32,6 +32,10 @@ def test_intention_voyage():
         "En route pour Neverwinter",
         "Je rejoins la ville la plus proche",
         "je prends la route du sud",
+        # Partie 1808ebab (suite) : « Je retourne à la ville pour voir
+        # Thukmuul Teleshann » — un retour à 30 km est un vrai voyage.
+        "Je retourne à la ville pour voir Thukmuul Teleshann",
+        "je rentre au village",
     ):
         assert _VOYAGE_INTENT_RE.search(msg), msg
 

@@ -1366,6 +1366,29 @@ def _extraire_voyage(message: str) -> Optional[str]:
     return dest.strip() or None
 
 
+def _decor_ancre_absent(narration: str, ancre_ligne: str) -> bool:
+    """Partie 083c7bba : la LONGUEUR ne suffit pas à valider une intro —
+    celle-ci faisait 1331 caractères mais SAUTAIT le décor (l'acceptation
+    « déjà faite » avant le premier mot). Vrai si la ligne d'ancrage
+    « LIEU DE DÉPART CANONIQUE » existe et que la narration n'ANCRE PAS le
+    décor : moins d'un tiers des mots caractéristiques (≥ 5 car.) de la
+    description canonique y apparaissent."""
+    if not ancre_ligne or not (narration or "").strip():
+        return False
+    m_desc = re.search(r"«\s*(.+?)\s*»", ancre_ligne)
+    if not m_desc:
+        return False
+    mots_decor = [
+        m for m in _normalise_pour_compare(m_desc.group(1)[:200]).split()
+        if len(m) >= 5
+    ][:10]
+    if not mots_decor:
+        return False
+    nar = _normalise_pour_compare(narration)
+    presents = sum(1 for md in mots_decor if md in nar)
+    return presents < max(2, len(mots_decor) // 3)
+
+
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
     """True si au moins une occurrence du nom normalisé `n` dans le texte
     normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
@@ -4517,15 +4540,25 @@ class Orchestrator:
             # second parchemin. Le drapeau `ouverture_tour` (phase opening +
             # aucune narration antérieure, calculé au début de run()) est la
             # seule autorisation.
+            # 🎨 Partie 083c7bba : la LONGUEUR ne suffit pas — une intro de
+            # 1331 caractères sautait le décor (l'acceptation « déjà faite »
+            # avant le premier mot, zéro description). Le décor canonique de
+            # la salle d'entrée (ancre du manifeste) doit être ANCRÉ.
+            from .prompt_builder import (_DEBUT_AVENTURE,
+                                         _lieu_depart_canonique)
+            _ancre_ligne = _lieu_depart_canonique(
+                _etat_intro, str(ctx.data_dir))
+            _decor_absent = _decor_ancre_absent(
+                result.narration or "", _ancre_ligne)
             if (
                 ouverture_tour
                 and _hist_intro
-                and len((result.narration or "").strip()) < 700
+                and (len((result.narration or "").strip()) < 700
+                     or _decor_absent)
             ):
-                from .prompt_builder import _DEBUT_AVENTURE
                 _log.warning(
-                    "intro trop courte (%d car.) — relance scène complète",
-                    len(result.narration.strip()))
+                    "intro trop courte (%d car.) ou décor absent — relance "
+                    "scène complète", len(result.narration.strip()))
                 _msg_intro = (
                     "⚠️ CORRECTION : ton introduction est TROP COURTE et "
                     "INCOMPLÈTE (un résumé expédié au lieu de la scène). "
@@ -4533,6 +4566,17 @@ class Orchestrator:
                     "paragraphes immersifs, SANS rappeler d'outil : "
                     + _DEBUT_AVENTURE
                 )
+                if _decor_absent and _ancre_ligne:
+                    _m_dec = re.search(r"«\s*(.+?)\s*»", _ancre_ligne)
+                    if _m_dec:
+                        _msg_intro += (
+                            "\n🏛️ OUVRE obligatoirement par le DÉCOR "
+                            "CANONIQUE du lieu, ancré mot pour mot dans ta "
+                            "première phrase : « "
+                            + _m_dec.group(1)[:220] + " » — AVANT toute "
+                            "réplique, toute remise d'objet et tout "
+                            "résumé de mission."
+                        )
                 if on_delta is not None and on_event is not None:
                     try:
                         await on_event({"type": "stream_reset"})

@@ -518,6 +518,156 @@ def salle_objet_requis(
     return None
 
 
+def alimenter_memoire(etat: dict[str, Any], data_dir: str) -> None:
+    """Alimente la mémoire de campagne SANS donjon requis (partie
+    d8f41637 : hors donjon, `actualiser_objectifs` sortait tôt et la
+    mémoire restait VIDE — lieux_visites, personnages_rencontres,
+    evenements_rencents, intrigue_resume, et un `objectif_courant` réduit
+    au pitch de la quête). Le serveur tient le fil lui-même :
+
+    - `position.lieu` (lieu courant) ;
+    - `lieux_visites` : le lieu courant ajouté (dédupliqué, plafonné) ;
+    - `evenements_rencents` : miroir des derniers événements d'histoire ;
+    - `intrigue_resume` : le pitch de la quête si vide ;
+    - `objectif_courant` : le TITRE de la première étape de la trame du
+      manifeste (découverte par id de scénario — pas besoin de donjon),
+      sinon le pitch ;
+    - `personnages_rencontres` : les PNJ de la salle d'entrée du manifeste
+      (le donneur de quête).
+
+    Mute `etat` EN PLACE (l'appelant sauvegarde)."""
+    if not isinstance(etat, dict):
+        return
+    mem = etat.setdefault("memoire", {})
+    if not isinstance(mem, dict):
+        return
+    quete = etat.get("quete") or {}
+    pitch = str(quete.get("pitch") or "").strip()
+    lieu_nom = str((etat.get("lieu") or {}).get("nom") or "").strip()
+
+    # Position courante.
+    if lieu_nom:
+        pos = mem.get("position")
+        if not isinstance(pos, dict):
+            pos = {}
+            mem["position"] = pos
+        if not str(pos.get("lieu") or "").strip():
+            pos["lieu"] = lieu_nom
+
+    # Lieux visités (dédupliqué, plafonné).
+    if lieu_nom:
+        lv = mem.get("lieux_visites")
+        if not isinstance(lv, list):
+            lv = []
+            mem["lieux_visites"] = lv
+        if lieu_nom not in [str(x) for x in lv]:
+            lv.append(lieu_nom)
+            del lv[:-20]
+
+    # Événements récents : miroir des derniers événements d'histoire.
+    hist = [
+        str((ev or {}).get("evenement") or "").strip()
+        for ev in (etat.get("histoire") or [])
+        if isinstance(ev, dict) and (ev.get("evenement") or "").strip()
+    ]
+    if hist:
+        mem["evenements_rencents"] = hist[-6:]
+
+    # Objectif courant : première étape de la trame du scénario.
+    objectif = ""
+    try:
+        for e in _etapes_manifeste(etat, data_dir):
+            if isinstance(e, dict) and str(e.get("titre") or "").strip():
+                objectif = str(e["titre"]).strip()
+                break
+    except Exception:                                        # noqa: BLE001
+        pass
+    if not objectif:
+        objectif = pitch
+    if objectif:
+        mem["objectif_courant"] = objectif
+
+    # Intrigue : le pitch si vide.
+    if not str(mem.get("intrigue_resume") or "").strip() and pitch:
+        mem["intrigue_resume"] = pitch
+
+    # Personnages rencontrés : les PNJ de la salle d'entrée du manifeste.
+    pr = mem.get("personnages_rencontres")
+    if not isinstance(pr, list):
+        pr = []
+        mem["personnages_rencontres"] = pr
+    pnj_entree = _pnj_entree_manifeste(etat, data_dir)
+    if pnj_entree:
+        connus = {str(x.get("nom") or "").casefold()
+                  if isinstance(x, dict) else str(x).casefold()
+                  for x in pr}
+        for nom in pnj_entree:
+            if nom.casefold() not in connus:
+                pr.append({"nom": nom})
+        del pr[:-20]
+
+
+def _pnj_entree_manifeste(etat: dict[str, Any], data_dir: str) -> list[str]:
+    """PNJ de la salle d'entrée du manifeste du scénario courant (le
+    donneur de quête, ex. Thukmuul Teleshann). [] si aucun manifeste."""
+    try:
+        sid = str((etat.get("quete") or {}).get("source") or "").split(
+            "]", 1)[0].lstrip("[").strip()
+    except Exception:                                        # noqa: BLE001
+        sid = ""
+    if not sid:
+        return []
+    base = os.path.join(data_dir, "scenarios")
+    if not os.path.isdir(base):
+        return []
+    for racine, _dirs, fichiers in os.walk(base):
+        for f in fichiers:
+            if not f.endswith(".donjon.json"):
+                continue
+            try:
+                with open(os.path.join(racine, f), encoding="utf-8") as fh:
+                    man = json.load(fh)
+            except Exception:                                # noqa: BLE001
+                continue
+            if not isinstance(man, dict):
+                continue
+            scen = man.get("scenario")
+            ids = scen if isinstance(scen, list) else [scen]
+            if sid not in {str(x).strip() for x in ids if x}:
+                continue
+            etages = [e2 for e2 in (man.get("etages") or [])
+                      if isinstance(e2, dict)]
+            if not etages:
+                continue
+            salles = [s for s in (etages[0].get("salles") or [])
+                      if isinstance(s, dict)]
+            ent = etages[0].get("entree") or [0, 0]
+            try:
+                ex, ey = int(ent[0]), int(ent[1])
+            except (TypeError, ValueError):
+                ex, ey = 0, 0
+            s0 = next(
+                (s for s in salles
+                 if _entier_coords(s) == (ex, ey)),
+                salles[0] if salles else None,
+            )
+            pnj = []
+            for p in (s0 or {}).get("pnj") or []:
+                nom = re.sub(r"\s*\([^)]*\)\s*", "", str(p or "")).strip()
+                if nom:
+                    pnj.append(nom)
+            return pnj
+    return []
+
+
+def _entier_coords(s: dict[str, Any]) -> tuple[int, int] | None:
+    """(x, y) d'une salle, None si absents/invalides."""
+    try:
+        return (int(s.get("x")), int(s.get("y")))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 def actualiser_objectifs(etat: dict[str, Any], data_dir: str,
                          partie_id: str = "") -> bool:
     """Évalue les objectifs et les écrit dans `quete.bible["objectifs"]` (+
@@ -528,6 +678,14 @@ def actualiser_objectifs(etat: dict[str, Any], data_dir: str,
     """
     if not isinstance(etat, dict):
         return False
+    # 🧠 Partie d8f41637 : la mémoire de campagne doit se remplir MÊME hors
+    # donjon (lieu courant, lieux visités, PNJ rencontrés, événements,
+    # intrigue, objectif de trame) — l'ancien flux sortait avant et laissait
+    # tout vide tant que le donjon n'était pas entré.
+    try:
+        alimenter_memoire(etat, data_dir)
+    except Exception:                                        # noqa: BLE001
+        pass
     bible = (etat.get("quete") or {}).get("bible")
     if not isinstance(bible, dict):
         return False

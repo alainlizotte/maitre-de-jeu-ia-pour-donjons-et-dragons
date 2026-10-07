@@ -1249,7 +1249,10 @@ _ACHAT_INTENT_RE = re.compile(
     r"\bj['’]ach[eè]te?\b|\bach[eè]ter\b|\bje\s+commande\b|"
     r"\bach[eè]te(?:z)?[-\s]moi\b|je\s+v[eè]ux\s+(?:acheter|un|une)\b|"
     r"je\s+(?:prends|demande)\s+(?:un|une)\s+(?:repas|chambre|logement)|"
-    r"^\s*(?:repas|chambre|logement)\s+(?:m[ée]diocre|convenable|bonne?)\s*$",
+    # 🔧 Partie d8f41637 : le message du joueur porte le préfixe de signature
+    # (« **[alain]** : repas mediocre ») — l'alternative ANCRÉE (^…$) ne
+    # matchait plus et le repas n'était jamais commandé.
+    r"\b(?:repas|chambre|logement)\s+(?:m[ée]diocre|convenable|bonne?)\b",
     re.IGNORECASE,
 )
 _RE_QUALITE_REPAS = re.compile(

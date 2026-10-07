@@ -70,3 +70,19 @@ def test_pas_de_destination_pas_de_voyage():
 def test_intention_absente_pas_de_voyage():
     """« je visite l'auberge » n'est pas un voyage."""
     assert not _VOYAGE_INTENT_RE.search("je visite l'auberge avant de partir")
+
+
+# --------------------------------------------------------------------------- #
+#  Or narré : crédit déterministe (2dfa9c75)
+# --------------------------------------------------------------------------- #
+
+def test_or_narre_gains_et_prix():
+    from server.llm.orchestrator import _or_gagne_narre
+    assert _or_gagne_narre(
+        "Dans le coffre, vous trouvez un sac contenant 50 po.") == 50
+    # Typos du modèle tolérées (« empchez » pour « empochez »).
+    assert _or_gagne_narre(
+        "Vous empchez 12 pièces d'or sur le corps.") == 12
+    # Prix/achats : JAMAIS crédités.
+    assert _or_gagne_narre("Le forgeron demande 350 po.") is None
+    assert _or_gagne_narre("Un repas coûte 10 po.") is None

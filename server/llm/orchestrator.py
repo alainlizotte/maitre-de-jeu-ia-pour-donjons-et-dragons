@@ -1053,11 +1053,15 @@ _NOMS_QUETE_RE = re.compile(
 )
 _REMISE_VERBE_RE = re.compile(
     r"\b(?:remets?|tends?|donnes?|passe?s?|glisse?s?|range|rangea|"
-    r"saisi[tz]?|attrape|empoches?|accepte|"
+    r"saisi[tz]?|attrape|empoches?|"
     # parties 7177d819/b59b4a9a : « Thukmuul sort de ses vêtements une fiole
     # de vérité… », « Elle dépose les objets dans vos mains » — la remise
     # avec ces verbes passait inaperçue (inventaire resté vide).
-    r"d[ée]p[ôo]ses?|d[ée]posa|offr[ei]t?|confi[ei]t?|"
+    # ⚠️ « accepte », « confie » et « sort(nu) » retirés (82a77cbe) :
+    # « Si vous acceptez cette mission, vous devrez récupérer la couronne »
+    # et « elle confie la quête de la Couronne » transformaient des MENTIONS
+    # de mission en remises — la Couronne elle-même était ajoutée dès l'intro.
+    r"d[ée]p[ôo]ses?|d[ée]posa|offr[ei]t?|"
     # « sort » verbe UNIQUEMENT en contexte de tirer un objet (« sort de
     # ses vêtements », « sort une dague », « sortit son épée ») — jamais le
     # NOM « un sort » (sortilège) : on exige un complément d'objet direct ou
@@ -4814,6 +4818,7 @@ class Orchestrator:
                     _pj_nom = None
                 if _pj_nom:
                     _ajoutes: list[str] = []
+                    _refus: list[str] = []
                     for _objet in _objets_remis:
                         try:
                             _tr_r = await self.execute_tool_direct(
@@ -4822,11 +4827,23 @@ class Orchestrator:
                                  "portee": "quete"},
                                 ctx, on_event, result,
                             )
-                            if _tr_r and _tr_r.text and "DÉJÀ" not in \
-                                    _tr_r.text[:80]:
+                            _txt_r = str(
+                                (_tr_r.text if _tr_r else "") or "")
+                            # 🔧 Partie 82a77cbe : un REFUS (🚫 anti-triche,
+                            # étape à venir, ❌…) ne doit pas être annoncé
+                            # comme un ajout — la note affirmait « couronne
+                            # ajoutée » dès l'intro. Seul le ✅ compte.
+                            if "✅" in _txt_r[:20] and "DÉJÀ" not in \
+                                    _txt_r[:80]:
                                 _ajoutes.append(_objet)
+                            elif _txt_r:
+                                _refus.append(_objet + " — "
+                                              + _txt_r[:80].strip())
                         except Exception:                    # noqa: BLE001
                             continue
+                    for _r in _refus:
+                        _log.info(
+                            "rattrapage remise : refus serveur pour %s", _r)
                     if _ajoutes:
                         _log.info(
                             "rattrapage remise de quête : %s ajouté(s) à %s",

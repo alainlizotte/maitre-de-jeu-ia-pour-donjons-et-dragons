@@ -857,6 +857,32 @@ async def inventaire_ajouter(
 
     inv = _inventaire(fiche)
     cible = _cle_objet(objet)
+    # 🔒 Partie 82a77cbe : un objet requis d'une étape À VENIR ne se gagne
+    # pas — la baguette de téléportation (requis de l'étape 2) était remise
+    # dès l'INTRO alors que le module ne la confie qu'au retour de la
+    # Couronne. Les étapes antérieures non accomplies verrouillent l'objet.
+    if portee_n == "quete" and _est_requis:
+        try:
+            from ..game.objectifs import etape_future_pour_objet  # noqa: E501 pylint: disable=import-outside-toplevel
+            from ..game.state import PartyState                  # noqa: E501 pylint: disable=import-outside-toplevel
+            _etat_f = PartyState(
+                data_dir=ctx.data_dir, partie_id=ctx.partie_id,
+            ).load()
+            _cles_inv = {
+                _cle_objet(str(_e.get("nom") or ""))
+                for _e in inv
+                if _entree_portee_ok(_e, "quete", ctx.partie_id)
+            }
+            _refus_futur = etape_future_pour_objet(
+                _etat_f or {}, ctx.data_dir, objet, _cles_inv)
+            if _refus_futur:
+                return ToolResult(text=(
+                    f"🚫 **« {objet} » ne peut pas être gagné MAINTENANT** : "
+                    f"{_refus_futur}. (Le module la prévoit plus tard — ne "
+                    "l'anticipe pas : narre la suite de l'étape courante.)"
+                ))
+        except Exception:                                    # noqa: BLE001
+            pass
     portee_lbl = (
         "📜 inventaire de quête (cette partie)" if portee_n == "quete"
         else "🎒 équipement permanent"

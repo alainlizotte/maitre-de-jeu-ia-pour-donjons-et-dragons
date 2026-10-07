@@ -1256,7 +1256,10 @@ _ACHAT_INTENT_RE = re.compile(
     # 🔧 Partie d8f41637 : le message du joueur porte le préfixe de signature
     # (« **[alain]** : repas mediocre ») — l'alternative ANCRÉE (^…$) ne
     # matchait plus et le repas n'était jamais commandé.
-    r"\b(?:repas|chambre|logement)\s+(?:m[ée]diocre|convenable|bonne?)\b",
+    r"\b(?:repas|chambre|logement)\s+(?:m[ée]diocre|convenable|bonne?)\b|"
+    # 💰 Partie 2dfa9c75 : les VENTES suivent la même mécanique (or crédité
+    # par `marche_vendre` à 50 % du prix de base officiel).
+    r"\bje\s+vends?\b|\bje\s+vendrais?\b",
     re.IGNORECASE,
 )
 _RE_QUALITE_REPAS = re.compile(
@@ -1301,6 +1304,8 @@ def _extraire_achat(message: str, articles: list[dict[str, Any]]) -> dict[str, A
         if qualite == "bon":
             qualite = "bonne"
 
+    mots = {_sing_mot(w) for w in _norm(msg).split() if len(w) >= 4}
+
     # Repas / logement → auberge_commander.
     if re.search(r"repas", msg, re.I):
         return {"type": "auberge", "repas": qualite or "mediocre",
@@ -1311,9 +1316,28 @@ def _extraire_achat(message: str, articles: list[dict[str, Any]]) -> dict[str, A
                 "logement": qualite or "mediocre", "nuits": 1,
                 "libelle": "logement " + (qualite or "mediocre")}
 
-    # Sinon : meilleur article du catalogue par mots communs (singuliers des
-    # DEUX côtés — « flèches » demandé vs « Flèches (10) » en catalogue).
-    mots = {_sing_mot(w) for w in _norm(msg).split() if len(w) >= 4}
+    # 💰 VENTE (partie 2dfa9c75) : « je vends mes rations » → marche_vendre
+    # (revente officielle à 50 %, or crédité sur la fiche).
+    if re.search(r"\bvends?\b|\bvendrais?\b", msg, re.I):
+        meilleur_v = None
+        for art in articles:
+            na = _norm(str(art.get("nom") or ""))
+            mots_art = {_sing_mot(w) for w in na.split()}
+            communs = mots & mots_art
+            if communs and (meilleur_v is None
+                            or len(communs) > len(meilleur_v[0])):
+                meilleur_v = (communs, art)
+        if meilleur_v is None:
+            return {}
+        art = meilleur_v[1]
+        qte = 1
+        m_q = _RE_QTE_ACHAT.search(msg)
+        if m_q:
+            qte = max(1, int(m_q.group(1)))
+        return {"type": "vente", "article": str(art.get("nom") or ""),
+                "quantite": qte, "libelle": "vente " + str(art.get("nom") or "")}
+
+    # Sinon : meilleur article du catalogue par mots communs.
     meilleure: tuple[int, dict[str, Any]] | None = None
     for art in articles:
         na = _norm(str(art.get("nom") or ""))
@@ -1406,6 +1430,21 @@ _OR_PRIX_RE = re.compile(
     r"\b(co[ûu]t(?:e|era|ant)?|prix|pai(?:e|er|é|ement)|pay(?:e|ez|é)|"
     r"demande|propose|acheter|coûtera)\b", re.IGNORECASE)
 
+# 🎁 Partie 2dfa9c75/audit : le BUTIN NON-QUÊTE narré (« vous trouvez une
+# épée longue ») sans tool — l'objet n'atteignait jamais l'inventaire. Le
+# rattrapage ne s'applique qu'au trésor CANONIQUE de la salle (champ
+# `tresor` du manifeste) : le nom extrait de la prose doit recouper ce
+# champ (pas d'objet inventé).
+_BUTIN_VERBE_RE = re.compile(
+    r"\b(?:trouv\w+|découv\w+|rév[eè]l\w+|s'ouvre\b|dévoil\w+|"
+    r"coffres?\s+(?:contient|s'ouvre|rév[eè]le)|conten\w+)\b",
+    re.IGNORECASE,
+)
+_BUTIN_OBJET_RE = re.compile(
+    r"\b((?:une?|le|la|les|l')[a-zà-ÿ'’\-]+(?:\s+[a-zà-ÿ'’\-]+){0,3})",
+    re.IGNORECASE,
+)
+
 
 def _or_gagne_narre(narration: str) -> Optional[int]:
     """Or GAGNÉ narré (trésor découvert, butin empoché) — pour le
@@ -1458,6 +1497,53 @@ def _jet_reusse_narre(narration: str) -> Optional[str]:
         if m_comp:
             return fenetre.strip()[:90]
     return None
+
+
+def _butin_salle_courante(narration: str, etat: dict[str, Any]) -> Optional[str]:
+    """Objet de BUTIN narré qui correspond au trésor CANONIQUE de la salle
+    courante (champ `tresor` du manifeste) — pour le rattrapage
+    `inventaire_ajouter(portee="auto")` quand le modèle narre la découverte
+    sans tool (partie 2dfa9c75/audit : « vous trouvez une épée longue »
+    narrée, objet jamais ajouté).
+
+    Le nom extrait de la prose doit RECOUPER le champ `tresor` (≥ 1 mot
+    fort commun) — pas d'objet inventé hors salle. None si aucun
+    rapprochement (ou si aucun inventaire-tool n'a déjà tourné, vérifié par
+    l'appelant)."""
+    if not narration or _BUTIN_VERBE_RE.search(narration) is None:
+        return None
+    donjon = etat.get("donjon") or {}
+    courant = donjon.get("courant") or [0, 0]
+    try:
+        cx, cy = int(courant[0]), int(courant[1])
+    except (TypeError, ValueError, IndexError):
+        return None
+    salle = next(
+        (s for s in (donjon.get("grille") or [])
+         if isinstance(s, dict) and s.get("x") == cx and s.get("y") == cy),
+        None,
+    )
+    tresor = str((salle or {}).get("tresor") or "").strip()
+    if not tresor:
+        return None
+    from ..tools.inventaire import _norm  # pylint: disable=import-outside-toplevel
+
+    mots_tresor = {w for w in _norm(tresor).split() if len(w) >= 4}
+    meilleure: tuple[int, str] | None = None
+    for m in _BUTIN_OBJET_RE.finditer(narration):
+        nom_candidat = (m.group(1) or "").strip()
+        if len(nom_candidat) < 4:
+            continue
+        mots_cand = {w for w in _norm(nom_candidat).split()
+                     if len(w) >= 4 and w not in (
+                         "sac", "coffre", "petit", "bois", "boite", "boîte")}
+        communs = mots_cand & mots_tresor
+        if not communs:
+            continue
+        score = len(communs)
+        if meilleure is None or score > meilleure[0]:
+            meilleure = (score, nom_candidat)
+    return meilleure[1] if meilleure else None
 
 
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
@@ -4826,6 +4912,16 @@ class Orchestrator:
                          "quantite": int(_achat.get("quantite") or 1)},
                         ctx, on_event, result,
                     )
+                elif _achat.get("type") == "vente":
+                    # 💰 Partie 2dfa9c75 : la revente crédite l'or du PJ à
+                    # 50 % du prix de base (règle officielle) via le tool.
+                    _tr_ach = await self.execute_tool_direct(
+                        "marche_vendre",
+                        {"nom": _pj_nom_achat,
+                         "article": _achat.get("article", ""),
+                         "quantite": int(_achat.get("quantite") or 1)},
+                        ctx, on_event, result,
+                    )
                 else:
                     _tr_ach = None
                     if not _achat:
@@ -4938,6 +5034,50 @@ class Orchestrator:
                             _pj_or)
         except Exception as _e_or:                           # noqa: BLE001
             _log.warning("rattrapage or narré échoué (ignoré) : %s", _e_or)
+
+        # 🎁 Partie 2dfa9c75 : rattrapage du BUTIN NON-QUÊTE — « vous
+        # trouvez une épée longue » dans la salle dont le `tresor` du
+        # manifeste mentionne cet objet, sans tool → `inventaire_ajouter(
+        # portee="auto")` (les verrous anti-triche s'appliquent aussi).
+        try:
+            _etat_butin = None
+            _objets_inventaire_trace = any(
+                tc.get("name") in ("inventaire_ramasser", "inventaire_ajouter")
+                and "✅" in (tc.get("text") or "")
+                for tc in result.tool_calls_trace
+            )
+            if (not _objets_inventaire_trace
+                    and (result.narration or "").strip()
+                    and _BUTIN_VERBE_RE.search(result.narration)):
+                from ..game.state import PartyState as _PS_but  # noqa: E501 pylint: disable=import-outside-toplevel
+                _etat_butin = _PS_but(
+                    data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                    max_history=0,
+                ).load()
+                _pj_but = next(
+                    (str(_p.get("nom"))
+                     for _p in (_etat_butin.get("pj") or []) if _p.get("nom")),
+                    None,
+                )
+                _objet_butin = _butin_salle_courante(
+                    result.narration, _etat_butin or {})
+                if _pj_but and _objet_butin:
+                    _tr_but = await self.execute_tool_direct(
+                        "inventaire_ajouter",
+                        {"nom": _pj_but, "objet": _objet_butin,
+                         "portee": "auto"},
+                        ctx, on_event, result,
+                    )
+                    if _tr_but is not None and "✅" in (_tr_but.text or ""):
+                        result.notes_mecaniques.append(
+                            "🎁 Butin ajouté par le serveur (trésor "
+                            "canonique de la salle) : " + _objet_butin + "."
+                        )
+                        _log.info(
+                            "butin de salle ajouté : %s à %s", _objet_butin,
+                            _pj_but)
+        except Exception as _e_but:                          # noqa: BLE001
+            _log.warning("rattrapage butin échoué (ignoré) : %s", _e_but)
 
         # 🎁 Rattrapage DÉTERMINISTE de la remise d'objets de quête (partie
         # e55cc855) : la remise était narrée (« range la fiole de vérité… dans

@@ -1966,6 +1966,17 @@ async def fiche_perso_soigner(
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    # ⚰️ Partie dfbb4846/audit : soigner un personnage MORT était un no-op
+    # SILencieux (PV restés à -10, aucun message) — le MJ croyait le soin
+    # appliqué. Refus explicite : seul un sort de résurrection relève un mort.
+    if any("mort" in str(c).lower() for c in (fiche.get("conditions") or [])
+           if isinstance(c, str)) or int(fiche.get("pv", 1) or 0) <= -10:
+        return ToolResult(text=(
+            f"⚰️ **{fiche.get('nom', nom)} est MORT** (PV "
+            f"{fiche.get('pv')}/{fiche.get('pv_max')}) — aucun soin ne "
+            "s'applique à un corps. Un sort de résurrection (5e niveau) et "
+            "le retrait de la condition « Mort » sont requis (MJ)."
+        ))
     # 🛡️ Garde anti-gaspillage (partie 120e9243) : PJ DÉJÀ à PV MAX → un
     # soin par kit/potion/fragment ne peut rien récupérer (tout gain est
     # plafonné à pv_max par la suite). On sort ICI, AVANT toute déduction :

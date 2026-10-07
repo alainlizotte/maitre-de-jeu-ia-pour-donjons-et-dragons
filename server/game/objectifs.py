@@ -483,6 +483,64 @@ def _cles_prefixe_rel(a: str, b: str) -> bool:
     return len(court) >= 4 and long.startswith(court + " ")
 
 
+def etape_future_pour_objet(
+    etat: dict[str, Any], data_dir: str, objet: str,
+    cles_inventaire: set[str],
+) -> Optional[str]:
+    """Message de refus si l'objet requis `objet` appartient à une étape À
+    VENIR de la trame — une étape ANTÉRIEURE n'étant pas encore accomplie
+    (ses objets requis absents de `cles_inventaire`).
+
+    Partie 82a77cbe : « Elle tend également une baguette de téléportation »
+    dès l'INTRO — le module ne la confie qu'AU RETOUR de la Couronne (étape
+    2). La baguette (requis de l'étape 2) devait être refusée tant que
+    l'étape 1 (la Couronne) n'est pas accomplie. None = gain légitime
+    (objet non requis, étape courante, ou trame absente)."""
+    cle = _cle_objet(objet)
+    etapes = _etapes_manifeste(etat, data_dir)
+
+    def _requiert(idx: int) -> bool:
+        e = etapes[idx]
+        if not isinstance(e, dict):
+            return False
+        reqs = [_cle_objet(n) for n in _liste_requis(e.get("requis") or [])]
+        if cle in reqs:
+            return True
+        return any(
+            _cles_prefixe_rel(cle, r) or _cles_prefixe_rel(r, cle)
+            for r in reqs
+        )
+
+    for i in range(len(etapes)):
+        if not _requiert(i):
+            continue
+        # L'étape i exige l'objet : les étapes 0..i doivent être accomplies
+        # (leurs requis présents dans l'inventaire de quête).
+        for j in range(i + 1):
+            e = etapes[j]
+            reqs = [_cle_objet(n) for n in _liste_requis(e.get("requis") or [])]
+            manquantes = [
+                r for r in reqs
+                if r not in cles_inventaire
+                and not any(
+                    _cles_prefixe_rel(r, c) or _cles_prefixe_rel(c, r)
+                    for c in cles_inventaire
+                )
+            ]
+            if manquantes:
+                if j == i:
+                    return None        # l'étape courante elle-même : OK
+                titre = str(etapes[j].get("titre") or (
+                    "étape " + str(j + 1)))
+                return (
+                    "l'objet appartient à une ÉTAPE À VENIR de la trame ("
+                    "« " + titre + " » n'est pas encore accomplie) — il "
+                    "sera remis/gagné QUAND cette étape deviendra la "
+                    "mission courante, jamais avant"
+                )
+        return None
+
+
 def salle_objet_requis(
     etat: dict[str, Any], data_dir: str, objet: str
 ) -> Optional[list[tuple[int, int]]]:

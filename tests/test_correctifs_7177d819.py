@@ -535,9 +535,9 @@ def test_objets_remettes_narration_verbes_tirage_et_anaphore():
         "La Couronne est entre les mains de Nulentok. Il lance un sort de "
         "feu puis s'avance. Elle dépose les objets sur la table.") == []
 
-    # « sort une dague » reste un verbe de tirage (« confie la cle » captée).
+    # « sort une dague » reste un verbe de tirage (« remet la cle » captée).
     objets2 = _objets_remettes_narration(
-        "Il sort une dague de sa ceinture. Elle confie la cle de fer à Margoth.")
+        "Il sort une dague de sa ceinture. Elle remet la cle de fer à Margoth.")
     assert any("cle" in o.lower() for o in objets2), objets2
 
 
@@ -662,6 +662,22 @@ def test_inventaire_objet_requis_portee_forcee_quete():
             "donjon": {"id": "La Couronne de Mystra"},
         })
         ctx = ToolContext(partie_id=pid_frappe, joueur="alain", data_dir=d)
+
+        # 🔒 La Couronne (étape 1) est DÉJÀ en inventaire : l'étape 2 (les
+        # gemmes, dont le Beljuril) est alors l'étape COURANTE — le verrou
+        # « étape à venir » (82a77cbe) n'a pas à se déclencher ici.
+        _PS(data_dir=d, partie_id=pid_frappe).save({
+            "meta": {"titre": "test"}, "phase": "exploration",
+            "quete": {"source": "[ro_the_crown_of_mystra] /data/scenarios"},
+            "donjon": {"id": "La Couronne de Mystra"},
+            "pj": [{"nom": "Utturgut"}],
+        })
+        fic0 = _json.load(open(fiche_path, encoding="utf-8"))
+        fic0["inventaire"] = [
+            {"nom": "La Couronne de Mystra", "qte": 1, "poids": 0.1,
+             "portee": "quete", "partie": pid_frappe}]
+        with open(fiche_path, "w", encoding="utf-8") as f:
+            _json.dump(fic0, f, ensure_ascii=False)
 
         r = asyncio.run(invoke_tool(tools["inventaire_ajouter"], ctx, {
             "nom": "Utturgut", "objet": "Le Beljuril",

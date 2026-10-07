@@ -970,6 +970,32 @@ def verrou_voyage(etat: dict[str, Any], data_dir: str, partie_id: str,
               "ces objets ne sont pas possédés (la suite du module est "
               "verrouillée par le scénario)."
         )
+        # 🧭 Partie 2dfa9c75 : dire OÙ aller — l'étape courante est ancrée
+        # à une salle du donjon (la Couronne chez Nulentok = (4,0)) et le
+        # modèle bouclait « voyage → refus » sans savoir que le chemin
+        # passe par l'EXPLORATION du donjon. Il restait alors bloqué et
+        # improvisait (PNJ inventé, arrivée instantanée).
+        if salle_txt:
+            _donjon_id = str((etat.get("donjon") or {}).get("id") or "")
+            _courant = (etat.get("donjon") or {}).get("courant") or [0, 0]
+            _portes = ""
+            for _s in (etat.get("donjon") or {}).get("grille") or []:
+                if isinstance(_s, dict) and (_s.get("x"), _s.get("y")) == \
+                        (_courant[0], _courant[1]):
+                    _portes = ", ".join(
+                        _d for _d, _on in (_s.get("portes") or {}).items()
+                        if _on)
+                    break
+            lignes.append(
+                f"📍 L'objet se trouve dans la salle {salle_txt} du donjon "
+                f"« {_donjon_id} » : reprends l'EXPLORATION — "
+                "`carte_donjon_explorer(direction=…)` avec une porte "
+                "OUVERTE de la salle courante"
+                + (f" (vous êtes en ({_courant[0]},{_courant[1]}) ; portes "
+                   f"ouvertes : {_portes})" if _portes else "")
+                + ". Le trajet narré (journées de route) fait partie de "
+                "l'EXPLORATION, pas de `voyage_demarrer`."
+            )
     elif salle_txt:
         if detail:
             lignes.append(detail[:400])

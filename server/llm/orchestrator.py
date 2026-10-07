@@ -1396,6 +1396,35 @@ def _decor_ancre_absent(narration: str, ancre_ligne: str) -> bool:
     return presents < max(2, len(mots_decor) // 3)
 
 
+_OR_GAIN_RE = re.compile(
+    r"\b(?:trouv\w+|découv\w+|gagn\w+|empo?ch\w+|récolt\w+|vous offr\w+|"
+    r"sac\s+contenant)\b"
+    r"[^.!?]{0,100}?\b(\d{1,4})\s*(?:pièces?\s+d'or|po)\b",
+    re.IGNORECASE,
+)
+_OR_PRIX_RE = re.compile(
+    r"\b(co[ûu]t(?:e|era|ant)?|prix|pai(?:e|er|é|ement)|pay(?:e|ez|é)|"
+    r"demande|propose|acheter|coûtera)\b", re.IGNORECASE)
+
+
+def _or_gagne_narre(narration: str) -> Optional[int]:
+    """Or GAGNÉ narré (trésor découvert, butin empoché) — pour le
+    rattrapage déterministe. None si aucun gain clair : les PRIX
+    (« coûte 50 po », « le forgeron demande 10 po ») sont exclus."""
+    if not narration:
+        return None
+    for m in _OR_GAIN_RE.finditer(narration):
+        phrase_d = narration.rfind(".", 0, m.start())
+        phrase_f = narration.find(".", m.start())
+        phrase = narration[
+            (phrase_d + 1) if phrase_d != -1 else 0:
+            phrase_f if phrase_f != -1 else len(narration)]
+        if _OR_PRIX_RE.search(phrase):
+            continue
+        return int(m.group(1))
+    return None
+
+
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
     """True si au moins une occurrence du nom normalisé `n` dans le texte
     normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
@@ -4783,6 +4812,46 @@ class Orchestrator:
                     )
         except Exception as _e_voy:                          # noqa: BLE001
             _log.warning("rattrapage voyage échoué (ignoré) : %s", _e_voy)
+
+        # 💰 Partie 2dfa9c75 : rattrapage d'OR NARRÉ (« vous trouvez un sac
+        # contenant 50 po ») sans AUCUN tool d'or — le trésor n'atteignait
+        # jamais la fiche. Crédit déterministe au montant narré (les PRIX
+        # — coûte/demande/paye — sont exclus ; l'achat passe par ses tools).
+        try:
+            _gain_or = _or_gagne_narre(result.narration or "")
+            if _gain_or and _gain_or > 0 and not any(
+                tc.get("name") in ("marche_acheter", "marche_vendre",
+                                   "auberge_commander")
+                and "✅" in (tc.get("text") or "")
+                for tc in result.tool_calls_trace
+            ):
+                from ..game.state import PartyState as _PS_or  # noqa: E501 pylint: disable=import-outside-toplevel
+                _etat_or = _PS_or(
+                    data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                    max_history=0,
+                ).load()
+                _pj_or = next(
+                    (str(_p.get("nom"))
+                     for _p in (_etat_or.get("pj") or []) if _p.get("nom")),
+                    None,
+                )
+                if _pj_or:
+                    from ..tools.fiches import _load_fiche as _lf, _save_fiche as _sf  # noqa: E501 pylint: disable=import-outside-toplevel
+                    _f_or = _lf(ctx, _pj_or)
+                    if _f_or is not None:
+                        _avant_or = int(_f_or.get("or", 0) or 0)
+                        _f_or["or"] = _avant_or + _gain_or
+                        _sf(ctx, _pj_or, _f_or)
+                        result.notes_mecaniques.append(
+                            "💰 Or narré crédité par le serveur : +"
+                            + str(_gain_or) + " po à " + _pj_or
+                            + " (total " + str(_f_or["or"]) + " po)."
+                        )
+                        _log.info(
+                            "or narré crédité : +%d po à %s", _gain_or,
+                            _pj_or)
+        except Exception as _e_or:                           # noqa: BLE001
+            _log.warning("rattrapage or narré échoué (ignoré) : %s", _e_or)
 
         # 🎁 Rattrapage DÉTERMINISTE de la remise d'objets de quête (partie
         # e55cc855) : la remise était narrée (« range la fiole de vérité… dans

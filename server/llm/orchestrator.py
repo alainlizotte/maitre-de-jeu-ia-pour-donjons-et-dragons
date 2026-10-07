@@ -1425,6 +1425,41 @@ def _or_gagne_narre(narration: str) -> Optional[int]:
     return None
 
 
+# 🎲 Jets de compétence RÉUSSIS narrés sans dé (audit 33d8f18e/dfbb4846) :
+# « il fouille la pièce et réussit sa Perception » — la réussite décide
+# d'un verrou, d'un piège ou d'un trésor SANS mécanique (règle 2 : le dé
+# doit PRÉCÉDER la prose). Détection : un mot de RÉUSSITE + un nom de
+# compétence dans la fenêtre, sans mention de dé ni de tool.
+_COMPETENCES_RE = re.compile(
+    r"(discr[eé]tion|perception|escamotage|escalade|diplomatie|"
+    r"intimidation|d[ée]guisement|fouille|saut|natation|[ée]quilibre|"
+    r"concentration|psychologie|premier\s+secours|vol\s+à\s+la\s+tire|"
+    r"dressage|[ée]quit\w+|connaissance|savoir|m[ée]decine|survie|"
+    r"arcane?s?|religion|nature|auditif|rep[ée]rage|"
+    r"ma[îi]trise\s+des\s+animaux|repr[ée]sentation|estimation|"
+    r"cryptographie|artisanat|profan\w+|force)",
+    re.IGNORECASE,
+)
+_REUSSITE_RE = re.compile(r"\b(r[ée]ussi\w*|r[ée]ussite)\b", re.IGNORECASE)
+
+
+def _jet_reusse_narre(narration: str) -> Optional[str]:
+    """Fragment « réussite + compétence » narré SANS dé (règle 2 violée :
+    la réussite décide d'un verrou/piège/trésor sans mécanique). None si
+    le jet est cité avec son dé (légitime) ou absent."""
+    if not narration:
+        return None
+    for m in _REUSSITE_RE.finditer(narration):
+        fenetre = narration[max(0, m.start() - 90):m.end() + 90]
+        bas = fenetre.lower()
+        if "d20" in bas or "lancer" in bas or "avait" in bas:
+            continue
+        m_comp = _COMPETENCES_RE.search(fenetre)
+        if m_comp:
+            return fenetre.strip()[:90]
+    return None
+
+
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
     """True si au moins une occurrence du nom normalisé `n` dans le texte
     normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
@@ -4461,6 +4496,57 @@ class Orchestrator:
                         ),
                     ))
                     continue
+
+                # 🎲 Partie 0e615b81/audit : les JETS DE COMPÉTENCE RÉUSSIS
+                # narrés sans dé (« il fouille la pièce et réussit sa
+                # Perception ») — la réussite ouvrait un verrou/un piège/un
+                # trésor SANS mécanique (règle 2 : le dé précède la prose).
+                # Relance roll-to-confirm : `lancer_d20` D'ABORD (la fiche
+                # fournit rangs et modificateurs), PUIS la narration du
+                # résultat OFFICIEL — réussite OU échec, tel quel.
+                if narration.strip() and _correction_autorisee(result):
+                    _jet_outil = any(
+                        tc.get("name") in ("lancer_d20", "lancer_sauvegarde",
+                                           "calculer_initiative",
+                                           "lancer_attaque")
+                        and tc.get("ok")
+                        for tc in result.tool_calls_trace
+                    )
+                    _jet_narre = (
+                        None if _jet_outil else _jet_reusse_narre(narration))
+                    if _jet_narre:
+                        result.corrections += 1
+                        if on_delta is not None and on_event is not None:
+                            try:
+                                await on_event({"type": "stream_reset"})
+                            except Exception:                 # noqa: BLE001
+                                pass
+                        _log.warning(
+                            "jet de compétence réussi narré sans dé (« %s », "
+                            "correction %d) — relance roll-to-confirm",
+                            _jet_narre[:80], result.corrections,
+                        )
+                        work.append(Message(
+                            role="system",
+                            content=(
+                                "⚠️ CORRECTION : ta narration raconte la "
+                                "RÉUSSITE d'un jet de compétence (« "
+                                f"{_jet_narre} ») sans qu'aucun "
+                                "`lancer_d20` n'ait été appelé ce tour — "
+                                "le jet n'a PAS eu lieu mécaniquement : le "
+                                "verrou, le piège ou le trésor ne s'ouvrent "
+                                "pas en prose. Appelle D'ABORD "
+                                "`lancer_d20(nom_personnage=…, "
+                                "competence=…, difficulte=…)` — la fiche "
+                                "fournit rangs et modificateurs (gradation "
+                                "DMG : facile 5, moyenne 10, difficile 15, "
+                                "très difficile 20, héroïque 25) — PUIS "
+                                "narre le résultat OFFICIEL, réussite ou "
+                                "échec, TEL QUEL."
+                                + _CORRECTIF_INTERNE
+                            ),
+                        ))
+                        continue
 
             # --- D2. Rattrapage : contenu vide après stripping thinking -----
             # Gemma 4 E4B renvoie parfois des réponses entièrement thinking

@@ -431,11 +431,14 @@ async def test_combat3_mort_dun_pj():
         f = _fiche(d, "Zarkon")
         assert f["pv"] == -10 and "Mort" in f["conditions"]
 
-        # La magie ne ressuscite pas : le soin ne lève pas « Mort ».
+        # La magie ne ressuscite pas : le soin d'un MORT est REFUSÉ
+        # (partie dfbb4846 : l'ancien no-op silencieux faisait varier les PV
+        # d'un corps — « -10 + 8 = -2 » — sans lever Mort, incohérent).
         r = await tool(d, "fiche_perso_soigner", nom="Zarkon", soin=8)
+        assert "est MORT" in r.text
         f = _fiche(d, "Zarkon")
         assert "Mort" in f["conditions"], "Mort doit persister après soin"
-        assert f["pv"] == min(5, -10 + 8)
+        assert f["pv"] == -10, f["pv"]
 
         # ── Un PJ mort est exclu de l'initiative du combat suivant ───────
         # retraite_combat (et non finir_combat : la garde F4 refuse de

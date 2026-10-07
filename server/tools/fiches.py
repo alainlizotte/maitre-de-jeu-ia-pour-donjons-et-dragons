@@ -1968,9 +1968,12 @@ async def fiche_perso_soigner(
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
     # ⚰️ Partie dfbb4846/audit : soigner un personnage MORT était un no-op
     # SILencieux (PV restés à -10, aucun message) — le MJ croyait le soin
-    # appliqué. Refus explicite : seul un sort de résurrection relève un mort.
+    # appliqué. Refus explicite : seul un sort de résurrection relève un
+    # mort. ⚠️ Le test sur les PV seuls est VOLONTAIREMENT absent : la
+    # résurrection (5f3e31c9) retire « Mort » PUIS soigne un corps à -10 PV
+    # — c'est légitime.
     if any("mort" in str(c).lower() for c in (fiche.get("conditions") or [])
-           if isinstance(c, str)) or int(fiche.get("pv", 1) or 0) <= -10:
+           if isinstance(c, str)):
         return ToolResult(text=(
             f"⚰️ **{fiche.get('nom', nom)} est MORT** (PV "
             f"{fiche.get('pv')}/{fiche.get('pv_max')}) — aucun soin ne "

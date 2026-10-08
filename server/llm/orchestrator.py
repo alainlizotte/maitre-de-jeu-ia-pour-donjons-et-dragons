@@ -3401,6 +3401,7 @@ class Orchestrator:
         # relances n'ont jamais produit de variation utile).
         phase_combat = False
         ouverture_tour = False
+        _narrations_avant: list[str] = []
         a_deja_narre = any(
             m.role == "assistant" and (m.content or "").strip()
             for m in messages
@@ -3424,6 +3425,18 @@ class Orchestrator:
                 and not (_etat_tour.get("histoire"))
                 and not a_deja_narre
             )
+            # 📸 Partie 3f3fa1b5 : SNAPSHOT des narrations ANTÉRIEURES au
+            # tour (messages entrants uniquement). Le filet anti-écho
+            # post-boucle doit comparer la narration finale à ces SEULES
+            # références : s'il scanne `work`, il inclut les BROUILLONS
+            # internes du tour courant — la version finale recouvre
+            # naturellement son propre brouillon (même scène, affinée) et
+            # l'anti-copie remplaçait l'intro par une re-narration SANS le
+            # début (le décor sauté) et avec le PJ parlant.
+            _narrations_avant = [
+                m.content for m in messages
+                if m.role == "assistant" and len(m.content or "") > 200
+            ]
         except Exception:                                    # noqa: BLE001
             phase_combat = False
             ouverture_tour = False
@@ -4869,13 +4882,13 @@ class Orchestrator:
         # était la copie OCTET POUR OCTET de [5] (le plafond de corrections
         # épuisé par les corrections de déplacement, la copie est passée
         # telle quelle). Si la narration finale recouvre quasi verbatim
-        # (~60 %) une narration antérieure du contexte, une DERNIÈRE
+        # (~60 %) une narration ANTÉRIEURE AU TOUR (snapshot `_narrations_avant`
+        # — JAMAIS les brouillons internes du tour lui-même), une DERNIÈRE
         # re-narration anti-copie est forcée (sans tools).
         try:
             _refs_echo = [
-                Message(role="assistant", content=m.content)
-                for m in work
-                if m.role == "assistant" and len(m.content or "") > 200
+                Message(role="assistant", content=_c)
+                for _c in (_narrations_avant or [])
             ]
             _echo_final = trouve_repetition(
                 result.narration or "", _refs_echo, seuil=0.6)

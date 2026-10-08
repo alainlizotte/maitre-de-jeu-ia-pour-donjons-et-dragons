@@ -1464,8 +1464,35 @@ def _or_gagne_narre(narration: str) -> Optional[int]:
     return None
 
 
+# 🧭 Partie 89174f50 : la DIRECTION demandée par la prose (« je me dirige
+# vers l'est », « la porte est »…), restreinte aux PORTES OUVERTES de la
+# salle courante — pour l'application serveur d'un déplacement narré que
+# la relance n'a pas fait corriger.
+def _direction_depuis_prose(narration: str,
+                            etat: dict[str, Any]) -> Optional[str]:
+    """Direction (nord/sud/est/ouest) exprimée par la prose ET correspondant
+    à une porte OUVERTE de la salle courante. None si absente ou ambiguë."""
+    donjon = etat.get("donjon") or {}
+    courant = donjon.get("courant") or [0, 0]
+    salle = next(
+        (s for s in (donjon.get("grille") or [])
+         if isinstance(s, dict)
+         and (s.get("x"), s.get("y")) == (courant[0], courant[1])),
+        None,
+    )
+    portes = (salle or {}).get("portes") or {}
+    t = _normalise_pour_compare(narration or "")
+    candidates = [
+        d for d in ("nord", "sud", "est", "ouest")
+        if d in (portes or {}) and (portes or {})[d]
+        and re.search(r"\b" + d + r"\b", t)
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
 # 🎲 Jets de compétence RÉUSSIS narrés sans dé (audit 33d8f18e/dfbb4846) :
-# « il fouille la pièce et réussit sa Perception » — la réussite décide
 # d'un verrou, d'un piège ou d'un trésor SANS mécanique (règle 2 : le dé
 # doit PRÉCÉDER la prose). Détection : un mot de RÉUSSITE + un nom de
 # compétence dans la fenêtre, sans mention de dé ni de tool.
@@ -4691,6 +4718,52 @@ class Orchestrator:
                 if _depl_narre and _deplacement_local(narration, etat):
                     _depl_narre = None
                 if _depl_narre:
+                    # 🔧 Partie 89174f50 : au 2e déplacement narré
+                    # consécutif (la relance a déjà échoué une fois), le
+                    # serveur APPLIQUE lui-même l'exploration dans la
+                    # direction clairement exprimée par la prose (arbitrée
+                    # par les portes ouvertes) — puis le modèle narre la
+                    # salle d'après le résultat officiel.
+                    if result.corrections >= 2:
+                        try:
+                            from ..game.state import PartyState as _PS_dir  # noqa: E501 pylint: disable=import-outside-toplevel
+                            _etat_dir = _PS_dir(
+                                data_dir=str(ctx.data_dir),
+                                partie_id=ctx.partie_id, max_history=0,
+                            ).load()
+                            _dir_prose = _direction_depuis_prose(
+                                narration, _etat_dir or {})
+                        except Exception:                 # noqa: BLE001
+                            _dir_prose = None
+                        if _dir_prose:
+                            _log.warning(
+                                "déplacement narré 2× sans outil — le "
+                                "serveur explore %s (direction de la "
+                                "prose)", _dir_prose)
+                            work.append(Message(
+                                role="assistant",
+                                content=narration.strip(),
+                            ))
+                            await self.execute_tool_direct(
+                                "carte_donjon_explorer",
+                                {"direction": _dir_prose},
+                                ctx, on_event, result,
+                            )
+                            work.append(Message(
+                                role="system",
+                                content=(
+                                    "🧭 L'EXPLORATION a été appliquée par "
+                                    "le serveur dans la direction demandée "
+                                    "par la prose (aucune relance "
+                                    "supplémentaire) : narre la salle "
+                                    "atteinte UNIQUEMENT d'après le "
+                                    "résultat officiel du tool ci-dessus — "
+                                    "le voyage narré fait partie de "
+                                    "l'exploration."
+                                    + _CORRECTIF_INTERNE
+                                ),
+                            ))
+                            continue
                     result.corrections += 1
                     if on_delta is not None and on_event is not None:
                         try:

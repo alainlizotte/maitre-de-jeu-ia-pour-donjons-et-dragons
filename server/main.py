@@ -294,14 +294,25 @@ _DONJON_ENTREE_RE = _re_mod.compile(
 
 
 def _entree_donjon_narree(narration: str) -> bool:
-    """True si la narration relate l'ENTRÉE du groupe dans un lieu clos
-    à cartographier (donjon, catacombes, crypte…)."""
+    """True si UNE MÊME PHRASE relate l'ENTRÉE du groupe dans un lieu clos
+    à cartographier (donjon, catacombes, crypte…).
+
+    🔧 Partie c21d0734 : la portée était le TEXTE ENTIER — le LIEU d'une
+    phrase (le souvenir du « repaire » de Nulentok, mentionné par
+    Teleshann) + le VERBE d'une autre (« Bienvenue dans l'auberge »,
+    « entrer dans son atelier ») re-déclenchaient `carte_donjon_entrer` :
+    le groupe reposant à l'auberge se retrouvait TÉLÉPORTÉ dans le
+    donjon."""
     if not narration:
         return False
-    return bool(
-        _DONJON_LIEU_RE.search(narration)
-        and _DONJON_ENTREE_RE.search(narration)
-    )
+    import re as _re_scope  # main.py importe re sous l'alias _re_mod
+    for phrase in _re_scope.split(r"(?<=[.!?…])\s+|\n", narration):
+        if not phrase.strip():
+            continue
+        if (_DONJON_LIEU_RE.search(phrase)
+                and _DONJON_ENTREE_RE.search(phrase)):
+            return True
+    return False
 
 
 def _suggestion_outil_explo(etat: dict[str, Any], txt: str) -> Optional[str]:

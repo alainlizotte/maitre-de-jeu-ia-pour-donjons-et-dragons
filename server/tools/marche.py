@@ -38,12 +38,38 @@ from .inventaire import (_cle_objet, _format_inventaire, _inventaire,
 #  Helpers localité / argent
 # --------------------------------------------------------------------------- #
 def _lieu_nom(ctx: ToolContext) -> str:
+    """La localité commerciale courante : le lieu de l'état s'il est une
+    localité connue, sinon la DERNIÈRE localité connue du groupe.
+
+    🔧 Partie c21d0734/15aa0b6f : dans les scénarios à manifeste, le
+    `lieu.nom` de l'état devient l'ID du parcours (« La Couronne de
+    Mystra ») — pas une localité. Le marché retombait alors sur
+    « (non déterminé) » en type Bourg (×1.1, sorts 1) alors que le groupe
+    achète à la Tour de l'Équilibre DANS Silverymoon (Cité : ×1.0, sorts 6).
+    Repli : `memoire.position.lieu` / `lieux_visites` (alimentés par le
+    serveur à chaque tour)."""
+    nom = ""
+    dernier_connu = ""
     try:
         from ..game.state import PartyState
-        etat = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
-        return str((etat.get("lieu") or {}).get("nom") or "").strip()
+        etat = PartyState(data_dir=ctx.data_dir,
+                          partie_id=ctx.partie_id).load()
+        nom = str((etat.get("lieu") or {}).get("nom") or "").strip()
+        if villes.type_de_ville(nom) != villes.TYPE_INCONNU:
+            return nom
+        mem = etat.get("memoire") or {}
+        dernier_connu = str((mem.get("position") or {}).get("lieu")
+                            or "").strip()
+        if dernier_connu and villes.type_de_ville(dernier_connu) != \
+                villes.TYPE_INCONNU:
+            return dernier_connu
+        for x in reversed(mem.get("lieux_visites") or []):
+            x_nom = x if isinstance(x, str) else str((x or {}).get("nom") or "")
+            if x_nom and villes.type_de_ville(x_nom) != villes.TYPE_INCONNU:
+                return x_nom
     except Exception:                                    # noqa: BLE001
-        return ""
+        pass
+    return nom or dernier_connu
 
 
 def _ville(ctx: ToolContext, ville: str = "") -> tuple[str, str]:

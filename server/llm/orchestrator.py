@@ -1546,6 +1546,47 @@ def _butin_salle_courante(narration: str, etat: dict[str, Any]) -> Optional[str]
     return meilleure[1] if meilleure else None
 
 
+def _deplacement_local(narration: str, etat: dict[str, Any]) -> bool:
+    """Vrai si le déplacement narré reste DANS la localité courante
+    (micro-déplacement libre — règle 7 : « les rues de la ville »).
+
+    Partie 15aa0b6f : « Je quitte les lieux et me dirige chez le marchand »
+    — le groupe est DÉJÀ à Silverymoon : marcher jusqu'à la boutique est
+    libre, mais D1 relançait (aucun tool de déplacement) et le modèle,
+    sans bonne option (`carte_donjon_explorer(est)` = la route du repère,
+    `voyage_demarrer` = l'inter-cités), bouclait sur la copie de [5].
+    Dans un DONJON, l'exploration reste toujours mécanique."""
+    lieu = etat.get("lieu") or {}
+    if str(lieu.get("type") or "").strip().lower() in ("donjon", "donjons"):
+        return False
+    lieu_nom = str(lieu.get("nom") or "").strip()
+    t = narration or ""
+    if not t:
+        return False
+    # Une AUTRE ville connue du répertoire est mentionnée → vrai voyage.
+    try:
+        from .. import villes as _villes
+        for nom_v in _villes.VILLES_TYPES:
+            nv = nom_v.lower()
+            if lieu_nom and nv == lieu_nom.lower():
+                continue
+            if nv in t.lower():
+                return False
+    except Exception:                                        # noqa: BLE001
+        pass
+    # Lieu intra-muros (marché, boutique, auberge, forgeron…) ou la ville
+    # elle-même citée → déplacement local, libre.
+    if re.search(
+        r"\b(march[ée]\w*|boutique|échoppe|forgeron|armurerie|auberge|"
+        r"taverne|temple|guilde|rues?|place du|marchand)\b", t,
+        re.IGNORECASE,
+    ):
+        return True
+    if lieu_nom and lieu_nom.lower() in t.lower():
+        return True
+    return False
+
+
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
     """True si au moins une occurrence du nom normalisé `n` dans le texte
     normalisé `t` est précédée d'un QUANTIFICATEUR (nombre, « plusieurs »,
@@ -4549,6 +4590,12 @@ class Orchestrator:
                 _depl_narre = (
                     None if _depl_outil else _deplacement_narre(narration)
                 )
+                # 🚶 Partie 15aa0b6f : exemption MICRO-DÉPLACEMENT — sortir
+                # de la tour pour « aller chez le marchand » (même ville)
+                # est libre (règle 7) ; D1 relançait et le modèle, sans
+                # bonne option, bouclait sur la copie de [5].
+                if _depl_narre and _deplacement_local(narration, etat):
+                    _depl_narre = None
                 if _depl_narre:
                     result.corrections += 1
                     if on_delta is not None and on_event is not None:

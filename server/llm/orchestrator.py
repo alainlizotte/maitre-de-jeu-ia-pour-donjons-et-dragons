@@ -1546,20 +1546,17 @@ def _butin_salle_courante(narration: str, etat: dict[str, Any]) -> Optional[str]
     return meilleure[1] if meilleure else None
 
 
-def _deplacement_local(narration: str, etat: dict[str, Any]) -> bool:
-    """Vrai si le déplacement narré reste DANS la localité courante
-    (micro-déplacement libre — règle 7 : « les rues de la ville »).
+_INTRA_MUROS_RE = re.compile(
+    r"\b(march[ée]\w*|boutique|échoppe|forgeron|armurerie|auberge|"
+    r"taverne|temple|guilde|rues?|place du|marchand|atelier)\b",
+    re.IGNORECASE,
+)
 
-    Partie 15aa0b6f : « Je quitte les lieux et me dirige chez le marchand »
-    — le groupe est DÉJÀ à Silverymoon : marcher jusqu'à la boutique est
-    libre, mais D1 relançait (aucun tool de déplacement) et le modèle,
-    sans bonne option (`carte_donjon_explorer(est)` = la route du repère,
-    `voyage_demarrer` = l'inter-cités), bouclait sur la copie de [5].
-    Dans un DONJON, l'exploration reste toujours mécanique."""
-    lieu = etat.get("lieu") or {}
-    if str(lieu.get("type") or "").strip().lower() in ("donjon", "donjons"):
-        return False
-    lieu_nom = str(lieu.get("nom") or "").strip()
+
+def _local_intra_muros(narration: str, lieu_nom: str) -> bool:
+    """Le texte reste DANS la localité `lieu_nom` : une autre ville connue
+    du répertoire n'est pas mentionnée ET un lieu intra-muros (marché,
+    boutique, auberge, forgeron, rues…) ou la ville elle-même est citée."""
     t = narration or ""
     if not t:
         return False
@@ -1576,15 +1573,28 @@ def _deplacement_local(narration: str, etat: dict[str, Any]) -> bool:
         pass
     # Lieu intra-muros (marché, boutique, auberge, forgeron…) ou la ville
     # elle-même citée → déplacement local, libre.
-    if re.search(
+    return bool(re.search(
         r"\b(march[ée]\w*|boutique|échoppe|forgeron|armurerie|auberge|"
-        r"taverne|temple|guilde|rues?|place du|marchand)\b", t,
+        r"taverne|temple|guilde|rues?|place du|marchand|atelier)\b", t,
         re.IGNORECASE,
-    ):
-        return True
-    if lieu_nom and lieu_nom.lower() in t.lower():
-        return True
-    return False
+    ) or (lieu_nom and lieu_nom.lower() in t.lower()))
+
+
+def _deplacement_local(narration: str, etat: dict[str, Any]) -> bool:
+    """Vrai si le déplacement narré reste DANS la localité courante
+    (micro-déplacement libre — règle 7 : « les rues de la ville »).
+
+    Partie 15aa0b6f : « Je quitte les lieux et me dirige chez le marchand »
+    — le groupe est DÉJÀ à Silverymoon : marcher jusqu'à la boutique est
+    libre, mais D1 relançait (aucun tool de déplacement) et le modèle,
+    sans bonne option (`carte_donjon_explorer(est)` = la route du repère,
+    `voyage_demarrer` = l'inter-cités), bouclait sur la copie de [5].
+    Dans un DONJON, l'exploration reste toujours mécanique."""
+    lieu = etat.get("lieu") or {}
+    if str(lieu.get("type") or "").strip().lower() in ("donjon", "donjons"):
+        return False
+    lieu_nom = str(lieu.get("nom") or "").strip()
+    return _local_intra_muros(narration, lieu_nom)
 
 
 def _mention_monstre_quantifiee(t: str, n: str) -> bool:
@@ -5178,6 +5188,51 @@ class Orchestrator:
                             _pj_but)
         except Exception as _e_but:                          # noqa: BLE001
             _log.warning("rattrapage butin échoué (ignoré) : %s", _e_but)
+
+        # 🏙️ Partie 15aa0b6f/c21d0734 : SORTIE DE BÂTIMENT dans une
+        # localité → l'état repasse en EXPLORATION DE LA VILLE (lieu = la
+        # ville courante). Le MJ « replongeait » le groupe dans le donjon
+        # (lieu.nom = l'id du parcours) alors que la narration le mettait
+        # chez le forgeron ou à l'auberge — et le marché tarifait un Bourg
+        # inconnu. La salle (0,0) du bâtiment reste la salle courante :
+        # y retourner est naturel (retraite/restauration incluses).
+        try:
+            from ..game.state import PartyState as _PS_ville  # noqa: E501 pylint: disable=import-outside-toplevel
+            from ..tools.marche import _lieu_nom as _ville_cour  # noqa: E501 pylint: disable=import-outside-toplevel
+            _etat_ville = _PS_ville(
+                data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+                max_history=0,
+            ).load()
+            _lieu_v = _etat_ville.get("lieu") or {}
+            if (str(_lieu_v.get("type") or "").strip().lower() == "donjon"
+                    and (result.narration or "").strip()
+                    and re.search(r"\b(?:quitte|sort\w*|sors|ressors\w*|"
+                                  r"quitte\s+les\s+lieux)\b",
+                                  result.narration, re.IGNORECASE)
+                    and _local_intra_muros(
+                        result.narration,
+                        _ville_courante(str(ctx.data_dir)))):
+                _ville_nom = (_ville_courante(str(ctx.data_dir))
+                              or "la ville")
+                _etat_ville["lieu"] = {"nom": _ville_nom, "type": "ville",
+                                       "description": ""}
+                _mem_v = _etat_ville.setdefault("memoire", {})
+                if isinstance(_mem_v, dict):
+                    pos_v = _mem_v.setdefault("position", {})
+                    if isinstance(pos_v, dict):
+                        pos_v["lieu"] = _ville_nom
+                _PS_ville(data_dir=str(ctx.data_dir),
+                          partie_id=ctx.partie_id, max_history=0,
+                          ).save(_etat_ville)
+                result.notes_mecaniques.append(
+                    "🏙️ Le groupe est maintenant dans les rues de "
+                    + _ville_nom + " (exploration de la ville) — le "
+                    "bâtiment quitté reste la salle courante du plan "
+                    "(retour naturel)."
+                )
+        except Exception as _e_ville:                        # noqa: BLE001
+            _log.warning("passage en exploration de ville échoué "
+                         "(ignoré) : %s", _e_ville)
 
         # 🎁 Rattrapage DÉTERMINISTE de la remise d'objets de quête (partie
         # e55cc855) : la remise était narrée (« range la fiole de vérité… dans

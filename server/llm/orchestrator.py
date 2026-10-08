@@ -3353,8 +3353,79 @@ class Orchestrator:
         """
         result = OrchestratedResult()
         work = list(messages)
+        # 💰 Pré-exécution des TRANSACTIONS (partie 2dfa9c75, à la façon des
+        # combats) : l'intention EXPLICITE du joueur (« j'achète 50 flèches »,
+        # « je vends mes rations », « Repas médiocre ») est exécutée PAR LE
+        # SERVEUR AVANT l'appel LLM — le modèle narre ensuite le résultat
+        # OFFICIEL (prix exacts, or réellement débité/crédité) au lieu
+        # d'inventer des prix en prose que le rattrapage devrait corriger.
+        try:
+            _msgs_user_tx = [
+                str(m.content or "") for m in messages
+                if m.role == "user" and (m.content or "").strip()
+            ]
+            _intention_tx = _intention_achat(_msgs_user)
+            if _intention_tx:
+                from .. import equipement_phb as _phb_tx  # noqa: E501 pylint: disable=import-outside-toplevel
+                from ..game.state import PartyState as _PS_tx  # noqa: E501 pylint: disable=import-outside-toplevel
+                from ..tools.marche import (      # noqa: E501 pylint: disable=import-outside-toplevel
+                    auberge_commander as _aub_tx,
+                    marche_acheter as _ach_tx,
+                    marche_vendre as _ven_tx,
+                )
+                _etat_tx = _PS_tx(data_dir=str(ctx.data_dir),
+                                  partie_id=ctx.partie_id,
+                                  max_history=0).load()
+                _pj_tx = next(
+                    (str(p.get("nom")) for p in (_etat_tx.get("pj") or [])
+                     if p.get("nom")),
+                    None)
+                _achat_tx = _extraire_achat(_intention_tx,
+                                            list(_phb_tx.articles()))
+                _tool_tx, _args_tx = None, None
+                if _pj_tx and _achat_tx.get("type") == "auberge":
+                    _tool_tx = "auberge_commander"
+                    _args_tx = {"nom": _pj_tx,
+                                "repas": _achat_tx.get("repas", ""),
+                                "logement": _achat_tx.get("logement", ""),
+                                "nuits": int(_achat_tx.get("nuits") or 1)}
+                elif _pj_tx and _achat_tx.get("type") == "marche":
+                    _tool_tx = "marche_acheter"
+                    _args_tx = {"nom": _pj_tx,
+                                "article": _achat_tx.get("article", ""),
+                                "quantite": int(_achat_tx.get("quantite") or 1)}
+                elif _pj_tx and _achat_tx.get("type") == "vente":
+                    _tool_tx = "marche_vendre"
+                    _args_tx = {"nom": _pj_tx,
+                                "article": _achat_tx.get("article", ""),
+                                "quantite": int(_achat_tx.get("quantite") or 1)}
+                if _tool_tx:
+                    _tr_tx = await self.execute_tool_direct(
+                        _tool_tx, _args_tx, ctx, on_event, result)
+                    # Le résultat officiel entre dans le contexte du tour :
+                    # le modèle narre LA-DESSUS (prix exacts) et ne rappelle
+                    # pas l'outil.
+                    work.append(Message(
+                        role="tool",
+                        name=_tool_tx,
+                        content=(_tr_tx.text if _tr_tx else ""),
+                    ))
+                    work.append(Message(
+                        role="system",
+                        content=(
+                            "💰 TRANSACTION DÉJÀ EXÉCUTÉE par le serveur "
+                            "(tarifs officiels) — NE rappelle PAS `"
+                            + _tool_tx + "` : narre le résultat ci-dessus "
+                            "(prix exact, or réellement débité/crédité) et "
+                            "la suite de la scène. Un refus éventuel "
+                            "(« indisponible », or insuffisant) se NARRE "
+                            "tel quel : le marchand refuse."
+                        ),
+                    ))
+        except Exception as _e_tx:                           # noqa: BLE001
+            _log.warning("pré-exécution de transaction échouée (ignorée) : %s",
+                         _e_tx)
         # 📊 Statut enrichi : exposé via ctx (par partie) pour que les tools
-        # et la boucle puissent pousser l'étape en cours au client.
         ctx.on_status = on_status
         # Filtrage par phase : un modèle 12B gère mal 39 tools fiables. Avant la
         # création de perso, seuls 3 outils de la phase d'ouverture suffisent ;

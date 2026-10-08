@@ -4818,6 +4818,46 @@ class Orchestrator:
         except Exception:                                    # noqa: BLE001
             pass
 
+        # 🔁 Partie 15aa0b6f : filet anti-écho EXACT en post-boucle — [7]
+        # était la copie OCTET POUR OCTET de [5] (le plafond de corrections
+        # épuisé par les corrections de déplacement, la copie est passée
+        # telle quelle). Si la narration finale recouvre quasi verbatim
+        # (~60 %) une narration antérieure du contexte, une DERNIÈRE
+        # re-narration anti-copie est forcée (sans tools).
+        try:
+            _refs_echo = [
+                Message(role="assistant", content=m.content)
+                for m in work
+                if m.role == "assistant" and len(m.content or "") > 200
+            ]
+            _echo_final = trouve_repetition(
+                result.narration or "", _refs_echo, seuil=0.6)
+            if _echo_final and len((result.narration or "").strip()) > 200:
+                _log.warning(
+                    "narration finale = écho d'un tour précédent (« %s… ») "
+                    "— re-narration anti-copie forcée", _echo_final[:80])
+                _msg_anti = (
+                    "⚠️ CORRECTION : ta réponse RECOPIE presque mot pour "
+                    "mot une narration précédente (« "
+                    + _echo_final[:140]
+                    + "… »). C'est inacceptable : réécris une narration "
+                    "NOUVELLE qui répond à l'action du joueur — avance la "
+                    "scène, un fait NOUVEAU par paragraphe, aucun texte "
+                    "recyclé, aucune re-narration d'un tour passé."
+                    + _CORRECTIF_INTERNE
+                )
+                if on_delta is not None and on_event is not None:
+                    try:
+                        await on_event({"type": "stream_reset"})
+                    except Exception:                            # noqa: BLE001
+                        pass
+                _narr_anti = await self._force_final_narration(
+                    work, on_delta, message=_msg_anti)
+                if _narr_anti and len(_narr_anti.strip()) > 200:
+                    result.narration = _narr_anti
+        except Exception as _e_echo:                         # noqa: BLE001
+            _log.warning("filet anti-écho échoué (ignoré) : %s", _e_echo)
+
         # 🪙 Partie 1808ebab : rattrapage DÉTERMINISTE des ACHATS — le joueur
         # demande explicitement (« j'achète 5 flèches », « Repas médiocre »),
         # le modèle narre la transaction en prose (prix inventés) SANS
@@ -5475,9 +5515,32 @@ class Orchestrator:
         on_event: Optional[EventCallback],
     ) -> None:
         """Exécute les tool calls trouvés par parsing prompt-based."""
+        # 🚶 Partie 15aa0b6f : UN SEUL DÉPLACEMENT par tour — le modèle avait
+        # enchaîné `voyage_demarrer` (2 jours) PUIS `carte_donjon_entrer`
+        # dans la même seconde : départ, journées, arrivée et entrée du
+        # donjon comprimés en un tour incohérent. Un déplacement réussi ce
+        # tour bloque les suivants (note au modèle, tour terminé ensuite).
+        _depl_deja = any(
+            tc.get("name") in _OUTILS_DEPLACEMENT and tc.get("ok")
+            for tc in result.tool_calls_trace
+        )
         for call in calls:
             name = call.get("name", "")
             args = call.get("arguments", {}) or {}
+            resolved = resolve_tool_name(name, self.tools)
+            if resolved in _OUTILS_DEPLACEMENT and _depl_deja:
+                work.append(Message(
+                    role="tool",
+                    name=name,
+                    content=(
+                        "⚠️ **UN SEUL DÉPLACEMENT par tour** : un "
+                        "déplacement a déjà réussi ce tour — il a eu lieu, "
+                        "l'état est à jour. Narre-le (journée par journée "
+                        "pour un voyage) et ATTENDS le choix du joueur "
+                        "avant tout autre déplacement."
+                    ),
+                ))
+                continue
             # Résolution floue du nom (prose : casse/accents/alias courts).
             resolved = resolve_tool_name(name, self.tools)
             if not resolved:

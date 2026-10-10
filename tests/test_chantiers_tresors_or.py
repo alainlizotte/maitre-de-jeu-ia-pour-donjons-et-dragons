@@ -207,16 +207,16 @@ def test_c3_parse_montants_reels():
     cas = [
         ("gemmes et pièces pour 200 po au total", 2000),
         ("une bourse de 15 po et une fine épée courte", 150),
-        ("bourse du culte (75 pc)", 75),
+        ("bourse du culte (75 pc)", 7.5),
         ("pièces et gemmes pour 45 po", 450),
         ("Trois gemmes de sardonyx serties sous le couvercle, 10 po pièce.", 0),
-        ("Dague dorée de cérémonie (50 pc)", 50),
-        ("couronne de Sedrair II (200 pc)", 200),
+        ("Dague dorée de cérémonie (50 pc)", 5),
+        ("couronne de Sedrair II (200 pc)", 20),
     ]
     for texte, attendu in cas:
         or_pc, _ = m._montants_tresor(texte)
         print(f"   {texte[:55]!r:58} -> {or_pc:>5} pc (attendu {attendu})")
-        assert or_pc == attendu, f"{texte!r} -> {or_pc}, attendu {attendu}"
+        assert abs(or_pc - attendu) < 0.01, f"{texte!r} -> {or_pc}, attendu {attendu}"
 
 
 def test_c3_tresor_credite_une_seule_fois():

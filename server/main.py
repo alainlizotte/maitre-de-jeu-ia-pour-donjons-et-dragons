@@ -612,7 +612,9 @@ def _montants_tresor(texte: str) -> tuple[int, int]:
     if or_po:
         candidats.append(int(or_po.group(1)) * 10)
     if or_pc:
-        candidats.append(int(or_pc.group(1)))
+        # Fix monnaie officielle (1 po = 10 pa = 100 pc) : le cuivre vaut
+        # 0.01 po = 0.1 unite interne (il etait survalue 10x).
+        candidats.append(round(int(or_pc.group(1)) * 0.1, 1))
     total_pc = max(candidats) if candidats else 0
     return total_pc, 0
 
@@ -719,8 +721,9 @@ async def _appliquer_tresor_canonique(
     if _etat_save:
         result.state_patches.append({"donjon": donjon})
     return (
-        f"🪙 **Trésor du scénario crédité à {nom_pj}** : {total_pc // 10} po "
-        f"(or total : {fiche['or'] // 10} po) — « {texte[:80]}»"
+        f"🪙 **Trésor du scénario crédité à {nom_pj}** : "
+        f"{int(round(total_pc / 10))} po "
+        f"(or total : {int(round(fiche['or'] / 10))} po) — « {texte[:80]}»"
     )
 
 

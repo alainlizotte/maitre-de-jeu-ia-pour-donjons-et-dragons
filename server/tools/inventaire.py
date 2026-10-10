@@ -752,8 +752,10 @@ async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
 # 🔧 Partie fc6f4d0e : les MONNAIES (« pièce d'or », « 25 pc », « or »…)
 # vont au COMPTEUR D'OR de la fiche (unités internes = pc, 1 po = 10) au
 # lieu d'encombrer l'inventaire d'items « pièce d'or » fictifs.
+# Valeurs officielles 3.5 : 1 po = 10 pa = 100 pc ; 1 pp = 10 po.
+# Unite interne : 0.1 po (= 1 piece d'argent) ; le cuivre = 0.1 unite.
 _VALEUR_MONNAIE_PC = {
-    "or": 10, "po": 10, "cuivre": 1, "pc": 1, "argent": 1, "pa": 1,
+    "or": 10, "po": 10, "cuivre": 0.1, "pc": 0.1, "argent": 1, "pa": 1,
     "platine": 100, "pp": 100, "electrum": 5, "électrum": 5,
 }
 
@@ -788,10 +790,10 @@ def _router_monnaie(fiche: dict, objet: str, quantite: int):
         return None
     fiche["or"] = int(fiche.get("or", 0) or 0) + pc_total
     _normaliser_fiche(fiche)
-    po_total = pc_total // 10
     return (
         f"🪙 {nb} × {devise} crédité(s) à {fiche.get('nom', '?')} : "
-        f"+{po_total} po (or total : {fiche["or"] // 10} po). "
+        f"+{round(pc_total / 10, 1)} po "
+        f"(or total : {round(fiche["or"] / 10, 1)} po). "
         "La monnaie va au compteur d'or, pas à l'inventaire."
     )
 

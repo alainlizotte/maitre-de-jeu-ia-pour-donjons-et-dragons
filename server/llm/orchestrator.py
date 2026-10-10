@@ -1555,17 +1555,33 @@ def _butin_salle_courante(narration: str, etat: dict[str, Any]) -> Optional[str]
         return None
     from ..tools.inventaire import _norm  # pylint: disable=import-outside-toplevel
 
-    mots_tresor = {w for w in _norm(tresor).split() if len(w) >= 4}
+    # 🔧 Partie fc6f4d0e : un recoupement sur UN mot faible (« deux » —
+    # mot-nombre de la canonique « 12 po et 16 pc sur les deux gardes »)
+    # faisait entrer « Les deux créatures » (fragment de prose) dans
+    # l'inventaire comme OBJET. Les mots-nombres sont exclus des deux
+    # ensembles et l'accord exige désormais ≥ 2 mots forts communs.
+    _MOTS_NOMBRES = {
+        "un", "une", "deux", "trois", "quatre", "cinq", "six", "sept",
+        "huit", "neuf", "dix", "onze", "douze", "premier", "premiere",
+        "second", "seconde", "dernier", "derniere",
+    }
+    mots_tresor = {
+        w for w in _norm(tresor).split()
+        if len(w) >= 4 and w not in _MOTS_NOMBRES
+    }
     meilleure: tuple[int, str] | None = None
     for m in _BUTIN_OBJET_RE.finditer(narration):
         nom_candidat = (m.group(1) or "").strip()
         if len(nom_candidat) < 4:
             continue
-        mots_cand = {w for w in _norm(nom_candidat).split()
-                     if len(w) >= 4 and w not in (
-                         "sac", "coffre", "petit", "bois", "boite", "boîte")}
+        mots_cand = {
+            w for w in _norm(nom_candidat).split()
+            if len(w) >= 4 and w not in (
+                "sac", "coffre", "petit", "bois", "boite", "boîte")
+            and w not in _MOTS_NOMBRES
+        }
         communs = mots_cand & mots_tresor
-        if not communs:
+        if len(communs) < 2:
             continue
         score = len(communs)
         if meilleure is None or score > meilleure[0]:
@@ -2708,6 +2724,47 @@ _RE_FORMULE_INCOMPLETE = re.compile(
 )
 
 
+# 🔧 Partie 3f52e912 : fuites MÉTA dans la prose — le petit modèle commente
+# sa propre mécanique au lieu de narrer (« Les objets de quête sont déjà
+# persistés dans l'inventaire de Morgoth », noms d'outils en snake_case,
+# mot anglais « tool »). Ces phrases n'ont aucun sens pour le joueur.
+# On retire les PHRASES incriminées (jamais la prose autour) ; mots français
+# légitimes épargnés (« une odeur persistante », « les outils du forgeron »).
+# 🔧 Partie b3ed9c17 : le modèle PARROTE aussi les consignes d'identité du
+# récap dans sa narration (« Maëlle est de genre féminin : utilisez
+# « elle », jamais « elle » ») — tokens d'instruction clairement méta.
+_RE_META_MOT_PROSE = re.compile(
+    r"\bpersist[ée]s?\b|\bpersister\b|\bpersistance\b"
+    r"|\btools?\b|\btool_call\w*"
+    r"|\b[a-z]{3,}(?:_[a-z0-9]+)+\b"
+    r"|\bappels?\s+d[''’ ]outils?\b"
+    r"|\best\s+de\s+genre\b"
+    r"|identité\s+de\s+rôle"
+    r"|accords\s+et\s+pronoms",
+    re.IGNORECASE,
+)
+
+
+def _retirer_phrases_meta(texte: str) -> str:
+    """Retire les phrases de narration contenant du méta-language d'outils
+    (persistance, noms d'outils snake_case, « tool »…). Les phrases sont
+    retirées AVEC leur séparateur pour ne laisser aucun « . . » résiduel."""
+    if not texte or not any(
+        _m in texte.lower()
+        for _m in ("persist", "tool", "_")
+    ):
+        return texte
+    _morceaux = re.split(r"([.!?…]+(?:[ \t]+|\n?)|\n)", texte)
+    _gardes: list[str] = []
+    for _i in range(0, len(_morceaux), 2):
+        _chunk = _morceaux[_i]
+        _sep = _morceaux[_i + 1] if _i + 1 < len(_morceaux) else ""
+        if _chunk.strip() and _RE_META_MOT_PROSE.search(_chunk):
+            continue  # phrase méta → retirée avec son séparateur
+        _gardes.append(_chunk + _sep)
+    return "".join(_gardes)
+
+
 def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None) -> str:
     """Nettoie la narration finale de toute trace de mécanique d'appel :
 
@@ -2748,6 +2805,9 @@ def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None)
     out = _RE_FAUX_DEGATS_PROSE.sub("", out)
     out = _RE_FAUX_JET_DEGATS_PROSE.sub("", out)
     out = _RE_FORMULE_INCOMPLETE.sub("", out)
+    # 🔧 Partie 3f52e912 : phrases méta (« déjà persistés dans
+    # l'inventaire… », noms d'outils) — retirées phrase par phrase.
+    out = _retirer_phrases_meta(out)
     out = _tidy_empty_lines(out)
     return out.strip()
 

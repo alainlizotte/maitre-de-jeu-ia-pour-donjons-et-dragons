@@ -2171,6 +2171,40 @@ async def fiche_perso_condition(
         return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
     conds: list[str] = fiche.setdefault("conditions", [])
     cond = condition.strip()
+    # 🔧 Partie 384a5dd2 : le petit modèle inventait des conditions hors
+    # règles (« Invalide » — mot de sa prose devenu CONDITION officielle de
+    # l'état). Liste blanche D&D 3.5 + conditions gérées par le moteur :
+    # toute autre valeur est refusée avec les suggestions.
+    import unicodedata as _uni_cond
+    _cond_norm = "".join(
+        c for c in _uni_cond.normalize("NFKD", cond.lower())
+        if not _uni_cond.combining(c)
+    ).strip()
+    _CONDITIONS_VALIDES = {
+        "aveugle", "confus", "charme", "assourdi", "sourd", "etourdi",
+        "epuise", "fatigue", "agrippe", "saisi", "empetre", "renverse",
+        "inconscient", "paralyse", "petrifie", "panique", "effraye",
+        "secoue", "malade", "titubant", "endormi", "saignant",
+        "pris en tenaille", "affecte", "muet",
+        # gérées par le moteur de combat
+        "mort", "mourant", "stabilise", "detruit", "invisible",
+        "empoisonne",
+    }
+    if appliquer and _cond_norm not in _CONDITIONS_VALIDES:
+        import difflib as _dif_cond
+        _sugg = _dif_cond.get_close_matches(
+            _cond_norm, sorted(_CONDITIONS_VALIDES), n=3, cutoff=0.6)
+        return ToolResult(text=(
+            f"⛔ Condition « {cond} » inconnue en D&D 3.5 — refusée. "
+            "Conditions valides : Aveuglé, Confus, Charmé, Assourdi, "
+            "Étourdi, Épuisé, Fatigué, Agrippé, Empêtré, Renversé, "
+            "Inconscient, Paralysé, Pétrifié, Paniqué, Effrayé, Secoué, "
+            "Malade, Titubant, Endormi, Saignant, Pris en tenaille, "
+            "Invisible, Empoisonné (+ Mort/Mourant/Stabilisé gérées par le "
+            "moteur)."
+            + (f" Suggéré : {', '.join(_sugg)}." if _sugg else "")
+            + " Décrivez l'état dans la PROSE sans le poser en condition."
+        ))
     if appliquer and cond not in conds:
         conds.append(cond)
     if not appliquer and cond in conds:

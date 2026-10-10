@@ -828,9 +828,25 @@ def _scenario_bible_bloc(
                                 "XP à attribuer via `fiche_perso_gagner_xp` "
                                 "quand cet objectif passe à ACCOMPLI."
                             )
+                    # 🔧 Partie 3f52e912 : l'objectif COURANT marque
+                    # « bloque » tant que ses objets requis manquent — le
+                    # label « ⛔ BLOQUÉ » faisait croire au modèle que
+                    # l'aventure était dans une impasse. C'est l'objectif
+                    # ACTIF : ses requis sont à acquérir, pas un mur.
+                    _st_o = str(_o.get("statut", "") or "")
+                    if (_st_o == "bloque"
+                            and str(_o.get("titre") or "").strip()
+                            == _courant_titre):
+                        _st_lbl = (
+                            "🔵 en cours — C'EST L'OBJECTIF ACTIF : guide "
+                            "les PJ vers l'acquisition des requis (❌ "
+                            "ci-dessous) ; ce n'est PAS une impasse"
+                        )
+                    else:
+                        _st_lbl = _lbl_o.get(_st_o, _st_o)
                     lignes.append(
                         f"   - {_o.get('titre','?')} — "
-                        + _lbl_o.get(_o.get("statut", ""), str(_o.get("statut") or ""))
+                        + _st_lbl
                         + (f" — {_req_txt}" if _req_txt else "")
                     )
                     # Partie 5819af94 : le `detail` de l'objectif (« PRÉREQUIS
@@ -1296,6 +1312,27 @@ class PromptBuilder:
                     _ancre = _lieu_depart_canonique(etat, data_dir)
                     if _ancre:
                         lignes.append(_ancre)
+            # 🧵 Fil de l'histoire (partie 3f52e912) : le récap minimal
+            # n'embarquait NI `histoire` NI `memoire` — quand la fenêtre
+            # d'historique (max_history_chars) retombe sur les derniers
+            # échanges, le modèle perdait le fil du récit (début de
+            # l'aventure, événements marquants) et pouvait « rembobiner »
+            # à la scène d'ouverture. On ancre la suite sur les derniers
+            # événements journalisés.
+            _hist_min = etat.get("histoire") or []
+            if _hist_min:
+                lignes.append(
+                    "\n🧵 Fil de l'histoire (déjà JOUÉ — ne le RE-NARRE PAS, "
+                    "ne remets PAS ce qui a déjà été confié ; poursuis à "
+                    "partir du dernier événement) :"
+                )
+                for _ev in _hist_min[-8:]:
+                    _txt_ev = str(_ev.get("evenement") or "").strip()
+                    if not _txt_ev:
+                        continue
+                    if len(_txt_ev) > 180:
+                        _txt_ev = _txt_ev[:177].rstrip(",;: ") + "…"
+                    lignes.append("  - " + _txt_ev)
             bible_min = _scenario_bible_bloc(
                 quete_min, etat=etat, data_dir=data_dir, partie_id=partie_id)
             if bible_min:

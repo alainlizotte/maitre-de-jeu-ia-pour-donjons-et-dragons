@@ -675,6 +675,22 @@ async def engager_combat(
             )
             if _sing_n in _attendues:
                 continue
+            # 🔧 Partie 97e94bd1 : un nom qui résout STRICTEMENT au bestiaire
+            # vers une espèce DIFFÉRENTE des attendues n'est PAS une
+            # coquille — c'est une invention réelle. « Hobgobelin » passait
+            # la correspondance flue (~0.82) comme coquille de « Gobelin »
+            # et était ENGAGÉ en plus du module (rencontre gonflée : le PJ
+            # niveau 1 solo est mort). À l'inverse, une vraie coquille
+            # (« Pierceur » pour « Perceur ») résout VERS l'espèce attendue
+            # et reste tolérée.
+            _strict = _find_monstre_strict(ctx, _n)
+            if _strict is not None:
+                _cle_strict = _ec_b25(
+                    str(_strict.get("nom") or _strict.get("cle") or ""))
+                if _cle_strict in _attendues:
+                    continue  # coquille de l'espèce attendue → tolérée
+                _inconnues.append(_n)
+                continue  # espèce réelle ≠ attendue → invention → refus
             if _difflib_b25.get_close_matches(
                     _cle_n, _cles_attendues, n=1, cutoff=0.78):
                 continue
@@ -772,13 +788,39 @@ async def engager_combat(
                 _quantites[_ec_m6(_esp)] = (_esp, _q)
         if _quantites:
             _developpes: list[str] = []
+            # 🔧 Partie 97e94bd1 : la même espèce demandée plusieurs fois
+            # n'est développée qu'UNE fois au compte canonique —
+            # « Gobelin, Gobelin » avec canon « Gobelin ×2 » créait 4
+            # gobelins (la quantité du module multipliée par le nombre de
+            # noms demandés : exactement l'inflation qui a tué le PJ solo
+            # de la partie 97e94bd1).
+            _vues_m6: set[str] = set()
+            # 🔧 Partie fc6f4d0e : la QUANTITÉ canonique est scalée à la
+            # TAILLE DU GROUPE — les modules 3.5 sont écrits pour 4-5 joueurs ;
+            # un solo (ou un duo) affrontait la meute entière (6 Perceurs vs
+            # une Magicienne niv 1 à 5 PV : mort au premier déplacement).
+            # Facteur : nb_pj / 4 (plafonné à 1 — on ne gonfle jamais au-delà
+            # du module pour un grand groupe), arrondi au supérieur, min 1.
+            # La Règle N°11 (« adapte le NOMBRE d'exemplaires ») devient
+            # mécanique et transparente pour le module.
+            _nb_pj_m6 = len([
+                p for p in (etat.get("pj") or [])
+                if isinstance(p, dict) and p.get("nom")
+            ]) or 1
+            _facteur_m6 = min(1.0, max(0.25, _nb_pj_m6 / 4.0))
             for _n in noms:
-                _info = _quantites.get(_ec_m6(_n))
+                _cle_m6 = _ec_m6(_n)
+                if _cle_m6 in _vues_m6:
+                    continue
+                _vues_m6.add(_cle_m6)
+                _info = _quantites.get(_cle_m6)
                 if not _info:
                     _developpes.append(_n)
                     continue
                 _esp, _q = _info
-                _developpes.extend([_esp] * max(1, min(_q, 12)))
+                import math as _math_m6
+                _q_scal = max(1, _math_m6.ceil(_q * _facteur_m6))
+                _developpes.extend([_esp] * max(1, min(_q_scal, _q, 12)))
             if len(_developpes) <= _MAX_MONSTRES_ENGAGEMENT:
                 if _developpes != noms:
                     print("[dnd35] M6 : quantité canonique appliquée "
@@ -812,7 +854,15 @@ async def engager_combat(
         int(str(p.get("pv_max") or 0))
         for p in (etat.get("pj") or []) if int(str(p.get("pv_max") or 0)) > 0
     ) or (len(etat.get("pj") or []) * 10)
-    plafond_pv = max(int(2.5 * max(pv_groupe, 1)), 30)
+    # 🔧 Partie 75f5e74c : le plancher de 30 PV ne s'applique qu'aux groupes
+    # DÉJÀ solides (≥ 30 PV totaux). Pour un groupe fragile (solo niv 1 à
+    # 5 PV), le plancher imposait une rencontre à 30 PV d'ennemis = 6× la
+    # capacité du groupe : mort instantanée (6 Perceurs engagés, Magicienne
+    # décimée au premier déplacement). Le ratio 2,5× redevient le plafond
+    # réel des petits groupes.
+    plafond_pv = int(2.5 * max(pv_groupe, 1))
+    if pv_groupe >= 30:
+        plafond_pv = max(plafond_pv, 30)
     somme_pv = 0
     for m in monstres_ok:
         try:
@@ -965,6 +1015,16 @@ async def engager_combat(
         )
 
     participants.sort(key=lambda x: x["init"], reverse=True)
+
+    # Fix partie fc6f4d0e : en phase game_over (tous les PJ morts), aucun
+    # participant ne survit au filtre ci-dessus -> participants[0] levait
+    # une IndexError et le tool plantait au lieu de repondre.
+    if not participants:
+        return ToolResult(text=(
+            'AUCUN PARTICIPANT VALIDE : tous les PJ sont morts (ou aucune '
+            'creature valide). Resolvez d abord l etat du groupe '
+            '(resurrection narrative, nouvelle partie) avant d engager un '
+            'combat.'))
 
     # ⚖️ Annonce transparente de l'ajustement temporaire (équilibre) :
     # le MJ (et la table) doivent savoir que CES stats ne valent que pour

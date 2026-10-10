@@ -91,6 +91,7 @@ export function LoginPage() {
             <span className="text-stone-300 text-sm">Nom d'utilisateur</span>
             <input
               autoFocus
+              aria-label="Nom d'utilisateur"
               className="mt-1 w-full bg-stone-900 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400"
               value={nom}
               onChange={(e) => setNom(e.target.value)}
@@ -103,6 +104,7 @@ export function LoginPage() {
             <span className="text-stone-300 text-sm">Mot de passe</span>
             <input
               type="password"
+              aria-label="Mot de passe"
               className="mt-1 w-full bg-stone-900 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400"
               value={mdp}
               onChange={(e) => setMdp(e.target.value)}
@@ -115,6 +117,7 @@ export function LoginPage() {
               <span className="text-stone-300 text-sm">Confirmer le mot de passe</span>
               <input
                 type="password"
+                aria-label="Confirmer le mot de passe"
                 className="mt-1 w-full bg-stone-900 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400"
                 value={mdp2}
                 onChange={(e) => setMdp2(e.target.value)}

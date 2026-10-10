@@ -112,11 +112,48 @@ _ATTAQUE_JOUEUR_RE = _re_mod.compile(
 _HOSTILITE_IMMINENTE_RE = _re_mod.compile(
     r"\b(?:pr[êéèe]t(?:e|es|s)?\s+(?:à|a)\s+(?:attaqu\w*|frapp\w*|charg\w*)|"
     r"s['’]appr[eêè]te?\s+(?:à|a)\s+(?:attaqu\w*|frapp\w*|charg\w*)|"
-    r"vous\s+vise|vous\s+menace|fond\s+sur\s+vous|bondit\s+vers\s+vous|"
+    r"vous\s+vise|vous\s+menace(?:nt)?|fond\s+sur\s+vous|bondit\s+vers\s+vous|"
     r"charg[eêé]\s+vers\s+vous|arme\s+lev[ée]e?|glai?ve\s+lev[ée]e?|"
-    r"armes?\s+point[ée]e?s?|vous\s+d[ée]fie|vous\s+guette)\b",
+    r"armes?\s+point[ée]e?s?|vous\s+d[ée]fie|vous\s+guette(?:nt)?)\b",
+    # 🔧 Partie b401206f : l'exposition de MISSION (« la profondeur du
+    # danger qui vous menace », « le péril qui vous guette ») est de la
+    # narration abstraite, pas une créature sur le point d'agresser —
+    # « vous menace » / « vous guette » précédés d'un sujet abstrait ne
+    # doivent PAS déclencher l'hostilité imminente (elle faisait
+    # engager_combat sur de simples mots de l'intro). Le pluriel
+    # (« ils vous menacent », « ils vous guettent ») est couvert : les
+    # scénarios à entrée combattante (« À la chasse aux gobs » : des
+    # gobelins qui menacent) doivent déclencher.
     _re_mod.IGNORECASE,
 )
+_RE_HOSTILITE_ABSTRAITE = _re_mod.compile(
+    r"(?:danger|p[ée]ril|menace|guerre|destin|tension|crise)s?\s+qui\s+"
+    r"vous\s+(?:menace(?:nt)?|guette(?:nt)?|attend(?:ent)?)"
+    r"|\b(?:danger|p[ée]ril|menace)s?\s+(?:qui\s+)?plane\b",
+    _re_mod.IGNORECASE,
+)
+
+
+def _hostilite_imminente(narration: str) -> bool:
+    """Hostilité imminente d'une CRÉATURE, hors exposition abstraite de
+    mission (« danger qui vous menace » — partie b401206f)."""
+    if not narration:
+        return False
+    m = _HOSTILITE_IMMINENTE_RE.search(narration)
+    if not m:
+        return False
+    # Le match doit ne pas appartenir à une formulation abstraite : on
+    # retire chaque phrase « abstraite » avant de re-chercher.
+    for phrase in _re_mod.split(r"(?<=[.!?…])\s+|\n", narration):
+        if not phrase.strip():
+            continue
+        if not _HOSTILITE_IMMINENTE_RE.search(phrase):
+            continue
+        # Si la phrase EST l'exposition abstraite, elle ne déclenche pas.
+        _sans_expo = _RE_HOSTILITE_ABSTRAITE.sub("", phrase)
+        if _HOSTILITE_IMMINENTE_RE.search(_sans_expo):
+            return True
+    return False
 
 # Détection d'une INTENTION DE SOINS déclarée par le joueur : si le LLM
 # narrer « vous avez récupéré 3 PV » SANS appeler fiche_perso_soigner, le
@@ -153,12 +190,19 @@ _RE_PV_RECUPERES = _re_mod.compile(
     r"(?:\*\*)?\s*(?:PV\b|points?\s+de\s+vie|point\s+de\s+vie)"
     r"|(?:maintenant\s+)?à\s*(?:\*\*)?\d{1,3}(?:\*\*)?\s*PV(?:\*\*)?"
     r"\s*(?:sur|/)\s*(?:vos\s+)?\d{1,3}"
-    r"|repos\s+(?:long|de\s+nuit)",
+    r"|repos\s+(?:long|de\s+nuit)"
+    # Fix partie fc6f4d0e : "avec 5 points de vie sur 11" - le
+    # montant raconte par le MJ pour la resurrection.
+    r"|(?:avec\s+)?\d{1,3}\s+points?\s+de\s+vie\s+sur\s+\d{1,3}",
     _re_mod.IGNORECASE,
 )
 _RESURRECTION_RE = _re_mod.compile(
     r"\b(ressuscit\w*|r[ée]surrection|r[ée]anim\w*"
-    r"|reven\w*\s+à\s+la\s+vie|raise\s+dead|r[ée]incarn\w*)\b",
+    r"|reven\w*\s+à\s+la\s+vie|raise\s+dead|r[ée]incarn\w*"
+    # Fix partie fc6f4d0e : "ramene a la vie" - le vocabulaire
+    # reel du MJ pour la resurrection negociee ne matchait pas et
+    # l'etat restait mort apres la narration du retour.
+    r"|ramen\w*\s+à\s+la\s+vie|rend\w*\s+à\s+la\s+vie)\b",
     _re_mod.IGNORECASE,
 )
 # Offre de choix / refus (« Je ne peux pas ressusciter… voici vos options ») :
@@ -2016,6 +2060,7 @@ async def _renarrer_ouverture(
     lieu_titre: str,
     lieu_desc: str,
     quete_pitch: str = "",
+    pjs_noms: Optional[list[str]] = None,
 ) -> str:
     """Re-narre la SCÈNE D'OUVERTURE fidèlement au lieu de départ canonique.
 
@@ -2046,11 +2091,26 @@ async def _renarrer_ouverture(
         "3. N'invente NI monstre NI combat NI rencontre : c'est "
         "l'ouverture paisible de l'aventure.\n"
         "4. Prose narrative uniquement : pas de titre, pas de liste, "
-        "aucune mention de serveur ou d'outils."
+        "aucune mention de serveur ou d'outils.\n"
+        # 🔧 Partie 3f52e912 : la description canonique mentionne des
+        # objets remis « ensuite »/« plus tard » (ex. la baguette de
+        # téléportation, remise après la reprise de la Couronne) — le
+        # modèle les remettait DÈS l'ouverture, contredisant le verrou
+        # de quête côté serveur.
+        "5. Si la description mentionne un objet remis « ensuite », "
+        "« plus tard » ou après une étape future : ne le remets PAS "
+        "maintenant et ne le présente pas comme déjà acquis.\n"
+        "6. Aucune méta-language : ne parle JAMAIS de persistance, "
+        "d'enregistrement, d'inventaire serveur ou d'outils — uniquement "
+        "de la fiction."
     )
     contenu = (
         (("Pitch de la quête : " + quete_pitch.strip() + "\n\n")
          if quete_pitch.strip() else "")
+        # 🔧 Partie 3f52e912 : nommer les héros réels pour ancrer la scène
+        # sur les personnages de la table (et non un groupe générique).
+        + (("Héros présents : " + ", ".join(pjs_noms) + "\n\n")
+           if pjs_noms else "")
         + "Lieu de départ officiel — " + (lieu_titre or "point de départ")
         + " :\n« " + (lieu_desc or "").strip() + " »"
     )
@@ -2166,7 +2226,13 @@ async def create_party(
         etat["meta"]["mot_de_passe_sha256"] = _hash_mot_de_passe(mot_de_passe)
     else:
         etat["meta"].pop("mot_de_passe_sha256", None)
-    etat["phase"] = "opening"
+    # 🔧 Partie 3f52e912 : `phase` n'est remise à « opening » que pour une
+    # partie RÉELLEMENT nouvelle. Re-poster /api/parties sur un id existant
+    # (rafraîchissement du formulaire, client qui recrée la session)
+    # réinitialisait la phase d'une partie en cours et faisait retomber
+    # les détecteurs d'ouverture en pleine aventure.
+    if not state.path.exists():
+        etat["phase"] = "opening"
     state.save(etat)
     sessions.get(partie_id)  # crée la session en mémoire
     return {
@@ -5198,6 +5264,7 @@ async def _ressusciter_pj_oublie(
     ctx: ToolContext,
     on_event: Any,
     result: Any,
+    texte_joueur: str = "",
 ) -> str:
     """Résout la RÉSURRECTION d'un PJ mort que le MJ a narrée SANS tool.
 
@@ -5244,8 +5311,9 @@ async def _ressusciter_pj_oublie(
     # Gate : la narration doit AFFIRMER une restauration (montant de PV
     # récupérés / repos long), ou user du vocabulaire de résurrection SANS
     # être une simple offre de choix (« je ne peux pas… choisissez »).
-    revendique = bool(_RE_PV_RECUPERES.search(narration)) or (
-        bool(_RESURRECTION_RE.search(narration))
+    _texte_ref = narration + "\n" + str(texte_joueur or "")
+    revendique = bool(_RE_PV_RECUPERES.search(_texte_ref)) or (
+        bool(_RESURRECTION_RE.search(_texte_ref))
         and not _RE_OFFRE_RESURRECTION.search(narration)
     )
     # 🛡️ B36 bis : un GAME OVER annoncé (ou un personnage encore Mourant non
@@ -5260,6 +5328,13 @@ async def _ressusciter_pj_oublie(
         _conds = {str(c).strip().lower()
                   for c in (_p_mort.get("conditions") or [])}
         if "mourant" in _conds or "inconscient" in _conds:
+            # Fix partie fc6f4d0e : un PJ MORT porte des conditions
+            # residuelles ("inconscient", "stabilise" posees avant le
+            # deces) - elles ne bloquent PAS la resurrection : seul "mort"
+            # (ou PV <= -10, couvert par _est_mort) compte. Sans ce cas, la
+            # resurrection negociee en game_over etait refusee a jamais.
+            if "mort" in _conds or int(_p_mort.get("pv", 0) or 0) <= -10:
+                continue
             _log_tour(
                 "résurrection automatique refusée : %s est Mourant/Inconscient "
                 "(partie %s)", _p_mort.get("nom"), ctx.partie_id,
@@ -5277,8 +5352,11 @@ async def _ressusciter_pj_oublie(
     cible_pv = 1
     m_c = _re_mod.search(
         r"à\s*(?:\*\*)?(\d{1,3})(?:\*\*)?\s*PV(?:\*\*)?"
-        r"\s*(?:sur|/)\s*(?:vos\s+)?\d{1,3}",
-        narration, _re_mod.IGNORECASE,
+        r"\s*(?:sur|/)\s*(?:vos\s+)?\d{1,3}"
+        # Fix partie fc6f4d0e : "avec 5 points de vie sur 11" (la forme
+        # longue utilisee par le joueur pour la resurrection negociee).
+        r"|(?:avec\s+)?(\d{1,3})\s+points?\s+de\s+vie\s+sur\s+\d{1,3}",
+        _texte_ref, _re_mod.IGNORECASE,
     )
     if m_c:
         cible_pv = max(1, int(m_c.group(1)))
@@ -5609,6 +5687,7 @@ async def _attaque_pj_sans_jet(
     on_event: Any,
     result: Any,
     nom_pj: str,
+    texte_declare: str = "",
 ) -> str:
     """Résout déterministiquement l'attaque d'un PJ déclarée sans aucun jet.
 
@@ -5621,6 +5700,10 @@ async def _attaque_pj_sans_jet(
     ennemie vivante, jet d'attaque puis dégâts via execute_tool_direct
     (l'auto-application inflige les PV du monstre suivi). Renvoie la note
     mécanique, ou '' si rien n'a pu être joué.
+
+    🔧 Partie 97e94bd1 : `texte_declare` (le message du joueur) permet de
+    cibler le monstre NOMMÉ par le joueur (« j'attaque le hobgobelin »)
+    plutôt que la première cible vivante.
     """
     from .tools.fiches import _chemin  # pylint: disable=import-outside-toplevel
 
@@ -5631,27 +5714,51 @@ async def _attaque_pj_sans_jet(
     except Exception:                                            # noqa: BLE001
         return ""
 
-    # 1) Cible ennemie vivante — première debout suivie.
+    # 1) Cible ennemie vivante — le monstre NOMMÉ par le joueur si son
+    # message en cite un parmi les ennemis suivis, sinon la première debout.
+    # 🔧 Partie 97e94bd1 : l'attaque tombait parfois sur le mauvais
+    # combattant (« j'attaque le hobgobelin » résolu sur un gobelin).
     cible = None
     ca_cible = 10
-    for mo in etat.get("monstres_combat") or []:
-        if mo.get("allie"):
-            continue
-        try:
-            pv = int(mo.get("pv", 0) or 0)
-        except (TypeError, ValueError):
-            pv = 0
-        conds = mo.get("conditions") or []
-        if pv <= 0 or "Détruit" in conds or "Detruit" in conds:
-            continue
-        cible = str(mo.get("nom") or "")
-        try:
-            ca_cible = int(mo.get("ca") or 10)
-        except (TypeError, ValueError):
-            ca_cible = 10
-        break
+    vivantes = [
+        mo for mo in (etat.get("monstres_combat") or [])
+        if not mo.get("allie")
+        and not (mo.get("conditions") or [])
+        and _to_int_fiable(mo.get("pv")) is not None
+        and _to_int_fiable(mo.get("pv")) > 0
+    ]
+    if texte_declare and vivantes:
+        import difflib as _dif_97
+        _txt = str(texte_declare).lower().replace("'", " ")
+        _noms_vivants = [str(m.get("nom") or "") for m in vivantes]
+        # 🔧 Les noms les PLUS LONGS d'abord : « hobgobelin » contient
+        # « gobelin » — la sous-chaîne du nom court matchait en premier et
+        # l'attaque déclarée sur le Hobgobelin tombait sur le Gobelin.
+        for _nv in sorted(_noms_vivants, key=len, reverse=True):
+            if _nv.strip().lower() in _txt:
+                cible = _nv
+                break
+        if not cible:
+            _proches = _dif_97.get_close_matches(
+                _txt, _noms_vivants, n=1, cutoff=0.4,
+            )
+            if _proches:
+                cible = _proches[0]
+    if cible is None and vivantes:
+        cible = str((vivantes[0]).get("nom") or "")
     if not cible:
         return ""
+    _mo_cible = next(
+        (m for m in (etat.get("monstres_combat") or [])
+         if str(m.get("nom") or "") == cible),
+        None,
+    )
+    ca_cible = 10
+    if _mo_cible is not None:
+        try:
+            ca_cible = int(_mo_cible.get("ca") or 10)
+        except (TypeError, ValueError):
+            ca_cible = 10
 
     # 2) Lecture de la fiche du PJ.
     path = _chemin(ctx, nom_pj)
@@ -6228,6 +6335,13 @@ def _journaliser_ouverture_si_besoin(etat: dict[str, Any], narration: str) -> bo
         "evenement": "Début de l'aventure : "
         + _coupe_narration_evenement(narration),
     })
+    # 🔧 Partie 3f52e912 : normalisation bénigne — le premier tour narré
+    # clôt l'OUVERTURE. Le petit modèle oublie souvent de déplacer `phase`
+    # ; la laisser à « opening » des heures durant faisait croire aux
+    # détecteurs de tour d'ouverture (5bis-f) que la partie n'avait pas
+    # commencé, d'où re-narration de l'intro en pleine aventure.
+    if str(etat.get("phase") or "").strip().lower() == "opening":
+        etat["phase"] = "opening_complete"
     return True
 
 
@@ -6442,8 +6556,16 @@ async def _handle_say(
             _pv_act = 1
         _conds_act = {str(c).strip().lower()
                       for c in (_pj_act.get("conditions") or [])}
-        if _pv_act <= 0 or "mourant" in _conds_act \
-                or "inconscient" in _conds_act:
+        # 🔧 Partie fc6f4d0e : le gate « mourant » ne bloque qu'en COMBAT.
+        # En phase game_over, il interceptait TOUT message : les options de
+        # reprise offertes par le MJ (« Résurrection négociée », « Reprise
+        # narrative ») étaient INACCESSIBLES par le chat — le joueur ne
+        # pouvait plus rien dire. Hors combat, le message passe au MJ
+        # (narration de l'après-mort, résurrection, reprise narrative).
+        if (
+            _pv_act <= 0 or "mourant" in _conds_act
+            or "inconscient" in _conds_act
+        ) and _etat_b8.get("phase") == "combat":
             _note_mourant = await _tour_mourant(
                 partie_id, str(_pj_act.get("nom") or personnage),
                 _pv_act, sorted(_conds_act),
@@ -6467,6 +6589,33 @@ async def _handle_say(
                     "tool_events": [], "state_patches": [],
                     "tool_calls_trace": [],
                 })
+            # 🔧 Partie 384a5dd2 : la boucle de combat DOIT continuer après
+            # le jet de stabilisation — sans elle, le combat se FIGEAIT sur
+            # le PJ mourant : chaque message du joueur ne produisait qu'un
+            # jet, les monstres ne jouaient JAMAIS leurs tours, et le PJ
+            # saignait jusqu'à la mort sans que rien d'autre ne se produise.
+            if _etat_b8.get("phase") == "combat":
+                try:
+                    ctx_mour = _ctx(partie_id, player)
+                    ctx_mour.on_event = on_event
+                    res_mour = await _boucle_combat(
+                        ctx_mour,
+                        timeout_secondes=cfg.game.combat_turn_timeout_seconds,
+                    )
+                    _bloc_mour = "\n".join(
+                        _epure_pour_table(ev) for ev in res_mour.events if ev
+                    ).strip()
+                    if _bloc_mour:
+                        await session.broadcast({
+                            "type": "dm", "text": _bloc_mour,
+                            "tool_events": [], "state_patches": [],
+                            "tool_calls_trace": [],
+                        })
+                except Exception as e_boucle_mour:            # noqa: BLE001
+                    print(
+                        "[dnd35] Boucle combat (mourant) échouée (ignorée) : "
+                        f"{e_boucle_mour}"
+                    )
             await session.broadcast({
                 "type": "status", "description": "", "done": True,
             })
@@ -6844,6 +6993,10 @@ async def _handle_say(
             # sont PLUS rejoués par le LLM : le moteur serveur (ci-dessous,
             # bloc ⚙️) les joue de façon déterministe. Ne restent ici que
             # les rattrapages liés à l'action DÉCLARÉE par le joueur actif.
+            # 🔧 Partie 97e94bd1 : drapeau « attaque déjà résolue
+            # déterministement » — évite une double résolution quand le
+            # filet post-rejeu tourne après le fallback du rejeu.
+            _atk_resolue_det = False
             try:
                 apres = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
@@ -6968,25 +7121,31 @@ async def _handle_say(
                                     result.notes_mecaniques.extend(
                                         result2.notes_mecaniques
                                     )
-                                    # Préserve les narrations intermédiaires
-                                    # déjà diffusées (cf. _rejoue_correctif),
-                                    # mais abandonne celles qui RÉSOLVENT déjà
-                                    # l'action en prose (touché/dégâts) : le
-                                    # rejeu les re-narre avec les jets réels —
-                                    # les garder relirait la MÊME attaque deux
-                                    # fois (bug vécu 5f3e31c9).
-                                    _parts = _assemble_narrations(
-                                        result.narrations_intermediaires,
-                                        result2.narration,
-                                    )
-                                    if _parts:
-                                        _parts = [
-                                            p for p in _parts[:-1]
-                                            if not _RE_PROSE_RESOLUTION.search(p)
-                                        ] + _parts[-1:]
-                                    result.narration = "\n\n".join(
-                                        _parts
-                                    ).strip()
+                                    # 🔧 Partie e50d6a97 : la narration du
+                                    # rejeu REMPLACE les versions supplantées.
+                                    # L'assemblage précédent conservait les
+                                    # narrations intermédiaires non
+                                    # résolvantes : le joueur voyait jusqu'à
+                                    # 4 versions contradictoires du même tour
+                                    # (« touché/détruit » puis « raté » puis
+                                    # un combat relancé). stream_reset
+                                    # resynchronise l'affichage.
+                                    _new_nar = (result2.narration or "").strip()
+                                    if _new_nar:
+                                        result.narration = _new_nar
+                                    else:
+                                        _parts = _assemble_narrations(
+                                            result.narrations_intermediaires,
+                                            result2.narration,
+                                        )
+                                        if _parts:
+                                            _parts = [
+                                                p for p in _parts[:-1]
+                                                if not _RE_PROSE_RESOLUTION.search(p)
+                                            ] + _parts[-1:]
+                                        result.narration = "\n\n".join(
+                                            _parts
+                                        ).strip()
                                     result.iterations += result2.iterations
                                     await reset_stream()
                                     print(
@@ -7017,6 +7176,7 @@ async def _handle_say(
                                                         personnage,
                                                         actif_avant,
                                                         etat_avant),
+                                                    texte_declare=text,
                                                 )
                                             )
                                             if _note_atk:
@@ -7026,6 +7186,7 @@ async def _handle_say(
                                                     "par le serveur :_\n\n"
                                                     + _note_atk
                                                 ).strip()
+                                                _atk_resolue_det = True
                                                 print(
                                                     f"[dnd35] Attaque PJ "
                                                     f"{actif_avant} résolue "
@@ -7039,6 +7200,43 @@ async def _handle_say(
                                             )
                             except Exception as e:                   # noqa: BLE001
                                 print(f"[dnd35] Rejeu PJ failed: {e}")
+                            # 🔧 Partie 97e94bd1 : le filet déterministe
+                            # doit tourner MÊME si le rejeu a levé une
+                            # exception (le `except` ci-dessus le sautait) :
+                            # une attaque déclarée et jamais résolue ne doit
+                            # JAMAIS rester sans effet — le tour passait à
+                            # vide, les ennemis jouaient, et le PJ mourait
+                            # sans avoir pu frapper.
+                            if (
+                                _attaque_non_resolue
+                                and not _atk_resolue_det
+                                and _ACTION_ATTAQUE_RE.search(text or "")
+                            ):
+                                try:
+                                    _note_atk2 = await _attaque_pj_sans_jet(
+                                        orch, ctx, on_event, result,
+                                        _pj_attaquant(
+                                            personnage, actif_avant,
+                                            etat_avant),
+                                        texte_declare=text,
+                                    )
+                                    if _note_atk2:
+                                        result.narration = (
+                                            result.narration
+                                            + "\n\n⚙️ _Attaque résolue par le "
+                                            "serveur (le MJ n'avait lancé "
+                                            "aucun dé) :_\n\n" + _note_atk2
+                                        ).strip()
+                                        print(
+                                            f"[dnd35] Attaque PJ {actif_avant} "
+                                            "résolue déterministement "
+                                            "(filet post-rejeu)."
+                                        )
+                                except Exception as e_5b:   # noqa: BLE001
+                                    print(
+                                        "[dnd35] Attaque PJ déterministe "
+                                        f"(filet) échouée : {e_5b}"
+                                    )
             except Exception as e:
                 print(f"[dnd35] 5bis rejeu failed: {e}")
 
@@ -7163,6 +7361,14 @@ async def _handle_say(
             except Exception as e:                               # noqa: BLE001
                 print(f"[dnd35] 5bis-e rejeu déplacement failed: {e}")
 
+            # 🔧 Partie b401206f : drapeau « ouverture re-narrée ce tour » —
+            # levé quand 5bis-f remplace la prose par la scène d'ouverture
+            # canonique ; le rattrapage combat-prose ne doit JAMAIS se
+            # déclencher sur ce tour (aucun combat à l'ouverture, cf.
+            # SystemPrompt_EXPLORATION_COURT « Aucun monstre, combat ou
+            # image à ce tour »).
+            _renar_5bisf = False
+
             # 5bis-f. 🗺️ Entrée de donjon narrée SANS `carte_donjon_entrer`.
             # Le MJ raconte le seuil (« Vous vous dirigez vers l'entrée des
             # catacombes… Vous entrez dans l'obscurité ») mais n'initialise
@@ -7179,6 +7385,18 @@ async def _handle_say(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
                     partie_id=partie_id,
                 ).load()
+                # 🔧 Partie 97e94bd1 : seul un appel RÉUSSI de
+                # `carte_donjon_entrer` prouve que le donjon est initialisé.
+                # Un appel EN ERREUR (mauvais argument du petit modèle)
+                # était présent dans la trace, marquait `_deja_entree` et
+                # BLOQUAIT le filet : le plan restait jamais initialisé
+                # (donjon fantôme sans contenu canonique — le garde «
+                # Rencontre hors module » était aveugle et 2 créatures
+                # inventées furent engagées, mort du PJ niveau 1).
+                _deja_entree_reussie = any(
+                    tc.get("name") == "carte_donjon_entrer" and tc.get("ok")
+                    for tc in result.tool_calls_trace
+                )
                 _deja_entree = any(
                     tc.get("name") == "carte_donjon_entrer"
                     for tc in result.tool_calls_trace
@@ -7186,7 +7404,7 @@ async def _handle_say(
                 if (
                     _etat_ent.get("phase") != "combat"
                     and not (_etat_ent.get("donjon") or {}).get("id")
-                    and not _deja_entree
+                    and not _deja_entree_reussie
                     and (
                         _entree_donjon_narree(
                             (text or "") + " " + (result.narration or ""))
@@ -7199,39 +7417,56 @@ async def _handle_say(
                         # monde affichée pendant que la narration vivait dans
                         # le donjon). À l'ouverture avec un manifeste, on
                         # initialise le plan DÉTERMINISTEMENT.
-                        or (
-                            str(_etat_ent.get("phase") or "").strip().lower()
-                            in ("opening", "opening_complete", "load")
-                            and not (_etat_ent.get("histoire"))
-                        )
+                        # 🔧 Partie 3f52e912 : le signal d'un tour d'ouverture
+                        # est `histoire` VIDE, pas la phase — la quête choisie
+                        # via l'interface positionne déjà phase=« exploration »
+                        # AVANT le premier tour, et le petit modèle ne déplace
+                        # souvent jamais `phase`. En se fiant à la phase, le
+                        # plan n'était initialisé que bien plus tard EN PLEINE
+                        # AVENTURE : l'entrée forcée téléportait alors le
+                        # groupe en salle (0,0), hors de toute cohérence.
+                        or not (_etat_ent.get("histoire"))
                     )
                 ):
                     from .tools.cartes import _manifest_pour
                     _man = _manifest_pour(ctx, "")
                     _did = str((_man or {}).get("donjon_id") or "").strip()
                     if _did:
-                        # 🎬 Tour d'OUVERTURE ? (phase opening/load : la
-                        # partie vient de commencer) — si le MJ a « narré »
-                        # une entrée de donjon dès l'ouverture, sa prose
+                        # 🎬 Tour d'OUVERTURE ? — si le MJ a « narré » une
+                        # entrée de donjon dès l'ouverture, sa prose
                         # décrivait un lieu improvisé (c1f4e547 : ouverture
                         # dans le « donjon de Khundrukar », nom repris de
                         # l'exemple du schéma d'outils) : après l'entrée
                         # forcée, la scène d'ouverture sera RE-NARRÉE depuis
                         # la description canonique de la salle de départ.
-                        _tour_ouverture = str(
-                            _etat_ent.get("phase") or ""
-                        ).strip().lower() in ("opening", "opening_complete",
-                                              "load")
+                        # 🔧 Partie 3f52e912 : la RE-NARRATION exige une
+                        # histoire VIERGE (`histoire` vide) — plus AUCUN
+                        # événement joué. La phase seule ment (le petit
+                        # modèle la laisse souvent à « opening » des heures
+                        # durant) : en pleine aventure, remplacer la prose
+                        # par la scène d'ouverture canonique effaçait
+                        # l'action du joueur et « rembobinait » le récit au
+                        # tour 1 (intro rejouée, baguette de quête remise
+                        # par erreur).
+                        _tour_ouverture = not (_etat_ent.get("histoire"))
                         tr_ent = await orch.execute_tool_direct(
                             "carte_donjon_entrer", {"donjon_id": _did},
                             ctx, on_event, result,
                         )
                         if tr_ent is not None and not tr_ent.text.startswith(
                                 ("❌", "⛔", "🚫")):
+                            # 🔧 Partie b401206f : le texte brut de l'outil
+                            # (instructions MJ « Suis FIDÈLEMENT… », « tu ne
+                            # sais RIEN… », contenu canonique répété, lien
+                            # carte) ne doit JAMAIS rejoindre la prose du
+                            # joueur — il est destiné au MJ, et le récap du
+                            # tour suivant le transporte déjà via le bloc
+                            # CARTE DU DONJON (source de vérité). On ne garde
+                            # que la note courte d'initialisation.
                             result.narration += (
                                 "\n\n⚙️ _Le serveur a fait entrer le groupe "
                                 "dans **" + _did + "** — carte du donjon "
-                                "initialisée._\n\n" + tr_ent.text
+                                "initialisée._\n\n"
                             )
                             print(
                                 "[dnd35] Entrée donjon narrée sans tool → "
@@ -7270,6 +7505,17 @@ async def _handle_say(
                                             )
                                             or _qb.get("pitch") or ""
                                         )
+                                        # 🔧 Partie 3f52e912 : passer les
+                                        # héros réels à la re-narration.
+                                        _pjs_noms = [
+                                            f"{p.get('nom', '?')} "
+                                            f"({p.get('race', '?')} "
+                                            f"{p.get('classe', '?')})"
+                                            for p in (
+                                                _etat_ouv.get("pj") or []
+                                            )
+                                            if p.get("nom")
+                                        ]
                                         _nar_ouv = await asyncio.wait_for(
                                             _renarrer_ouverture(
                                                 app,
@@ -7285,6 +7531,7 @@ async def _handle_say(
                                                     ) or ""
                                                 ),
                                                 _pitch,
+                                                pjs_noms=_pjs_noms,
                                             ),
                                             timeout=90.0,
                                         )
@@ -7297,9 +7544,17 @@ async def _handle_say(
                                                     })
                                                 except Exception:  # noqa: BLE001
                                                     pass
-                                            result.narration = (
-                                                _nar_ouv + "\n\n" + tr_ent.text
-                                            )
+                                            # 🔧 Partie b401206f : la
+                                            # re-narration REMPLACE la prose ;
+                                            # on n'y colle PLUS le texte brut
+                                            # de l'outil (instructions MJ,
+                                            # contenu canonique déjà narré,
+                                            # lien carte) — l'intro du joueur
+                                            # reste pure, et le récap du tour
+                                            # suivant transporte la mécanique
+                                            # via le bloc CARTE DU DONJON.
+                                            result.narration = _nar_ouv
+                                            _renar_5bisf = True
                                             print(
                                                 "[dnd35] Ouverture re-narrée "
                                                 "depuis le lieu canonique "
@@ -7911,6 +8166,47 @@ async def _handle_say(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
                     partie_id=partie_id,
                 ).load()
+                # 🔧 Partie b401206f : au tour de la SCÈNE D'OUVERTURE
+                # (re-narrée 5bis-f, ou histoire vierge — ≤ 1 événement
+                # structurel), l'AUTO-déclencheur du rattrapage (hostilité
+                # imminente) est DÉSARMÉ : l'exposition de mission (« la
+                # profondeur du danger qui vous menace », « Ces fanatiques
+                # cherchent… », « les repaires des cultistes ») matchait
+                # _HOSTILITE_IMMINENTE_RE + les noms du bestiaire —
+                # engager_combat("Fanatique, Cultiste") lançait un combat
+                # INVENTÉ dans la salle d'audience paisible de l'ouverture.
+                # 🔧 Réserve (13 des 31 manifestes placent des ennemis DÈS
+                # la salle d'entrée — « À la chasse aux gobs » : 2 gobelins
+                # endormés, « surprise possible au premier round » ;
+                # « Oeil-de-Gruumsh » : 2 gardes + 2 molosses) : si la salle
+                # COURANTE a des ennemis canoniques, le combat à l'ouverture
+                # est conforme au module — l'auto-déclencheur RESTE armé.
+                # Les signaux EXPLICITES (marqueurs de combat, dégâts
+                # chiffrés, attaque déclarée du joueur) restent armés pour
+                # TOUS les scénarios.
+                _hist_ouv_5t = etat_detect.get("histoire") or []
+                _tour_ouverture_5t = (
+                    _renar_5bisf or len(_hist_ouv_5t) <= 1
+                )
+                _dj_ouv_5t = etat_detect.get("donjon") or {}
+                _courant_ouv_5t = list(_dj_ouv_5t.get("courant")
+                                       or [0, 0]) + [0, 0]
+                _salle_ouv_5t = next(
+                    (
+                        s
+                        for s in (_dj_ouv_5t.get("grille") or [])
+                        if (s.get("x"), s.get("y")) == (
+                            _courant_ouv_5t[0], _courant_ouv_5t[1])
+                    ),
+                    None,
+                )
+                _ennemis_salle_5t = bool(
+                    _salle_ouv_5t
+                    and any(
+                        str(e).strip()
+                        for e in (_salle_ouv_5t.get("ennemis") or [])
+                    )
+                )
                 if etat_detect.get("phase") != "combat":
                     try:
                         # Déclencheurs élargis : prose du MJ (marqueurs /
@@ -7925,14 +8221,17 @@ async def _handle_say(
                         )
                         # Fix engagement auto : hostilité imminente narrée par
                         # le MJ (« prêt à attaquer », « vous vise »… cf.
-                        # _HOSTILITE_IMMINENTE_RE) — le joueur n'a pas encore
+                        # _hostilite_imminente) — le joueur n'a pas encore
                         # frappé mais la créature s'apprête à agresser : on
                         # engage la mécanique officielle au lieu d'attendre
-                        # une deuxième attaque (partie 5b4e2bbe).
-                        _menace_imminente_5t = bool(
-                            _HOSTILITE_IMMINENTE_RE.search(
-                                result.narration or "")
-                        )
+                        # une deuxième attaque (partie 5b4e2bbe). L'exposition
+                        # abstraite (« danger qui vous menace ») ne déclenche
+                        # PAS (partie b401206f) — SAUF si la salle courante a
+                        # des ennemis canoniques (scénarios à entrée
+                        # combattante) ou sur un tour hors ouverture.
+                        _menace_imminente_5t = _hostilite_imminente(
+                            result.narration or ""
+                        ) and (not _tour_ouverture_5t or _ennemis_salle_5t)
                         # 🛡️ m20 (audit) : les noms de CLASSES et de RACES
                         # des PJ (« Voleur », « Clerc », « Halfelin »…) sont
                         # exclus — la prose « Korr (Voleur niveau 1) » faisait
@@ -8587,7 +8886,7 @@ on_status=on_status)
 
                 try:
                     _txt_res = await _ressusciter_pj_oublie(
-                        orch, ctx, on_event, result)
+                        orch, ctx, on_event, result, texte_joueur=text or "")
                     if _txt_res:
                         result.narration += "\n\n" + _txt_res
                         print(

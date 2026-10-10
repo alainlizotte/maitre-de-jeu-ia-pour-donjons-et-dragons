@@ -231,6 +231,7 @@ async def voyage_demarrer(
         )
     # Distance : fournie par le MJ, sinon CALCULÉE carte en main (position du
     # groupe → ville de destination).
+    _hors_carte = False
     if float(distance_km or 0) <= 0:
         try:
             from ..game.state import PartyState       # lazy : évite tout cycle
@@ -241,20 +242,16 @@ async def voyage_demarrer(
         except Exception:                                # noqa: BLE001
             distance_km = 0
         if distance_km <= 0:
-            try:
-                from .cartes import VILLES_REPERES as _villes  # noqa: PLC0415
-                _liste_villes = ", ".join(_villes.keys())
-            except Exception:                            # noqa: BLE001
-                _liste_villes = "(indisponible)"
-            return ToolResult(
-                text=(
-                    f"⚠️ distance_km inconnu pour « {destination} » : ni "
-                    "fourni, ni calculable (destination hors carte OU groupe "
-                    "sans position). Place le groupe "
-                    "(`carte_joueurs_placer_ville`) ou précise "
-                    f"distance_km. Villes connues : {_liste_villes}."
-                )
-            )
+            # 🔧 Partie 75f5e74c : une destination HORS CARTE (« le repère de
+            # Nulentok », « la cabane du bûcheron »…) refusait le voyage —
+            # le petit modèle narrait alors son échec à voix haute au lieu
+            # de rejouer avec une distance. On estime désormais un trajet
+            # court (1 jour de marche) : le voyage démarre, le MJ précise
+            # `distance_km` s'il veut ajuster.
+            distance_km = 30.0
+            _hors_carte = True
+        else:
+            _hors_carte = False
         distance_km = float(distance_km)
     if distance_km <= 0:
         return ToolResult(text="⚠️ distance_km doit être > 0.")
@@ -293,7 +290,10 @@ async def voyage_demarrer(
         f"— allure : {allure_label} ({base_kmj:.0f} km/jour × facteur "
         f"{tdata['f']:.2f} = **{km_jour_effectifs:.0f} km/jour**)",
         f"- Distance : {distance_km:.0f} km → durée : **{jours_total} jour(s)** "
-        f"(8 h de marche par jour)",
+        f"(8 h de marche par jour)"
+        + (" — ⚠️ destination hors carte : distance ESTIMÉE (1 jour de "
+           "marche) ; précisez `distance_km` pour ajuster."
+           if _hors_carte else ""),
     ]
 
     # --- Marche forcée -------------------------------------------------------

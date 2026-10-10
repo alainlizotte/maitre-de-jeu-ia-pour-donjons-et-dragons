@@ -1804,6 +1804,33 @@ def enregistrer_personnage_partie(
         pv_max_entree = fiche.get("pv_max", 0)
         conditions_entree = []
         xp_entree = fiche.get("xp", 0)
+        # 🔧 Partie 97e94bd1 : un personnage MORT qui rejoint une nouvelle
+        # partie repart à PV pleins SANS AUCUN signal — le joueur (et le MJ)
+        # voyaient le perso mort (-10 PV, « Mort ») à l'écran, puis vivant
+        # sans explication. On journalise explicitement le nouveau départ.
+        try:
+            _pv_fiche = int(fiche.get("pv") or 0)
+        except (TypeError, ValueError):
+            _pv_fiche = 1
+        _etait_mort = _pv_fiche <= -10 or any(
+            str(c).strip().lower() == "mort"
+            for c in (fiche.get("conditions") or [])
+        )
+        if _pv_fiche <= 0 or _etait_mort:
+            from datetime import datetime as _dt  # pylint: disable=import-outside-toplevel
+            etat.setdefault("histoire", []).append({
+                "ts": _dt.now().isoformat(),
+                "tour": "",
+                "evenement": (
+                    f"⚠️ {fiche.get('nom', nom_personnage)} arrive dans cette "
+                    + ("nouvelle partie : son décès dans la partie précédente "
+                       "est oublié" if _etait_mort else
+                       "nouvelle partie : son état critique ("
+                       f"{_pv_fiche} PV) dans la partie précédente est oublié")
+                    + " (nouveau départ — PV rendus à "
+                    f"{pv_entree})."
+                ),
+            })
         if fiche.get("pv") != pv_entree or fiche.get("conditions"):
             fiche["pv"] = pv_entree
             fiche["conditions"] = []

@@ -403,15 +403,25 @@ export function HomePage() {
               {mesPersos.map((p) => (
                 <option key={p.nom} value={p.nom}>
                   {p.nom} ({[p.race, p.classe].filter(Boolean).join(" · ")})
+                  {p.pv <= 0 ? " ⚠ mort dans sa dernière partie" : ""}
                 </option>
               ))}
             </select>
           </label>
           {personnage ? (
-            <p className="text-xs text-emerald-400 mt-1">
-              ✓ Vous rejoindrez les parties en tant que{" "}
-              <strong>{labelPersoChoisi}</strong>.
-            </p>
+            mesPersos.find((p) => p.nom === personnage)?.pv !== undefined &&
+            (mesPersos.find((p) => p.nom === personnage)?.pv ?? 1) <= 0 ? (
+              <p className="text-xs text-orange-400 mt-1">
+                ⚠ {personnage} est décédé dans sa dernière partie — en créant
+                ou rejoignant une partie, il repart à pleine santé (nouveau
+                départ, son décès est oublié).
+              </p>
+            ) : (
+              <p className="text-xs text-emerald-400 mt-1">
+                ✓ Vous rejoindrez les parties en tant que{" "}
+                <strong>{labelPersoChoisi}</strong>.
+              </p>
+            )
           ) : (
             <p className="text-xs text-amber-500/90 mt-1">
               ⚠ Sélectionnez un personnage pour créer ou rejoindre une partie.

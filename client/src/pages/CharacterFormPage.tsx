@@ -251,12 +251,14 @@ function champClasse(
   onChange: (v: string) => void,
   placeholder = "",
   type = "text",
+  ariaLabel?: string,
 ): React.ReactElement {
   return (
     <label className="block">
       <span className="text-stone-400 text-xs">{label}</span>
       <input
         type={type}
+        aria-label={ariaLabel ?? label}
         className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -1082,11 +1084,12 @@ export function CharacterFormPage() {
               <h2 className="font-serif text-lg text-amber-200 mb-3">Identité</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="col-span-2">
-                  {champClasse("Nom du personnage *", form.nom, (v) => set("nom", v), "ex : Elara des Bois")}
+                  {champClasse("Nom du personnage *", form.nom, (v) => set("nom", v), "ex : Elara des Bois", "Nom du personnage")}
                 </div>
                 <label className="block">
                   <span className="text-stone-400 text-xs">Race *</span>
                   <select
+                    aria-label="Race du personnage"
                     className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
                     value={form.race}
                     onChange={(e) => set("race", e.target.value)}
@@ -1104,6 +1107,7 @@ export function CharacterFormPage() {
                 <label className="block">
                   <span className="text-stone-400 text-xs">Classe *</span>
                   <select
+                    aria-label="Classe du personnage"
                     className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
                     value={form.classe}
                     onChange={(e) => set("classe", e.target.value)}
@@ -1131,6 +1135,7 @@ export function CharacterFormPage() {
                 <label className="block">
                   <span className="text-stone-400 text-xs">Alignement</span>
                   <select
+                    aria-label="Alignement du personnage"
                     className="mt-0.5 w-full bg-stone-900 border border-stone-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-amber-400"
                     value={form.alignement}
                     onChange={(e) => set("alignement", e.target.value)}

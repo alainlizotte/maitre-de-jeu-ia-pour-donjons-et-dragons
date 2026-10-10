@@ -8819,6 +8819,57 @@ on_status=on_status)
                                             on_event, _obj_soin, "soins",
 on_status=on_status)
 
+                    # Fix partie fc6f4d0e : si le rejeu n'a toujours produit
+                    # AUCUN tool de soin, le soin declare reste sans effet
+                    # ("Rejeu soins sans tool - avancement force"). Filet
+                    # deterministe : le sort de soin NOMME par le joueur
+                    # ("soin leger" = Cure Light Wounds) est applique a sa
+                    # formule canonique (1d8 + min(niveau, 5)) via les tools.
+                    _soin_apres = any(
+                        str(tc.get("name")) == "fiche_perso_soigner"
+                        for tc in result.tool_calls_trace
+                    )
+                    if (not _soin_apres
+                            and _RE_SOIN_LEGER.search(text or "")):
+                        try:
+                            _etat_soin = PartyState(
+                                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                partie_id=partie_id,
+                            ).load()
+                            _niveau_soin = 1
+                            for _p_s in (_etat_soin.get("pj") or []):
+                                if (str(_p_s.get("nom") or "") == actif_avant
+                                        or len(_etat_soin.get("pj") or []) == 1):
+                                    _niveau_soin = max(
+                                        1, int(_p_s.get("niveau", 1) or 1))
+                                    break
+                            import random as _rand_sl  # noqa: E501 pylint: disable=import-outside-toplevel
+                            _montant_soin = _rand_sl.randint(1, 8) + min(
+                                _niveau_soin, 5)
+                            tr_soin = await orch.execute_tool_direct(
+                                "fiche_perso_soigner",
+                                {"nom": _pj_attaquant(
+                                    personnage, actif_avant, etat_avant),
+                                 "montant": _montant_soin},
+                                ctx, on_event, result,
+                            )
+                            if (tr_soin is not None
+                                    and not tr_soin.text.startswith("❌")):
+                                result.narration = (
+                                    (result.narration or "").rstrip()
+                                    + "\n\n✨ _Soin résolu par le serveur "
+                                    "(soin léger, formule canonique) :_\n\n"
+                                    + tr_soin.text
+                                ).strip()
+                                print(
+                                    "[dnd35] Soin léger appliqué "
+                                    "déterministiquement (filet post-rejeu)."
+                                )
+                        except Exception as e_sl:      # noqa: BLE001
+                            print(
+                                "[dnd35] Filet soin léger échoué (ignoré) : "
+                                f"{e_sl}")
+
                 # --- 5quater-d-bis. 💚 Soin NARRÉ PAR LE MJ appliqué au
                 # serveur (hors combat, hors résurrection). La narration
                 # décrit une guérison (« vos blessures se referment, vous

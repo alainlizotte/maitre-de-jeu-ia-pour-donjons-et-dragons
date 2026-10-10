@@ -2719,6 +2719,25 @@ _RE_FAUX_JET_DEGATS_PROSE = re.compile(
     r"[ \t]*(?:\*{0,2})\s*Jet\s+de\s+d[ée]g[âa]ts\s*:?\s*\*{0,2}[^\n]*",
     re.IGNORECASE,
 )
+
+# Fix partie fc6f4d0e : le LLM MIME le FORMAT des resultats d'outils dans sa
+# prose ("Formule : 1d20 + BBA + mod. FOR / Jet brut : 14 / Total : 19 /
+# Resultat : Touché ! ()" - champs vides, bonus invente "+5 (FOR)" pour un
+# FOR 11) : le joueur lit de faux jets, l'etat officiel ne suit pas. Ces
+# lignes mecaniques mimees sont retirees ; la resolution officielle du
+# serveur (5bis-a + filets) arrive apres.
+_RE_FAUX_BLOC_OUTIL_PROSE = re.compile(
+    r"^[ \t]*(?:\*{0,2})(?:"
+    r"Formule\b[^\n:]*:"
+    r"|Jet\s+brut\s*:"
+    r"|Bonus(?:\s+d[''’ ]?[a-zà-ÿ]+)?\s*:\s*[+±]?\s*\d"
+    r"|R[ée]sultat\s*:\s*[^\n]*(?:✅|❌|⭐|Touch[ée]|Manqu[ée])"
+    r"|Total\s*:\s*[+±]?\s*\d"
+    r"|Touch[ée]\s*![^\n]*\(\s*\)"
+    r"|Manqu[ée][^\n]*\(\s*\)"
+    r")[^\n]*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 _RE_FORMULE_INCOMPLETE = re.compile(
     r"[ \t]*(?:\*{0,2})[^\n]*?(?:\d+[dD]\d+\s*(?:\+\s*\d+)?|[1-9]\d*\s*[dD]\d+\s*\+\s*[1-9]\d*)\s*=\s*\?\s*[^\n]*",
 )
@@ -2807,6 +2826,8 @@ def strip_narration_artifacts(text: str, tools: Optional[dict[str, Any]] = None)
     out = _RE_FORMULE_INCOMPLETE.sub("", out)
     # 🔧 Partie 3f52e912 : phrases méta (« déjà persistés dans
     # l'inventaire… », noms d'outils) — retirées phrase par phrase.
+    # Fix partie fc6f4d0e : blocs outils simules en prose retires.
+    out = _RE_FAUX_BLOC_OUTIL_PROSE.sub("", out)
     out = _retirer_phrases_meta(out)
     out = _tidy_empty_lines(out)
     return out.strip()
@@ -3451,7 +3472,7 @@ class Orchestrator:
                 str(m.content or "") for m in messages
                 if m.role == "user" and (m.content or "").strip()
             ]
-            _intention_tx = _intention_achat(_msgs_user)
+            _intention_tx = _intention_achat(_msgs_user_tx)
             if _intention_tx:
                 from .. import equipement_phb as _phb_tx  # noqa: E501 pylint: disable=import-outside-toplevel
                 from ..game.state import PartyState as _PS_tx  # noqa: E501 pylint: disable=import-outside-toplevel

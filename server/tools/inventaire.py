@@ -749,6 +749,53 @@ async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     )
 
 
+# 🔧 Partie fc6f4d0e : les MONNAIES (« pièce d'or », « 25 pc », « or »…)
+# vont au COMPTEUR D'OR de la fiche (unités internes = pc, 1 po = 10) au
+# lieu d'encombrer l'inventaire d'items « pièce d'or » fictifs.
+_VALEUR_MONNAIE_PC = {
+    "or": 10, "po": 10, "cuivre": 1, "pc": 1, "argent": 1, "pa": 1,
+    "platine": 100, "pp": 100, "electrum": 5, "électrum": 5,
+}
+
+
+_RE_MONNAIE = re.compile(
+    # Le nom ENTIER doit etre la monnaie (count/bourse optionnels).
+    # Un mot ARGENT perdu dans un nom d objet (cle en argent) ne
+    # declenche PAS le routage (partie fc6f4d0e).
+    r"^\s*(?:\d{1,6}\s+|bourse\s+(?:de|d['' ])\s+)?"
+    r"(?:pi[èe]ces?\s+(?:d['' ]|de\s+)\s*)?"
+    r"(or|po|pc|pa|pp|cuivre|argent|platine|electrum|électrum)"
+    r"(?:\s+(?:d['' ]|de\s+)\s*(or|po|pc|pa|pp|cuivre|argent|platine"
+    r"|electrum|électrum))?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _router_monnaie(fiche: dict, objet: str, quantite: int):
+    """Si l'objet est de la MONNAIE, crédite l'or de la fiche et renvoie la
+    note ; sinon None (l'objet rejoint l'inventaire normalement)."""
+    m = _RE_MONNAIE.search(str(objet or ""))
+    if not m:
+        return None
+    devise = next((g for g in m.groups() if g), "or")
+    devise_n = devise.lower()
+    pc_unite = _VALEUR_MONNAIE_PC.get(devise_n, 10)
+    # Montant : premier nombre de la chaîne, sinon la quantité demandée.
+    m_nb = re.search(r"(\d{1,6})", str(objet or ""))
+    nb = int(m_nb.group(1)) if m_nb else max(1, int(quantite or 1))
+    pc_total = nb * pc_unite
+    if pc_total <= 0:
+        return None
+    fiche["or"] = int(fiche.get("or", 0) or 0) + pc_total
+    _normaliser_fiche(fiche)
+    po_total = pc_total // 10
+    return (
+        f"🪙 {nb} × {devise} crédité(s) à {fiche.get('nom', '?')} : "
+        f"+{po_total} po (or total : {fiche["or"] // 10} po). "
+        "La monnaie va au compteur d'or, pas à l'inventaire."
+    )
+
+
 @tool
 async def inventaire_ajouter(
     ctx: ToolContext,
@@ -783,6 +830,20 @@ async def inventaire_ajouter(
         return err
     if not objet or not _norm(objet):
         return ToolResult(text="❌ Donne un nom d'objet valide.")
+    # 🔧 Partie fc6f4d0e : la monnaie est créditée sur l'or, pas en items.
+    _note_monnaie = _router_monnaie(fiche, objet, quantite)
+    if _note_monnaie:
+        from .fiches import _save_fiche as _sf_m, _sync_pj as _sp_m  # noqa: E501 pylint: disable=import-outside-toplevel
+        from .fiches import _patch_pj as _pp_m  # pylint: disable=import-outside-toplevel
+        try:
+            _sf_m(ctx, nom, fiche)
+        except ValueError as e:
+            return ToolResult(text=f"❌ {e}")
+        _idx_m = _sp_m(ctx, nom, {"or": fiche.get("or", 0)})
+        return ToolResult(
+            text=_note_monnaie,
+            state_patch=_pp_m(nom, _idx_m, {"or": fiche.get("or", 0)}),
+        )
     qte = max(1, int(quantite or 1))
     portee_n = _norm(portee)
     if portee_n not in ("quete", "permanent"):
@@ -1139,7 +1200,7 @@ async def inventaire_consommer_munition(
     return ToolResult(
         text=(
             f"🏹 **{qte} {munition}(s)** consommée(s) par {fiche.get('nom', nom)} "
-            f"— restantes : {trouve['qte'] if reste > 0 else 0}.\n\n"
+            f"— restantes : {trouve["qte"] if reste > 0 else 0}.\n\n"
             + _format_inventaire(fiche, poids, cat, max_kg)
         ),
         state_patch=patch,

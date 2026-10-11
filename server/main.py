@@ -6633,6 +6633,32 @@ async def _handle_say(
             })
             return
 
+    # 🔧 Partie 8c72c9ee : le personnage incarné DOIT être dans la liste
+    # `pj` AVANT le tour. Course observée : le bind du WS join était
+    # ÉCRASÉ par la sauvegarde finale d'un tour démarré avant lui
+    # (snapshot périmé sans `pj`) — le MJ jouait sans connaître le perso
+    # (récap « 0 PJ », PV absents). Filet : re-binde si absent.
+    if personnage:
+        try:
+            _etat_rb = PartyState(
+                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                partie_id=partie_id,
+            ).load()
+            _pjs_rb = [
+                str(p.get("nom") or "") for p in (_etat_rb.get("pj") or [])
+            ]
+            if personnage not in _pjs_rb:
+                _fiche_rb = persos_mod.enregistrer_personnage_partie(
+                    _dossier_donnees(), partie_id, personnage, player
+                )
+                if _fiche_rb is not None:
+                    print(
+                        "[dnd35] Re-bind pré-tour : " + personnage
+                        + " (course join/tour — pj manquant de l'état)."
+                    )
+        except Exception as e_rb:                      # noqa: BLE001
+            print(f"[dnd35] Re-bind pré-tour échoué (ignoré) : {e_rb}")
+
     # 1. Mémorise le message joueur + broadcast immédiat à tous (echo).
     session.remember_player_message(player, text)
     await session.broadcast({

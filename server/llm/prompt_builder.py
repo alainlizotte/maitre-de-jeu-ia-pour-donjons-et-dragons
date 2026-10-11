@@ -1652,6 +1652,11 @@ class PromptBuilder:
         _rappel = _rappel_final_pj(data_dir, pj)
         if _rappel:
             lignes.append(_rappel)
+        # 📍 Rappel FINAL de position (effet de récence — partie 60446e2f :
+        # le MJ dérivait de salle en narration).
+        _rappel_pos = _rappel_final_position(etat)
+        if _rappel_pos:
+            lignes.append(_rappel_pos)
 
         recap = "\n".join(lignes)
         if len(recap) > self.cfg.game.max_recap_chars:

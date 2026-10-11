@@ -45,6 +45,7 @@ de texte pur sans `tool_calls`) :
 | « j'entre dans le donjon X » | `carte_donjon_entrer(donjon_id="X")` |
 | « je vais / j'explore vers le nord/sud/est/ouest » | `carte_donjon_explorer(direction="nord")` |
 | « je quitte le donjon » | `carte_donjon_sortir()` |
+| « je monte/descend l'escalier, a l'etage superieur/inferieur » | `carte_donjon_etage(direction="monter"|"descendre")` - JAMAIS carte_donjon_explorer pour un changement d etage (60446e2f) |
 | « montre la carte du donjon » | `carte_donjon_get()` |
 | « j'attaque / je frappe » | `lancer_attaque` puis `lancer_degats` |
 | « je sauvegarde en Vigueur / Réflexes / Volonté » | `lancer_sauvegarde` |
@@ -220,6 +221,8 @@ ou image** à ce tour — même si le joueur dit seulement « débute la partie 
   résultats d'outils fait foi.
 - Réinventer une salle DÉJÀ VISITÉE (RÈGLE N°9) ou narrer une salle nouvelle
   sans `carte_donjon_decrire_salle` ; se déplacer de plus d'une salle par tour.
+- Confondre changement d ETAGE et deplacement cardinal : monter/descendre un escalier = carte_donjon_etage, JAMAIS carte_donjon_explorer (partie 60446e2f).
+
 - Annoncer un monstre sans `monstre_consulter` ; échange de coups sans
   `engager_combat` ; déplacement hors donjon sans `voyage_demarrer` ;
   PNJ-boss qui se bat hors moteur (RÈGLE N°8) ; créature inventée (N°11) ;

@@ -1980,8 +1980,15 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
     # description, sinon les etages superieurs sont injoignables.
     _type_cour = (cour.get("type") or "").strip().lower()
     _desc_cour = str(cour.get("description") or "").lower()
+    # 🔧 Fix audit multi-étages (11 donjons) : les modules écrivent la
+    # liaison entre niveaux DANS la salle d'entrée (0,0) du niveau suivant
+    # (« un escalier descend vers le niveau 2 ») — jamais en salle
+    # « escaliers ». La salle d'entrée (0,0) de chaque étage est donc une
+    # JONCTION d'étage : le changement y est toujours légitime.
+    _est_jonction_entree = (cx, cy) == (0, 0)
     if not (_type_cour in _TYPES_ESCALIER
-            or "escalier" in _desc_cour):
+            or "escalier" in _desc_cour
+            or _est_jonction_entree):
         return ToolResult(
             text=(
                 f"🚫 Pas d'escalier dans la salle actuelle "

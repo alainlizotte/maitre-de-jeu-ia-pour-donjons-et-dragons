@@ -1771,12 +1771,15 @@ def enregistrer_personnage_partie(
     # et (b) au rejoin, écrasait les PV de la partie en cours par ceux de la
     # fiche (partie et fiche divergent dès le premier dégât/soin).
     pj_list = etat.get("pj") or []
+    # DIAG partie ead406b2 : tracer le bind.
+    print(f"[bind] {nom_personnage} -> partie {partie_id} : pj_list={[(p.get('nom'), p.get('pv')) for p in pj_list]} fiche pv={fiche.get('pv')}/{fiche.get('pv_max')}")
     existant = next(
         (p for p in pj_list
          if str(p.get("nom", "")).lower()
          == str(fiche.get("nom", nom_personnage)).lower()),
         None,
     )
+    print(f"[bind] branche: {'existant' if existant is not None else 'NOUVEAU (reset)'}")
     if existant is not None:
         # Rejoin / refresh de la même partie : on garde les PV, conditions et
         # XP VÉCUS dans cette partie ; seuls les champs statiques sont

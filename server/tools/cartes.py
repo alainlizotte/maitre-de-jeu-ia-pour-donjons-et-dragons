@@ -1974,7 +1974,14 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
     cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
     salles = _grille_vers_dict(donjon.get("grille", []))
     cour = salles.get((cx, cy)) or {}
-    if (cour.get("type") or "").strip().lower() not in _TYPES_ESCALIER:
+    # Fix partie 60446e2f : certains manifestes multi-etages n ont
+    # AUCUNE salle de type escaliers - les escaliers ne sont decrits
+    # QUE dans la description (la Unknown Tower). Le gate accepte la
+    # description, sinon les etages superieurs sont injoignables.
+    _type_cour = (cour.get("type") or "").strip().lower()
+    _desc_cour = str(cour.get("description") or "").lower()
+    if not (_type_cour in _TYPES_ESCALIER
+            or "escalier" in _desc_cour):
         return ToolResult(
             text=(
                 f"🚫 Pas d'escalier dans la salle actuelle "

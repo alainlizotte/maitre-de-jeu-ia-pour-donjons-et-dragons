@@ -7399,6 +7399,56 @@ async def _handle_say(
             except Exception as e:                               # noqa: BLE001
                 print(f"[dnd35] 5bis-e rejeu déplacement failed: {e}")
 
+            # 🔧 Partie 60446e2f : les ESCALIERS ne sont pas des directions
+            # cardinales — "je monte l'escalier" ne matchait ni
+            # _MOVE_INTENT_RE ni le rejeu : l'état restait à l'étage 0 pour
+            # toujours (la tour à 7 étages injouable). Filet SÉPARÉ du gate
+            # cardinal : intention monter/descendre + escalier/étage dans
+            # le message → carte_donjon_etage déterministe.
+            try:
+                _etat_et = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _dj_et = _etat_et.get("donjon") or {}
+                _deja_etage = any(
+                    tc.get("name") == "carte_donjon_etage"
+                    for tc in result.tool_calls_trace
+                )
+                if (
+                    (_dj_et.get("id"))
+                    and not _deja_etage
+                    and (_INTENT_MONTER_RE.search(text or "")
+                         or _INTENT_DESCENDRE_RE.search(text or ""))
+                    and _re_mod.search(
+                        r"escalier|étage|etage|niveau suivant"
+                        r"|étage\s+supérieur|étage\s+inférieur",
+                        text or "", _re_mod.IGNORECASE)
+                ):
+                    _sens_etage = (
+                        "descendant" if _INTENT_DESCENDRE_RE.search(
+                            text or "") else "montant"
+                    )
+                    tr_et = await orch.execute_tool_direct(
+                        "carte_donjon_etage",
+                        {"direction": _sens_etage},
+                        ctx, on_event, result,
+                    )
+                    if tr_et is not None and not tr_et.text.startswith(
+                            ("❌", "⛔", "🚫")):
+                        result.narration = (
+                            (result.narration or "").rstrip()
+                            + "\n\n⚙️ _Le serveur a fait changer d'étage au "
+                            "groupe._\n\n" + tr_et.text
+                        ).strip()
+                        print(
+                            "[dnd35] Changement d'étage narré sans tool → "
+                            f"carte_donjon_etage({_sens_etage}) exécuté "
+                            "(serveur)."
+                        )
+            except Exception as e_et:                        # noqa: BLE001
+                print(f"[dnd35] Filet étage échoué (ignoré) : {e_et}")
+
             # 🔧 Partie b401206f : drapeau « ouverture re-narrée ce tour » —
             # levé quand 5bis-f remplace la prose par la scène d'ouverture
             # canonique ; le rattrapage combat-prose ne doit JAMAIS se

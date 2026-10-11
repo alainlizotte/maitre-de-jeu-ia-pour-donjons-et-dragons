@@ -1005,6 +1005,58 @@ def _rappel_final_pj(data_dir: str, pj: list[dict[str, Any]]) -> str:
     return "⚠️ RAPPEL IDENTITÉ (pronoms) : " + " ; ".join(lignes) + "."
 
 
+def _rappel_final_position(etat: dict[str, Any]) -> str:
+    """Rappel FINAL de la position OFFICIELLE du groupe (effet de récence —
+    partie 60446e2f : le MJ narrait le groupe « déjà dans le hall » pendant
+    que l'état le tenait dans l'écurie, puis inventait l'emplacement des
+    escaliers). La fiction doit coller à CETTE position et à CETTE
+    description — n'invente ni déplacement déjà effectué ni contenu absent.
+    '' si rien de fiable (fail-safe)."""
+    try:
+        dj = (etat or {}).get("donjon") or {}
+        if dj.get("id"):
+            etage = int(dj.get("etage", 0) or 0)
+            nom_et = str(((dj.get("etages") or {}).get(str(etage)) or {})
+                         .get("nom") or "").strip()
+            courant = list(dj.get("courant") or [0, 0])
+            cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
+            salle = next(
+                (s for s in (dj.get("grille") or [])
+                 if s.get("x") == cx and s.get("y") == cy), None) or {}
+            type_s = str(salle.get("type") or "?").strip()
+            desc = " ".join(str(salle.get("description") or "").split())[:180]
+            ligne = (
+                "📍 POSITION OFFICIELLE — le groupe est dans le donjon "
+                f"« {dj.get('id')} », étage {etage}"
+                + (f" « {nom_et} »" if nom_et else "")
+                + f", salle ({cx},{cy}) type « {type_s} »."
+            )
+            if desc:
+                ligne += (" Description enregistrée de CETTE salle : « "
+                          + desc + " ».")
+            ligne += (" La narration doit coller à CETTE position — n'invente "
+                      "ni déplacement déjà effectué, ni contenu absent de la "
+                      "description.")
+            return ligne
+        lieu = (etat or {}).get("lieu") or {}
+        nom_lieu = str(lieu.get("nom") or "").strip()
+        if nom_lieu and str(lieu.get("type") or "") != "donjon":
+            pos = ((etat or {}).get("positions_joueurs") or {}).get("groupe")
+            coord = ""
+            if isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                try:
+                    coord = f" (carte du monde : x={float(pos[0]):g}, "                             f"y={float(pos[1]):g})"
+                except (TypeError, ValueError):
+                    coord = ""
+            return (
+                "📍 POSITION OFFICIELLE — le groupe est à « " + nom_lieu
+                + " »" + coord + ". La narration doit coller à CETTE position."
+            )
+    except Exception:                                        # noqa: BLE001
+        return ""
+    return ""
+
+
 def _dons_competences_pj(data_dir: str, nom: str) -> str:
     """Dons + rangs de compétences d'un PJ, lus dans sa fiche sur disque —
     l'entrée `pj` de l'état ne transporte ni les dons ni les rangs. Sans
@@ -1354,6 +1406,12 @@ class PromptBuilder:
             _rappel_min = _rappel_final_pj(data_dir, pj)
             if _rappel_min:
                 lignes.append(_rappel_min)
+            # 📍 Rappel FINAL de position (partie 60446e2f : dérive de salle
+            # en narration — le chemin MINIMAL est celui utilisé en live en
+            # exploration, l'ancre n'y atteignait jamais le modèle).
+            _rappel_pos_min = _rappel_final_position(etat)
+            if _rappel_pos_min:
+                lignes.append(_rappel_pos_min)
             lignes.append("=" * 48)
             return "\n".join(lignes)
 

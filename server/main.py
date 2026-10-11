@@ -289,6 +289,21 @@ _INTENT_RETOUR_RE = _re_mod.compile(
     r"\b",
     _re_mod.IGNORECASE,
 )
+# 🔧 Fix 60446e2f : intentions monter/descendre (filet étage). Elles étaient
+# utilisées dans le filet sans être définies ici → NameError avalé par le
+# `except` → le filet étage n'a JAMAIS pu s'exécuter.
+_INTENT_DESCENDRE_RE = _re_mod.compile(
+    r"(descend\w*|sous-?sol\b|[eé]tage\s+(?:inf[ée]rieur|en\s+dessous|du\s+dessous)|"
+    r"niveau\s+(?:inf[ée]rieur|en\s+dessous)|vers\s+le\s+bas\b|plus\s+bas\b)",
+    _re_mod.IGNORECASE,
+)
+_INTENT_MONTER_RE = _re_mod.compile(
+    r"(\b(?:monte|montes|montons|montez|monter|montant|mont[ée]e|mont[ée]es)\b|"
+    r"\bremont\w*|[eé]tage\s+(?:sup[ée]rieur|au-?dessus|du\s+dessus)|"
+    r"niveau\s+(?:sup[ée]rieur|au-?dessus)|rez-?de-?chauss[eé]e|"
+    r"vers\s+le\s+haut\b|plus\s+haut\b|\bsurface\b)",
+    _re_mod.IGNORECASE,
+)
 # Intention de VOYAGE hors donjon (« je me dirige a pied vers la grotte ») :
 # destination explicite (« vers X », « jusqu'à X »). Utilisé HORS donjon
 # uniquement (le bloc donjon actif est traité avant).
@@ -7012,6 +7027,22 @@ async def _handle_say(
 
             orch = _orchestrator(app)
 
+            # 🛡️ Snapshot pré-tour (filet étage) : position OFFICIELLE du
+            # groupe avant génération. Si le LLM déplace le groupe
+            # (`carte_donjon_explorer`) au lieu de changer d'étage, le filet
+            # annule le déplacement parasite et change d'étage depuis la
+            # salle de départ.
+            _courant_pretour: list = []
+            try:
+                _etat_pre = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _dj_pre = _etat_pre.get("donjon") or {}
+                _courant_pretour = list(_dj_pre.get("courant") or [])
+            except Exception:                                    # noqa: BLE001
+                _courant_pretour = []
+
             result = await orch.run(
                 messages, ctx, on_event=on_event, on_delta=on_delta,
                 on_status=on_status,
@@ -7411,8 +7442,13 @@ async def _handle_say(
                     partie_id=partie_id,
                 ).load()
                 _dj_et = _etat_et.get("donjon") or {}
+                # 🔧 Fix 60446e2f (suite) : ne compter que les appels
+                # REUSSIS. Observé : le LLM appelle
+                # carte_donjon_etage(direction="est") — direction invalide,
+                # tool refusé (ok=False) — et l'ancien test bloquait le
+                # rattrapage déterministe : l'étage ne changeait JAMAIS.
                 _deja_etage = any(
-                    tc.get("name") == "carte_donjon_etage"
+                    tc.get("name") == "carte_donjon_etage" and tc.get("ok")
                     for tc in result.tool_calls_trace
                 )
                 if (
@@ -7446,6 +7482,59 @@ async def _handle_say(
                             f"carte_donjon_etage({_sens_etage}) exécuté "
                             "(serveur)."
                         )
+                    elif (
+                        tr_et is not None
+                        and tr_et.text.startswith("🚫 Pas d'escalier")
+                        and _courant_pretour
+                        and list(_dj_et.get("courant") or [])
+                        != list(_courant_pretour)
+                    ):
+                        # 🔧 Le LLM a DÉPLACÉ le groupe (explorer) au lieu de
+                        # changer d'étage ; la salle de départ avait un
+                        # escalier → annulation du déplacement parasite puis
+                        # changement d'étage depuis la salle de départ
+                        # (partie 60446e2f).
+                        try:
+                            _etat_rv = PartyState(
+                                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                partie_id=partie_id,
+                            ).load()
+                            _dj_rv = _etat_rv.get("donjon") or {}
+                            _dj_rv["courant"] = list(_courant_pretour)
+                            _st_rv = (_dj_rv.get("etages") or {}).get(
+                                str(_dj_rv.get("etage"))) or {}
+                            if _st_rv:
+                                _st_rv["courant"] = list(_courant_pretour)
+                            PartyState(
+                                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                partie_id=partie_id,
+                            ).save(_etat_rv)
+                            tr_rv = await orch.execute_tool_direct(
+                                "carte_donjon_etage",
+                                {"direction": _sens_etage},
+                                ctx, on_event, result,
+                            )
+                            if tr_rv is not None and not tr_rv.text.startswith(
+                                    ("❌", "⛔", "🚫")):
+                                result.narration = (
+                                    (result.narration or "").rstrip()
+                                    + "\n\nℹ️ _Précision de l'état du jeu : "
+                                    "le déplacement narré ce tour n'a pas eu "
+                                    "lieu — le groupe est resté en ("
+                                    f"{_courant_pretour[0]},"
+                                    f"{_courant_pretour[1]}) et a changé "
+                                    "d'étage._\n\n⚙️ _Le serveur a fait "
+                                    "changer d'étage au groupe._\n\n"
+                                    + tr_rv.text
+                                ).strip()
+                                print(
+                                    "[dnd35] Déplacement parasite annulé → "
+                                    "carte_donjon_etage exécuté depuis la "
+                                    "salle de départ."
+                                )
+                        except Exception as e_rv:                # noqa: BLE001
+                            print(f"[dnd35] Annulation déplacement parasite "
+                                  f"échouée : {e_rv}")
             except Exception as e_et:                        # noqa: BLE001
                 print(f"[dnd35] Filet étage échoué (ignoré) : {e_et}")
 

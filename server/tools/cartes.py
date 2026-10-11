@@ -1946,8 +1946,9 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
     (`donjon.etage`) ; les étages explorés restent mémorisés et reprennent
     exactement où le groupe les a quittés.
 
-    :param direction (str): "monter" (vers le rez-de-chaussée) ou
-        "descendre" (vers le sous-sol).
+    :param direction (str): "monter" ou "descendre" — le niveau visé est
+        défini par les liens verticaux du manifeste du scénario
+        (`liens.au_dessus` / `liens.au_dessous`), pas par un ordre figé.
     """
     d = (direction or "").strip().lower()
     # Tolérant aux variantes du LLM : « vers le bas », « sous-sol »,
@@ -1997,7 +1998,31 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
             )
         )
     etage_actuel = int(donjon.get("etage", 0) or 0)
-    if descendre:
+    # 🔧 Liens verticaux explicites du manifeste (les modules ordonnent
+    # leurs niveaux de façon NARRATIVE — Unknown Tower 0=RDC, 1-2=étages
+    # supérieurs, 3-6=sous-sols). Fallback : convention index.
+    _et_man: list[Any] = []
+    _liens_et: Optional[dict[str, Any]] = None
+    try:
+        _man_et = _manifest_pour(ctx, str(donjon.get("id") or "")) or {}
+        _et_man = list(_man_et.get("etages") or [])
+        if 0 <= etage_actuel < len(_et_man):
+            _l = _et_man[etage_actuel].get("liens")
+            if isinstance(_l, dict):
+                _liens_et = _l
+    except Exception:                                            # noqa: BLE001
+        _liens_et = None
+    if _liens_et is not None:
+        _cible = _liens_et.get("au_dessous" if descendre else "au_dessus")
+        if _cible is None:
+            return ToolResult(
+                text=("🚫 Pas d'étage plus bas d'ici — la carte du donjon "
+                      "s'arrête à ce niveau." if descendre
+                      else "🚫 Pas d'étage au-dessus d'ici — la carte du "
+                           "donjon s'arrête à ce niveau.")
+            )
+        nouvel_etage = int(_cible)
+    elif descendre:
         nouvel_etage = etage_actuel + 1
     else:
         if etage_actuel <= 0:
@@ -2007,6 +2032,18 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
         nouvel_etage = etage_actuel - 1
     _sync_etage(donjon)           # archive l'étage qu'on quitte
     _charger_etage(donjon, nouvel_etage)
+    # Nom du niveau depuis le manifeste (sinon nomenclature standard).
+    try:
+        if 0 <= nouvel_etage < len(_et_man):
+            _nom_n = str((_et_man[nouvel_etage] or {}).get("nom") or ""
+                         ).strip()
+            if _nom_n:
+                _st_n = donjon.setdefault("etages", {}).setdefault(
+                    str(nouvel_etage), {})
+                if not str(_st_n.get("nom") or "").strip():
+                    _st_n["nom"] = _nom_n
+    except Exception:                                            # noqa: BLE001
+        pass
     donjon["arrivee_par"] = None  # arrivée par l'escalier, pas par une porte
     etat["donjon"] = donjon
     err = _sauver_etat(ctx, etat)

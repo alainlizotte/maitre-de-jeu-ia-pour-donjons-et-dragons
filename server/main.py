@@ -645,7 +645,10 @@ async def _appliquer_tresor_canonique(
     # fin de ligne).
     if _re_mod.search(
         r"inventaire\s+mis\s+à\s+jour[^+]*\+\s*\d+|"
-        r"\+\s*\d+\s*(?:pi[èe]ces?|objets?|po\b|or\b|pc\b)",
+        # Fix partie 5b2f9845 : les montants DECIMAUX du routage monnaie
+        # ("+12.0 po") comptaient aussi - sinon le tresor canonique
+        # re-creditait les memes pieces (double credit x2 verifie en jeu).
+        r"\+\s*\d+(?:[.,]\d+)?\s*(?:pi[èe]ces?|objets?|po\b|or\b|pc\b)",
         narration,
         _re_mod.IGNORECASE,
     ):
@@ -8736,6 +8739,78 @@ on_status=on_status)
                     except Exception as e_tres:                 # noqa: BLE001
                         print(f"[dnd35] Rattrapage trésor canonique échoué "
                               f"(ignoré) : {e_tres}")
+
+                # --- 5quater-g. 🗝️ Étape "pnj" accomplie SUR PLACE sans
+                # `scenario_etape` : le groupe est dans la salle de l'étape
+                # courante et la narration raconte la delivrance — le serveur
+                # clôture l'étape déterministement (partie 5b2f9845 :
+                # Gandelme libéré, la quête restait 0/4 à jamais car le MJ
+                # n'appelle jamais l'outil).
+                try:
+                    from .game.objectifs import (  # noqa: E501 pylint: disable=import-outside-toplevel
+                        objectifs_quete as _oq_pnj,
+                    )
+                    _etat_pnj = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load()
+                    if (_etat_pnj.get("phase") == "exploration"
+                            and (_etat_pnj.get("donjon") or {}).get("id")):
+                        _infos_pnj = _oq_pnj(
+                            _etat_pnj, str(cfg.abs(cfg.paths.data_dir)),
+                            partie_id=partie_id,
+                        )
+                        _titre_pnj = str(
+                            _infos_pnj.get("objectif_courant") or "")
+                        _bible_pnj = (
+                            (_etat_pnj.get("quete") or {}).get("bible") or {})
+                        _etape_pnj = next(
+                            (e for e in (_bible_pnj.get("objectifs") or [])
+                             if str(e.get("titre") or "") == _titre_pnj
+                             and str(e.get("type") or "") == "pnj"),
+                            None,
+                        )
+                        _dj_pnj = _etat_pnj.get("donjon") or {}
+                        _cour_pnj = list(_dj_pnj.get("courant") or [0, 0])
+                        _salle_ok = bool(
+                            _etape_pnj
+                            and str(_etape_pnj.get("salle") or "").strip()
+                            == f"{_cour_pnj[0]},{_cour_pnj[1]}"
+                        )
+                        if (_salle_ok and _titre_pnj and _re_mod.search(
+                                r"\b(lib[èe]r\w*|d[ée]livr\w*|d[ée]tach\w*"
+                                r"|liens?\s+coup[ée]s?|coup\w*\s+les\s+liens)\b",
+                                (result.narration or "") + " " + (text or ""),
+                                _re_mod.IGNORECASE,
+                        )):
+                            _bible_pnj.setdefault("etapes_terminees",
+                                                  []).append(_titre_pnj)
+                            from .game.objectifs import (  # noqa: E501 pylint: disable=import-outside-toplevel
+                                actualiser_objectifs as _ao_pnj,
+                            )
+                            _ao_pnj(_etat_pnj,
+                                    str(cfg.abs(cfg.paths.data_dir)),
+                                    partie_id=partie_id)
+                            PartyState(
+                                data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                                partie_id=partie_id,
+                            ).save(_etat_pnj)
+                            _note_pnj = (
+                                "🗝️ **Étape de quête accomplie** : "
+                                + _titre_pnj
+                                + " — `scenario_etape(terminée=true)` "
+                                "appliqué par le serveur."
+                            )
+                            result.narration = (
+                                (result.narration or "").rstrip()
+                                + "\n\n" + _note_pnj
+                            ).strip()
+                            print(
+                                "[dnd35] Étape pnj clôturée sur place "
+                                f"(filet) : {_titre_pnj[:60]}"
+                            )
+                except Exception as e_pnj:                 # noqa: BLE001
+                    print(f"[dnd35] Filet étape pnj échoué (ignoré) : {e_pnj}")
 
                 # --- 5quater-d2. ⚔️ Engagement de combat NARRÉ sans outil
                 # (phase exploration). Le LLM écrit « Engagement du combat /

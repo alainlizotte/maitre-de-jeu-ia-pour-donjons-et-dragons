@@ -2759,7 +2759,11 @@ _RE_META_MOT_PROSE = re.compile(
     r"|\bappels?\s+d[''’ ]outils?\b"
     r"|\best\s+de\s+genre\b"
     r"|identité\s+de\s+rôle"
-    r"|accords\s+et\s+pronoms",
+    r"|accords\s+et\s+pronoms"
+    # Fix partie 5b2f9845 : le modele recopiait la note systeme
+    # "(Note : Le tour des monstres est gere par le serveur...)".
+    r"|g\w*r\s+par\s+le\s+serveur\b"
+    r"|Le\s+tour\s+des\s+monstres\s+est\s+g\w*r",
     re.IGNORECASE,
 )
 

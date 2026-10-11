@@ -832,6 +832,61 @@ async def inventaire_ajouter(
         return err
     if not objet or not _norm(objet):
         return ToolResult(text="❌ Donne un nom d'objet valide.")
+    # 🔧 Partie ead406b2 : la VALEUR CANONIQUE du tresor de la salle
+    # prime sur une bourse inventee par le modele (le canon de (2,0) disait
+    # "32 po" : le modele a ajoute "bourse de 25 pc" inventee). Si l'objet
+    # ajoute est une bourse/monnaie ET que le tresor canonique de la salle
+    # courante porte un montant, on credite LE MONTANT CANONIQUE.
+    if re.search(r"bourse|pi[èe]ce|monnaie|pi[èe]ces?\s+d[''’ ]?(or|po|pc|pa|pp)|\b(po|pc|pa|pp)\b",
+                      str(objet or ""), re.IGNORECASE):
+        try:
+            _etat_canon = _charger_etat(ctx)
+            _dj_canon = _etat_canon.get("donjon") or {}
+            _cour_canon = list(_dj_canon.get("courant") or [0, 0])
+            _salle_canon_t = next(
+                (s for s in (_dj_canon.get("grille") or [])
+                 if isinstance(s, dict)
+                 and (s.get("x"), s.get("y")) == (_cour_canon[0], _cour_canon[1])),
+                None,
+            )
+            _tresor_txt = str((_salle_canon_t or {}).get("tresor") or "")
+            _m_po = re.search(r"(\d{1,5})\s*po\b", _tresor_txt,
+                                   re.IGNORECASE)
+            _m_pc = re.search(r"(\d{1,5})\s*pc\b", _tresor_txt,
+                                   re.IGNORECASE)
+            if _m_po or _m_pc:
+                _pc_canon = (int(_m_po.group(1)) * 10 if _m_po else 0) + (
+                    int(_m_pc.group(1)) if _m_pc else 0)
+                if _pc_canon > 0:
+                    fiche["or"] = int(fiche.get("or", 0) or 0) + _pc_canon
+                    _normaliser_fiche(fiche)
+                    try:
+                        _save_fiche(ctx, nom, fiche)
+                    except ValueError as e:
+                        return ToolResult(text=f"❌ {e}")
+                    _idx_c = _sync_pj(ctx, nom, {"or": fiche.get("or", 0)})
+                    for _s_mq in (_dj_canon.get("grille") or []):
+                        if isinstance(_s_mq) and (_s_mq.get("x"),
+                                                  _s_mq.get("y")) == (
+                                                      _cour_canon[0],
+                                                      _cour_canon[1]):
+                            _s_mq["tresor_pris"] = True
+                            break
+                    _err_canon = PartyState(
+                        data_dir=ctx.data_dir,
+                        partie_id=ctx.partie_id).save(_etat_canon)
+                    return ToolResult(
+                        text=(
+                            f"🪙 **Trésor canonique de la salle crédité** : "
+                            f"{_pc_canon // 10} po (or total : "
+                            f"{fiche.get('or', 0) // 10} po) — la valeur du "
+                            "module fait foi, pas un montant inventé."
+                        ),
+                        state_patch={"pj_updated": nom,
+                                     f"pj.{_idx_c}.or": fiche.get("or", 0)},
+                    )
+        except Exception:                                    # noqa: BLE001
+            pass
     # 🔧 Partie fc6f4d0e : la monnaie est créditée sur l'or, pas en items.
     _note_monnaie = _router_monnaie(fiche, objet, quantite)
     if _note_monnaie:

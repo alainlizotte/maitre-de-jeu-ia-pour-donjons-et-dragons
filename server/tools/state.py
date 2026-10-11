@@ -647,6 +647,35 @@ async def engager_combat(
     # Si elle est renseignée, on n'engage QUE ces créatures (espèce et
     # quantité) ; une autre espèce est refusée avec la liste officielle.
     _salle_canon = _ennemis_canoniques_salle(etat)
+    # 🔧 Fix partie ead406b2 : le garde B25 ne protegeait que les salles
+    # AVEC une liste canonique. Une salle canonique SANS ennemis (le canon
+    # du manifeste : 'ennemis: None' - une salle-piege, un couloir...)
+    # restait aveugle : le MJ y inventait un combat (un Squelette qui
+    # attaque dans une salle-piege sans creature prevue). Si la salle
+    # courante EXISTE dans le manifeste mais ne liste AUCUN ennemi,
+    # AUCUN engagement n'est legitime ici.
+    if not _salle_canon:
+        _dj_vide = etat.get("donjon") or {}
+        _cour_vide = list(_dj_vide.get("courant") or [0, 0])
+        _salle_vide = next(
+            (s for s in (_dj_vide.get("grille") or [])
+             if isinstance(s, dict)
+             and (s.get("x"), s.get("y")) == (_cour_vide[0], _cour_vide[1])),
+            None,
+        )
+        if (_salle_vide is not None
+                and _dj_vide.get("id")
+                and "ennemis" in _salle_vide
+                and not [e for e in (_salle_vide.get("ennemis") or [])
+                         if str(e).strip()]):
+            return ToolResult(text=(
+                "⛔ **Rencontre hors module refusée** : la salle "
+                f"({_cour_vide[0]},{_cour_vide[1]}) de "
+                f"**{_dj_vide.get('id')}** n'a AUCUNE rencontre prévue "
+                "par le module (canon : aucun ennemi). Narre "
+                "l'exploration/le piège/la découverte SANS combat, ou "
+                "fait sortir le groupe de la salle avant tout engagement."
+            ))
     if _salle_canon:
         from .fiches import _espece_cle as _ec_b25
         _attendues = {}

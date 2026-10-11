@@ -5365,7 +5365,9 @@ async def _ressusciter_pj_oublie(
         _texte_ref, _re_mod.IGNORECASE,
     )
     if m_c:
-        cible_pv = max(1, int(m_c.group(1)))
+        # Fix partie ead406b2 : la 2e alternative du pattern ("avec N points"
+        # "de vie sur X") capture en groupe 2 -> int(None) sinon.
+        cible_pv = max(1, int(m_c.group(1) or m_c.group(2)))
 
     lignes: list[str] = []
     _fiche_lue: dict[str, dict[str, Any]] = {}
@@ -6603,7 +6605,11 @@ async def _handle_say(
             if _etat_b8.get("phase") == "combat":
                 try:
                     ctx_mour = _ctx(partie_id, player)
-                    ctx_mour.on_event = on_event
+                    async def _on_event_mour(ev: dict) -> None:
+                        # Les events structurés du moteur (images...) ne sont
+                        # pas critiques pour le tour d'un mourant : no-op sûr.
+                        return
+                    ctx_mour.on_event = _on_event_mour
                     res_mour = await _boucle_combat(
                         ctx_mour,
                         timeout_secondes=cfg.game.combat_turn_timeout_seconds,
@@ -8811,6 +8817,60 @@ on_status=on_status)
                             )
                 except Exception as e_pnj:                 # noqa: BLE001
                     print(f"[dnd35] Filet étape pnj échoué (ignoré) : {e_pnj}")
+
+                # --- 5quater-g-bis. 🪤 PIÈGE canonique déclenché sans jet :
+                # la salle porte un `piege` canonique ("Réflexes DD 12, 2d6...")
+                # et la narration raconte le déclenchement SANS AUCUN
+                # `lancer_sauvegarde` — le LLM inventait les dégâts (9 PV
+                # appliqués sans jet, partie ead406b2). On rejoue avec la
+                # consigne forcant le jet officiel puis les dégâts canoniques.
+                try:
+                    _etat_piege = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load()
+                    _dj_piege = _etat_piege.get("donjon") or {}
+                    _cour_piege = list(_dj_piege.get("courant") or [0, 0])
+                    _salle_piege = next(
+                        (s for s in (_dj_piege.get("grille") or [])
+                         if isinstance(s, dict)
+                         and (s.get("x"), s.get("y")) == (_cour_piege[0],
+                                                          _cour_piege[1])),
+                        None,
+                    )
+                    _piege_txt = str((_salle_piege or {}).get("piege") or "")
+                    _save_deja = any(
+                        tc.get("name") == "lancer_sauvegarde"
+                        for tc in result.tool_calls_trace
+                    )
+                    _m_save = _re_mod.search(
+                        r"(Réflexes|Reflexes|Volonté|Volonte|Vigueur)"
+                        r"\s+DD\s*(\d{1,2})", _piege_txt, _re_mod.IGNORECASE)
+                    if (_piege_txt and _m_save and not _save_deja
+                            and _re_mod.search(r"pi[èe]ge",
+                                               result.narration or "",
+                                               _re_mod.IGNORECASE)):
+                        _type_save = _m_save.group(1).capitalize()
+                        _dd_save = int(_m_save.group(2))
+                        _m_deg = _re_mod.search(r"(\d{1,2}d\d{1,2})", _piege_txt)
+                        _deg_piege = _m_deg.group(1) if _m_deg else "1d6"
+                        _obj_piege = (
+                            "⚠️ ERREUR système : un PIÈGE canonique de la "
+                            "salle s'est DÉCLENCHÉ sans AUCUN jet : « "
+                            + _piege_txt[:220] + " ». Appelle "
+                            "MAINTENANT `lancer_sauvegarde` (nom du PJ, "
+                            "type=" + _type_save + ", difficulte="
+                            + str(_dd_save) + ") PUIS, si échec, "
+                            "`lancer_degats` (" + _deg_piege
+                            + ") et `fiche_perso_infliger_degats`. Si le jet "
+                            "réussit, narre l'esquive SANS dégâts. NE narre "
+                            "JAMAIS un montant de dégâts sans jet officiel."
+                        )
+                        await _rejoue_correctif(
+                            orch, messages, ctx, result, on_event,
+                            _obj_piege, "piege", on_status=on_status)
+                except Exception as e_piege:              # noqa: BLE001
+                    print(f"[dnd35] Filet piège échoué (ignoré) : {e_piege}")
 
                 # --- 5quater-d2. ⚔️ Engagement de combat NARRÉ sans outil
                 # (phase exploration). Le LLM écrit « Engagement du combat /

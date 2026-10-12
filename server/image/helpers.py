@@ -48,8 +48,8 @@ async def _notify_pending(ctx, usage: str) -> None:
 
 # Anti-texte partagé : les modèles de génération (Qwen-Image notamment)
 # adorent orner les illustrations d'écritures décoratives ; comme les
-# workflows Lightning tournent à cfg=1 (prompt négatif ignoré), ces
-# consignes passent obligatoirement par le prompt positif.
+# workflows Turbo (Qwen Image 2.1) tournent à cfg=1 (prompt négatif vide),
+# ces consignes passent obligatoirement par le prompt positif.
 _ANTI_TEXT = (
     "textless image, no letters, no words, no inscriptions, no runes, "
     "no watermark, no signature, no frame, no border, no ornamental writing, "
@@ -124,6 +124,11 @@ async def generer_averti(ctx, usage: str, prompt: str, dest_path: str) -> Option
 # --- Helpers de prompts -------------------------------------------------- #
 # Version du prompt template — quand elle change, toutes les images en cache
 # sont régénérées (via le mécanisme desc_hash_v2 dans monstres.py).
+# ⚠️ Ne PAS bump à chaque bascule de workflow : le hash porte sur cette
+# version + la description du bestiaire, pas sur le prompt complet. Bump
+# volontairement conservé en v4 lors du passage à Qwen Image 2.1 Turbo pour
+# préserver le cache d'images existant (seuls les monstres absents du cache
+# seront générés, avec le nouveau modèle).
 PROMPT_VERSION = "v4_clean_prompt"
 
 
@@ -227,6 +232,13 @@ def monstre_prompt(nom: str, description: str = "") -> str:
     pour éviter que le modèle ne génère du texte (le nom comme étiquette).
     Seule la description physique est utilisée. Le type de créature (EN)
     est ajouté comme mot-clé pour guider le style.
+
+    Qwen Image 2.1 Turbo a tendance à isoler ses sujets sur un fond neutre
+    (uni ou transparent) : on exige explicitement un environnement immersif
+    adapté à la créature. On ne figure PAS le décor en dur (l'ancien modèle
+    variait le fond selon le monstre — crypte, océan, volcan… — et Qwen 2.1,
+    trop obéissant, recopierait le même partout) : « natural habitat »
+    laisse le text-encoder Qwen3-VL inférer le lieu depuis la description.
     """
     # Sanitizer la description pour ne garder que l'apparence physique
     desc = _sanitize_description(description)
@@ -241,7 +253,9 @@ def monstre_prompt(nom: str, description: str = "") -> str:
     return (
         f"dark fantasy illustration of {subject}, "
         "tabletop RPG monster art, dramatic lighting, detailed digital "
-        "painting, full body, centered, plain dark background, "
+        "painting, full body, centered, "
+        "in its natural habitat, immersive fantasy environment befitting "
+        "the creature, atmospheric background, moody lighting, "
         "purely visual artwork, clean illustration, "
         "ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS, "
         "NO WRITING, NO INSCRIPTIONS, NO RUNES, NO LABELS, "
@@ -450,16 +464,57 @@ def scene_prompt(description: str) -> str:
 
 
 def portrait_prompt(nom: str, race: str = "", classe: str = "") -> str:
-    elements = [nom]
-    if race:
-        elements.append(race)
-    if classe:
-        elements.append(f"{classe}")
-    sujet = ", ".join(elements)
+    """Prompt pour un portrait de PJ (ou PNJ) — chemin de repli (la fiche
+    remplie passe normalement par `persos.construire_prompt_portrait`).
+
+    Comme pour les monstres, pas de fond uni en dur : l'ancien modèle
+    ignoraient « plain background » (d'où leurs décors variés) ; Qwen 2.1
+    Turbo, trop obéissant, le respecterait → portraits de studio pour tous.
+    On demande donc un décor adapté au personnage, flou pour garder le
+    focus sur le visage.
+
+    Qwen 2.1 lit le prompt mot à mot : race et classe sont traduits FR→EN
+    via le catalogue de `persos` (import tardif, repli sur la valeur brute).
+    """
+    import unicodedata as _ud
+
+    def _canon(s: str) -> str:
+        t = _ud.normalize("NFKD", (s or "").strip().lower())
+        return "".join(c for c in t if not _ud.combining(c))
+
+    race_tr, classe_tr, archetype, traits_race = race, classe, "", ""
+    try:
+        from ..persos import _CLASSE_EN, _CATEGORIE_CLASSE, _RACE_EN, RACES
+        for fr, en in _RACE_EN.items():
+            if _canon(fr) == _canon(race):
+                race_tr = en
+                # Traits raciaux canoniques EN (« long pointed ears… ») :
+                # le mot « elf » seul ne suffit pas à Qwen 2.1, trop
+                # littéral, pour dessiner les oreilles pointues.
+                traits_race = RACES.get(fr, {}).get("traits_visuels", "")
+                break
+        for fr, en in _CLASSE_EN.items():
+            if _canon(fr) == _canon(classe):
+                classe_tr = en
+                archetype = _CATEGORIE_CLASSE.get(fr, "")
+                break
+    except Exception:
+        pass  # repli : valeurs FR brutes, sans archétype
+
+    elements = [nom, race_tr]
+    if traits_race:
+        elements.append(traits_race)
+    if classe_tr:
+        elements.append(classe_tr)
+    if archetype:
+        elements.append(archetype)
+    sujet = ", ".join(e for e in elements if e)
     return (
         f"heroic portrait of {sujet}, "
         "fantasy character art, head and shoulders, "
-        "dramatic studio lighting, detailed digital painting, "
-        "warm colors, high resolution, plain background, "
+        "dramatic cinematic lighting, detailed digital painting, "
+        "warm colors, high resolution, "
+        "immersive fantasy environment befitting the character, "
+        "atmospheric softly blurred background, "
         + _ANTI_TEXT
     )

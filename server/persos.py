@@ -1630,7 +1630,11 @@ def construire_prompt_portrait(fiche: dict[str, Any]) -> str:
         + "D&D fantasy character art, "
         + (cadre if cadre else "head and shoulders, ")
         + "dramatic lighting, detailed digital painting, warm colors, "
-        "high resolution, no text"
+        "high resolution, "
+        # Décors adaptés au personnage (l'ancien modèle les improvisait ;
+        # Qwen 2.1 Turbo, trop littéral, produirait un fond studio neutre).
+        "immersive fantasy environment befitting the character, "
+        "atmospheric softly blurred background, no text"
     )
     return corps
 

@@ -10,8 +10,9 @@ Un seul workflow par usage cible est chargé en mémoire (depuis
 API** (chaque node a `class_type` et `inputs` — pas le format UI). Pour
 chaque génération on identifie par convention deux nodes à patcher :
 
-- `<usage>_PROMPT_NODE` — node `CLIPTextEncode` (ou équivalent) dont le
-  champ `text` portera le prompt texte (positif).
+- `<usage>_PROMPT_NODE` — node d'encodage du prompt positif : un
+  `TextEncodeQwenImage21` (Qwen Image 2.1, champ `prompt`) ou un
+  `CLIPTextEncode` (ancien workflow, champ `text`).
 - `<usage>_SEED_NODE` — node portant un champ `seed` qu'on randomise pour
   varier les images (peut être absent — on garde alors la seed du workflow).
 
@@ -38,7 +39,8 @@ from .. import gpu as _gpu
 USAGES_VALIDES = {"monstre", "lieu", "portrait"}
 
 # Timeout par défaut : ComfyUI sur RTX 3060 Ti peut prendre 1-3 min pour une
-# génération 4-step Lightning; on met generreusement 5 min pour le PNG final.
+# génération Qwen Image 2.1 Turbo 8-step (int8) ; on met généreusement 5 min
+# pour le PNG final.
 DEFAULT_TIMEOUT_TOTAL = 300
 POLL_INTERVAL = 3.0  # secondes entre deux interrogation /history
 
@@ -93,10 +95,11 @@ class ComfyUIBackend:
         Soit le graphe expose des nodes nommés avec une convention
         `<usage>_PROMPT_NODE` / `<usage>_SEED_NODE`, soit l'heuristique
         suivante opère :
-        - On cherche un node `class_type == "CLIPTextEncode"` identifié par
-          clé `_PROMPT_NODE` (ie le suffixe du dict key) ou, à défaut, le
-          premier CLIPTextEncode rencontré qu'on suppose être le positif
-          (le 2e étant conventionnellement le négatif).
+        - On cherche un node d'encodage texte — `TextEncodeQwenImage21`
+          (Qwen Image 2.1, champ `prompt`) ou `CLIPTextEncode` (ancien
+          workflow, champ `text`) — identifié par clé `_PROMPT_NODE` (ie le
+          suffixe du dict key) ou, à défaut, le premier rencontré qu'on
+          suppose être le positif.
         - De même, on cherche un node portant une `seed` (KSampler /
           RandomNoise / etc.) avec la key contenant `_SEED_NODE` ou à
           défaut le premier trouvé.
@@ -120,19 +123,31 @@ class ComfyUIBackend:
                 if k.upper().endswith("_PROMPT_NODE"):
                     prompt_node_key = k
                     break
-        # Dernière chance : le 1er CLIPTextEncode dans l'ordre d'insertion.
+        # Dernière chance : le 1er node d'encodage texte dans l'ordre
+        # d'insertion (TextEncodeQwenImage21 ou CLIPTextEncode).
         if prompt_node_key is None:
             for k, v in graph.items():
+                if not isinstance(v, dict):
+                    continue
+                ins = v.get("inputs", {})
+                if v.get("class_type") == "TextEncodeQwenImage21" and isinstance(
+                    ins.get("prompt"), str
+                ):
+                    prompt_node_key = k
+                    break
                 if (
-                    isinstance(v, dict)
-                    and v.get("class_type") == "CLIPTextEncode"
-                    and isinstance(v.get("inputs", {}).get("text"), str)
+                    v.get("class_type") == "CLIPTextEncode"
+                    and isinstance(ins.get("text"), str)
                 ):
                     prompt_node_key = k
                     break
 
         if prompt_node_key is not None:
-            graph[prompt_node_key]["inputs"]["text"] = prompt_text
+            # TextEncodeQwenImage21 expose le champ `prompt` (son 2e output
+            # porte le négatif, ignoré : cfg=1) ; CLIPTextEncode, `text`.
+            ins = graph[prompt_node_key]["inputs"]
+            champ = "prompt" if isinstance(ins.get("prompt"), str) else "text"
+            ins[champ] = prompt_text
 
         # 2. Patch seed (recherche "carrying" par convention ou premier trouvé)
         seed_node_key = None

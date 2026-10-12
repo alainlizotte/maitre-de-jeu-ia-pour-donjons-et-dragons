@@ -312,6 +312,88 @@ _INTENT_VOYAGE_RE = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
+# 🧹 Assainissement « joueur » : les blocs/tool texts destinés AU MJ SEUL
+# (contenu canonique du scénario, instructions de narration, méta des filets
+# serveur) ne partent JAMAIS à l'écran — spoilers (piège + solution, trésor,
+# ennemis à venir) et bruit technique. Le LLM reçoit le texte complet via ses
+# messages : ce filtre ne s'applique QU'À la diffusion client.
+_DM_SECTIONS = (
+    "📜 **Contenu canonique de la salle (scénario)**",
+    "📜 **Salle DU SCÉNARIO**",
+    "🚪 Portes de cette salle",
+)
+_DM_LIGNE_RE = _re_mod.compile(
+    r"^(?:Description enregistrée\s*:|État tel que laissé\s*:|"
+    r"⚠️ NE RÉINVENTE PAS|📌 Salle NOUVELLE|🪜 ESCALIER dans cette "
+    r"salle|🪤|ℹ️ \*\*Rattrapage serveur\*\*|Entrée\s*:)",
+)
+
+
+def _assainir_texte_joueur(texte: str) -> str:
+    """Retire du texte diffusé au JOUEUR les blocs destinés au MJ seul :
+    contenu canonique (pièges + solutions, trésors, ennemis, PNJ),
+    descriptions des salles voisines, instructions de narration, méta
+    technique des filets serveur. Les infos utiles restent : jets de dés,
+    carte, position, butin, résultat des sorts."""
+    if not texte:
+        return texte
+    lignes_out: list[str] = []
+    en_section = False
+    for ligne in str(texte).split("\n"):
+        nu = ligne.strip()
+        if not en_section and any(nu.startswith(sp) for sp in _DM_SECTIONS):
+            en_section = True
+            continue
+        if en_section:
+            # Reprise : un marqueur destiné au joueur clôt la section DM.
+            if nu.startswith("🖼️"):
+                en_section = False
+                lignes_out.append(ligne)
+            continue
+        if _DM_LIGNE_RE.match(nu):
+            continue
+        lignes_out.append(ligne)
+    t = "\n".join(lignes_out)
+    # Segments inline d'instructions au MJ (dans les lignes conservées).
+    t = _re_mod.sub(r"\s*— n'invente AUCUNE autre sortie\.", "", t)
+    t = _re_mod.sub(r"\s*Le groupe poursuit son exploration du donjon\.", "", t)
+    t = _re_mod.sub(r"\s*⚠️ Ce sont les SEULES sorties[^.]*\.", "", t)
+    t = _re_mod.sub(r"Portes EXISTANTES (?:dans la salle d'entrée )?ici\s*:",
+               "Portes visibles ici :", t)
+    # Méta des filets serveur : notes techniques → versions courtes neutres.
+    t = _re_mod.sub(r"\n*⚙️ _Le serveur a (?:fait|DÉJÀ fait) changer d'étage[^_]*_",
+               "\n🪜 _Le groupe change d'étage._", t)
+    t = _re_mod.sub(
+        r"🗺️ _Retour vers « ([^»]+) »[^_]*_",
+        r"🗺️ _Le groupe retourne vers « \1 »._", t)
+    t = _re_mod.sub(
+        r"ℹ️ _Précision de l'état du jeu : le déplacement narré ce tour "
+        r"n'a pas eu lieu[^_]*_", "\n🪜 _Le groupe change d'étage._", t)
+    t = _re_mod.sub(r"ℹ️ _Précision de l'état du jeu : AUCUN combat réel[^_]*_",
+               "\nℹ️ _Le combat annoncé n'a pas lieu._", t)
+    t = _re_mod.sub(
+        r"ℹ️ _Précision de l'état du jeu : le déplacement au "
+        r"\*\*(?:nord|sud|est|ouest)\*\* n'a PAS eu lieu[^_]*_",
+        "\nℹ️ _Aucune porte dans ce mur — le groupe n'a pas bougé._", t)
+    t = _re_mod.sub(r"\n*⚙️ _Rattrapage serveur[^_]*_", "", t)
+    t = t.replace("📦 **Rattrapage serveur**", "📦 Butin")
+    t = _re_mod.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
+def _assainir_event_joueur(ev: dict[str, Any]) -> dict[str, Any]:
+    """Version assainie d'un tool_event destiné au client (champs texte
+    only). Les autres champs (patches, images) sont intacts."""
+    if not isinstance(ev, dict):
+        return ev
+    ev2 = dict(ev)
+    for cle in ("text", "description", "detail"):
+        v = ev2.get(cle)
+        if isinstance(v, str):
+            ev2[cle] = _assainir_texte_joueur(v)
+    return ev2
+
+
 # Mots exclus de l'extraction de DESTINATION (retour par nom de salle) :
 # le vocabulaire du retour lui-même et les mots trop génériques.
 _MOTS_OUT_RETOUR = frozenset((
@@ -6812,7 +6894,11 @@ async def _handle_say(
                 elif etype == "stream_reset":
                     await session.broadcast({"type": "stream_reset"})
                 else:
-                    await session.broadcast({"type": "tool_event", "event": ev})
+                    # 🧹 Le client ne voit pas les blocs MJ-seul (spoilers,
+                    # instructions) — le LLM, lui, reçoit le texte complet.
+                    await session.broadcast(
+                        {"type": "tool_event",
+                         "event": _assainir_event_joueur(ev)})
 
             # 📊 Statut enrichi : l'étape en cours est poussée au client
             # (défini TÔT — utilisé par le pre-run du moteur de combat).
@@ -9918,16 +10004,28 @@ on_status=on_status)
             except Exception as _e_align:                    # noqa: BLE001
                 print(f"[dnd35] Alignement narration/état échoué (ignoré) : "
                       f"{_e_align}")
+            # 🧹 Version JOUEUR : narration + trace + events assainis des
+            # blocs MJ-seul (contenu canonique = spoilers, instructions).
+            # L'objet `result` reste INTACT pour le serveur (filets, logs).
+            _trace_joueur = []
+            for _tc in result.tool_calls_trace:
+                _tc2 = dict(_tc)
+                if isinstance(_tc2.get("text"), str):
+                    _tc2["text"] = _assainir_texte_joueur(_tc2["text"])[:900]
+                _trace_joueur.append(_tc2)
+            _events_joueur = [
+                _assainir_event_joueur(_ev) for _ev in result.tool_events
+            ]
             await session.broadcast({
                 "type": "dm",
-                "text": result.narration,
+                "text": _assainir_texte_joueur(result.narration or ""),
                 "iterations": result.iterations,
                 "corrections": result.corrections,
                 "simulation_attempted": result.simulation_attempted,
-                "tool_events": result.tool_events,
+                "tool_events": _events_joueur,
                 # 🛡️ m4 : la grille du donjon n'est plus diffusée.
                 "state_patches": _alleger_patches_client(result.state_patches),
-                "tool_calls_trace": result.tool_calls_trace,
+                "tool_calls_trace": _trace_joueur,
             })
     except Exception as e:                                           # noqa: BLE001
         # Le tour a crashé (LLM injoignable, timeout…) : on prévient la table

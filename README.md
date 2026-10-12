@@ -253,6 +253,50 @@ cd client && npm install && npm run build && cd ..   # frontend → server/stati
 py -m uvicorn server.main:app --port 8000            # → http://127.0.0.1:8000
 ```
 
+## 🗺️ Vos scénarios et vos cartes
+
+Le dépôt ne distribue **ni cartes officielles, ni scénarios tiers** (© de leurs
+auteurs — voir [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)) : chaque table
+fournit les siens.
+
+**Cartes de référence** — déposez vos images dans `cartes/` (à la racine du
+projet) puis redémarrez : elles sont copiées vers `server/data/cartes/` et
+servies sous `/data/cartes/…`. Import en masse depuis un dossier existant :
+
+```bash
+py scripts/importer_scenarios.py --cartes "D:\mes cartes du faerun"
+```
+
+**Scénarios** — arborescence attendue sous `server/data/scenarios/` :
+
+```
+scenarios/
+  Mon Univers/                      ← univers (groupé dans le catalogue)
+    Cartes/                         ← cartes de l'univers (optionnel)
+    Ma Campagne/                    ← un dossier par aventure
+      ma campagne-01-debut.pdf      ← PDF jouable(s) (-01-, -02-… = chapitres
+      ma campagne-02-fin.pdf           chaînés automatiquement)
+      Ma Campagne.donjon.json       ← manifeste de donjon (optionnel)
+      Cartes/  Artwork/  Magic Items/   ← assets (optionnels)
+    Aventure Solo.pdf               ← scénario mono-fichier
+  Mon Autre Univers/Ma Campagne.pdf ← PDF original complet → annexe du dossier
+```
+
+Puis régénérez le catalogue et redémarrez :
+
+```bash
+py scripts/importer_scenarios.py --analyse   # aperçu de ce qui sera importé
+py scripts/importer_scenarios.py --apply     # écrit le catalogue
+docker compose restart dnd35
+```
+
+L'outil **préserve les entrées existantes** (pitch, niveaux, chaînage
+artisanal) : seuls les nouveaux scénarios sont ajoutés, et les PDF
+volontairement non catalogués (annexes…) sont signalés sans être ajoutés.
+Vérifications utiles : `scripts/valider_manifestes.py` (manifestes de
+donjons), `scripts/decouper_scenarios.py` (découpage des PDF volumineux en
+chapitres), `scripts/generer_donjon_scenario.py` (brouillon de manifeste).
+
 ## 🧪 Tests
 
 **745 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,

@@ -60,3 +60,7 @@ server/data/bestiaire.json.bak_enrich*
 
 # Fichiers temporaires de chat (runtime)
 server/data/.chat_*.tmp
+
+# Catalogue de scénarios — artefact GÉNÉRÉ par scripts/importer_scenarios.py
+# à partir des scénarios de l'hébergeur (non distribués).
+server/data/scenarios_catalogue.json

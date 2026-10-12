@@ -17,7 +17,21 @@ import shutil
 import sys
 import tempfile
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Ces tests copient le catalogue + les PDF réels de `server/data/scenarios/`
+# (contenu de l'hébergeur, non distribué). Sur un clone frais sans données,
+# ils sont sautés — l'outil `scripts/importer_scenarios.py` régénère le
+# catalogue après import des scénarios personnels.
+_CATALOGUE_REEL = os.path.abspath("server/data/scenarios_catalogue.json")
+_DIVERS_REEL = os.path.abspath("server/data/scenarios/Divers")
+pytestmark = pytest.mark.skipif(
+    not (os.path.isfile(_CATALOGUE_REEL) and os.path.isdir(_DIVERS_REEL)),
+    reason="scénarios réels absents (clone frais) — voir "
+           "scripts/importer_scenarios.py",
+)
 
 from server.game.state import PartyState  # noqa: E402
 from server.llm.prompt_builder import PromptBuilder  # noqa: E402

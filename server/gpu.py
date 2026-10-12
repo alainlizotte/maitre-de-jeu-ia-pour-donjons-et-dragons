@@ -158,7 +158,11 @@ async def _recharger_apres_image() -> None:
     # Seuil de sécurité : ~6,5 Go libres pour charger Qwen3.5-9B-Q4_K_M-MTP
     # (6,42 Go mesurés) sans pousser ComfyUI à basculer au mauvais moment.
     SEUIL_VRAM_LIBRE_MO = 6500
-    POLL = 0.5
+    # 🛡️ Fix : poll ADAPTATIF — 0.5 s fixe retardaient le rechargement
+    # d'au moins un cycle entier même quand `reload_delay_s` était court
+    # (le break de sécurité du timeout n'était atteint qu'après un sleep
+    # complet) ; le reload LLM tombait alors hors de toute fenêtre courte.
+    POLL = max(0.05, min(0.5, float(_reload_delay_s) / 4.0))
     timeout_max = max(0.0, float(_reload_delay_s)) if "_reload_delay_s" in globals() else 30.0
     t0 = asyncio.get_running_loop().time()
 

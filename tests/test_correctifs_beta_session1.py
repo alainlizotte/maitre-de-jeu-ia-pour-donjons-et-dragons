@@ -29,6 +29,19 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from server import main as srv  # noqa: E402
+
+
+def _fichier_client(*parts: str) -> str:
+    """Chemin d'un fichier SOURCE client ; SKIP si les sources ne sont pas
+    présentes — l'image Docker n'embarque que le build `server/static`, pas
+    les sources TS (les 3 tests de source client échouaient en FileNotFoundError
+    dans tout conteneur, en aucun cas une régression du code)."""
+    chemin = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "client", "src", *parts)
+    if not os.path.exists(chemin):
+        pytest.skip("sources client absentes (environnement serveur seul)")
+    return chemin
 from server.game.session import PartySession  # noqa: E402
 from server.game.state import PartyState  # noqa: E402
 
@@ -376,14 +389,11 @@ def test_c1_historique_inclus_maintenant_client_id(session_history=None):
                      "server", "main.py"), encoding="utf-8").read()
     assert '"client_id"' in src
     # Et le client affiche les messages joueurs reçus.
-    csrc = open(os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "client", "src", "hooks", "useChatSocket.ts"), encoding="utf-8").read()
+    csrc = open(_fichier_client("hooks", "useChatSocket.ts"),
+                encoding="utf-8").read()
     assert 'case "player"' in csrc and "ownSayIds" in csrc
     # ws.ts joint le token (C2).
-    wsrc = open(os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "client", "src", "api", "ws.ts"), encoding="utf-8").read()
+    wsrc = open(_fichier_client("api", "ws.ts"), encoding="utf-8").read()
     assert "getToken" in wsrc and "payload.token" in wsrc
 
 
@@ -407,15 +417,13 @@ def test_r2_canal_dice_sans_tour_mj():
 
 def test_r2_client_dice_envoie_le_nouveau_canal():
     """DiceRoller/PartyPage/ws.ts : le dé manuel passe par type="dice"."""
-    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    wsrc = open(os.path.join(base, "client", "src", "api", "ws.ts"),
-                encoding="utf-8").read()
+    wsrc = open(_fichier_client("api", "ws.ts"), encoding="utf-8").read()
     assert 'type: "dice"' in wsrc
-    psrc = open(os.path.join(base, "client", "src", "pages", "PartyPage.tsx"),
+    psrc = open(_fichier_client("pages", "PartyPage.tsx"),
                 encoding="utf-8").read()
     assert "sendDice" in psrc
-    rsrc = open(os.path.join(base, "client", "src", "components",
-                             "RightSidebar.tsx"), encoding="utf-8").read()
+    rsrc = open(_fichier_client("components", "RightSidebar.tsx"),
+                encoding="utf-8").read()
     assert "sendDice" in rsrc
 
 
@@ -506,9 +514,8 @@ def test_r5_crash_patch_partiel_sans_nom_corrige():
     sur un snapshot périmé crée une entrée pj PARTIELLE (sans nom) —
     `slugify(undefined)` plantait tout le panneau (page blanche). Le rendu
     tolère désormais les fiches sans nom (fallback slug + monogramme)."""
-    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    src = open(os.path.join(base, "client", "src", "components",
-                            "StateSidebar.tsx"), encoding="utf-8").read()
+    src = open(_fichier_client("components", "StateSidebar.tsx"),
+               encoding="utf-8").read()
     # Portrait : nom optionnel + slug fallback
     assert "nom?: string" in src
     assert 'slugify(nom ?? "")' in src

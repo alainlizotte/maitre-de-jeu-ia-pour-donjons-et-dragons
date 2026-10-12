@@ -312,6 +312,97 @@ _INTENT_VOYAGE_RE = _re_mod.compile(
     _re_mod.IGNORECASE,
 )
 
+# Mots exclus de l'extraction de DESTINATION (retour par nom de salle) :
+# le vocabulaire du retour lui-même et les mots trop génériques.
+_MOTS_OUT_RETOUR = frozenset((
+    "retourne", "retourner", "retour", "retourne", "reviens", "revenir",
+    "revenons", "rebrousse", "rebroussons", "chemin", "salle", "salles",
+    "piece", "pieces", "donjon", "tour", "vers", "dans", "pour", "puis",
+    "ensuite", "directement", "rapidement", "vite", "nord", "sud", "est",
+    "ouest", "escalier", "escaliers", "etage", "etages", "explore",
+    "explorer", "explore",
+))
+
+
+def _norm_txt_salle(s: str) -> str:
+    """Normalisation accent/casse pour rapprocher texte joueur et salles."""
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", (s or "").lower())
+    return "".join(c for c in nf if not unicodedata.combining(c))
+
+
+def _pas_vers_salle_nommee(
+    donjon: dict, txt: str,
+) -> Optional[tuple[str, str, int]]:
+    """Retour par NOM de salle (« je retourne au hall », « je reviens à
+    l'entrée ») — les cardinaux sont déjà résolus par 5bis-e. Cherche parmi
+    les salles VISITÉES celle que le texte désigne (priorité au TYPE de
+    salle, sinon mots forts de la description), puis renvoie le PREMIER PAS
+    du plus court chemin (BFS sur les portes ouvertes de la grille active).
+    Renvoie None si aucune cible claire, si le texte contient une direction
+    cardinale (déjà gérée ailleurs) ou si le groupe est déjà sur place.
+    :returns: (direction, libellé_cible, distance) ou None
+    """
+    try:
+        _ntxt = _norm_txt_salle(txt)
+        if not _ntxt:
+            return None
+        # Une direction cardinale explicite relève de 5bis-e, pas d'ici.
+        if _re_mod.search(r"\b(nord|sud|est|ouest)\b", _ntxt):
+            return None
+        salles = {(int(s.get("x")), int(s.get("y"))): s
+                  for s in (donjon.get("grille") or [])
+                  if s.get("x") is not None}
+        courant = list(donjon.get("courant") or [0, 0])
+        start = (int(courant[0]), int(courant[1])) if len(courant) >= 2 \
+            else (0, 0)
+        if start not in salles:
+            return None
+        dirs = {"nord": (0, -1), "sud": (0, 1), "est": (1, 0),
+                "ouest": (-1, 0)}
+        from collections import deque as _deque
+        dist = {start: 0}
+        premier_pas: dict[tuple[int, int], str] = {}
+        q = _deque([start])
+        while q:
+            cur = q.popleft()
+            s0 = salles.get(cur) or {}
+            for d, (dx, dy) in dirs.items():
+                if not (s0.get("portes") or {}).get(d):
+                    continue
+                nxt = (cur[0] + dx, cur[1] + dy)
+                if nxt not in salles or nxt in dist:
+                    continue
+                dist[nxt] = dist[cur] + 1
+                premier_pas[nxt] = (d if cur == start
+                                    else premier_pas.get(cur, d))
+                q.append(nxt)
+        mots = [w for w in _re_mod.findall(r"[a-z]+", _ntxt)
+                if len(w) >= 5 and w not in _MOTS_OUT_RETOUR]
+        meilleur = None  # ((-score, dist), direction, libelle, distance)
+        for (x, y), s in salles.items():
+            if (x, y) == start or not s.get("visitee") or (x, y) not in dist:
+                continue
+            score = 0
+            type_n = _norm_txt_salle(s.get("type")).strip().rstrip("s")
+            if type_n and type_n in _ntxt:
+                score += 10
+            desc_n = _norm_txt_salle(s.get("description"))
+            for w in mots:
+                if w in desc_n:
+                    score += 3
+            if score <= 0:
+                continue
+            cle = (-score, dist[(x, y)])
+            if meilleur is None or cle < meilleur[0]:
+                meilleur = (cle, premier_pas.get((x, y)),
+                            str(s.get("type") or "salle"), dist[(x, y)])
+        if meilleur is None or not meilleur[1]:
+            return None
+        return meilleur[1], meilleur[2], meilleur[3]
+    except Exception:                                            # noqa: BLE001
+        return None
+
 # Détection d'ENTRÉE dans un lieu à cartographier (partie 8a7c1f92 : le MJ
 # narre « Vous vous dirigez vers l'entrée des catacombes… Vous entrez dans
 # l'obscurité » SANS jamais appeler `carte_donjon_entrer` — donjon.id reste
@@ -6897,6 +6988,66 @@ async def _handle_say(
                 # Si l'actif est un PNJ/monstre restant (rare après pre-run),
                 # le message passe : la boucle post-tour le gérera.
 
+            # 2ter. 🪜 PRÉ-TOUR DÉTERMINISTE : changement d'ÉTAGE. Observé
+            # (partie 60446e2f) : « je monte l'escalier » → le LLM appelait
+            # carte_donjon_explorer(est) (direction inventée) ou narrait sans
+            # tool — un déplacement faux, une prose fausse, l'étage intact.
+            # Quand l'intention est NON AMBIGUÏE (monter/descendre +
+            # escalier/étage) et que le groupe est en donjon HORS combat, le
+            # serveur exécute carte_donjon_etage AVANT le LLM et annonce le
+            # résultat dans events_pre : le modèle narre l'ARRIVÉE, il ne
+            # rejoue rien. Les refus (pas d'escalier ici, pas d'étage
+            # au-dessus) sont annoncés aussi : la réponse au joueur est la
+            # VÉRITÉ, pas la fiction inventée.
+            _etage_pretour = False
+            try:
+                _etat_p2 = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _dj_p2 = _etat_p2.get("donjon") or {}
+                if (
+                    (_dj_p2.get("id"))
+                    and _etat_p2.get("phase") != "combat"
+                    and (_INTENT_MONTER_RE.search(text or "")
+                         or _INTENT_DESCENDRE_RE.search(text or ""))
+                    and _re_mod.search(
+                        r"escalier|étage|etage|niveau suivant"
+                        r"|étage\s+supérieur|étage\s+inférieur",
+                        text or "", _re_mod.IGNORECASE)
+                ):
+                    _sens_p2 = (
+                        "descendant" if _INTENT_DESCENDRE_RE.search(
+                            text or "") else "montant"
+                    )
+                    from .tools.base import (                            # noqa: E402
+                        _TOOL_REGISTRY as _REG_P2, invoke_tool as _inv_p2,
+                    )
+                    _spec_p2 = _REG_P2.get("carte_donjon_etage")
+                    if _spec_p2 is not None:
+                        _ctx_p2 = _ctx(partie_id, player)
+                        _tr_p2 = await _inv_p2(
+                            _spec_p2, _ctx_p2, {"direction": _sens_p2})
+                        _txt_p2 = str(getattr(_tr_p2, "text", "") or "")
+                        if _txt_p2.startswith(("❌", "⛔", "🚫")):
+                            events_pre.append(
+                                "🪜 _Refus serveur (vérité à transmettre au "
+                                "joueur — n'invente PAS la montée/descente) :_ "
+                                + _txt_p2
+                            )
+                        else:
+                            events_pre.append(
+                                "🪜 _Le serveur a DÉJÀ fait changer d'étage au "
+                                "groupe — narre l'ARRIVÉE dans le nouvel étage "
+                                "(ne rappelle AUCUN tool d'étage ni de "
+                                "déplacement) :_ " + _txt_p2
+                            )
+                        _etage_pretour = True
+                        print("[dnd35] Pré-tour étage résolu (serveur) : "
+                              f"carte_donjon_etage({_sens_p2}).")
+            except Exception as e_p2:                            # noqa: BLE001
+                print(f"[dnd35] Pré-tour étage échoué (ignoré) : {e_p2}")
+
             # 3. Construit le message système (system prompt + récap + sections + RAG).
             rag_context = ""
             rag_store: Optional[RagStore] = getattr(app.state, "rag_store", None)
@@ -7454,6 +7605,7 @@ async def _handle_say(
                 if (
                     (_dj_et.get("id"))
                     and not _deja_etage
+                    and not _etage_pretour
                     and (_INTENT_MONTER_RE.search(text or "")
                          or _INTENT_DESCENDRE_RE.search(text or ""))
                     and _re_mod.search(
@@ -7537,6 +7689,52 @@ async def _handle_say(
                                   f"échouée : {e_rv}")
             except Exception as e_et:                        # noqa: BLE001
                 print(f"[dnd35] Filet étage échoué (ignoré) : {e_et}")
+
+            # 🔧 Retour par NOM de salle (partie 60446e2f : « je retourne à
+            # l'entrée de la tour » narré sans tool — l'état restait dans
+            # l'écurie). Les cardinaux sont résolus par 5bis-e ; ici on
+            # résout DÉTERMINISTEMENT le premier pas du chemin vers la salle
+            # visitée désignée (BFS), un déplacement par tour comme le reste.
+            try:
+                _etat_rr = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _dj_rr = _etat_rr.get("donjon") or {}
+                _deja_mv_rr = any(
+                    tc.get("name") in ("carte_donjon_explorer",
+                                       "carte_donjon_etage")
+                    and tc.get("ok")
+                    for tc in result.tool_calls_trace
+                )
+                if (
+                    (_dj_rr.get("id"))
+                    and not _deja_mv_rr
+                    and not _etage_pretour
+                    and _INTENT_RETOUR_RE.search(text or "")
+                ):
+                    _pas_rr = _pas_vers_salle_nommee(_dj_rr, text or "")
+                    if _pas_rr is not None:
+                        _dir_rr, _cible_rr, _dist_rr = _pas_rr
+                        tr_rr = await orch.execute_tool_direct(
+                            "carte_donjon_explorer",
+                            {"direction": _dir_rr},
+                            ctx, on_event, result,
+                        )
+                        if tr_rr is not None and not tr_rr.text.startswith(
+                                ("❌", "⛔", "🚫")):
+                            result.narration = (
+                                (result.narration or "").rstrip()
+                                + f"\n\n🗺️ _Retour vers « {_cible_rr} » "
+                                f"résolu par le serveur (premier pas du "
+                                f"chemin ; {_dist_rr} salle(s) au total) — "
+                                "redemandez le même déplacement pour "
+                                "continuer._\n\n" + tr_rr.text
+                            ).strip()
+                            print("[dnd35] Retour par nom de salle résolu "
+                                  f"({_dir_rr} vers {_cible_rr}).")
+            except Exception as e_rr:                        # noqa: BLE001
+                print(f"[dnd35] Filet retour échoué (ignoré) : {e_rr}")
 
             # 🔧 Partie b401206f : drapeau « ouverture re-narrée ce tour » —
             # levé quand 5bis-f remplace la prose par la scène d'ouverture

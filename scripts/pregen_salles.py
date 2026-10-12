@@ -28,6 +28,9 @@ from typing import Any
 
 _RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_RACINE))
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from server.image.helpers import lieu_prompt
 from server.tools.cartes import chemin_image_salle as cartes_chemin_image_salle

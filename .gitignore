@@ -50,3 +50,13 @@ server/data/*.bak
 nouveaux scénarios/
 server/data/settings.json
 server/data/bestiaire.json.bak_enrich*
+
+# Assets tiers sous droits (fournis par l'hebergeur, non distribues -
+# voir THIRD_PARTY_NOTICES.md) :
+#   cartes/                 -> cartes officielles WotC / Laelith (c) auteurs
+#   server/data/scenarios/  -> scenarios tiers et leurs artworks
+/cartes/
+/server/data/scenarios/
+
+# Fichiers temporaires de chat (runtime)
+server/data/.chat_*.tmp

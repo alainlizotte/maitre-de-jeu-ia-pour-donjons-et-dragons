@@ -341,6 +341,19 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 
 ## 🔒 Note juridique
 
+**Code : licence [MIT](LICENSE)** — libre d'usage, de modification et de
+redistribution.
+
 Ce projet est un **outil de table** non officiel. Il ne distribue aucun contenu protégé :
 déposez vous-même vos textes de règles dans `knowledge_import/` et vos PDF dans
 `server/data/manuels/`. Donjons & Dragons est une marque de Wizards of the Coast.
+Idem pour les **cartes** (`cartes/`) et les **scénarios tiers**
+(`server/data/scenarios/`) : fournies par l'hébergeur, non distribuées.
+
+**Génération d'images** (optionnelle) : le projet n'embarque aucun modèle ;
+chaque hébergeur installe ComfyUI et télécharge ses modèles depuis Hugging
+Face en acceptant leurs licences. Les workflows fournis référencent
+**Qwen-Image-2.1 Turbo**, sous *Qwen Research License* (usage recherche/
+évaluation, non commercial — les images générées appartiennent à
+l'hébergeur ; usage commercial → licence séparée de Qwen). Détails complets
+et alternatives : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

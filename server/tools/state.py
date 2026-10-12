@@ -226,6 +226,25 @@ async def etat_partie_save(ctx: ToolContext, nouveau_etat: str) -> ToolResult:
 
     :param nouveau_etat (str): chaîne JSON complète conforme au schéma.
     """
+    # 🔒 Combat fantôme (partie 60446e2f) : un save complet qui bascule la
+    # phase VERS « combat » fabrique un combat sans moteur (pas de monstres
+    # ni de PV). La bascule appartient à `demarrer_combat`.
+    try:
+        _avant_b = _party(ctx).load()
+        _phase_avant_b = str((_avant_b or {}).get("phase") or "")
+        _cible_b = json.loads(nouveau_etat or "{}")
+        _phase_cible_b = str((_cible_b or {}).get("phase") or "")
+        if _phase_cible_b == "combat" and _phase_avant_b != "combat":
+            return ToolResult(text=(
+                "🚫 INTERDIT de basculer phase vers « combat » via "
+                "etat_partie_save : l'état de combat appartient au moteur. "
+                "Pour un combat RÉEL : `engager_combat(monstres=…)` puis "
+                "`demarrer_combat(initiative_liste=…)`."
+            ))
+    except json.JSONDecodeError:
+        pass  # JSON invalide : replace_all renverra sa propre erreur
+    except Exception:                                            # noqa: BLE001
+        pass  # fail-safe : ne jamais bloquer une sauvegarde légitime
     ok, msg = _party(ctx).replace_all(nouveau_etat)
     return ToolResult(text=msg)
 
@@ -278,13 +297,34 @@ def _miroir_patch_fiche(ctx: ToolContext, chemin: str, valeur: str) -> None:
 async def etat_partie_patch(ctx: ToolContext, chemin: str, valeur: str) -> ToolResult:
     """
     Applique une mise à jour ciblée de l'état de la partie via notation par
-    points (ex. "tour=4", "phase=combat", "courant_tour_pour=Groth",
-    "lieu.nom=Auberge du Drakkar", "pj.0.pv=12"). La `valeur` est interprétée
+    points (ex. "tour=4", "phase=opening_complete",
+    "lieu.nom=Auberge du Drakkar", "pj.0.pv=12" — JAMAIS phase=combat ni
+    initiative/courant_tour_pour : le moteur de combat en a l'exclusivité). La `valeur` est interprétée
     comme JSON si possible (entiers, booléens, listes, dicts), sinon texte.
 
     :param chemin (str): chemin de la propriété (notation point).
     :param valeur (str): nouvelle valeur (JSON ou chaîne).
     """
+    # 🔒 Combat fantôme (partie 60446e2f) : l'état de combat est la propriété
+    # EXCLUSIVE du moteur. Observé : le modèle calculait l'initiative (sync
+    # UI légitime de calculer_initiative) puis collait `phase=combat` ICI —
+    # un combat sans monstre ni PV, injouable.
+    _chemin_n = (chemin or "").strip().lower()
+    _val_n = str(valeur or "").strip().strip('"\'').strip().lower()
+    if _chemin_n == "phase" and _val_n == "combat":
+        return ToolResult(text=(
+            "🚫 INTERDIT de poser phase=combat via etat_partie_patch : "
+            "l'état de combat appartient au moteur. Pour un combat RÉEL : "
+            "`engager_combat(monstres=…)` (garde anti-hors-module) puis "
+            "`demarrer_combat(initiative_liste=…)`. Si la menace n'est pas "
+            "confirmée, NARRE-la sans lancer de combat."
+        ))
+    if _chemin_n in ("initiative", "courant_tour_pour"):
+        return ToolResult(text=(
+            "🚫 `initiative` et `courant_tour_pour` appartiennent au moteur "
+            "de combat (`demarrer_combat` / `tour_suivant_combat`) — "
+            "interdits via etat_partie_patch."
+        ))
     ok, msg = _party(ctx).patch(chemin, valeur)
     state_patch = None
     if ok:

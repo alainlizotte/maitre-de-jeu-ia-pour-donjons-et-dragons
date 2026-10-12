@@ -7197,6 +7197,7 @@ async def _handle_say(
             # annule le déplacement parasite et change d'étage depuis la
             # salle de départ.
             _courant_pretour: list = []
+            _phase_pretour = ""
             try:
                 _etat_pre = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
@@ -7204,8 +7205,10 @@ async def _handle_say(
                 ).load()
                 _dj_pre = _etat_pre.get("donjon") or {}
                 _courant_pretour = list(_dj_pre.get("courant") or [])
+                _phase_pretour = str(_etat_pre.get("phase") or "")
             except Exception:                                    # noqa: BLE001
                 _courant_pretour = []
+                _phase_pretour = ""
 
             result = await orch.run(
                 messages, ctx, on_event=on_event, on_delta=on_delta,
@@ -7221,6 +7224,47 @@ async def _handle_say(
                 "type": "status",
                 "description": "Le MJ finalise la scène…",
             })
+
+            # 🔒 Combat fantôme (partie 60446e2f) : la phase a basculé en
+            # « combat » ce tour SANS qu'aucun tool de combat n'ait réussi
+            # (le 9B colle phase=combat après un calcul d'initiative
+            # cosmétique) → combat sans monstre ni PV, tours qui « expirent
+            # par défaut » en boucle. Réversion + transparence : la menace
+            # reste À GÉRER par la narration.
+            try:
+                if _phase_pretour != "combat":
+                    _etat_cf = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).load()
+                    if _etat_cf.get("phase") == "combat" and not any(
+                        tc.get("name") in ("engager_combat",
+                                           "demarrer_combat",
+                                           "combat_ajouter_combattant")
+                        and tc.get("ok")
+                        for tc in result.tool_calls_trace
+                    ):
+                        _etat_cf["phase"] = _phase_pretour or "exploration"
+                        _etat_cf["initiative"] = []
+                        _etat_cf["courant_tour_pour"] = None
+                        PartyState(
+                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                            partie_id=partie_id,
+                        ).save(_etat_cf)
+                        result.narration = (
+                            (result.narration or "").rstrip()
+                            + "\n\nℹ️ _Précision de l'état du jeu : AUCUN "
+                            "combat réel n'a été engagé (ni `engager_combat` "
+                            "ni `demarrer_combat`) — la phase « combat » "
+                            "inventée a été retirée. La menace décrite reste "
+                            "à gérer par la narration (fuite, parlementage, "
+                            "attaque déclarée avec les tools)._"
+                        )
+                        print("[dnd35] Combat fantôme retiré (phase sans "
+                              "engagement).")
+            except Exception as e_cf:                        # noqa: BLE001
+                print(f"[dnd35] Garde combat fantôme échouée (ignorée) : "
+                      f"{e_cf}")
 
             # 5bis. ⚔️ Post-traitement du tour LLM. Les tours de monstres ne
             # sont PLUS rejoués par le LLM : le moteur serveur (ci-dessous,

@@ -235,9 +235,13 @@ def test_lancer_degats_placeholders():
 def test_etat_partie_patch():
     d = _fresh_dir()
     try:
-        r = _run_prose('`etat_partie_patch(chemin="phase", valeur="combat")`', d)
+        # 🔒 Fix combat fantôme (60446e2f) : `phase=combat` est REFUSÉ via
+        # patch (le moteur de combat en a l'exclusivité) — le test vérifie
+        # que le patch s'applique avec un chemin légitime.
+        r = _run_prose(
+            '`etat_partie_patch(chemin="phase", valeur="opening_complete")`', d)
         assert "etat_partie_patch" in [t["name"] for t in r.tool_calls_trace]
-        assert _etat(d).get("phase") == "combat"
+        assert _etat(d).get("phase") == "opening_complete"
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

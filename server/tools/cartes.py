@@ -546,8 +546,13 @@ _MVT_REFUS = (
 
 
 def _mouvement_deja_fait(ctx: ToolContext) -> bool:
-    """True si le groupe a déjà été déplacé pendant ce tour (même tour_id)."""
-    return bool(ctx.tour_id) and _MOUVEMENTS_TOUR.get(ctx.partie_id) == ctx.tour_id
+    """True si le groupe a déjà été déplacé pendant ce tour (même tour_id).
+    Les appels SERVEUR déterministes (filets de rattrapage, posés avec
+    `ctx._hors_budget = True` par _run_one_tool) ne sont PAS bloqués : ils
+    doivent pouvoir corriger un tour même après un mouvement du LLM."""
+    if not ctx.tour_id or _MOUVEMENTS_TOUR.get(ctx.partie_id) != ctx.tour_id:
+        return False
+    return not getattr(ctx, "_hors_budget", False)
 
 
 def _marquer_mouvement(ctx: ToolContext) -> None:
@@ -1971,6 +1976,11 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
         return ToolResult(
             text="❌ Aucun donjon actif — appelez d'abord `carte_donjon_entrer`."
         )
+    # 🔒 Fix 60446e2f (double descente) : UN changement d'étage par tour —
+    # le pré-tour serveur changeait l'étage, puis le LLM RE-APPELAIT le tool
+    # et re-descendait d'un niveau supplémentaire en un seul tour.
+    if _mouvement_deja_fait(ctx):
+        return ToolResult(text=_MVT_REFUS)
     courant = list(donjon.get("courant", [0, 0]))
     cx, cy = (courant[0], courant[1]) if len(courant) >= 2 else (0, 0)
     salles = _grille_vers_dict(donjon.get("grille", []))
@@ -2045,6 +2055,7 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
     except Exception:                                            # noqa: BLE001
         pass
     donjon["arrivee_par"] = None  # arrivée par l'escalier, pas par une porte
+    _marquer_mouvement(ctx)
     etat["donjon"] = donjon
     err = _sauver_etat(ctx, etat)
     if err:

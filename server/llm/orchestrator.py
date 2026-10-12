@@ -5956,6 +5956,26 @@ class Orchestrator:
         hors_budget: bool = False,
     ) -> ToolResult:
         """Exécute un tool, relaye ses events, agrège le patch d'état."""
+        # 🛡️ La nature de l'appelant est visible aux tools (verrous : les
+        # appels SERVEUR hors_budget bypassent « 1 mouvement par tour »).
+        _hb_prev = getattr(ctx, "_hors_budget", False)
+        ctx._hors_budget = bool(hors_budget)
+        try:
+            return await self._run_one_tool_corps(
+                spec, ctx, args, on_event, result, hors_budget=hors_budget)
+        finally:
+            ctx._hors_budget = _hb_prev
+
+    async def _run_one_tool_corps(
+        self,
+        spec: ToolSpec,
+        ctx: ToolContext,
+        args: dict,
+        on_event,
+        result,
+        hors_budget: bool = False,
+    ) -> ToolResult:
+        """Corps historique de _run_one_tool (renommé pour le wrapper)."""
         # Nettoyage de la contamination XML→JSON des arguments (Qwen3.5-9B).
         args = _nettoyer_args_outils(args or {})
         # 💰 Budget par tour : borne le spam d'outils observé en e2e

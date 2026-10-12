@@ -328,7 +328,7 @@ def _norm_txt_salle(s: str) -> str:
     """Normalisation accent/casse pour rapprocher texte joueur et salles."""
     import unicodedata as _ud
     nf = _ud.normalize("NFKD", (s or "").lower())
-    return "".join(c for c in nf if not unicodedata.combining(c))
+    return "".join(c for c in nf if not _ud.combining(c))
 
 
 def _pas_vers_salle_nommee(
@@ -378,7 +378,7 @@ def _pas_vers_salle_nommee(
                                     else premier_pas.get(cur, d))
                 q.append(nxt)
         mots = [w for w in _re_mod.findall(r"[a-z]+", _ntxt)
-                if len(w) >= 5 and w not in _MOTS_OUT_RETOUR]
+                if len(w) >= 4 and w not in _MOTS_OUT_RETOUR]
         meilleur = None  # ((-score, dist), direction, libelle, distance)
         for (x, y), s in salles.items():
             if (x, y) == start or not s.get("visitee") or (x, y) not in dist:
@@ -7000,6 +7000,7 @@ async def _handle_say(
             # au-dessus) sont annoncés aussi : la réponse au joueur est la
             # VÉRITÉ, pas la fiction inventée.
             _etage_pretour = False
+            _tour_id_p2 = ""
             try:
                 _etat_p2 = PartyState(
                     data_dir=str(cfg.abs(cfg.paths.data_dir)),
@@ -7026,6 +7027,12 @@ async def _handle_say(
                     _spec_p2 = _REG_P2.get("carte_donjon_etage")
                     if _spec_p2 is not None:
                         _ctx_p2 = _ctx(partie_id, player)
+                        # 🔒 Le tour LLM réutilisera CE tour_id : le verrou
+                        # « 1 mouvement par tour » bloque alors tout appel
+                        # LLM suivant (explorer/etage) après le changement
+                        # pré-tour (fix double descente 60446e2f).
+                        _ctx_p2.tour_id = uuid.uuid4().hex
+                        _tour_id_p2 = _ctx_p2.tour_id
                         _tr_p2 = await _inv_p2(
                             _spec_p2, _ctx_p2, {"direction": _sens_p2})
                         _txt_p2 = str(getattr(_tr_p2, "text", "") or "")
@@ -7042,6 +7049,12 @@ async def _handle_say(
                                 "(ne rappelle AUCUN tool d'étage ni de "
                                 "déplacement) :_ " + _txt_p2
                             )
+                            # 🔒 Mouvement consommé pour CE tour : le verrou
+                            # bloque tout explorer/etage LLM supplémentaire.
+                            from .tools.cartes import (           # noqa: E402
+                                _marquer_mouvement as _mm_p2,
+                            )
+                            _mm_p2(_ctx_p2)
                         _etage_pretour = True
                         print("[dnd35] Pré-tour étage résolu (serveur) : "
                               f"carte_donjon_etage({_sens_p2}).")
@@ -7167,7 +7180,7 @@ async def _handle_say(
             # borner certaines actions à une seule fois par message joueur.
             # Les rejeux correctifs ci-dessous réutilisent le même ctx et
             # donc le même tour_id — le quota de déplacement reste global.
-            ctx.tour_id = uuid.uuid4().hex
+            ctx.tour_id = _tour_id_p2 or uuid.uuid4().hex
 
             # Des dégâts viennent d'être résolus par le moteur serveur (pre-run)
             # ? Le LLM les reformule alors légitimement dans sa narration — on

@@ -144,3 +144,23 @@ def test_placer_ville_faerun_par_defaut():
         TOOLS["carte_joueurs_placer_ville"], ctx, {"ville": "Waterdeep"}))
     assert "43, 37.5" in tr.text, tr.text
     assert _etat(d).get("carte_visites", [])[-1]["nom"] == "Waterdeep"
+
+
+def test_army_damned_table_stensia():
+    """Army of the Damned : table STENSIA (Shadowgrange 26,44) pour les
+    chapitres ; les AUTRES scénarios divers_ restent sur Faerûn."""
+    d = tempfile.mkdtemp(prefix="dnd35_carte_j_")
+    ctx = _etat_avec_source(
+        d, "[divers_army_of_the_damned_ch02] /data/scenarios/x.pdf")
+    tr = asyncio.run(invoke_tool(
+        TOOLS["carte_joueurs_placer_ville"], ctx, {"ville": "Shadowgrange"}))
+    assert "26, 44" in tr.text, tr.text
+    assert _etat(d).get("carte_visites", [])[-1]["x"] == 26.0
+
+    # Crypts Kelemvor (divers, Faerûn) : Neverwinter reste en table Faerûn.
+    d2 = tempfile.mkdtemp(prefix="dnd35_carte_j_")
+    ctx2 = _etat_avec_source(
+        d2, "[divers_crypts_kelemvor] /data/scenarios/y.pdf")
+    tr2 = asyncio.run(invoke_tool(
+        TOOLS["carte_joueurs_placer_ville"], ctx2, {"ville": "Neverwinter"}))
+    assert "38, 19" in tr2.text, tr2.text

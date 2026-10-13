@@ -89,26 +89,61 @@ VILLES_REPERES_TERRES = {
     "vallée de Hurlemont":      (68, 55),  # l'Épine (manifeste)
     "l'Épine":                  (68, 55),
 }
-VILLES_REPERES_INNISTRAD = {
-    "Shadowgrange":             (11, 50),  # domaine de Mauer (manifeste)
-    "Domaine de Mauer":         (11, 50),
+
+# Stensia (scénario Army of the Damned, carte Stensia Map.png 792x612) —
+# lieux mesurés sur la carte étiquetée. Le scénario entier (14 chapitres)
+# se déroule dans cette province d'Innistrad.
+VILLES_REPERES_STENSIA = {
+    "Shadowgrange":             (26, 44),
+    "Mauer Estate":             (47, 22),
+    "Markov Manor":             (80, 6),
+    "Volkhar Estate":           (46, 10),
+    "Stensia Silbern":          (72, 29),
+    "Bourg":                    (74, 35),
+    "Corsiva":                  (63, 57),
+    "The Ashmouth":             (60, 31),
+    "North Farbog":             (40, 29),
+    "South Farbog":             (56, 43),
+    "Mordov":                   (34, 38),
+    "Drosh":                    (49, 36),
+    "Breyala":                  (45, 42),
+    "Ireca":                    (33, 55),
+    "Falkenrath Keep":          (46, 61),
+    "Lammas":                   (21, 63),
+    "Frith":                    (16, 78),
+    "Kruin Pass":               (85, 12),
+    "Ziel Pass":                (55, 12),
+    "Nirdle's Ex Pass":         (60, 25),
+    "Hofsaddel Pass":           (46, 50),
+    "Gavoner Pass":             (46, 68),
 }
 
-# Préfixe d'univers → table de repères. Absent (ro, divers…) = carte Faerûn.
+# Préfixe/scénario → table de repères. Absent (ro, divers…) = carte Faerûn.
+TABLES_PAR_SCENARIO = {
+    # divers_army_of_the_damned : tout le scénario en Stensia
+    "divers_army_of_the_damned": VILLES_REPERES_STENSIA,
+}
 TABLES_PAR_PREFIXE = {
     "terres": VILLES_REPERES_TERRES,
-    # innistrad : carte du scénario divers_army_of_the_damned
-    "divers": VILLES_REPERES_INNISTRAD,
 }
 
 
 def _table_reperes(ctx: ToolContext, etat: dict) -> tuple[dict, bool]:
     """Table de repères de la carte ACTIVE + indique si c'est la carte
-    Faerûn (défaut). L'univers est déduit du préfixe de `quete.source`
+    Faerûn (défaut). L'univers est déduit de `quete.source`
     (« [laelith_xxx] /data/... ») — même logique que le client."""
     src = str((etat.get("quete") or {}).get("source") or "")
-    m = re.match(r"^\[([a-z]+?)_", src.lower())
-    prefixe = m.group(1) if m else ""
+    m = re.match(r"^\[([a-z0-9_]+?)\]", src.lower())
+    if not m:
+        return VILLES_REPERES, True
+    scenario_id = m.group(1)
+    # 1. Table spécifique au scénario (armée des damnés → Stensia).
+    for scen, table in TABLES_PAR_SCENARIO.items():
+        if scenario_id.startswith(scen):
+            return table, False
+    # 2. Table par univers (préfixe).
+    prefixe = re.match(r"^([a-z]+?)_", scenario_id)
+    prefixe = prefixe.group(1) if prefixe else ""
     if prefixe == "laelith":
         # 226 repères du plan officiel de la Cité Sainte (fichier généré
         # depuis la carte interactive du Donjon du Dragon).

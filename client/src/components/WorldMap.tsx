@@ -46,8 +46,8 @@ const SCENARIO_MAPS: Record<string, MapInfo> = {
     w: 800, h: 600, label: "Spine of the World",
   },
   divers_army_of_the_damned: {
-    url: "/data/scenarios/Divers/Army of the Damned/Maps/Innistrad Map.png",
-    w: 1200, h: 900, label: "Innistrad",
+    url: "/data/scenarios/Divers/Army of the Damned/Maps/Stensia Map.png",
+    w: 792, h: 612, label: "Innistrad — Stensia",
   },
 };
 
@@ -60,9 +60,12 @@ function extractIds(questSource?: string): { universe: string; scenario: string 
   // Format neuf : [prefix_scenario] ...
   const m = src.match(/^\[([a-z_]+?)_/);
   if (m?.[1]) {
-    // Extraire l'ID complet du scénario (tout ce qui est entre [ et ])
+    // Extraire l'ID complet du scénario (tout ce qui est entre [ et ]),
+    // puis retirer le suffixe de chapitre (_ch01…) pour que l'override
+    // de carte par scénario couvre TOUS les chapitres d'une campagne.
     const fullId = src.match(/^\[([^\]]+)\]/)?.[1] ?? "";
-    return { universe: m[1], scenario: fullId };
+    const scenario = fullId.replace(/_ch\d+$/, "");
+    return { universe: m[1], scenario };
   }
   // Format ancien : détecter l'univers dans le chemin /data/scenarios/<Univers>/...
   const lower = src.toLowerCase();

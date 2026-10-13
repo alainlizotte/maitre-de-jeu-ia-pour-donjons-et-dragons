@@ -69,7 +69,7 @@ VILLES_REPERES = {
     "Silverymoon":    (53, 13),
     "Mithral Hall":   (43, 14.5),
     "Evereska":       (62, 32),
-    "Secomber":       (48, 41),
+    "Secomber":        (48, 41),
     "Scornubel":      (56, 60),
     "Elturel":        (55, 57),
     "Baldur's Gate":  (51, 65),
@@ -78,6 +78,54 @@ VILLES_REPERES = {
 }
 # Nom de la carte affichée dans l'onglet « Monde » du panneau droit.
 CARTE_MONDE_FICHIER = "Sword-Coast-Map.jpg"
+
+# ── Tables de coordonnées PAR CARTE ─────────────────────────────────────── #
+# Les % sont propres à CHAQUE image : la table Faerûn ci-dessus est mesurée
+# sur Sword-Coast-Map.jpg et n'a de sens QUE sur cette carte. Pour les
+# autres univers, table dédiée (coords mesurées — notamment les `depart`
+# des manifestes, posés au cordeau par le MJ). Clé = préfixe d'univers de
+# `quete.source` (« [laelith_xxx] … »), comme la sélection de carte client.
+VILLES_REPERES_LAELITH = {
+    "Douze-Fontaines":          (52, 48),  # quais de la Lune ivre (manifeste)
+    "quais de la Lune ivre":    (52, 48),
+    "quartier de la Martre":    (46, 40),
+    "Creux du Géant":           (25, 35),
+    "auberge du Sanglier Gris": (47, 55),
+    "temple du Crâne":          (43, 27),
+    "tombe des rois serpents":  (30, 60),
+    "serrurerie Bagosh":        (44, 70),
+    "île du lac d'Altalith":    (77, 46),
+    "antre des gobelins":       (22, 42),
+}
+VILLES_REPERES_TERRES = {
+    "vallée de Hurlemont":      (68, 55),  # l'Épine (manifeste)
+    "l'Épine":                  (68, 55),
+}
+VILLES_REPERES_INNISTRAD = {
+    "Shadowgrange":             (11, 50),  # domaine de Mauer (manifeste)
+    "Domaine de Mauer":         (11, 50),
+}
+
+# Préfixe d'univers → table de repères. Absent (ro, divers…) = carte Faerûn.
+TABLES_PAR_PREFIXE = {
+    "laelith": VILLES_REPERES_LAELITH,
+    "terres": VILLES_REPERES_TERRES,
+    # innistrad : carte du scénario divers_army_of_the_damned
+    "divers": VILLES_REPERES_INNISTRAD,
+}
+
+
+def _table_reperes(ctx: ToolContext, etat: dict) -> tuple[dict, bool]:
+    """Table de repères de la carte ACTIVE + indique si c'est la carte
+    Faerûn (défaut). L'univers est déduit du préfixe de `quete.source`
+    (« [laelith_xxx] /data/... ») — même logique que le client."""
+    src = str((etat.get("quete") or {}).get("source") or "")
+    m = re.match(r"^\[([a-z]+?)_", src.lower())
+    prefixe = m.group(1) if m else ""
+    table = TABLES_PAR_PREFIXE.get(prefixe)
+    if table is None:
+        return VILLES_REPERES, True
+    return table, False
 
 
 def _normaliser_nom(nom: str) -> str:
@@ -468,11 +516,21 @@ async def carte_joueurs_placer_ville(
     cible = _normaliser_nom(ville)
     if not cible:
         return ToolResult(text="❌ Nom de ville vide.")
+    etat = _charger_etat(ctx)
+    # 🗺️ Table de repères de la carte ACTIVE (Laelith ≠ Faerûn…) — les %
+    # d'une carte n'ont pas de sens sur une autre.
+    table, est_faerun = _table_reperes(ctx, etat)
     trouve = None
-    for nom, (x, y) in VILLES_REPERES.items():
+    for nom, (x, y) in table.items():
         if _normaliser_nom(nom) == cible or cible in _normaliser_nom(nom):
             trouve = (nom, x, y)
             break
+    if trouve is None and est_faerun:
+        # Repli : sur la carte Faerûn, les villes repères officielles.
+        for nom, (x, y) in VILLES_REPERES.items():
+            if _normaliser_nom(nom) == cible or cible in _normaliser_nom(nom):
+                trouve = (nom, x, y)
+                break
     if trouve is None:
         # Lieu de scénario absent de la carte du monde : au lieu d'un refus
         # sec (qui poussait le LLM à méta-commenter « la carte ne connaît pas
@@ -480,10 +538,15 @@ async def carte_joueurs_placer_ville(
         # d'ANCRAGE : placer à la ville repère la plus proche, puis renommer
         # le lieu via etat_partie_patch — le marqueur reste juste et la
         # narration garde le nom du scénario.
+        if est_faerun:
+            repères = ", ".join(VILLES_REPERES.keys())
+        else:
+            repères = ", ".join(table.keys()) or \
+                "(aucun — utilisez carte_joueurs_position avec des % mesurés)"
         return ToolResult(
             text=(
-                f"❌ Ville « {ville} » inconnue de la carte. Villes repères : "
-                + ", ".join(VILLES_REPERES.keys())
+                f"❌ Ville « {ville} » inconnue de la carte ACTIVE. Villes "
+                f"repères : {repères}."
                 + f".\n➡️ Lieu de scénario ? Relance carte_joueurs_placer_ville"
                 + " avec la ville repère la plus proche, PUIS renomme le lieu"
                 + " via etat_partie_patch('lieu.nom', '<lieu du scénario>') —"
@@ -554,12 +617,14 @@ async def carte_joueurs_get(ctx: ToolContext) -> ToolResult:
     pos_raw = etat.get("positions_joueurs", {})
     positions = {k: tuple(v) for k, v in pos_raw.items()}
     if not positions:
+        # 🗺️ Villes repères de la carte ACTIVE (Laelith ≠ Faerûn…).
+        table, _est_faerun = _table_reperes(ctx, etat)
         return ToolResult(
             text=(
                 "ℹ️ Aucune position enregistrée. Placez d'abord le groupe via "
                 "`carte_joueurs_placer_ville` ou `carte_joueurs_position`. "
                 "Villes repères disponibles : "
-                + ", ".join(VILLES_REPERES.keys())
+                + ", ".join(table.keys())
             )
         )
     svg = _rendre_svg_monde(positions)

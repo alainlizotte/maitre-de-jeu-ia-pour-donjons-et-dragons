@@ -103,3 +103,44 @@ def test_depart_scenario_ouvre_le_chemin():
     # Avec un état déjà positionné → None aussi (pas de re-placement).
     etat2: dict = {"positions_joueurs": {"groupe": [1.0, 2.0]}}
     assert appliquer_depart(ctx, etat2, "x") is None
+
+
+def _etat_avec_source(d: str, source: str) -> ToolContext:
+    """Partie pré-écrite avec une quête.source donnée (sélection de carte)."""
+    import json
+    ctx = _ctx(d)
+    etat = {"quete": {"titre": "t", "pitch": "", "source": source}, "pj": []}
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, f"partie_{PID}.json"), "w", encoding="utf-8") as f:
+        json.dump(etat, f, ensure_ascii=False)
+    return ctx
+
+
+def test_placer_ville_utilise_la_table_de_la_carte_active():
+    """Sur un jeu Laelith, « quartier de la Martre » → coords LAELITH
+    (46, 40) — pas la table Faerûn ; « Waterdeep » est refusée."""
+    d = tempfile.mkdtemp(prefix="dnd35_carte_j_")
+    ctx = _etat_avec_source(
+        d, "[laelith_xxx] /data/scenarios/Laelith/x.pdf")
+    tr = asyncio.run(invoke_tool(
+        TOOLS["carte_joueurs_placer_ville"], ctx,
+        {"ville": "quartier de la Martre"}))
+    assert "46, 40" in tr.text, tr.text
+    visites = _etat(d).get("carte_visites", [])
+    assert visites and visites[-1]["nom"] == "quartier de la Martre"
+    assert visites[-1]["x"] == 46.0
+
+    tr2 = asyncio.run(invoke_tool(
+        TOOLS["carte_joueurs_placer_ville"], ctx, {"ville": "Waterdeep"}))
+    assert "carte ACTIVE" in tr2.text  # Waterdeep n'est pas sur Laelith
+
+
+def test_placer_ville_faerun_par_defaut():
+    """Sans univers reconnu (source vide) → table Faerûn : Waterdeep →
+    (43, 37.5)."""
+    d = tempfile.mkdtemp(prefix="dnd35_carte_j_")
+    ctx = _etat_avec_source(d, "")
+    tr = asyncio.run(invoke_tool(
+        TOOLS["carte_joueurs_placer_ville"], ctx, {"ville": "Waterdeep"}))
+    assert "43, 37.5" in tr.text, tr.text
+    assert _etat(d).get("carte_visites", [])[-1]["nom"] == "Waterdeep"

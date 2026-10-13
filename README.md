@@ -1,4 +1,4 @@
-# 🐉 Maître du Jeu IA — Donjons & Dragons 3.5
+﻿# 🐉 Maître du Jeu IA — Donjons & Dragons 3.5
 
 ### PROJET EN COURS DE DÉVELOPPEMENT ###
 
@@ -19,8 +19,9 @@ connectent depuis leur navigateur sur le réseau local.
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD |
-| **Qualité** | **745 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) |
-| **Images** | ComfyUI (monstres, portraits, salles, scènes) — optionnel |
+| **Qualité** | **958 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) |
+| **Images** | ComfyUI — **Qwen Image 2.1 Turbo** (monstres, portraits, salles, scènes) — optionnel |
+| **Cartes** | Carte du monde par univers/scénario avec épingles, **chemin parcouru et lieux visités persistants**, plein écran projeté |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
 
 ## 📸 Captures d'écran
@@ -137,8 +138,17 @@ connectent depuis leur navigateur sur le réseau local.
   **anti-double-crédit** quand le MJ a déjà chiffré le gain.
 - **Voyage hors donjon** conforme au SRD : durée réelle (vitesse, terrain, marche forcée),
   rencontres aléatoires, risque de s'égarer et météo.
-- **Carte du monde interactive** (Côte des Épées / Faerûn) : position du groupe par ville
-  repère.
+- **Carte du monde interactive, par univers et par scénario** (Côte des Épées,
+  plan de la Cité Sainte de Laelith, Stensia/Innistrad…) : position du groupe par
+  ville repère, **zoom ×5 centré sur le groupe** (bascule carte entière ↔ groupe),
+  **plein écran projeté à l'identique** (épingles, zoom, centrage).
+- **Journal du voyage persistant** : chaque déplacement alimente `carte_visites`
+  dans l'état de partie — le **chemin parcouru** (ligne pointillée à contour noir)
+  et les **lieux visités** (épingles nommées) s'affichent sur la carte en onglet
+  comme en plein écran, et survivent aux reconnexions.
+- **Coordonnées par carte** : chaque univers/scénario a sa table de villes repères
+  mesurées (Faerûn, plan de Laelith avec 226 lieux officiels, Stensia, Terres de
+  l'Éternel) — les épingles tombent au bon endroit sur chaque carte.
 
 ### Campagne, scénarios & magie
 - **Choix du scénario depuis l'interface** (catalogue : Laelith, Royaumes Oubliés…) ; une
@@ -154,6 +164,8 @@ connectent depuis leur navigateur sur le réseau local.
   engagé contre une créature **du bestiaire officiel** (créatures inventées refusées).
 
 ### IA générative (ComfyUI — optionnel, désactivé par défaut)
+- Modèle recommandé : **Qwen Image 2.1 Turbo** (8 étapes, cfg=1, int8) — rendu
+  détaillé, ~12 s/image sur RTX 3060 Ti.
 - **Images de monstres générées automatiquement** dès leur apparition dans la narration
   (cache par fiche : l'image ne change pas tant que la fiche ne change pas) — en arrière-plan,
   sans jamais bloquer le tour de jeu.
@@ -216,7 +228,7 @@ vérifiés par des tests déterministes :
   immédiatement », pas « attendre indéfiniment ») — la borne s'applique désormais
   toujours. **Ces deux défauts bloquaient la suite de tests complète** (interblocage
   dans le teardown de pytest-asyncio, tâche `nvidia-smi` jamais terminée) : réparés,
-  les 745 tests tournent verts en ~2 min.
+  les 958 tests tournent verts en ~2 min.
 
 ## 🚀 Démarrage rapide (Docker)
 
@@ -299,7 +311,7 @@ chapitres), `scripts/generer_donjon_scenario.py` (brouillon de manifeste).
 
 ## 🧪 Tests
 
-**745 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
+**958 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
 refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, le
 crédit du trésor canonique et le partage de l'or, les scénarios et le pipeline
@@ -378,7 +390,7 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 ├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées,
 │                             génération de manifestes de donjons par scénario,
 │                             simulation)
-└── tests/                  ← 745 tests pytest déterministes (combat, carte,
+└── tests/                  ← 958 tests pytest déterministes (combat, carte,
                               manifestes de scénario, fiches, trésors/or,
                               E2E)
 ```

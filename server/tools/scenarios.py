@@ -610,6 +610,13 @@ def appliquer_depart(
     _lieu_d["nom"] = nom
     _lieu_d["position_x"] = float(x)
     _lieu_d["position_y"] = float(y)
+    # 🗺️ Point de DÉPART du chemin parcouru (journal carte_visites) —
+    # import tardif : cartes ↔ scenarios s'importent mutuellement ailleurs.
+    try:
+        from .cartes import _journaliser_visite
+        _journaliser_visite(etat, "groupe", float(x), float(y), nom)
+    except Exception:                                        # noqa: BLE001
+        pass
     mem = etat.setdefault("memoire", {})
     mem.setdefault("position", {"lieu": "", "zone": "", "detail": ""})
     mem["position"]["lieu"] = nom

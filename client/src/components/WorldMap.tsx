@@ -99,6 +99,9 @@ const AUTO_ZOOM = 5;
 
 interface Box { dx: number; dy: number; dw: number; dh: number }
 
+/** Point du journal du voyage (état de partie `carte_visites`). */
+interface Visite { x: number; y: number; nom?: string; par?: string; ts?: string }
+
 /** Boîte réellement occupée par l'image dans son conteneur (object-cover
  *  rogne, object-contain letterboxe) : indispensable pour placer un marqueur
  *  — et calculer le centrage — au bon endroit pixel. Recalculé au
@@ -185,6 +188,8 @@ function VueCarte({
   box,
   focus,
   positions,
+  visites,
+  lieuxVisites,
   vueEntiere,
   erreur,
   onImgSize,
@@ -200,6 +205,8 @@ function VueCarte({
   box: Box | null;
   focus: [number, number] | null;
   positions: [string, number[]][];
+  visites: Visite[];
+  lieuxVisites: { x: number; y: number; nom: string }[];
   vueEntiere: boolean;
   erreur: boolean;
   onImgSize: (w: number, h: number) => void;
@@ -252,11 +259,59 @@ function VueCarte({
             (mode === "cover" ? "object-cover" : "object-contain")
           }
         />
+        {/* 🗺️ Chemin parcouru (journal carte_visites) — SVG calé sur la boîte
+            image (et non le conteneur letterboxé) : les % de carte se
+            mappent 1:1. L'ensemble vit DANS le div transformé → il zoome et
+            se déplace avec la carte ; vector-effect garde un trait fin. */}
+        {box && visites.length >= 2 && (
+          <svg
+            className="absolute pointer-events-none"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            style={{ left: box.dx, top: box.dy, width: box.dw, height: box.dh }}
+          >
+            <polyline
+              points={visites.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="none"
+              stroke="#fbbf24"
+              strokeWidth="1.5"
+              strokeDasharray="5 4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={0.7}
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        )}
       </div>
       {box &&
         positions.map(([nom, [x, y]]) => (
           <Marker key={nom} nom={nom} x={x} y={y} box={box} z={z} tx={tx} ty={ty} />
         ))}
+      {/* 🏕️ Lieux visités distincts — points dorés + nom (taille écran
+          constante : rendus HORS du div transformé, formule Marker). */}
+      {box &&
+        lieuxVisites.map((l) => {
+          const left = tx + z * (box.dx + (l.x / 100) * box.dw);
+          const top = ty + z * (box.dy + (l.y / 100) * box.dh);
+          return (
+            <div
+              key={`v-${l.nom || `${l.x},${l.y}`}`}
+              className="absolute z-[9] pointer-events-none"
+              style={{ left: `${left}px`, top: `${top}px`, transform: "translate(-50%, -50%)" }}
+            >
+              <span
+                className="block w-2 h-2 rounded-full bg-amber-300 border border-stone-900 shadow-[0_0_3px_rgba(0,0,0,0.9)]"
+                title={`Visité : ${l.nom || "lieu sans nom"}`}
+              />
+              {l.nom && (
+                <span className="absolute left-2.5 -top-0.5 whitespace-nowrap px-1 rounded bg-black/50 text-stone-200 text-[8px] leading-tight">
+                  {l.nom}
+                </span>
+              )}
+            </div>
+          );
+        })}
       {erreur && (
         <div className="absolute inset-0 flex items-center justify-center text-center text-stone-500 text-xs italic px-6">
           Carte introuvable sur le serveur —
@@ -280,6 +335,24 @@ export function WorldMap() {
   const focus: [number, number] | null = focusEntry
     ? [focusEntry[1][0], focusEntry[1][1]]
     : null;
+
+  // 🗺️ Journal du voyage : points ordonnés (chemin) + lieux visités
+  // distincts (dédupliqués par proximité < 1.5 % de carte).
+  const visites = (state?.carte_visites ?? []).filter(
+    (p) => isFinite(p?.x) && isFinite(p?.y),
+  );
+  const lieuxVisites: { x: number; y: number; nom: string }[] = [];
+  for (const p of visites) {
+    const nom = (p.nom ?? "").trim();
+    const proche = lieuxVisites.find(
+      (l) => Math.hypot(l.x - p.x, l.y - p.y) < 1.5,
+    );
+    if (proche) {
+      if (nom && !proche.nom) proche.nom = nom;
+      continue;
+    }
+    lieuxVisites.push({ x: p.x, y: p.y, nom });
+  }
 
   // Déterminer la carte : scénario > univers > fallback
   const { universe: universeId, scenario: scenarioId } = extractIds(state?.quete?.source);
@@ -368,6 +441,8 @@ export function WorldMap() {
         box={isMobile ? tabBoxContain : tabBox}
         focus={focus}
         positions={positions}
+        visites={visites}
+        lieuxVisites={lieuxVisites}
         vueEntiere={vueEntiere}
         erreur={erreur}
         onImgSize={(w, h) => setNat([w, h])}
@@ -423,6 +498,8 @@ export function WorldMap() {
               box={fsBox}
               focus={focus}
               positions={positions}
+              visites={visites}
+              lieuxVisites={lieuxVisites}
               vueEntiere={vueEntiere}
               erreur={erreur}
               onImgSize={(w, h) => setNat([w, h])}

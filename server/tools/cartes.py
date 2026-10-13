@@ -368,6 +368,42 @@ def _rendre_svg_monde(positions: dict[str, tuple[float, float]]) -> str:
 # --------------------------------------------------------------------------- #
 #  Tools — carte du monde
 # --------------------------------------------------------------------------- #
+def _journaliser_visite(
+    etat: dict, nom_perso: str, x: float, y: float, nom_lieu: str = ""
+) -> bool:
+    """Ajoute un point au journal du voyage (`etat["carte_visites"]`).
+
+    Le journal alimente l'affichage carte (chemin parcouru en ligne +
+    lieux visités épinglés) et est persisté dans l'état de partie.
+
+    - Dédoublonnage : si le dernier point est à moins de 0.4 % de distance,
+      on ne fait que compléter son nom de lieu (anti-spam de re-placement).
+    - Cap à 400 points : au-delà, on retire les plus anciens (le chemin
+      reste lisible et l'état ne gonfle pas à l'infini).
+
+    Renvoie True si un point a été ajouté.
+    """
+    journal = etat.setdefault("carte_visites", [])
+    x, y = float(x), float(y)
+    if journal:
+        d = journal[-1]
+        dist = ((d.get("x", 0) - x) ** 2 + (d.get("y", 0) - y) ** 2) ** 0.5
+        if dist < 0.4:
+            if nom_lieu and not d.get("nom"):
+                d["nom"] = nom_lieu
+            return False
+    journal.append({
+        "x": round(x, 2),
+        "y": round(y, 2),
+        "nom": nom_lieu or "",
+        "par": nom_perso,
+        "ts": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+    })
+    if len(journal) > 400:
+        del journal[:-400]
+    return True
+
+
 @tool
 async def carte_joueurs_position(
     ctx: ToolContext, nom_perso: str, x: float, y: float
@@ -379,6 +415,8 @@ async def carte_joueurs_position(
     persistée dans l'état de la partie sous `lieu.position_x/y` et affichée en
     direct par le marqueur doré de l'onglet « Monde ». Utiliser de préférence
     `carte_joueurs_placer_ville` quand la destination est une ville connue.
+    Chaque déplacement significatif est aussi journalisé dans
+    `carte_visites` (chemin parcouru + lieux visités, affichés sur la carte).
 
     :param nom_perso (str): nom du personnage ou "groupe".
     :param x (float): pourcentage horizontal 0-100 (ouest → est).
@@ -393,12 +431,23 @@ async def carte_joueurs_position(
     # Stocke positions individuelles sous positions_joueurs.
     etat.setdefault("positions_joueurs", {})
     etat["positions_joueurs"][nom_perso] = [float(x), float(y)]
+    # 🗺️ Journal du voyage : chaque arrêt significatif alimente le chemin
+    # parcouru + les lieux visités (affichés sur la carte, persistés).
+    nom_lieu = str(etat.get("lieu", {}).get("nom") or "") \
+        if nom_perso == "groupe" else ""
+    if nom_lieu in ("(non déterminé)", "(non determine)"):
+        nom_lieu = ""
+    _journaliser_visite(etat, nom_perso, float(x), float(y), nom_lieu)
     err = _sauver_etat(ctx, etat)
     if err:
         return ToolResult(text=f"❌ {err}")
     return ToolResult(
         text=f"📍 {nom_perso} placé en ({x:.1f}, {y:.1f}).",
-        state_patch={"lieu.position_x": float(x), "lieu.position_y": float(y)},
+        state_patch={
+            "lieu.position_x": float(x),
+            "lieu.position_y": float(y),
+            "carte_visites": etat.get("carte_visites", []),
+        },
     )
 
 
@@ -453,6 +502,8 @@ async def carte_joueurs_placer_ville(
     etat["lieu"]["nom"] = nom_v
     etat.setdefault("positions_joueurs", {})
     etat["positions_joueurs"][nom_perso] = [float(x), float(y)]
+    # 🗺️ Lieu visité (nommé) → journal du voyage.
+    _journaliser_visite(etat, nom_perso, float(x), float(y), nom_v)
     err = _sauver_etat(ctx, etat)
     if err:
         return ToolResult(text=f"❌ {err}")
@@ -462,6 +513,7 @@ async def carte_joueurs_placer_ville(
             "lieu.nom": nom_v,
             "lieu.position_x": float(x),
             "lieu.position_y": float(y),
+            "carte_visites": etat.get("carte_visites", []),
         },
     )
 

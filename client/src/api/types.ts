@@ -22,6 +22,15 @@ export interface PartyState {
   /** Position monde (% de la carte) par personnage ou "groupe" — curseur
    *  de l'onglet Monde (carte_joueurs_placer_ville / depart de scénario). */
   positions_joueurs?: Record<string, number[]>;
+  /** 🗺️ Journal du voyage : points ordonnés du chemin parcouru + lieux
+   *  visités (alimenté par carte_joueurs_position / placer_ville). */
+  carte_visites?: {
+    x: number;
+    y: number;
+    nom?: string;
+    par?: string;
+    ts?: string;
+  }[];
   donjon: {
     id: string | null;
     salles_visitees: string[];

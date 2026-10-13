@@ -107,14 +107,13 @@ interface Visite { x: number; y: number; nom?: string; par?: string; ts?: string
  *  — et calculer le centrage — au bon endroit pixel. Recalculé au
  *  redimensionnement. */
 function useImageBox(
-  ref: React.RefObject<HTMLDivElement>,
+  el: HTMLDivElement | null,
   natW: number,
   natH: number,
   mode: "cover" | "contain",
 ): Box | null {
   const [box, setBox] = useState<Box | null>(null);
   useEffect(() => {
-    const el = ref.current;
     if (!el || !natW || !natH) return;
     const calc = () => {
       const cw = el.clientWidth;
@@ -132,7 +131,7 @@ function useImageBox(
     const ro = new ResizeObserver(calc);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ref, natW, natH, mode]);
+  }, [el, natW, natH, mode]);
   return box;
 }
 
@@ -201,7 +200,7 @@ function VueCarte({
   mapUrl: string;
   alt: string;
   mode: "cover" | "contain";
-  boxRef: React.RefObject<HTMLDivElement>;
+  boxRef: (node: HTMLDivElement | null) => void;
   box: Box | null;
   focus: [number, number] | null;
   positions: [string, number[]][];
@@ -383,14 +382,15 @@ export function WorldMap() {
   const [pleinEcran, setPleinEcran] = useState(false);
 
   // Boîtes d'affichage (cover en onglet desktop, contain sur smartphone et
-  // en plein écran).
+  // en plein écran). Callback refs : chaque div réel qui se monte déclenche
+  // la mesure (sinon la lightbox plein écran ne serait jamais boxée).
   const isMobile = useIsMobile();
-  const tabBoxRef = useRef<HTMLDivElement>(null);
-  const tabBoxContainRef = useRef<HTMLDivElement>(null);
-  const fsBoxRef = useRef<HTMLDivElement>(null);
-  const tabBox = useImageBox(tabBoxRef, nat[0], nat[1], "cover");
-  const tabBoxContain = useImageBox(tabBoxContainRef, nat[0], nat[1], "contain");
-  const fsBox = useImageBox(fsBoxRef, nat[0], nat[1], "contain");
+  const [tabBoxEl, setTabBoxEl] = useState<HTMLDivElement | null>(null);
+  const [tabBoxContainEl, setTabBoxContainEl] = useState<HTMLDivElement | null>(null);
+  const [fsBoxEl, setFsBoxEl] = useState<HTMLDivElement | null>(null);
+  const tabBox = useImageBox(tabBoxEl, nat[0], nat[1], "cover");
+  const tabBoxContain = useImageBox(tabBoxContainEl, nat[0], nat[1], "contain");
+  const fsBox = useImageBox(fsBoxEl, nat[0], nat[1], "contain");
 
   // Atlas link (si ville connue sur carte Faerûn)
   const nomAtlas = (() => {
@@ -437,7 +437,7 @@ export function WorldMap() {
         mapUrl={MAP_URL}
         alt={`Carte : ${mapInfo.label}`}
         mode={isMobile ? "contain" : "cover"}
-        boxRef={tabBoxRef}
+        boxRef={setTabBoxEl}
         box={isMobile ? tabBoxContain : tabBox}
         focus={focus}
         positions={positions}
@@ -494,7 +494,7 @@ export function WorldMap() {
               mapUrl={MAP_URL}
               alt={`Carte plein écran : ${mapInfo.label}`}
               mode="contain"
-              boxRef={fsBoxRef}
+              boxRef={setFsBoxEl}
               box={fsBox}
               focus={focus}
               positions={positions}

@@ -3712,6 +3712,34 @@ async def ressources(partie_id: Optional[str] = None) -> dict[str, Any]:
         }
     )
 
+    # 🗺️ Cartes des univers et scénarios (catalogue) — plan de la Cité
+    # Sainte, provinces de Laelith, cartes Innistrad/Stensia, atlas des
+    # Terres de l'Éternel… servies sous /data/scenarios/… (fournies par
+    # l'hébergeur : n'apparaissent que si les fichiers sont présents).
+    try:
+        cata = S.charger_catalogue(ctx)
+        vus_urls = {c["url"] for c in cartes}
+        for u in cata.get("universes", []):
+            entrees = list(u.get("cartes") or [])
+            for s in (u.get("scenarios") or []):
+                entrees.extend(s.get("cartes") or [])
+            for c in entrees:
+                url = c.get("fichier") or c.get("url")
+                if not url or url in vus_urls:
+                    continue
+                rel = url.removeprefix("/data/")
+                if not (data_dir / rel).is_file():
+                    continue
+                vus_urls.add(url)
+                nom = c.get("nom") or "Carte"
+                cartes.append({
+                    "titre": f"{nom} — {u.get('nom', '')}",
+                    "libelle": f"{nom} ({u.get('nom', '')})",
+                    "url": url,
+                })
+    except Exception as e:                                       # noqa: BLE001
+        print(f"[ressources] cartes de scénarios ignorées : {e}")
+
     # Cartes d'univers — scénarios par univers (cartes communes)
     cata = S.charger_catalogue(ctx)
     for u in cata.get("universes", []):

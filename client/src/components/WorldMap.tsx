@@ -263,7 +263,9 @@ function VueCarte({
         {/* 🗺️ Chemin parcouru (journal carte_visites) — SVG calé sur la boîte
             image (et non le conteneur letterboxé) : les % de carte se
             mappent 1:1. L'ensemble vit DANS le div transformé → il zoome et
-            se déplace avec la carte ; vector-effect garde un trait fin. */}
+            se déplace avec la carte ; vector-effect garde un trait fin.
+            Double trait : sous-couche noire plus épaisse sous les pointillés
+            ambre → lisible sur toutes les cartes (jaunes, sombres…). */}
         {box && visites.length >= 2 && (
           <svg
             className="absolute pointer-events-none"
@@ -274,12 +276,22 @@ function VueCarte({
             <polyline
               points={visites.map((p) => `${p.x},${p.y}`).join(" ")}
               fill="none"
+              stroke="#000"
+              strokeWidth="4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={0.75}
+              vectorEffect="non-scaling-stroke"
+            />
+            <polyline
+              points={visites.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="none"
               stroke="#fbbf24"
-              strokeWidth="1.5"
+              strokeWidth="1.75"
               strokeDasharray="5 4"
               strokeLinejoin="round"
               strokeLinecap="round"
-              opacity={0.7}
+              opacity={0.95}
               vectorEffect="non-scaling-stroke"
             />
           </svg>

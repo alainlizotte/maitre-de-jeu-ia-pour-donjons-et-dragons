@@ -117,22 +117,22 @@ def _etat_avec_source(d: str, source: str) -> ToolContext:
 
 
 def test_placer_ville_utilise_la_table_de_la_carte_active():
-    """Sur un jeu Laelith, « quartier de la Martre » → coords LAELITH
-    (46, 40) — pas la table Faerûn ; « Waterdeep » est refusée."""
+    """Sur un jeu Laelith, « Temple du Crâne » → coords du PLAN officiel
+    (69.5, 37.1) — pas la table Faerûn ; « Waterdeep » est refusée."""
     d = tempfile.mkdtemp(prefix="dnd35_carte_j_")
     ctx = _etat_avec_source(
         d, "[laelith_xxx] /data/scenarios/Laelith/x.pdf")
     tr = asyncio.run(invoke_tool(
         TOOLS["carte_joueurs_placer_ville"], ctx,
-        {"ville": "quartier de la Martre"}))
-    assert "46, 40" in tr.text, tr.text
+        {"ville": "Temple du Crâne"}))
+    assert "69.5, 37.1" in tr.text, tr.text
     visites = _etat(d).get("carte_visites", [])
-    assert visites and visites[-1]["nom"] == "quartier de la Martre"
-    assert visites[-1]["x"] == 46.0
+    assert visites and visites[-1]["nom"] == "Temple du Crâne"
+    assert visites[-1]["x"] == 69.5
 
     tr2 = asyncio.run(invoke_tool(
         TOOLS["carte_joueurs_placer_ville"], ctx, {"ville": "Waterdeep"}))
-    assert "carte ACTIVE" in tr2.text  # Waterdeep n'est pas sur Laelith
+    assert "carte ACTIVE" in tr2.text  # Waterdeep n'est pas sur le plan de Laelith
 
 
 def test_placer_ville_faerun_par_defaut():

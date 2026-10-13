@@ -23,7 +23,7 @@ const UNIVERSE_MAPS: Record<string, MapInfo> = {
   royaumes_oublies: FALLBACK_MAP,
   laelith: {
     url: "/data/scenarios/Laelith/Cartes/laelith.jpg",
-    w: 1200, h: 900, label: "Laelith",
+    w: 4908, h: 3533, label: "Laelith — la Cité Sainte",
     atlas: "https://www.aidedd.org/atlas/fr/laelith",
   },
   terres_eternel: {

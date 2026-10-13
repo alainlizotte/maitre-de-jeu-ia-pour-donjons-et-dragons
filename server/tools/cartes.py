@@ -85,18 +85,6 @@ CARTE_MONDE_FICHIER = "Sword-Coast-Map.jpg"
 # autres univers, table dédiée (coords mesurées — notamment les `depart`
 # des manifestes, posés au cordeau par le MJ). Clé = préfixe d'univers de
 # `quete.source` (« [laelith_xxx] … »), comme la sélection de carte client.
-VILLES_REPERES_LAELITH = {
-    "Douze-Fontaines":          (52, 48),  # quais de la Lune ivre (manifeste)
-    "quais de la Lune ivre":    (52, 48),
-    "quartier de la Martre":    (46, 40),
-    "Creux du Géant":           (25, 35),
-    "auberge du Sanglier Gris": (47, 55),
-    "temple du Crâne":          (43, 27),
-    "tombe des rois serpents":  (30, 60),
-    "serrurerie Bagosh":        (44, 70),
-    "île du lac d'Altalith":    (77, 46),
-    "antre des gobelins":       (22, 42),
-}
 VILLES_REPERES_TERRES = {
     "vallée de Hurlemont":      (68, 55),  # l'Épine (manifeste)
     "l'Épine":                  (68, 55),
@@ -108,7 +96,6 @@ VILLES_REPERES_INNISTRAD = {
 
 # Préfixe d'univers → table de repères. Absent (ro, divers…) = carte Faerûn.
 TABLES_PAR_PREFIXE = {
-    "laelith": VILLES_REPERES_LAELITH,
     "terres": VILLES_REPERES_TERRES,
     # innistrad : carte du scénario divers_army_of_the_damned
     "divers": VILLES_REPERES_INNISTRAD,
@@ -122,6 +109,14 @@ def _table_reperes(ctx: ToolContext, etat: dict) -> tuple[dict, bool]:
     src = str((etat.get("quete") or {}).get("source") or "")
     m = re.match(r"^\[([a-z]+?)_", src.lower())
     prefixe = m.group(1) if m else ""
+    if prefixe == "laelith":
+        # 226 repères du plan officiel de la Cité Sainte (fichier généré
+        # depuis la carte interactive du Donjon du Dragon).
+        try:
+            from .reperes_laelith import LAELITH
+            return LAELITH, False
+        except Exception:                                    # noqa: BLE001
+            pass
     table = TABLES_PAR_PREFIXE.get(prefixe)
     if table is None:
         return VILLES_REPERES, True

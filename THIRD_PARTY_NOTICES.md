@@ -71,6 +71,11 @@ d'images) est sous **GPL-3.0** — il n'est ni inclus ni modifié par ce projet.
 - **Cartes de référence** (`cartes/`, non distribué) : cartes officielles
   Faerûn/Toril/Outreterre — © Wizards of the Coast, fournies par
   l'hébergeur. Voir le README pour l'emplacement attendu.
+- **Carte de Laelith** (`server/data/scenarios/Laelith/Cartes/laelith.jpg`,
+  non distribué) : plan de la Cité Sainte — © Laelith (Donjon du Dragon,
+  donjondudragon.fr), fourni par l'hébergeur. Les repères de
+  `server/tools/reperes_laelith.py` (noms de lieux + %) en sont dérivés
+  pour un usage personnel.
 - **Scénarios** (`server/data/scenarios/`, non distribué) : aventures
   tierces et leurs artworks, propriété de leurs auteurs respectifs.
 - **Bestiaire** (`server/data/bestiaire.json`) : données de jeu dérivées

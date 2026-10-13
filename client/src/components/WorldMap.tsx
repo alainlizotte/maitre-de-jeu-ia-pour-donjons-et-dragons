@@ -7,7 +7,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
-import { useIsMobile } from "../hooks/useIsMobile";
 
 // ── Lookup univers → carte par défaut ──────────────────────────────────── //
 // Clé = ID d'univers dans scenarios_catalogue.json ; valeur = URL de la
@@ -381,15 +380,13 @@ export function WorldMap() {
   const [erreur, setErreur] = useState(false);
   const [pleinEcran, setPleinEcran] = useState(false);
 
-  // Boîtes d'affichage (cover en onglet desktop, contain sur smartphone et
-  // en plein écran). Callback refs : chaque div réel qui se monte déclenche
-  // la mesure (sinon la lightbox plein écran ne serait jamais boxée).
-  const isMobile = useIsMobile();
+  // Boîte d'affichage en "contain" (onglet ET plein écran) : la carte
+  // entière reste visible, letterbox sombre, le zoom groupe comble le cadre.
+  // Callback refs : chaque div réel qui se monte déclenche la mesure (sinon
+  // la lightbox plein écran ne serait jamais boxée).
   const [tabBoxEl, setTabBoxEl] = useState<HTMLDivElement | null>(null);
-  const [tabBoxContainEl, setTabBoxContainEl] = useState<HTMLDivElement | null>(null);
   const [fsBoxEl, setFsBoxEl] = useState<HTMLDivElement | null>(null);
-  const tabBox = useImageBox(tabBoxEl, nat[0], nat[1], "cover");
-  const tabBoxContain = useImageBox(tabBoxContainEl, nat[0], nat[1], "contain");
+  const tabBox = useImageBox(tabBoxEl, nat[0], nat[1], "contain");
   const fsBox = useImageBox(fsBoxEl, nat[0], nat[1], "contain");
 
   // Atlas link (si ville connue sur carte Faerûn)
@@ -430,15 +427,16 @@ export function WorldMap() {
         {mapInfo.label}
       </div>
       {/* Carte de l'onglet : zoomée sur le groupe, clic → plein écran.
-          🔧 Bêta : mode "contain" sur smartphone — "cover" rogne la carte
-          (portrait étroit) et des parties entières du monde disparaissent
-          du cadre. En contain, la carte entière reste visible. */}
+          Mode "contain" PARTOUT (desktop inclus) : "cover" rogne la carte
+          (le ratio du panneau ne colle jamais à celui des cartes) et des
+          parties entières du monde disparaissaient du cadre (Laelith…).
+          En contain, la carte entière reste visible, letterbox sombre. */}
       <VueCarte
         mapUrl={MAP_URL}
         alt={`Carte : ${mapInfo.label}`}
-        mode={isMobile ? "contain" : "cover"}
+        mode="contain"
         boxRef={setTabBoxEl}
-        box={isMobile ? tabBoxContain : tabBox}
+        box={tabBox}
         focus={focus}
         positions={positions}
         visites={visites}

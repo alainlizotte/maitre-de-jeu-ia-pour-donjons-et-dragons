@@ -11,10 +11,28 @@ siens et en accepte les licences correspondantes.
 
 La génération d'images est **optionnelle et désactivée par défaut**
 (`image.enabled: false`). Elle délègue à un serveur [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
-installé séparément par l'hébergeur, qui télécharge lui-même les modèles
-suivants et accepte leurs licences sur Hugging Face :
+installé séparément par l'hébergeur, qui télécharge lui-même le modèle de
+son choix et en accepte la licence sur Hugging Face.
 
-| Composant | Fichiers (référencés par les workflows) | Licence |
+### ⚠️ Recommandation licence — Qwen-Image 1.0 ou FLUX.1-schnell
+
+Pour un usage sans contrainte, privilégiez un modèle **permissif** :
+
+| Modèle | Licence | Note |
+|---|---|---|
+| **[Qwen-Image (1.0)](https://huggingface.co/Qwen/Qwen-Image)** | **Apache 2.0** | Même famille que le 2.1 : les workflows fournis s'y adaptent en changeant les poids |
+| **[FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell)** | Apache 2.0 | Génération rapide, excellente qualité |
+
+Le modèle **Qwen-Image-2.1 (et sa variante Turbo)** fonctionne très bien avec
+ce projet, mais il est distribué sous la **Qwen Research License**
+(recherche/évaluation uniquement, usage commercial sur licence séparée) —
+chaque hébergeur doit vérifier que son usage respecte cette licence. Les
+workflows fournis dans `server/image/workflows/` le référencent par défaut ;
+ils restent adaptables en changeant les fichiers de modèles.
+
+### Exemple de modèles référencés (configuration de l'auteur)
+
+| Composant | Fichiers | Licence |
 |---|---|---|
 | Qwen-Image-2.1 Turbo (UNET) | `qwen_image_2.1_turbo_int8_convrot.safetensors` | [Qwen Research License](https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE) |
 | VAE Qwen-Image-2.1 | `qwen_image_2.1_vae_bf16.safetensors` | Qwen Research License |
@@ -40,12 +58,16 @@ suivants et accepte leurs licences sur Hugging Face :
   Qwen » dans la documentation du produit concerné (hors périmètre de ce
   projet, qui n'entraîne aucun modèle).
 
-### Alternatives
+### Aucune image pré-générée dans ce dépôt
 
-Pour une génération d'images sans restriction de la Qwen Research License,
-le modèle **Qwen-Image (1.0)** reste distribué sous **Apache 2.0** : les
-workflows de ce projet lui sont adaptables en changeant les fichiers de
-modèles (mêmes nodes, autres poids).
+Par prudence juridique, **ce dépôt ne distribue aucune image générée par
+modèle** : les caches (`bestiaire_cache/`, `images_salles/`,
+`images_scenes/`) sont ignorés par git et régénérables localement à la
+demande (les sorties des modèles restent la propriété de leur auteur, mais
+leur diffusion au public n'est pas un acte neutre pour un projet open
+source — chacun apprécie). ⚠️ Les historiques de commit antérieurs à cette
+décision peuvent encore contenir d'anciennes images pré-générées : une
+purge d'historique (BFG / git filter-repo) reste possible si nécessaire.
 
 ## 2. Logiciels tiers (conteneurs et dépendances)
 

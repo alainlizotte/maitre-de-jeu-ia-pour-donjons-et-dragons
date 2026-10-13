@@ -64,3 +64,10 @@ server/data/.chat_*.tmp
 # Catalogue de scénarios — artefact GÉNÉRÉ par scripts/importer_scenarios.py
 # à partir des scénarios de l'hébergeur (non distribués).
 server/data/scenarios_catalogue.json
+
+# Images generees par ComfyUI (cache local, regenerables a la demande) -
+# non distribuees (enjeux de licence sur les sorties de modeles, voir
+# THIRD_PARTY_NOTICES.md) :
+/server/data/bestiaire_cache/
+/server/data/images_salles/
+/server/data/images_scenes/

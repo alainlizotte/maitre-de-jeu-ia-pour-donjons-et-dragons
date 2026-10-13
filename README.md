@@ -20,7 +20,7 @@ connectent depuis leur navigateur sur le réseau local.
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD |
 | **Qualité** | **958 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) |
-| **Images** | ComfyUI — **Qwen Image 2.1 Turbo** (monstres, portraits, salles, scènes) — optionnel |
+| **Images** | ComfyUI — tout modèle de votre choix (**recommandé : Qwen-Image 1.0 ou FLUX.1-schnell**, Apache 2.0) — optionnel |
 | **Cartes** | Carte du monde par univers/scénario avec épingles, **chemin parcouru et lieux visités persistants**, plein écran projeté |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
 
@@ -164,8 +164,10 @@ connectent depuis leur navigateur sur le réseau local.
   engagé contre une créature **du bestiaire officiel** (créatures inventées refusées).
 
 ### IA générative (ComfyUI — optionnel, désactivé par défaut)
-- Modèle recommandé : **Qwen Image 2.1 Turbo** (8 étapes, cfg=1, int8) — rendu
-  détaillé, ~12 s/image sur RTX 3060 Ti.
+- Modèle au choix de l'hébergeur. **Recommandation** : Qwen-Image 1.0 ou
+  FLUX.1-schnell (Apache 2.0 — usage sans contrainte) ; ⚠️ Qwen-Image 2.1
+  (Turbo) fonctionne très bien mais sa licence est recherche/évaluation
+  (non commerciale) — voir [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **Images de monstres générées automatiquement** dès leur apparition dans la narration
   (cache par fiche : l'image ne change pas tant que la fiche ne change pas) — en arrière-plan,
   sans jamais bloquer le tour de jeu.
@@ -406,10 +408,12 @@ déposez vous-même vos textes de règles dans `knowledge_import/` et vos PDF da
 Idem pour les **cartes** (`cartes/`) et les **scénarios tiers**
 (`server/data/scenarios/`) : fournies par l'hébergeur, non distribuées.
 
-**Génération d'images** (optionnelle) : le projet n'embarque aucun modèle ;
-chaque hébergeur installe ComfyUI et télécharge ses modèles depuis Hugging
-Face en acceptant leurs licences. Les workflows fournis référencent
-**Qwen-Image-2.1 Turbo**, sous *Qwen Research License* (usage recherche/
-évaluation, non commercial — les images générées appartiennent à
-l'hébergeur ; usage commercial → licence séparée de Qwen). Détails complets
-et alternatives : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+**Génération d'images** (optionnelle) : le projet n'embarque **ni modèle ni
+image pré-générée** ; chaque hébergeur installe ComfyUI et télécharge ses
+modèles depuis Hugging Face en acceptant leurs licences. **Recommandation** :
+Qwen-Image 1.0 ou FLUX.1-schnell (**Apache 2.0**, usage sans contrainte).
+⚠️ Les workflows fournis référencent **Qwen-Image-2.1 Turbo** (Qwen Research
+License : usage recherche/évaluation, non commercial ; les images générées
+appartiennent à l'hébergeur ; usage commercial → licence séparée de Qwen).
+**Aucune image générée n'est distribuée avec ce projet** — les caches sont
+locaux et régénérables. Détails complets : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

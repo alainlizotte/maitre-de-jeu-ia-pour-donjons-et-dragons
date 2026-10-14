@@ -669,15 +669,55 @@ def bonus_race_familier(fiche: Optional[dict], effet: str) -> int:
 
 
 def _load_fiche(ctx: ToolContext, nom: str) -> Optional[dict[str, Any]]:
-    """Charge une fiche ou renvoie None si absente/illisible."""
+    """Charge une fiche ou renvoie None si absente/illisible.
+
+    🛡️ gruumsh4pj (P24) : purge aussi les effets de sorts temporaires
+    échus (champ racine `effets_actifs`) en restituant la CA — le bonus
+    d'Armure du mage ne survit pas à sa durée."""
     path = _chemin(ctx, nom)
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            fiche = json.load(f)
     except FileNotFoundError:
         return None
     except (json.JSONDecodeError, OSError):
         return None
+    return _purger_effets_expires(fiche)
+
+
+def _purger_effets_expires(fiche: dict[str, Any]) -> dict[str, Any]:
+    """Retire les effets de sorts temporaires échus (champ racine
+    `effets_actifs`, hors schéma `conditions` qui n'accepte que des
+    chaînes) et restitue la CA stockée par l'effet. Sans écriture : le
+    nettoyage persiste à la prochaine sauvegarde de la fiche."""
+    effets = fiche.get("effets_actifs") if isinstance(fiche, dict) else None
+    if not isinstance(effets, list) or not effets:
+        return fiche
+    from datetime import datetime as _dt
+    maintenant = _dt.now()
+    actifs: list[dict[str, Any]] = []
+    echus: list[dict[str, Any]] = []
+    for e in effets:
+        if not isinstance(e, dict):
+            continue
+        try:
+            expire = _dt.fromisoformat(str(e.get("fin_ts") or "")) <= maintenant
+        except ValueError:
+            expire = True
+        (echus if expire else actifs).append(e)
+    if not echus:
+        return fiche
+    for e in echus:
+        try:
+            fiche["ca"] = int(fiche.get("ca", 10) or 10) - int(
+                e.get("ca_bonus") or 0)
+        except (TypeError, ValueError):
+            pass
+    if actifs:
+        fiche["effets_actifs"] = actifs
+    else:
+        fiche.pop("effets_actifs", None)
+    return fiche
 
 
 # Cache module-level des schémas JSON et validateurs par chemin (lazy).
@@ -1401,6 +1441,35 @@ async def fiche_perso_mettre_a_jour(
                     v = plafond
             except (TypeError, ValueError):
                 pass
+            # 🛡️ gruumsh4pj (incident §4bis) : les conditions vitales suivent
+            # les PV — plus de « Mort » sur une fiche pleine de vie.
+            _conds_pv = [
+                str(c) for c in (fiche.get("conditions") or [])
+                if str(c).strip()
+            ]
+            if v >= 1:
+                _conds_pv = [
+                    c for c in _conds_pv
+                    if c.lower() not in ("mort", "mourant", "inconscient",
+                                         "invalide", "stabilisé", "stabilise")
+                ]
+            elif v == 0:
+                _conds_pv = [
+                    c for c in _conds_pv if c.lower() not in ("mort",
+                                                              "mourant")]
+                if "Invalide" not in _conds_pv:
+                    _conds_pv.append("Invalide")
+            elif -9 <= v <= -1:
+                _conds_pv = [c for c in _conds_pv
+                             if c.lower() not in ("mort", "invalide")]
+                if "Mourant" not in _conds_pv:
+                    _conds_pv.append("Mourant")
+            else:  # v <= -10
+                _conds_pv = [c for c in _conds_pv
+                             if c.lower() not in ("mourant", "invalide")]
+                if "Mort" not in _conds_pv:
+                    _conds_pv.append("Mort")
+            fiche["conditions"] = _conds_pv
         if keys[0] == "or":
             v = max(0, min(v, 1_000_000))
         if keys[0] == "initiative":
@@ -1728,6 +1797,11 @@ def _infliger_degats_monstre(
         )
     nv = int(cible.get("pv", 0)) - d
     cible["pv"] = nv
+    # 🛡️ gruumsh4pj (P15/P20) : trace des dégâts RÉELLEMENT infligés — la
+    # clôture n'paye l'XP que pour les ennemis touchés (l'exploit « marteler
+    # une action sur une salle nettoyée → clôture victoire → +270 XP » passait
+    # par des ennemis jamais blessés).
+    cible["degats_recus"] = int(cible.get("degats_recus") or 0) + d
     conds: list[str] = cible.setdefault("conditions", [])
     note = ""
     if nv <= 0 and "Détruit" not in conds:
@@ -1847,7 +1921,7 @@ async def fiche_perso_infliger_degats(
     fiche["pv"] = nv
     # Conditions d'état selon la barre de PV (règles officielles).
     conds: list[str] = fiche.setdefault("conditions", [])
-    for c in ("Invalide", "Mourant", "Mort"):
+    for c in ("Invalide", "Mourant", "Mort", "Inconscient", "Stabilisé", "Stabilise", "Rassasié"):
         if c in conds:
             conds.remove(c)
     # « Stabilisé » n'a de sens que pour un mourant : un personnage remis
@@ -1913,6 +1987,10 @@ async def fiche_perso_soigner(
         (incanter_sort, rattrapages) — contourne la garde anti-soin-
         gratuit F1. Ne JAMAIS exposer au MJ.
     """
+
+    # C5 (passe Mystra) : un SOIN qui remonte les PV a 1+ leve les
+    # conditions vitales residuelles (Mourant, Inconscient,
+    # Invalide) - plus de Mourant avec 12 PV.
     # 🧪 Auto-formule de potion (partie 2ca691ec) : « source="potion de
     # soins légers" » SANS `soin` — le 9B omettait le montant et le soin
     # était systématiquement refusé (deux mourants non soignés en partie
@@ -2205,6 +2283,36 @@ async def fiche_perso_condition(
             + (f" Suggéré : {', '.join(_sugg)}." if _sugg else "")
             + " Décrivez l'état dans la PROSE sans le poser en condition."
         ))
+    # 🛡️ gruumsh4pj (incident §4bis) : COHÉRENCE condition ↔ PV. Le MJ
+    # avait posé « Mort » sur un PJ à 17 PV — l'état corrompu déclenchait
+    # ensuite des défaites fantômes. Les conditions vitales sont verrouillées
+    # sur les PV réels de la fiche.
+    _pv_f = int(fiche.get("pv", 0) or 0)
+    _norm_cond = _cond_norm
+    if appliquer and _norm_cond == "mort" and _pv_f > -10:
+        return ToolResult(text=(
+            f"⛔ **Mort** exige des PV de -10 ou moins (actuellement "
+            f"{_pv_f}). Pour blesser : `fiche_perso_infliger_degats` ; "
+            "pour tuer un PJ, inflige-lui des dégâts jusqu'à -10 — la "
+            "condition « Mort » est posée par le serveur."
+        ))
+    if appliquer and _norm_cond == "mourant" and not (-9 <= _pv_f <= 0):
+        return ToolResult(text=(
+            f"⛔ **Mourant** exige des PV entre 0 et -9 (actuellement "
+            f"{_pv_f}). Pour blesser : `fiche_perso_infliger_degats`."
+        ))
+    if not appliquer and _norm_cond == "mort":
+        # Lever « Mort » = résurrection : les conditions résiduelles sont
+        # levées et le PJ est rendu conscient à 1 PV (Raise Dead 3.5).
+        for _res in ("Mourant", "Inconscient", "Stabilisé", "Invalide"):
+            if _res in conds:
+                conds.remove(_res)
+        if "Stabilise" in conds:
+            conds.remove("Stabilise")
+        fiche["pv"] = max(1, int(fiche.get("pv", 0) or 0) if fiche.get(
+            "pv", 0) or 0 > -10 else 1)
+        if int(fiche.get("pv", 0) or 0) < 1:
+            fiche["pv"] = 1
     if appliquer and cond not in conds:
         conds.append(cond)
     if not appliquer and cond in conds:
@@ -2214,7 +2322,7 @@ async def fiche_perso_condition(
     except ValueError as e:
         return ToolResult(text=f"❌ {e}")
     # Synchro de l'entrée PJ de l'état de partie (conditions affichées).
-    idx = _sync_pj(ctx, nom, {"conditions": conds})
+    idx = _sync_pj(ctx, nom, {"conditions": conds, "pv": fiche.get("pv")})
     action = "affecté par" if appliquer else "n'est plus affecté par"
     return ToolResult(
         text=f"{nom} est {action} **{cond}**. Conditions actives : {conds}",

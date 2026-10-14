@@ -975,7 +975,26 @@ _DEPLACEMENT_NARRE_RE = re.compile(
     r"entre\s+dans\s+(?:la|le|l'|cette)\s*(?:grotte|caverne|salle|donjon|"
     r"temple|crypte|tour|pièce|ruine)|s'engage\s+sur\s+la\s+route|"
     r"quitte\s+(?:la|le|l')\s*(?:grotte|caverne|salle|donjon|temple|"
-    r"crypte|tour|pièce|ruine|couloir))",
+    r"crypte|tour|pièce|ruine|couloir)"
+    # 🛡️ gruumsh4pj (P25) : en partie réelle, « Thorrak avance sur le
+    # sentier », « le groupe gravit les marches », « il monte l'escalier »,
+    # « il s'enfonce dans le couloir », « prend le sentier au nord » et
+    # « redescend l'escalier » ont laissé la carte figée (aucun tool de
+    # déplacement, aucun rejeu : le détecteur ne connaissait que
+    # « pénètre/entre/arrive devant »).
+    r"|avance\s+(?:sur|vers|dans|par)|avan[çc]ons\s+(?:sur|vers|dans|par)"
+    r"|gravit\s+(?:les|la|le|l')|grimpe\s+(?:les|la|le|l')"
+    r"|monte\s+(?:l'|la|le|les\s+marches|l'escalier)"
+    r"|descend\s+(?:l'|la|le|les\s+marches|l'escalier)"
+    r"|redescend\s+(?:l'|la|le|les)"
+    r"|s'enfonce\s+dans|s'engouffre\s+dans"
+    r"|pousse\s+jusqu'|pousse\s+la\s+porte"
+    r"|emprunte\s+(?:la|le|l'|un)\s*(?:escalier|couloir|passage|sentier|"
+    r"porte|tunnel)"
+    r"|prend\s+(?:le|la|un)\s*(?:sentier|couloir|passage|escalier|tunnel)"
+    r"|suit\s+(?:le|la|un)\s*(?:sentier|couloir|passage|escalier|tunnel)"
+    r"|rejoign\w+\s+(?:la|le|l')\s*(?:salle|porte|cour|demeure|maison|"
+    r"chambre|cabane))",
     re.IGNORECASE,
 )
 _OUTILS_DEPLACEMENT = frozenset({
@@ -1421,11 +1440,49 @@ def _decor_ancre_absent(narration: str, ancre_ligne: str) -> bool:
 
 
 _OR_GAIN_RE = re.compile(
-    r"\b(?:trouv\w+|découv\w+|gagn\w+|empo?ch\w+|récolt\w+|vous offr\w+|"
-    r"sac\s+contenant)\b"
-    r"[^.!?]{0,100}?\b(\d{1,4})\s*(?:pièces?\s+d'or|po)\b",
+    r"\b(?:trouv\w+|d[ée]couv\w+|gagn\w+|emp\w*ch\w+|r[ée]colt\w+|"
+    r"vous offr\w+|ramass\w+|sac\s+contenant|bourse\s+de\s+\d+)\b"
+    r"[^.!?]{0,100}?\b(\d{1,4})\s*"
+    r"(pi[èe]ces?\s+d'or|pi[èe]ces?\s+d'argent|pi[èe]ces?\s+de\s+cuivre|"
+    r"pi[èe]ces?\s+de\s+platine|pi[èe]ces?\s+d'(?:or|argent|cuivre|platine)|"
+    r"po\b|pa\b|pc\b|pp\b)",
     re.IGNORECASE,
 )
+# 🛡️ gruumsh4pj (P29) : conversion en po par devise — « 600 pièces d'argent »
+# créditait 600 po (erreur ×10) ; « 3 pièces d'or » créditait 0,3 po (÷10).
+_DEVISE_PO: dict[str, float] = {
+    "or": 1.0, "po": 1.0, "argent": 0.1, "pa": 0.1,
+    "cuivre": 0.01, "pc": 0.01, "platine": 10.0, "pp": 10.0,
+}
+
+
+def _pj_actif_du_joueur(ctx: Any, etat: dict[str, Any]) -> Optional[str]:
+    """Le PJ incarné par le compte du tour (propriétaire de la fiche), à
+    défaut le PJ au tour courant, à défaut le premier de la liste.
+
+    Le rattrapage d'or/butin crédite le PREMIER PJ de la liste depuis la
+    partie 2dfa9c75 : à 4 joueurs, l'or ramassé par Liriel arrivait chez
+    Thorrak (audit gruumsh4pj P29)."""
+    from .tools.fiches import _load_fiche as _lf_o  # noqa: PLC0415
+    compte = str(getattr(ctx, "joueur", "") or "").strip().casefold()
+    courant = str((etat or {}).get("courant_tour_pour") or "").strip()
+    pjs = [p for p in (etat or {}).get("pj") or []
+           if isinstance(p, dict) and p.get("nom")]
+    if not pjs:
+        return None
+    if courant:
+        _f_c = _lf_o(ctx, courant)
+        if (_f_c is not None and compte
+                and str(_f_c.get("proprietaire") or "").strip().casefold()
+                == compte):
+            return courant
+    for _p in pjs:
+        _f = _lf_o(ctx, str(_p.get("nom")))
+        if (_f is not None and compte
+                and str(_f.get("proprietaire") or "").strip().casefold()
+                == compte):
+            return str(_p.get("nom"))
+    return str(pjs[0]["nom"])
 _OR_PRIX_RE = re.compile(
     r"\b(co[ûu]t(?:e|era|ant)?|prix|pai(?:e|er|é|ement)|pay(?:e|ez|é)|"
     r"demande|propose|acheter|coûtera)\b", re.IGNORECASE)
@@ -1446,22 +1503,47 @@ _BUTIN_OBJET_RE = re.compile(
 )
 
 
-def _or_gagne_narre(narration: str) -> Optional[int]:
-    """Or GAGNÉ narré (trésor découvert, butin empoché) — pour le
+def _or_gagne_narre(narration: str) -> Optional[float]:
+    """Or GAGNÉ narré (trésor découvert, butin empoché), en PO — pour le
     rattrapage déterministe. None si aucun gain clair : les PRIX
-    (« coûte 50 po », « le forgeron demande 10 po ») sont exclus."""
+    (« coûte 50 po », « le forgeron demande 10 po ») sont exclus.
+
+    🛡️ gruumsh4pj (P29) : scan PAR PHRASE — chaque phrase déclenchée
+    (verbe de découverte) fournit son montant MAXIMAL toutes devises
+    confondues (« 600 pièces d'argent et 100 pièces d'or » → 100 po, l'or
+    domine l'argent) ; le gain retenu est le plus élevé de la narration."""
     if not narration:
         return None
-    for m in _OR_GAIN_RE.finditer(narration):
-        phrase_d = narration.rfind(".", 0, m.start())
-        phrase_f = narration.find(".", m.start())
-        phrase = narration[
-            (phrase_d + 1) if phrase_d != -1 else 0:
-            phrase_f if phrase_f != -1 else len(narration)]
+    import re as _re_or
+    _devise_re = _re_or.compile(
+        r"\b(\d{1,4})\s*"
+        r"(pi[èe]ces?\s+d'or|pi[èe]ces?\s+d'argent|pi[èe]ces?\s+de\s+cuivre|"
+        r"pi[èe]ces?\s+de\s+platine|po\b|pa\b|pc\b|pp\b)",
+        _re_or.IGNORECASE,
+    )
+
+    def _po_de(m: "_re_or.Match") -> float:
+        devise = (m.group(2) or "po").strip().casefold()
+        for motif, facteur in (("pièces d'argent", 0.1), ("pièces de cuivre", 0.01),
+                               ("pièces de platine", 10.0), ("pièces d'or", 1.0),
+                               ("pièce d'argent", 0.1), ("pièce de cuivre", 0.01),
+                               ("pièce de platine", 10.0), ("pièce d'or", 1.0)):
+            if devise.startswith(motif):
+                return int(m.group(1)) * facteur
+        return int(m.group(1)) * _DEVISE_PO.get(devise, 1.0)
+
+    meilleur: float | None = None
+    for phrase in _re_or.split(r"(?<=[.!?])\s+", narration):
+        if not _OR_GAIN_RE.search(phrase):
+            continue
         if _OR_PRIX_RE.search(phrase):
             continue
-        return int(m.group(1))
-    return None
+        gains = [_po_de(m) for m in _devise_re.finditer(phrase)]
+        if gains:
+            g = round(max(gains), 2)
+            if meilleur is None or g > meilleur:
+                meilleur = g
+    return meilleur
 
 
 # 🧭 Partie 89174f50 : la DIRECTION demandée par la prose (« je me dirige
@@ -5351,25 +5433,48 @@ class Orchestrator:
                     data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
                     max_history=0,
                 ).load()
-                _pj_or = next(
-                    (str(_p.get("nom"))
-                     for _p in (_etat_or.get("pj") or []) if _p.get("nom")),
-                    None,
+                # 🛡️ gruumsh4pj (P29) : le crédit va au PJ ACTIF (celui qui
+                # fouille), pas au premier de la liste. Si la salle courante
+                # a déjà son trésor canonique crédité (`tresor_pris`), l'or
+                # « narré » est le MÊME trésor re-raconté → on ne crédite pas
+                # deux fois (Liriel avait reçu 160 po en double).
+                _dj_or = _etat_or.get("donjon") or {}
+                _tresor_deja_pris = False
+                try:
+                    _cx_or, _cy_or = (int((_dj_or.get("courant") or [0, 0])[0]),
+                                      int((_dj_or.get("courant") or [0, 0])[1]))
+                    _salle_or = next(
+                        (s for s in (_dj_or.get("grille") or [])
+                         if isinstance(s, dict)
+                         and (int(s.get("x", -1)), int(s.get("y", -1)))
+                         == (_cx_or, _cy_or)),
+                        None,
+                    )
+                    _tresor_deja_pris = bool((_salle_or or {}).get("tresor_pris"))
+                except (TypeError, ValueError, IndexError):
+                    _tresor_deja_pris = False
+                _pj_or = (
+                    _pj_actif_du_joueur(ctx, _etat_or) if not _tresor_deja_pris
+                    else None
                 )
                 if _pj_or:
                     from ..tools.fiches import _load_fiche as _lf, _save_fiche as _sf  # noqa: E501 pylint: disable=import-outside-toplevel
                     _f_or = _lf(ctx, _pj_or)
                     if _f_or is not None:
+                        # _gain_or est en PO (conversion devise) ; le champ
+                        # `or` des fiches est en unités de 1/10 po.
+                        _gain_unites = int(round(float(_gain_or) * 10))
                         _avant_or = int(_f_or.get("or", 0) or 0)
-                        _f_or["or"] = _avant_or + _gain_or
+                        _f_or["or"] = _avant_or + _gain_unites
                         _sf(ctx, _pj_or, _f_or)
                         result.notes_mecaniques.append(
                             "💰 Or narré crédité par le serveur : +"
                             + str(_gain_or) + " po à " + _pj_or
-                            + " (total " + str(_f_or["or"]) + " po)."
+                            + " (total " + str(round(_f_or["or"] / 10, 1))
+                            + " po)."
                         )
                         _log.info(
-                            "or narré crédité : +%d po à %s", _gain_or,
+                            "or narré crédité : +%s po à %s", _gain_or,
                             _pj_or)
         except Exception as _e_or:                           # noqa: BLE001
             _log.warning("rattrapage or narré échoué (ignoré) : %s", _e_or)

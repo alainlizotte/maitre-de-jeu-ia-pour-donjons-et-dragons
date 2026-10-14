@@ -491,6 +491,12 @@ async def engager_combat(
     )
 
     noms = [n.strip() for n in monstres.split(",") if n.strip()]
+    # 🛡️ gruumsh4pj (P9) : « Bandit ×2 » (quantité collée au nom) faisait
+    # échouer la garde de fidélité (espèce « bandit x2 » inconnue) alors que
+    # la quantité est déjà gérée par M6 — on normalise chaque nom.
+    import re as _re_nom
+    noms = [_re_nom.sub(r"\s*[x×]\s*\d+\s*$", "", n, flags=_re_nom.IGNORECASE)
+            .strip() or n for n in noms]
     if not noms:
         return ToolResult(text="❌ Donne au moins un nom de monstre.")
     aj = _parser_ajustement(ajustement)
@@ -890,6 +896,29 @@ async def engager_combat(
                 import math as _math_m6
                 _q_scal = max(1, _math_m6.ceil(_q * _facteur_m6))
                 _developpes.extend([_esp] * max(1, min(_q_scal, _q, 12)))
+            # 🛡️ gruumsh4pj (P9) : la rencontre canonique est COMPLÈTE. En
+            # partie réelle, la salle (0,0) = « Bandit ×2, Chien ×2 » n'a
+            # livré que les chiens : le MJ n'avait nommé qu'une espèce et
+            # la moitié du module disparaissait (XP et défi amputés). Les
+            # espèces canoniques MANQUANTES sont ajoutées au compte du
+            # module (même plafond d'engagement : sans ça, on ne touche à
+            # rien et la garde anti-triche reste prioritaire).
+            _manquants_m6 = [
+                (esp, q) for _cle, (esp, q) in _quantites.items()
+                if _cle not in _vues_m6
+            ]
+            if _manquants_m6:
+                import math as _math_mq
+                _ajouts_m6: list[str] = []
+                for _esp_mq, _q_mq in _manquants_m6:
+                    _q_scal_mq = max(1, _math_mq.ceil(_q_mq * _facteur_m6))
+                    _ajouts_m6.extend(
+                        [_esp_mq] * max(1, min(_q_scal_mq, _q_mq, 12)))
+                if len(_developpes) + len(_ajouts_m6) <= _MAX_MONSTRES_ENGAGEMENT:
+                    _developpes.extend(_ajouts_m6)
+                    print("[dnd35] P9 : ennemis canoniques manquants "
+                          "ajoutés à l'engagement : "
+                          + ", ".join(_ajouts_m6))
             if len(_developpes) <= _MAX_MONSTRES_ENGAGEMENT:
                 if _developpes != noms:
                     print("[dnd35] M6 : quantité canonique appliquée "
@@ -901,16 +930,41 @@ async def engager_combat(
                     for m in monstres_ok
                 )
                 _monstres_par_espece: dict[str, list[dict]] = {}
+                from .fiches import _espece_cle as _ec_m6b
                 for _m in monstres_ok:
-                    _monstres_par_espece.setdefault(
-                        str((_m or {}).get("nom") or "").strip().casefold(),
-                        []).append(_m)
+                    _nom_resolu = str((_m or {}).get("nom") or "").strip()
+                    # 🛡️ gruumsh4pj (P9) : la re-correspondance casse quand
+                    # le nom RÉSOLU du bestiaire diffère du nom demandé
+                    # (« Bandit » → « Bandit humain (guerrier 1) ») : la
+                    # clé « bandit » ne trouvait rien → 0 créature engagée
+                    # (combat fantôme, victoire immédiate). On indexe par
+                    # nom résolu ET par clé d'espèce.
+                    for _k in (_nom_resolu.casefold(), _ec_m6b(_nom_resolu)):
+                        if _k:
+                            _monstres_par_espece.setdefault(_k, []).append(_m)
                 _nouveaux: list[dict] = []
+                _vus_m6b: set[int] = set()
                 for _n in noms:
-                    _lst = _monstres_par_espece.get(
-                        str(_n).strip().casefold()) or []
-                    if _lst:
-                        _nouveaux.append(_lst[0])
+                    _lst = (_monstres_par_espece.get(str(_n).strip().casefold())
+                            or _monstres_par_espece.get(_ec_m6b(str(_n)))
+                            or [])
+                    _cand = None
+                    for _c in _lst:
+                        if id(_c) not in _vus_m6b:
+                            _cand = _c
+                            break
+                    if _cand is None:
+                        # 🛡️ gruumsh4pj (P9) : une espèce canonique ajoutée
+                        # par l'auto-complétion n'a AUCUNE entrée résolue
+                        # (elle ne figurait pas dans la demande initiale) →
+                        # résolution bestiaire à la demande.
+                        try:
+                            _cand = _find_monstre_strict(ctx, _n)
+                        except Exception:                # noqa: BLE001
+                            _cand = None
+                    if _cand is not None:
+                        _vus_m6b.add(id(_cand))
+                        _nouveaux.append(_cand)
                 monstres_ok = _nouveaux
 
     # ── GOUVERNEUR DE TAILLE (même logique que les renforts) ──────────
@@ -1023,9 +1077,12 @@ async def engager_combat(
         except ValueError:
             ca_m = 0
         # Suivi mécanique des PV du monstre pendant le combat.
+        # 🛡️ gruumsh4pj (P15/P20) : `degats_recus` fait foi à la clôture —
+        # l'XP n'est payée que pour les ennemis réellement blessés.
         entry_mc = {
             "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
             "fp": str(m.get("fp", "?")), "conditions": [],
+            "degats_recus": 0,
         }
         # ⚖️ Ajustement TEMPORAIRE (équilibre) : modifie l'entrée de CE
         # combat uniquement — le bestiaire reste inchangé.
@@ -1567,6 +1624,7 @@ async def combat_ajouter_combattant(
         monstre_entry = {
             "nom": label, "pv": pv_m, "pv_max": pv_m, "ca": ca_m,
             "fp": str(m.get("fp", "?")), "conditions": [],
+            "degats_recus": 0,
         }
         # ⚖️ Ajustement TEMPORAIRE (équilibre) — bestiaire inchangé.
         if aj_renfort["actif"]:

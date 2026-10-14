@@ -744,12 +744,19 @@ def _norm_dure(s: str) -> str:
 
 
 def sorts_de_fiche(fiche: dict[str, Any]) -> dict[str, Any]:
-    """Champ `sorts` normalisé d'une fiche (tolérant aux fiches anciennes)."""
+    """Champ `sorts` normalisé d'une fiche (tolérant aux fiches anciennes).
+
+    🛡️ gruumsh4pj (P26b/R6) : les compteurs de préparation ≤ 0 sont
+    PURGÉS à la lecture — un « Armure du mage: 0 » résiduel (rattrapages
+    successifs) polluait l'état, brouillait l'affichage et faisait échouer
+    les incantations alors qu'un slot réel restait disponible."""
     s = fiche.get("sorts") if isinstance(fiche.get("sorts"), dict) else {}
     connus = s.get("connus") or []
     if isinstance(connus, str):
         connus = [x.strip() for x in connus.split(",") if x.strip()]
     prepares = s.get("prepares") if isinstance(s.get("prepares"), dict) else {}
+    prepares = {str(k): int(v or 0) for k, v in prepares.items()
+                if int(v or 0) > 0}
     depenses = s.get("depenses") if isinstance(s.get("depenses"), dict) else {}
     return {"connus": list(connus), "prepares": dict(prepares), "depenses": dict(depenses)}
 
@@ -772,7 +779,12 @@ def resume_sorts(fiche: dict[str, Any]) -> str:
                 for lvl in slots}
     parties = [
         "Emplacements " + ", ".join(f"n.{lvl}: {r}/{slots[lvl]}"
-                                    for lvl, r in sorted(restants.items()))
+                                    for lvl, r in sorted(restants.items())),
+        # C6 (passe Mystra) : rappel du format préparations + niveau des
+        # sorts courants — le MJ classait Bénédiction/Soins légers en niv 0.
+        "Preparation : preparer_sorts(preparations_json=dict ou liste) - NE PAS"
+        "appeler repos_long pour preparer.",
+        "ou liste) — NE PAS appeler repos_long pour préparer.",
     ]
     if classe in SPONTANE:
         if s["connus"]:

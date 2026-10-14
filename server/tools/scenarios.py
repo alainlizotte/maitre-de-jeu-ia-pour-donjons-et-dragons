@@ -389,6 +389,16 @@ _MOTS_EXCLUS_ETAPE = frozenset({
     "read aloud", "treasure", "experience", "development",
     "table of contents", "credits", "sidebars", "statistiques", "stat block",
 })
+# 🛡️ gruumsh4pj (P6) : la bible de scénario injectait du BRUIT de
+# pagination/copyright comme étapes de quête — « Copyright Notice »,
+# « End Of License » étaient réinjectés au MJ à CHAQUE tour comme trame.
+_RE_BRUIT_ETAPE = re.compile(
+    r"^(copyright|licence|license|end\s+of|notice|legal|cr[ée]dits|"
+    r"page\s+\d|pdf|sommaire|index|annex\w*|dungeons\s*&?\s*dragons|"
+    r"dragon\+\s*\d+|wizard[s]?\s+of\s+the\s+coast|not\s+for\s+resale|"
+    r"permission\s+granted|version\s+du)",
+    re.IGNORECASE,
+)
 
 
 def _extraire_etapes(pdf_texte: str, max_etapes: int = 12) -> list[str]:
@@ -406,6 +416,11 @@ def _extraire_etapes(pdf_texte: str, max_etapes: int = 12) -> list[str]:
         if cle in vus:
             continue
         if any(x in cle for x in _MOTS_EXCLUS_ETAPE):
+            continue
+        # 🛡️ gruumsh4pj (P6) : bruit de copyright/pagination exclu de la
+        # trame — un « Copyright Notice » comme étape de quête polluait le
+        # prompt du MJ à chaque tour.
+        if _RE_BRUIT_ETAPE.match(cle):
             continue
         # Un titre n'est pas une phrase : il ne se termine pas par un point.
         if titre.endswith("."):

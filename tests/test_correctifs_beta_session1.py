@@ -595,8 +595,11 @@ def test_r8_xp_de_secours_sur_snapshot_ennemis_perdus(tmp_path, monkeypatch):
         "phase": "combat",
         # 🔧 Suivi PERDU : monstres_combat vide.
         "monstres_combat": [],
-        # 🔧 …mais le snapshot des derniers ennemis suivis existe.
-        "monstres_derniers": [{"nom": "Squelette", "fp": "1/3"}],
+        # 🔧 …mais le snapshot des derniers ennemis suivis existe. gruumsh4pj
+        # (P15/P20) : le fallback XP n'est payable que si les dégâts réels
+        # sont tracés dans le snapshot.
+        "monstres_derniers": [{"nom": "Squelette", "fp": "1/3",
+                               "degats_recus": 6}],
         "pj": [{"nom": "Brunhild", "joueur": "J1", "pv": 5}],
     })
     # Fiche du PJ (XP lue/écrite dessus).

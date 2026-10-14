@@ -334,6 +334,13 @@ def memoire_resume(etat: dict[str, Any], max_chars: int = 1200) -> str:
     if evenements:
         lignes.append("Événements récents (du plus ancien au plus récent) :")
         lignes.extend(f"- {e.get('texte', '?')}" for e in evenements)
+    # S4 : résumés courts des tours tombés hors de la fenêtre d'historique
+    # (1re phrase de chaque) - la troncature de contexte n'efface plus les
+    # vieux événements de la mémoire du MJ.
+    resumes = m.get("historique_resume") or []
+    if resumes:
+        lignes.append("Anciens tours (résumés, hors fenêtre d'historique) :")
+        lignes.extend("- " + str(r) for r in resumes[-12:])
     if not lignes:
         return ""
     resume = "\n".join(lignes)

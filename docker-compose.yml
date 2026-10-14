@@ -109,7 +109,7 @@ services:
       --models-dir /models
       --models-max 1
       -ngl 99
-      -c 32768
+      -c 65536
       -n 2048
       -np 1
       -ctk q8_0

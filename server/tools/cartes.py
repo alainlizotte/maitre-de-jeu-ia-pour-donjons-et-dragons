@@ -837,6 +837,19 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
         narration (jamais de donjon « d'exemple » : utilise le nom du module).
     """
     etat = _charger_etat(ctx)
+    # C2 (passe Mystra) : un VOYAGE ACTIF interdit l entree en donjon -
+    # le MJ re-teleportait le groupe dans la tour de depart apres un
+    # combat de voyage (position monde perdue). Terminer le voyage
+    # d abord (arrivee, retraite) avant carte_donjon_entrer.
+    _voyage_actif = etat.get("voyage")
+    if _voyage_actif:
+        _dest_v = str(_voyage_actif.get("destination", "?"))
+        return ToolResult(text=(
+            "⛔ Voyage en cours : le groupe est sur la route "
+            "(destination " + _dest_v + "). Impossible "
+            "d'entrer dans un donjon maintenant - termine le "
+            "voyage (arrivee, retraite) avant."
+        ))
     # Garde-fou : si un donjon est déjà ouvert avec le même id, on refuse
     # poliment de l'écraser — le MJ doit utiliser `carte_donjon_explorer`
     # pour avancer, pas `carte_donjon_entrer` (qui ré-initialiserait la

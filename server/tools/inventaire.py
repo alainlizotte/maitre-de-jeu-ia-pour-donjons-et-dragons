@@ -840,7 +840,13 @@ async def inventaire_ajouter(
     if re.search(r"bourse|pi[èe]ce|monnaie|pi[èe]ces?\s+d[''’ ]?(or|po|pc|pa|pp)|\b(po|pc|pa|pp)\b",
                       str(objet or ""), re.IGNORECASE):
         try:
-            _etat_canon = _charger_etat(ctx)
+            # 🛡️ gruumsh4pj (P29) : `_charger_etat` était appelé SANS exister
+            # (NameError avalé par le `except Exception: pass`) — le crédit
+            # du trésor canonique était du code mort, tout l'or passait par
+            # la route des montants narrés (destinataire et devise faux).
+            from ..game.state import PartyState as _PS_canon  # noqa: E501 PLC0415
+            _etat_canon = _PS_canon(
+                data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
             _dj_canon = _etat_canon.get("donjon") or {}
             _cour_canon = list(_dj_canon.get("courant") or [0, 0])
             _salle_canon_t = next(
@@ -854,27 +860,57 @@ async def inventaire_ajouter(
                                    re.IGNORECASE)
             _m_pc = re.search(r"(\d{1,5})\s*pc\b", _tresor_txt,
                                    re.IGNORECASE)
-            if _m_po or _m_pc:
+            # 🛡️ gruumsh4pj (P29) : l'argent (pa) et le platine
+            # (pp) du trésor canonique étaient ignorés — « 600 pa,
+            # 100 po » ne créditait que 100 po (60 po perdus).
+            _m_pa = re.search(r"(\d{1,5})\s*pa\b", _tresor_txt,
+                                   re.IGNORECASE)
+            _m_pp = re.search(r"(\d{1,5})\s*pp\b", _tresor_txt,
+                                   re.IGNORECASE)
+            if _m_po or _m_pc or _m_pa or _m_pp:
                 _pc_canon = (int(_m_po.group(1)) * 10 if _m_po else 0) + (
                     int(_m_pc.group(1)) if _m_pc else 0)
+                _pc_canon += int(_m_pa.group(1)) if _m_pa else 0
+                _pc_canon += (int(_m_pp.group(1)) * 100 if _m_pp else 0)
                 if _pc_canon > 0:
-                    fiche["or"] = int(fiche.get("or", 0) or 0) + _pc_canon
-                    _normaliser_fiche(fiche)
-                    try:
-                        _save_fiche(ctx, nom, fiche)
-                    except ValueError as e:
-                        return ToolResult(text=f"❌ {e}")
-                    _idx_c = _sync_pj(ctx, nom, {"or": fiche.get("or", 0)})
+                    # 🛡️ gruumsh4pj (P29) : MARQUEUR D'ABORD, crédit ensuite.
+                    # L'ancien ordre (crédit fiche → sync → marqueur) perdait
+                    # le marqueur à la moindre exception intermédiaire : le
+                    # 2e `inventaire_ramasser` du même tour re-créditait le
+                    # même trésor (160 po créditées DEUX fois). Le marqueur
+                    # persistant fait désormais foi dès l'écriture d'état.
+                    _deja_pris_inv = bool(
+                        (_salle_canon_t or {}).get("tresor_pris"))
+                    if _deja_pris_inv:
+                        return ToolResult(text=(
+                            "🪙 Le trésor canonique de cette salle a DÉJÀ été "
+                            "crédité — pas de double crédit. Narre la fouille "
+                            "sans nouveau gain, ou invente AUTRE CHOSE "
+                            "(indice, objet de quête)."
+                        ))
                     for _s_mq in (_dj_canon.get("grille") or []):
-                        if isinstance(_s_mq) and (_s_mq.get("x"),
+                        if isinstance(_s_mq, dict) and (_s_mq.get("x"),
                                                   _s_mq.get("y")) == (
                                                       _cour_canon[0],
                                                       _cour_canon[1]):
                             _s_mq["tresor_pris"] = True
                             break
-                    _err_canon = PartyState(
+                    _err_canon = _PS_canon(
                         data_dir=ctx.data_dir,
                         partie_id=ctx.partie_id).save(_etat_canon)
+                    if _err_canon:
+                        return ToolResult(text=f"❌ {_err_canon}")
+                    from .fiches import (  # noqa: PLC0415
+                        _load_fiche as _lf_canon, _save_fiche as _sf_canon,
+                        _sync_pj as _sp_canon)
+                    fiche = _lf_canon(ctx, nom)
+                    fiche["or"] = int(fiche.get("or", 0) or 0) + _pc_canon
+                    _normaliser_fiche(fiche)
+                    try:
+                        _sf_canon(ctx, nom, fiche)
+                    except ValueError as e:
+                        return ToolResult(text=f"❌ {e}")
+                    _idx_c = _sp_canon(ctx, nom, {"or": fiche.get("or", 0)})
                     return ToolResult(
                         text=(
                             f"🪙 **Trésor canonique de la salle crédité** : "

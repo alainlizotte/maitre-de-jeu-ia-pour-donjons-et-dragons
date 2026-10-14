@@ -736,6 +736,17 @@ _RE_MONTANT_PC = _re_mod.compile(
     r"(\d{1,5})\s*(?:pc\b|pi[èe]ces?\s+de\s+cuivre\b|cp\b)",
     _re_mod.IGNORECASE,
 )
+# 🛡️ gruumsh4pj (P29) : l'argent (pa) et le platine (pp) n'étaient PAS
+# parsés — « 600 pa, 100 po » ne créditait que les 100 po, et le reste du
+# trésor canonique dépendait de la prose du MJ.
+_RE_MONTANT_PA = _re_mod.compile(
+    r"(\d{1,5})\s*(?:pa\b|pi[èe]ces?\s+d'argent\b|pi[èe]ces?\s+dargent\b|sp\b)",
+    _re_mod.IGNORECASE,
+)
+_RE_MONTANT_PP = _re_mod.compile(
+    r"(\d{1,5})\s*(?:pp\b|pi[èe]ces?\s+de\s+platine\b)",
+    _re_mod.IGNORECASE,
+)
 # Mots qui signalent que le groupe CHERCHE / prend le trésor (et non qu'il
 # le voit de loin ou qu'on le mentionne en décor).
 _RE_FOUILLE_TRESOR = _re_mod.compile(
@@ -789,21 +800,32 @@ def _montants_tresor(texte: str) -> tuple[int, int]:
     if not texte:
         return 0, 0
     t = texte
-    # Un « N po pièce/unité » est un PRIX UNITAIRE, pas un total : on le
-    # neutralise avant de chercher un total.
-    t = _re_mod.sub(r"\d{1,4}\s*po\b\s*(?:pi[èe]ce|unit[ée])", "", t,
-                    flags=_re_mod.IGNORECASE)
+    # Un « N po pièce/unité/chacune » est un PRIX UNITAIRE, pas un total : on
+    # le neutralise avant de chercher un total.
+    t = _re_mod.sub(r"\d{1,4}\s*po\b\s*(?:pi[èe]ce|unit[ée]|chacune|chaque)",
+                    "", t, flags=_re_mod.IGNORECASE)
     or_po = _RE_MONTANT_TRESOR.search(t)
     or_pc = _RE_MONTANT_PC.search(t)
-    # La plus grande valeur en pc gagne (un « pour 200 po » écrase un « 15 po »).
-    candidats = []
+    or_pa = _RE_MONTANT_PA.search(t)
+    or_pp = _RE_MONTANT_PP.search(t)
+    # 🛡️ gruumsh4pj (P29) : SOMME des devises (première occurrence de
+    # chacune) — « 600 pa, 100 po » valait 100 po à la louche (max au lieu
+    # de somme) et l'argent était ignoré. Chaque devise ne compte qu'UNE
+    # fois (première occurrence), donc « 200 po au total, 15 po par sac »
+    # ne double pas le total po.
+    total_pc = 0
     if or_po:
-        candidats.append(int(or_po.group(1)) * 10)
+        total_pc += int(or_po.group(1)) * 10
     if or_pc:
         # Fix monnaie officielle (1 po = 10 pa = 100 pc) : le cuivre vaut
         # 0.01 po = 0.1 unite interne (il etait survalue 10x).
-        candidats.append(round(int(or_pc.group(1)) * 0.1, 1))
-    total_pc = max(candidats) if candidats else 0
+        total_pc += round(int(or_pc.group(1)) * 0.1, 1)
+    if or_pa:
+        # 1 pa = 0,1 po = 1 unité interne (gruumsh4pj P29).
+        total_pc += int(or_pa.group(1))
+    if or_pp:
+        # 1 pp = 10 po = 100 unités internes.
+        total_pc += int(or_pp.group(1)) * 100
     return total_pc, 0
 
 
@@ -1600,13 +1622,41 @@ _RE_PARAGRAPHE_META = _re_mod.compile(
 # rotation est gérée par le moteur, qui émet son propre événement « passé
 # automatiquement »). Un paragraphe qui RAconte une expiration de délai est
 # donc de la fiction fausse : purgé (l'événement serveur, lui, est conservé).
+# 🛡️ gruumsh4pj (P27) : élargi — le MJ mangeait des tours ENTIERS en narre
+# « la limite de vingt secondes dépassée » / « deux cents secondes
+# d'attente » 2 à 8 s après l'action déclarée DANS le bon tour. Toute
+# mention d'une limite de temps numérique expirée est de la fiction fausse.
 _RE_PARAGRAPHE_TIMEOUT_INVENTE = _re_mod.compile(
     r"(expir\w*\s+(?:d[ée]lai|dans\s+la\s+limite)"
     r"|d[ée]lai\s+(?:de\s+)?(?:trente|\d+)\s+secondes"
-    r"|limite\s+\w*\s*des\s+trente\s+secondes"
+    r"|limite\s+(?:\w*\s*)?(?:des\s+)?(?:trente|dix|vingt|cinquante|\d+)\s*secondes"
+    r"|(?:vingt|dix|trente|cinquante|cent|deux\s+cents|\d{2,4})\s*secondes?\s+(?:de\s+|d')?inaction"
+    r"|(?:vingt|dix|trente|cinquante|deux\s+cents|\d{2,4})\s*secondes\s+(?:d[ée]pass\w+|écoul\w+)"
+    r"|d[ée]pass\w+\s+(?:la\s+limite|le\s+d[ée]lai)"
+    r"|expir\w*\s+apr[èe]s\s+(?:deux\s+)?(?:cents\s+)?secondes"
+    r"|(?:deux\s+)?cents\s+secondes\s+de\s+d[ée]lai"
+    r"|secondes\s+de\s+d[ée]lai"
+    r"|actions?\s+expir\w*"
+    r"|tour\s+(?:s'achève|est\s+achev\w+)\s+automatiquement"
     r"|le\s+tour\s+(?:de\s+\S+\s+)?(?:a\s+)?expir\w*"
-    r"|tour\s+expir\w*\s+(?:automatiquement|sans))",
+    r"|tour\s+expir\w*\s+(?:automatiquement|sans)"
+    r"|(?:tour|action)s?\s+(?:compromis|gel\w+)\s+par\s+un\s+d[ée]lai"
+    r"|d[ée]lai\s+d[ée]pass\w*)",
     _re_mod.IGNORECASE,
+)
+# 🛡️ gruumsh4pj (P17) : une ligne d'ERREUR TOOL exposée au client
+# (« ⚠️ type_sauvegarde invalide : 'Réflexion'. Attendu : … ») est du
+# diagnostic serveur, pas de la narration.
+_RE_LIGNE_ERREUR_TOOL = _re_mod.compile(
+    r"^\s*(?:⚠️|❌|⛔)\s.*(?:invalide|invalid|attendu|expected|erreur|"
+    r"error|traceback|exception).*$",
+    _re_mod.IGNORECASE | _re_mod.MULTILINE,
+)
+# 🛡️ gruumsh4pj (P5) : tokens non-latins (« grognements低沉 ») rendus au
+# client par le modèle — purgés du texte final.
+_RE_NON_LATIN = _re_mod.compile(
+    r"[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
+    r"\uac00-\ud7af\uff00-\uffef]+"
 )
 # Seuil de similarité (Jaccard sur les mots > 3 lettres) au-delà duquel deux
 # paragraphes sont considérés comme la MÊME scène re-racontée.
@@ -1780,6 +1830,254 @@ def _purger_consignes(texte: str) -> str:
     return _re_mod.sub(r"\n{3,}", "\n\n", sortie).strip()
 
 
+# 🛡️ gruumsh4pj (R7) : JET DEMANDÉ AU JOUEUR — sauvegardes et compétences.
+# Le DD de contexte appartient au MJ de la scène : aucun filet serveur ne
+# peut l'inventer. Le MJ annonce le jet dans sa narration, le serveur pose
+# `jet_attendu`, le JOUEUR lance (dé côté serveur, bonus fiche officiel),
+# et le résultat retourne au MJ pour arbitrage — comme à une vraie table.
+_RE_JET_SAUVEGARDE = _re_mod.compile(
+    r"(?:jet|sauvegarde|test)s?\s+(?:de\s+|d')?(?:sauvegarde\s*)?"
+    r"(?:de\s+|d')?(?:type\s+)?"
+    r"(vigueur|r[ée]flexes|volont[ée])",
+    _re_mod.IGNORECASE,
+)
+
+
+def _jet_cible_pj(narration: str, etat: dict[str, Any]) -> tuple[str, str]:
+    """Le PJ visé par la demande de jet : celui NOMMÉ dans la narration,
+    sinon le combattant actif, sinon le premier PJ vivant. Renvoie
+    (nom_pj, joueur_compte)."""
+    import unicodedata as _ud_jc
+
+    def _nn(s: Any) -> str:
+        n = _ud_jc.normalize("NFKD", str(s or "").lower())
+        return "".join(c for c in n if not _ud_jc.combining(c))
+
+    pjs = [p for p in (etat.get("pj") or [])
+           if isinstance(p, dict) and p.get("nom")]
+    if not pjs:
+        return "", ""
+    txt = _re_mod.sub(r"\s+", " ", _nn(narration))
+    actif = str(etat.get("courant_tour_pour") or "")
+    ordre = ([actif] if actif else []) + [
+        str(p.get("nom") or "") for p in pjs]
+    nom_choisi = ""
+    for nom in ordre:
+        if nom and _nn(nom) in txt:
+            nom_choisi = nom
+            break
+    if not nom_choisi:
+        for p in pjs:
+            if str(p.get("nom") or "") == actif and int(
+                    p.get("pv", 1) or 0) > -10:
+                nom_choisi = actif
+                break
+        nom_choisi = nom_choisi or str(pjs[0].get("nom") or "")
+    joueur_compte = str(
+        next((p.get("joueur") or "" for p in pjs
+              if str(p.get("nom") or "") == nom_choisi), ""))
+    return nom_choisi, joueur_compte
+
+
+def _jet_detecte(narration: str) -> Optional[tuple[str, str]]:
+    """(catégorie, type) si la narration demande un jet au joueur.
+    Ignore les jets DÉJÀ résolus dans la narration (réussite/échec)."""
+    import unicodedata as _ud_jd
+    import unicodedata as unicodedata
+    t = str(narration or "")
+    if _re_mod.search(r"(?:r[ée]ussi|échoue|échec|obtient)\s+"
+                      r"(?:sa\s+|son\s+)?(?:jet|sauvegarde)", t,
+                      _re_mod.IGNORECASE):
+        return None
+    m_sv = _RE_JET_SAUVEGARDE.search(t)
+    if m_sv:
+        sv = m_sv.group(1)
+        sv_n = "".join(c for c in _ud_jd.normalize("NFKD", sv.lower())
+                       if not _ud_jd.combining(c))
+        return ("sauvegarde", sv_n)
+    # 🛡️ Correspondance DIRECTE par catalogue : « test de Discrétion »
+    # (une capture libre échouait sur les longues phrases — borne {30}
+    # dépassée avant la ponctuation). Chaque compétence citée après un
+    # verbe de jet est reconnue par son nom normalisé.
+    from .catalogue import COMPETENCES as _comp_cat  # noqa: PLC0415
+    for c in _comp_cat:
+        nom_off = str(c.get("nom") or "")
+        if not nom_off:
+            continue
+        if _re_mod.search(
+                r"(?:jet|test)s?\s+de\s+(?:la\s+|le\s+|l')?"
+                + _re_mod.escape(nom_off) + r"\b",
+                t, _re_mod.IGNORECASE):
+            return ("competence", nom_off)
+    return None
+
+
+async def _jet_poser_attente(
+    session, partie_id: str, narration: str, data_dir: str | None = None,
+) -> None:
+    """Détecte une demande de jet dans la narration MJ, pose `jet_attendu`
+    et diffuse `jet_demande` au joueur visé. Silencieux si rien à faire."""
+    try:
+        det = _jet_detecte(narration)
+        if not det:
+            return
+        st = PartyState(
+            data_dir=data_dir or str(cfg.abs(cfg.paths.data_dir)),
+            partie_id=partie_id)
+        etat = st.load()
+        if "_erreur" in etat or etat.get("jet_attendu"):
+            return
+        nom_pj, joueur_c = _jet_cible_pj(narration, etat)
+        if not nom_pj:
+            return
+        from datetime import datetime as _dt_jp
+        etat["jet_attendu"] = {
+            "personnage": nom_pj,
+            "joueur": joueur_c,
+            "categorie": det[0],
+            "type": det[1],
+            "ts": _dt_jp.now().isoformat(),
+        }
+        st.save(etat)
+        await session.broadcast({
+            "type": "jet_demande",
+            "joueur": joueur_c,
+            "personnage": nom_pj,
+            "categorie": det[0],
+            "type": det[1],
+            "detail": (
+                f"🎲 {nom_pj} : lance un jet de "
+                f"{'sauvegarde ' if det[0] == 'sauvegarde' else ''}"
+                f"{det[1]} — clique Lancer (ou tape « je lance »)."
+            ),
+        })
+        _log_tour("jet demandé au joueur : %s (%s/%s) — partie %s",
+                  nom_pj, det[0], det[1], partie_id)
+    except Exception as e_jd:                              # noqa: BLE001
+        print(f"[dnd35] Pose jet_attendu échouée (ignoré) : {e_jd}")
+
+
+async def _jet_resoudre(
+    session, partie_id: str, joueur: str, automatique: bool = False,
+    data_dir: str | None = None,
+) -> bool:
+    """Résout le jet attendu du joueur : bonus officiel depuis la fiche
+    (sauvegardes, ou rangs + carac pour une compétence), 1d20 côté serveur,
+    résultat diffusé à la table et injecté dans l'historique pour
+    l'arbitrage du MJ. Renvoie True si un jet a été résolu."""
+    import random as _rnd_jr
+    import unicodedata as _ud_jr
+    from datetime import datetime as _dt_jr
+    from .tools.fiches import _load_fiche as _cf_jr
+    from .tools.base import ToolContext as _TC_jr
+    from .catalogue import COMPETENCES as _comp_jr
+    _dir_jr = data_dir or str(cfg.abs(cfg.paths.data_dir))
+    try:
+        st = PartyState(data_dir=_dir_jr, partie_id=partie_id)
+        etat = st.load()
+        attente = etat.get("jet_attendu") or {}
+        if not attente:
+            return False
+        nom_pj = str(attente.get("personnage") or "")
+        categorie = str(attente.get("categorie") or "")
+        type_jet = str(attente.get("type") or "")
+        if not nom_pj or not categorie:
+            return False
+        ctx = _TC_jr(partie_id=partie_id, joueur=joueur, data_dir=_dir_jr)
+        fiche = _cf_jr(ctx, nom_pj) or {}
+
+        def _nn_jr(s: Any) -> str:
+            n = _ud_jr.normalize("NFKD", str(s or "").lower())
+            return "".join(c for c in n if not _ud_jr.combining(c))
+
+        bonus = 0
+        bonus_txt = ""
+        if categorie == "sauvegarde":
+            t_n = _nn_jr(type_jet)
+            t_n = {"reflex": "reflexes", "reflexe": "reflexes",
+                   "fortitude": "vigueur"}.get(t_n, t_n)
+            _cle = {"vigueur": "Vigueur", "reflexes": "Reflexes",
+                    "volonte": "Volonte"}.get(t_n, t_n.capitalize())
+            bonus = int((fiche.get("sauvegardes") or {}).get(_cle, 0) or 0)
+            bonus_txt = f"{_cle} {bonus:+d}"
+            type_jet = {"Vigueur": "Vigueur", "Reflexes": "Réflexes",
+                        "Volonte": "Volonté"}.get(_cle, _cle)
+        else:
+            rangs = int((fiche.get("competences") or {}).get(type_jet, 0)
+                        or 0)
+            mod_carac = 0
+            cara = next((c.get("cara") for c in _comp_jr
+                         if _nn_jr(str(c.get("nom") or "")) == _nn_jr(
+                             type_jet)), None)
+            if cara:
+                _val = int((fiche.get("carac") or {}).get(cara, 10) or 10)
+                mod_carac = (_val - 10) // 2
+            bonus = rangs + mod_carac
+            bonus_txt = f"rangs {rangs} + {cara} {mod_carac:+d}"
+        _d20 = _rnd_jr.randint(1, 20)
+        total = _d20 + bonus
+        marque = (" (jet automatique — délai dépassé)" if automatique
+                  else "")
+        label_type = ("sauvegarde de " if categorie == "sauvegarde"
+                      else "test de ")
+        texte = (
+            f"🎲 [{nom_pj}]{marque} {label_type}{type_jet} : "
+            f"**{total}** (1d20={_d20} + {bonus_txt})."
+        )
+        etat.pop("jet_attendu", None)
+        st.save(etat)
+        await session.broadcast({
+            "type": "jet_resultat",
+            "joueur": joueur,
+            "personnage": nom_pj,
+            "total": total,
+            "d20": _d20,
+            "bonus": bonus,
+            "texte": texte,
+        })
+        session.remember_player_message(joueur or nom_pj, texte)
+        _log_tour("jet résolu : %s → %d (%s) — partie %s", nom_pj, total,
+                  bonus_txt, partie_id)
+        return True
+    except Exception as e_jr:                              # noqa: BLE001
+        print(f"[dnd35] Résolution jet échouée : {e_jr}")
+        import traceback as _tb_jr
+        _tb_jr.print_exc()
+        return False
+
+
+def _dedup_vs_derniere(narration: str, precedente: str) -> str:
+    """Purge les paragraphes de TÊTE de `narration` quasi identiques à ceux
+    de la narration PRÉCÉDENTE (gruumsh4pj R2 : en combat, le bloc
+    d'ambiance d'ouverture — « Le fer noir de la grille… » — était recopié
+    quasi verbatim à CHAQUE tour ; la dédup Jaccard intra-tour ne voyait
+    pas le doublon inter-tours). Seuil haut (0,8) pour ne pas toucher aux
+    re-descriptions de salles légitimes ; au moins un paragraphe survit.
+    """
+    if not narration or not precedente:
+        return narration
+    paras = [p for p in narration.split("\n\n") if p.strip()]
+    if len(paras) < 2:
+        return narration
+    prev_aplatis = [" ".join(p.split()) for p in precedente.split("\n\n")
+                    if p.strip()]
+    if not prev_aplatis:
+        return narration
+    gardes: list[str] = []
+    purges = 0
+    for idx, p in enumerate(paras):
+        aplati = " ".join(p.split())
+        if (len(aplati) >= 60 and gardes == [] and purges < 2
+                and any(_jaccard_mots(aplati, pa) >= 0.8
+                        for pa in prev_aplatis)):
+            purges += 1
+            continue
+        gardes.append(p)
+    if not gardes or purges == 0:
+        return narration
+    return "\n\n".join(gardes).strip()
+
+
 def _nettoyer_meta_narration(narration: str) -> str:
     """Nettoie la narration finale : coulisses LLM, consignes serveur→modèle
     (B40/B43/B44), templates cassés, paraphrases doublées."""
@@ -1792,6 +2090,11 @@ def _nettoyer_meta_narration(narration: str) -> str:
     texte = _purger_consignes(texte)
     if not texte.strip():
         return narration or ""
+
+    # 🛡️ gruumsh4pj (P5) : tokens non-latins purgés (« grognements低沉 ») ;
+    # (P17) lignes d'erreur tool purgées du texte visible.
+    texte = _RE_NON_LATIN.sub("", texte)
+    texte = _RE_LIGNE_ERREUR_TOOL.sub("", texte)
 
     # (1) Verdicts à parenthèses vides : « Touché ! () » → « Touché ! ».
     texte = _RE_VERDICT_PARENS_VIDES.sub(r"\1\2", texte)
@@ -1829,7 +2132,18 @@ def _nettoyer_meta_narration(narration: str) -> str:
             gardes.append(aplati)
         sortie.append(p)
 
-    return _re_mod.sub(r"\n{3,}", "\n\n", "\n\n".join(sortie)).strip()
+    nettoye = _re_mod.sub(r"\n{3,}", "\n\n", "\n\n".join(sortie)).strip()
+    # 🛡️ gruumsh4pj (P27) : si la purge des timeouts fantômes a vidé la
+    # narration (tour mangé = un seul paragraphe inventé), on ne livre PAS
+    # un dm vide : une note honnête tient lieu de scène.
+    if not nettoye and narration.strip():
+        return (
+            "…(le tour s'est joué sans événement notable — le serveur a "
+            "purgé une « expiration de délai » inventée. L'état du jeu est "
+            "celui affiché ; rejouez votre action si elle n'a pas été "
+            "résolue.)"
+        )
+    return nettoye
 
 
 # Tools qui CONSOMMENT l'action standard du personnage courant : dès que le
@@ -3900,6 +4214,25 @@ async def set_quest(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
                     _apd(_ctx_q, etat, _sid)
                 except Exception as e:                           # noqa: BLE001
                     print(f"[dnd35] Départ scénario non placé : {e}")
+                # 🛡️ gruumsh4pj (C3, passe Mystra) : la SALLE DE DÉPART du
+                # donjon de quête est marquée « visitée » — la garde de trame
+                # du voyage refusait tout départ tant que l'étape 1 (salle
+                # 0,0 non visitée) n'était pas accomplie, bien que la scène
+                # d'ouverture y ait déjà été jouée.
+                try:
+                    _dj_c3 = etat.get("donjon") or {}
+                    _cour_c3 = list(_dj_c3.get("courant") or [0, 0])
+                    for _s_c3 in _dj_c3.get("grille") or []:
+                        if isinstance(_s_c3, dict) and (
+                                int(_s_c3.get("x", -1)),
+                                int(_s_c3.get("y", -1)),
+                        ) == (_cour_c3[0], _cour_c3[1]):
+                            _s_c3["visitee"] = True
+                            break
+                    _etapes_c3 = (etat.get("quete") or {}).get(
+                        "bible", {}).get("etapes_detail") or []
+                except Exception as e_c3:                    # noqa: BLE001
+                    print(f"[dnd35] C3 marque départ visité échoué : {e_c3}")
         except Exception as e:                                   # noqa: BLE001
             print(f"[dnd35] Bible scénario non construite (picker) : {e}")
     etat["phase"] = "exploration"
@@ -4412,6 +4745,14 @@ async def ws_chat(ws: WebSocket, partie_id: str) -> None:
                         fiche_enregistree.get("nom") if fiche_enregistree else None
                     ),
                 })
+                continue
+
+            if mtype == "roll":
+                # 🛡️ gruumsh4pj (R7) : le JOUEUR lance son jet demandé —
+                # le DÉ est jeté côté serveur (bonus officiel depuis la
+                # fiche), résultat diffusé à la table et injecté dans
+                # l'historique pour l'arbitrage du MJ. Aucun tour LLM.
+                await _jet_resoudre(session, partie_id, player)
                 continue
 
             if mtype == "dice":
@@ -5481,6 +5822,77 @@ def _noms_armures_catalogue() -> set[str]:
         return set()
 
 
+# 🛡️ gruumsh4pj (R5) : acceptation EXPLICITE de la table en phase
+# game_over — le MJ 9B déviait en prose (« le soin se dissipe », offre sans
+# fin) et la table restait morte pour toujours. L'acceptation claire du
+# propriétaire du personnage suffit désormais à la mécanique.
+_RE_ACCEPTATION_RESURRECTION = _re_mod.compile(
+    r"\b(nous\s+acceptons|j'accepte|je\s+valide|nous\s+validons|"
+    r"d'accord|daccord|on\s+rel[èe]ve|rel[èe]vez?\s+les?\s+(?:compagnons|"
+    r"groupe|h[ée]ros|pj)|ressuscit\w+(?:z|ez)?\s+(?:les?|nous|le\s+groupe)|"
+    r"r[ée]anim\w+(?:z|ez)?\s+(?:les?|nous|le\s+groupe))\b",
+    _re_mod.IGNORECASE,
+)
+_RE_REFUS_RESURRECTION = _re_mod.compile(
+    r"\bne\s+(?:peux|peut|voulons|veut|souhaite\w*)\b|pas\s+de\s+"
+    r"r[ée]surrection|refus\w*|jamais\b",
+    _re_mod.IGNORECASE,
+)
+
+
+async def _resurrection_sur_acceptation(
+    app: Any,
+    ctx: ToolContext,
+    player: str,
+) -> str:
+    """En phase `game_over`, une ACCEPTATION explicite de la table applique
+    la résurrection serveur SANS attendre que le MJ narre la réalisation
+    (qui n'arrivait jamais — R5). Pénalité officielle de Raise Dead
+    (−1 niveau, ou −2 CON au niveau 1) conservée. Renvoie la note
+    mécanique, '' hors game_over / sans acceptation / sans mort."""
+    try:
+        st = PartyState(data_dir=str(ctx.data_dir), partie_id=ctx.partie_id)
+        etat = st.load()
+    except Exception:                                            # noqa: BLE001
+        return ""
+    if str(etat.get("phase") or "") != "game_over" and not etat.get("game_over"):
+        return ""
+    import unicodedata as _uni5
+
+    def _nn5(s: Any) -> str:
+        n = _uni5.normalize("NFKD", str(s or "").strip().lower())
+        return "".join(c for c in n if not _uni5.combining(c))
+
+    morts = [
+        p for p in (etat.get("pj") or [])
+        if "mort" in {str(c).strip().lower()
+                      for c in (p.get("conditions") or [])}
+        or _to_int_fiable(p.get("pv")) is not None
+        and _to_int_fiable(p.get("pv")) <= -10
+    ]
+    if not morts:
+        return ""
+    # 2) Narration-forcée qui passe les gates de `_ressusciter_pj_oublie`
+    #    (réalisation affirmée + montant de PV) — l'acceptation du joueur
+    #    EST la décision de la table, la prose du MJ n'est plus requise.
+    class _ResultAcceptation:
+        narration = ("Résurrection acceptée par la table : les compagnons "
+                     "tombés sont ressuscités et récupèrent 4 points de "
+                     "vie.")
+        state_patches: list = []
+
+    _result_f = _ResultAcceptation()
+    note = await _ressusciter_pj_oublie(
+        _orchestrator(app), ctx, None, _result_f, texte_joueur=str(player)
+    )
+    if not note:
+        return ""
+    etat["game_over"] = False
+    etat["phase"] = "exploration"
+    st.save(etat)
+    return note
+
+
 async def _ressusciter_pj_oublie(
     orch: Orchestrator,
     ctx: ToolContext,
@@ -5611,6 +6023,16 @@ async def _ressusciter_pj_oublie(
                 ctx, on_event, result,
             )
         # 2) PV portés au montant narré (plafonné par le tool à pv_max).
+        # S-fix gruumsh4pj : la fiche est RELUE après la levée des
+        # conditions - le garde condition/PV (incident 4bis) a pu
+        # ramener les PV à 1 lors du retrait de Mort ; calculer le
+        # soin différentiel sur l'ancienne valeur (-10) soignait
+        # 11 PV de trop (pv final = pv_max au lieu du montant).
+        try:
+            with open(chemin, "r", encoding="utf-8") as f:
+                fiche = json.load(f)
+        except Exception:
+            pass
         try:
             pv_actuel = int(fiche.get("pv", 0) or 0)
         except (TypeError, ValueError):
@@ -5905,6 +6327,140 @@ def _pj_attaquant(
     return personnage or actif_avant or ""
 
 
+# 🛡️ gruumsh4pj (S1) : déclaration EXPLICITE de fin de combat dans la
+# narration (le MJ conclut le combat en prose) — déclenche la mise en
+# cohérence mécanique si des ennemis vivants restent en état.
+_RE_VICTOIRE_NARREE = _re_mod.compile(
+    r"(victoire\b"
+    r"|le combat (?:est|soit|vient d)[ée]?(?:tre)?\s+(?:termin|fini|ach[ée]v)"
+    r"|combat\s+s'ach[èe]ve"
+    r"|combat\s+(?:est\s+)?(?:termin[ée]|fini|achev[ée])"
+    r"|tous\s+(?:les|vos)\s+(?:ennemis|adversaires|assaillants|cr[ée]atures)"
+    r"[^.\n]{0,60}(?:hors\s+de\s+combat|[àa]\s+terre|au\s+sol|d[ée]truit|"
+    r"inanim[ée]|morts?|gisent))",
+    _re_mod.IGNORECASE,
+)
+_SORT_INCANTE_RE = _re_mod.compile(
+    r"\b(incant\w*|lanc\w+\s+(?:un\s+)?sort|sort\s+de\s+\w+|rayon\s+de\s+givre"
+    r"|projectiles?\s+magiques?|sommeil\b|soins?\s+l[ée]gers?|b[ée]n[ée]diction"
+    r"|armure\s+du\s+mage|graisse\b|mains\s+br[ûu]lantes|contact\s+glacial"
+    r"|charme-?personne|hypnose\b|fl[ée]au\b|armes?\s+magique)",
+    _re_mod.IGNORECASE,
+)
+
+
+async def _sort_pj_sans_jet(
+    orch: Orchestrator,
+    ctx: ToolContext,
+    on_event: Any,
+    result: Any,
+    nom_pj: str,
+    texte_declare: str = "",
+) -> str:
+    """Résout déterministement le SORT d'un PJ déclaré sans aucune
+    incantation (filet R3, audit gruumsh4pj) : le petit modèle narrait le
+    sort en prose et n'appelait JAMAIS `incanter_sort` — la re-relance
+    corrective échouait aussi et le tour passait sans effet (« Sylvaine
+    lance Sommeil » ×3 tours, aucun dé ni slot). Contrairement à
+    l'attaque, AUCUN filet n'existait pour les sorts.
+
+    On détecte le sort dans le message du joueur (correspondance floue
+    contre les sorts connus/préparés du lanceur, puis le catalogue), puis
+    on appelle `incanter_sort` : le tool applique l'effet si les règles le
+    permettent et REFUSE honnêtement sinon (non préparé, emplacement
+    épuisé) — le refus est affiché à la table. Renvoie la note mécanique
+    ('' si aucun sort identifiable)."""
+    if not (texte_declare or "").strip():
+        return ""
+    from .tools.fiches import _chemin as _ch_sort  # noqa: PLC0415
+
+    try:
+        etat = PartyState(
+            data_dir=str(ctx.data_dir), partie_id=ctx.partie_id,
+        ).load()
+    except Exception:                                            # noqa: BLE001
+        return ""
+
+    # 1) Le PJ existe-t-il et est-il lanceur ?
+    path = _ch_sort(ctx, nom_pj)
+    if not os.path.isfile(path):
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            fiche = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return ""
+    from . import sorts as _cat_sorts  # noqa: PLC0415
+    classe = str(fiche.get("classe") or "")
+    if not _cat_sorts.est_lanceur(classe):
+        return ""
+
+    # 2) Détection du sort : d'abord ses sorts connus/préparés (le joueur
+    #    lance ce qu'il connaît), puis le catalogue de classe entier.
+    _txt = str(texte_declare or "").lower().replace("'", " ")
+    import difflib as _dif_sort
+    _candidats: list[str] = []
+    _s_fiche = _cat_sorts.sorts_de_fiche(fiche)
+    _candidats.extend(str(s) for s in (_s_fiche.get("prepares") or {}))
+    _candidats.extend(str(s) for s in (_s_fiche.get("connus") or []))
+    _tout = [
+        str(s.get("nom")) for s in getattr(_cat_sorts, "SORTS", [])
+        if classe in (s.get("classes") or [])
+    ] or [str(s.get("nom")) for s in getattr(_cat_sorts, "SORTS", [])]
+    for s in _tout:
+        if s not in _candidats:
+            _candidats.append(s)
+    _nom_trouve = None
+    for _c in sorted(_candidats, key=len, reverse=True):
+        if str(_c).lower().replace("'", " ") in _txt:
+            _nom_trouve = str(_c)
+            break
+    if not _nom_trouve:
+        _proches = _dif_sort.get_close_matches(
+            _txt, _candidats, n=1, cutoff=0.55)
+        if _proches:
+            _nom_trouve = _proches[0]
+    if not _nom_trouve:
+        return ""
+
+    # 3) Cible : un ennemi suivi nommé dans le message, sinon la première
+    #    créature vivante (les sorts d'auto-buff ignorent la cible).
+    _cible = ""
+    vivantes = [
+        str(mo.get("nom") or "") for mo in (etat.get("monstres_combat") or [])
+        if not mo.get("allie")
+        and not (mo.get("conditions") or [])
+        and _to_int_fiable(mo.get("pv")) is not None
+        and _to_int_fiable(mo.get("pv")) > 0
+    ]
+    for _nv in sorted(vivantes, key=len, reverse=True):
+        if _nv.strip().lower() in _txt:
+            _cible = _nv
+            break
+
+    # 4) Résolution par le tool officiel (refus honnête inclus).
+    from .tools.base import _TOOL_REGISTRY as _reg_sort, invoke_tool as _inv_sort  # noqa: E501 PLC0415
+    spec_sort = _reg_sort.get("incanter_sort")
+    if spec_sort is None:
+        return ""
+    tr = await _inv_sort(spec_sort, ctx, {
+        "nom_personnage": nom_pj,
+        "nom_sort": _nom_trouve,
+        "cible": _cible,
+    })
+    if not tr.text or tr.text.startswith("❌ Aucune fiche"):
+        return ""
+    note = (
+        f"⚙️ _Sort résolu par le serveur (filet déterministe) : "
+        f"{nom_pj} → {_nom_trouve}"
+        + (f" → {_cible}" if _cible else "")
+        + "_\n\n" + tr.text
+    )
+    print(f"[dnd35] Sort PJ {nom_pj} résolu déterministement "
+          f"({_nom_trouve}).")
+    return note
+
+
 async def _attaque_pj_sans_jet(
     orch: Orchestrator,
     ctx: ToolContext,
@@ -5963,12 +6519,33 @@ async def _attaque_pj_sans_jet(
                 cible = _nv
                 break
         if not cible:
+            # 🛡️ gruumsh4pj (R3-bis) : l'anaphore (« frappe L'AUTRE bandit »)
+            # ne contient ni le nom complet ni une approximation — on matche
+            # la TÊTE D'ESPÈCE (premier mot du nom suivi : « bandit »,
+            # « chien », « gobelin »), priorité au nom le plus long.
+            for _nv in sorted(_noms_vivants, key=len, reverse=True):
+                _tete = (_nv.strip().split()[0] if _nv.strip() else "").lower()
+                if len(_tete) >= 4 and _tete in _txt:
+                    cible = _nv
+                    break
+        if not cible:
             _proches = _dif_97.get_close_matches(
                 _txt, _noms_vivants, n=1, cutoff=0.4,
             )
             if _proches:
                 cible = _proches[0]
     if cible is None and vivantes:
+        # 🛡️ gruumsh4pj (S2) : « frappe UN ennemi » (anaphore seule, ni nom
+        # ni espèce identifiable) → viser le PLUS BLESSÉ : finir le travail
+        # plutôt que taper sur un monstre plein PV.
+        try:
+            vivantes = sorted(
+                vivantes,
+                key=lambda _m: int(str(_m.get("pv", 0) or 0).split("(")[0]
+                                   or 0),
+            )
+        except (TypeError, ValueError):
+            pass
         cible = str((vivantes[0]).get("nom") or "")
     if not cible:
         return ""
@@ -6875,6 +7452,41 @@ async def _handle_say(
         except Exception as e_rb:                      # noqa: BLE001
             print(f"[dnd35] Re-bind pré-tour échoué (ignoré) : {e_rb}")
 
+    # 🛡️ gruumsh4pj (R7) : JET EN ATTENTE — résolution automatique si le
+    # délai (90 s) est dépassé, sinon rappel honnête au joueur concerné
+    # (son jet décidera du sort de l'action ; pas de tour LLM sans jet).
+    try:
+        _st_ja = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id,
+        ).load()
+        _attente_ja = _st_ja.get("jet_attendu") or {}
+        if _attente_ja:
+            from datetime import datetime as _dt_ja
+            _ts_ja = str(_attente_ja.get("ts") or "")
+            try:
+                _age_ja = (
+                    _dt_ja.now() - _dt_ja.fromisoformat(_ts_ja)
+                ).total_seconds()
+            except ValueError:
+                _age_ja = 1e9
+            if _age_ja > 90.0:
+                await _jet_resoudre(session, partie_id, player,
+                                    automatique=True)
+            elif (_attente_ja.get("joueur") or "").strip().lower() == (
+                    player.strip().lower()):
+                await session.broadcast({
+                    "type": "sys",
+                    "event": "jet_rappel",
+                    "detail": (
+                        "🎲 Ton jet est attendu : "
+                        f"{_attente_ja.get('type')} — clique Lancer ou "
+                        "tape « je lance »."
+                    ),
+                })
+                return
+    except Exception as e_ja:                                # noqa: BLE001
+        print(f"[dnd35] Garde jet_attendu échouée (ignoré) : {e_ja}")
+
     # 1. Mémorise le message joueur + broadcast immédiat à tous (echo).
     session.remember_player_message(player, text)
     await session.broadcast({
@@ -6887,6 +7499,37 @@ async def _handle_say(
         # en direct chez les coéquipiers).
         "client_id": str(client_id or ""),
     })
+
+    # 🛡️ gruumsh4pj (R5) : phase game_over + acceptation explicite →
+    # résurrection serveur immédiate (la prose du MJ n'est plus requise).
+    try:
+        _st_go = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id,
+        ).load()
+        if (str(_st_go.get("phase") or "") == "game_over"
+                or _st_go.get("game_over")):
+            if (_RE_ACCEPTATION_RESURRECTION.search(text or "")
+                    and not _RE_REFUS_RESURRECTION.search(text or "")):
+                ctx_go = _ctx(partie_id, player)
+                _note_go = await _resurrection_sur_acceptation(
+                    app, ctx_go, player)
+                if _note_go:
+                    await session.broadcast({
+                        "type": "dm",
+                        "text": (
+                            "✨ **Résurrection acceptée par la table.**\n\n"
+                            + _note_go
+                        ),
+                        "tool_events": [],
+                        "state_patches": [],
+                        "tool_calls_trace": [],
+                    })
+                    await session.broadcast({
+                        "type": "status", "description": "", "done": True,
+                    })
+                    return
+    except Exception as e_go:                                   # noqa: BLE001
+        print(f"[dnd35] Résurrection sur acceptation échouée (ignoré) : {e_go}")
 
     # 1bis. ⚔️ Garde de tour : DÉPLACÉE après le pre-run du moteur de combat
     # (voir dans le verrou de session) — la rotation doit d'abord être
@@ -7063,13 +7706,21 @@ async def _handle_say(
                                     "[dnd35] Narration pre-run (tour bloqué) "
                                     f"échouée/timeout (repli brut) : {e_b}"
                                 )
-                            await session.broadcast({
-                                "type": "dm",
-                                "text": _nar_bloc
-                                or (
+                            # 🛡️ gruumsh4pj (R2/P27) : cette narration de
+                            # pre-run était diffusée SANS passer par
+                            # `_nettoyer_meta_narration` — le LLM y inventait
+                            # des timeouts (« tour expiré après deux cents
+                            # secondes d'inaction ») rendus tels quels.
+                            _nar_bloc = _nettoyer_meta_narration(
+                                _nar_bloc or "")
+                            if not _nar_bloc:
+                                _nar_bloc = (
                                     "⚙️ _Mécanique serveur :_\n\n"
                                     + "\n\n".join(events_pre)
-                                ),
+                                )
+                            await session.broadcast({
+                                "type": "dm",
+                                "text": _nar_bloc,
                                 "tool_events": [],
                                 "state_patches": patches_pre,
                                 "tool_calls_trace": [],
@@ -7077,6 +7728,13 @@ async def _handle_say(
                         await session.broadcast({
                             "type": "sys",
                             "event": "turn_blocked",
+                            # 🛡️ gruumsh4pj (P10) : `terminal` signale au
+                            # demandeur (et aux clients) que ce refus est la
+                            # réponse FINALE à son envoi — aucun `dm` ne
+                            # suivra. En partie réelle, l'émetteur restait
+                            # en attente indéfiniment (son message n'était
+                            # jamais traité, rien ne clore son tour client).
+                            "terminal": True,
                             "detail": (
                                 f"⏳ {player}"
                                 + (f" ({personnage})" if mauvais_perso else "")
@@ -7270,6 +7928,37 @@ async def _handle_say(
             if debut < len(hist) - 1:  # garde au moins le dernier message
                 print(f"[dnd35] Historique tronqué : {len(hist) - debut} messages "
                       f"anciens omis (budget {budget_hist} chars).")
+                # S4 : les messages omis ne disparaissent pas de la
+                # memoire - resumes courts (1re phrase) dans
+                # memoire.historique_resume (FIFO, 24 entrees),
+                # reinjecte au MJ pour garder le fil ancien.
+                try:
+                    _perdus = hist[:debut]
+                    _extraits = []
+                    for _msg in _perdus:
+                        _role = getattr(_msg, 'role', '')
+                        _c = ' '.join(str(getattr(_msg, 'content', '')
+                                      or '').split())
+                        if not _c:
+                            continue
+                        _extraits.append('(' + _role + ') ' + _c[:140])
+                    if _extraits:
+                        _et_hist = PartyState(
+                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                            partie_id=partie_id,
+                        ).load()
+                        _mem = _et_hist.setdefault('memoire', {})
+                        _mem_h = _mem.setdefault('historique_resume', [])
+                        _mem_h.extend(_extraits)
+                        _mem['historique_resume'] = _mem_h[-24:]
+                        PartyState(
+                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                            partie_id=partie_id,
+                        ).save(_et_hist)
+                        print('[dnd35] S4 :', len(_extraits),
+                              'resumes archives (historique_resume).')
+                except Exception as e_s4:
+                    print('[dnd35] S4 condense echoue (ignore) :', e_s4)
             fenetre = hist[debut:]
 
             # 📉 Compression des vieilles narrations (partie 2ca691ec) : les
@@ -7420,6 +8109,25 @@ async def _handle_say(
                         str(apres.get("courant_tour_pour") or "")
                         == actif_avant
                         or _attaque_non_resolue
+                        # 🛡️ gruumsh4pj (P27) : un TOUR MANGÉ PAR UN TIMEOUT
+                        # FANTÔME (« la limite de vingt secondes dépassée »
+                        # narrée 2 s après l'action, rotation avancée par la
+                        # prose) est une action NON RÉSOLUE — le rejeu 5bis-a
+                        # se déclenche même si le tour a déjà été consommé.
+                        or (
+                            bool(_RE_PARAGRAPHE_TIMEOUT_INVENTE.search(
+                                result.narration or ""))
+                            and not any(
+                                tc.get("name") in (
+                                    "lancer_attaque", "lancer_degats",
+                                    "lancer_sauvegarde", "lancer_d20",
+                                    "lancer_des",
+                                    "fiche_perso_infliger_degats",
+                                    "fiche_perso_soigner",
+                                )
+                                for tc in result.tool_calls_trace
+                            )
+                        )
                     )
                 ):
                     pj_actif_apres = next(
@@ -7434,6 +8142,16 @@ async def _handle_say(
                     # ré-invoque le MJ une fois avec un correctif — sinon le
                     # tour avance et l'action est perdue (très frustrant).
                     if not est_monstre:
+                        # 🛡️ gruumsh4pj (audit relances) : quand l'action est
+                        # couverte par un FILET DÉTERMINISTE (attaque armée ou
+                        # sort), le rejeu LLM échouait presque toujours (le 9B
+                        # re-narrait sans jet) et coûtait 1+ appel LLM par tour
+                        # concerné (~40 % des tours de combat). On saute le
+                        # rejeu : le filet serveur résout directement.
+                        _filet_direct = bool(
+                            _SORT_INCANTE_RE.search(text or "")
+                            or _ACTION_ATTAQUE_RE.search(text or "")
+                        )
                         pj_a_agi = any(
                             tc.get("name") in (
                                 "lancer_attaque", "lancer_degats",
@@ -7451,6 +8169,7 @@ async def _handle_say(
                             pj_a_agi = False
                         if (
                             not pj_a_agi
+                            and not _filet_direct
                             and _ACTION_COMBAT_RE.search(text or "")
                         ):
                             print(
@@ -7627,6 +8346,45 @@ async def _handle_say(
                                     print(
                                         "[dnd35] Attaque PJ déterministe "
                                         f"(filet) échouée : {e_5b}"
+                                    )
+                            # 🛡️ gruumsh4pj (R3) : FILET SORTS — un sort
+                            # annoncé (incantation/rayon/soin…) et jamais
+                            # résolu passe par `incanter_sort` déterministe.
+                            # Le tool applique l'effet si les règles le
+                            # permettent, refuse honnêtement sinon ; le tour
+                            # ne reste plus jamais sans verdict magique.
+                            if (
+                                etat_avant.get("phase") == "combat"
+                                and actif_avant
+                                and not _atk_resolue_det
+                                and _SORT_INCANTE_RE.search(text or "")
+                                and not any(
+                                    tc.get("name") in (
+                                        "incanter_sort", "lancer_attaque",
+                                        "lancer_degats",
+                                        "fiche_perso_infliger_degats",
+                                        "fiche_perso_soigner",
+                                    )
+                                    for tc in result.tool_calls_trace
+                                )
+                            ):
+                                try:
+                                    _note_sort = await _sort_pj_sans_jet(
+                                        orch, ctx, on_event, result,
+                                        _pj_attaquant(
+                                            personnage, actif_avant,
+                                            etat_avant),
+                                        texte_declare=text,
+                                    )
+                                    if _note_sort:
+                                        result.narration = (
+                                            result.narration
+                                            + "\n\n" + _note_sort
+                                        ).strip()
+                                except Exception as e_sort_net:  # noqa: BLE001
+                                    print(
+                                        "[dnd35] Sort PJ déterministe "
+                                        f"échoué : {e_sort_net}"
                                     )
             except Exception as e:
                 print(f"[dnd35] 5bis rejeu failed: {e}")
@@ -8345,6 +9103,70 @@ async def _handle_say(
                                   + "; ".join(_corrections))
             except Exception as e:                               # noqa: BLE001
                 print(f"[dnd35] Dé-duplication dégâts échouée (ignoré) : {e}")
+
+            # 🛡️ gruumsh4pj (S1) : MISE EN COHÉRENCE victoire narrée.
+            # Observé en passe 3 : le MJ conclut le combat en prose
+            # (« Victoire ! Les ennemis sont tous hors de combat ») alors
+            # que des ennemis à 1 PV restent vivants dans `monstres_combat`
+            # — la phase restait combat à jamais, sans XP ni exploration.
+            # La déclaration explicite de fin retire les ennemis restants
+            # SANS dégâts tracés : la clôture suivante paiera 0 XP (garde
+            # P15/P20 — une victoire sans dégâts mécaniques ne se monnaie
+            # pas), mais la partie reprend normalement.
+            try:
+                _etat_s1 = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                if (_etat_s1.get("phase") == "combat"
+                        and (result.narration or "").strip()):
+                    _vivants_s1 = [
+                        m for m in (_etat_s1.get("monstres_combat") or [])
+                        if isinstance(m, dict) and not m.get("allie")
+                        and int(m.get("pv", 0) or 0) > 0
+                        and "Détruit" not in (m.get("conditions") or [])
+                        and "Detruit" not in (m.get("conditions") or [])
+                    ]
+                    _msg_gagnant = (
+                        _RE_VICTOIRE_NARREE.search(text or "")
+                        and all(
+                            int(m.get("pv", 0) or 0)
+                            <= max(1, int(m.get("pv_max", 1) or 1) // 4)
+                            for m in _vivants_s1
+                        )
+                    )
+                    if _vivants_s1 and (
+                        _RE_VICTOIRE_NARREE.search(result.narration)
+                        or _msg_gagnant
+                    ):
+                        for _m_s1 in _vivants_s1:
+                            _m_s1["pv"] = 0
+                            _conds_s1 = _m_s1.setdefault("conditions", [])
+                            if ("Détruit" not in _conds_s1
+                                    and "Detruit" not in _conds_s1):
+                                _conds_s1.append("Détruit")
+                        PartyState(
+                            data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                            partie_id=partie_id,
+                        ).save(_etat_s1)
+                        result.narration = (
+                            (result.narration or "").rstrip()
+                            + "\n\n⚙️ _Mise en cohérence : la narration "
+                            "déclare la fin du combat — les ennemis encore "
+                            "vivant(s) en état ont été retirés. Aucune XP : "
+                            "aucun dégât mécanique n'était enregistré "
+                            "(une victoire se frappe, elle ne se décrète "
+                            "pas)._"
+                        )
+                        print(
+                            "[dnd35] S1 : fin de combat ("
+                            + ("message joueur" if _msg_gagnant else
+                               "narration MJ")
+                            + f") — {len(_vivants_s1)} ennemi(s) retiré(s) "
+                            "(0 XP, clôture au moteur)."
+                        )
+            except Exception as e_s1:                        # noqa: BLE001
+                print(f"[dnd35] Garde S1 échoué (ignoré) : {e_s1}")
 
             # ⚙️ MOTEUR DE COMBAT SERVEUR (post-tour).
             # 1) Les événements mécaniques résolus AVANT le tour LLM
@@ -9710,6 +10532,40 @@ on_status=on_status)
                                     _preps_fusion[_sn] = (
                                         _preps_fusion.get(_sn, 0) + 1
                                     )
+                                # 🛡️ gruumsh4pj (R6-bis) : TRONCATURE aux
+                                # emplacements réels — « je prépare A, B, C,
+                                # D, E, F » avec 2 emplacements niv 1
+                                # refusait TOUT (6 > 2) et la préparation
+                                # restait vide pour la 3e fois de suite.
+                                # On garde les PREMIERS sorts cités dans la
+                                # limite des slots (ordre du message = choix
+                                # du joueur) et on l'annonce honnêtement.
+                                try:
+                                    from . import sorts as _cat_mem  # noqa: PLC0415
+                                    _f_mem = persos_mod.charger_fiche(
+                                        cfg.abs(cfg.paths.data_dir), _nom_mem
+                                    ) or {}
+                                    _classe_mem = str(
+                                        _f_mem.get("classe") or "")
+                                    _niv_mem = max(1, int(
+                                        _f_mem.get("niveau", 1) or 1))
+                                    _carac_mem = _f_mem.get("carac") or {}
+                                    _cle_carac = _cat_mem.carac_incantation(
+                                        _classe_mem)
+                                    _mod_mem = (
+                                        int(_carac_mem.get(_cle_carac, 10) or 10)
+                                        - 10) // 2
+                                    _slots_mem = _cat_mem.emplacements(
+                                        _classe_mem, _niv_mem, _mod_mem)
+                                    _limite = sum(_slots_mem.values())
+                                    if (_limite
+                                            and len(_preps_fusion) > _limite):
+                                        _gardes = dict(
+                                            list(_preps_fusion.items())
+                                            [:_limite])
+                                        _preps_fusion = _gardes
+                                except Exception:            # noqa: BLE001
+                                    pass  # borne indisponible → tool strict
                                 if _preps_fusion:
                                     _res_prep = await _prep_tool(
                                         ctx,
@@ -9900,6 +10756,16 @@ on_status=on_status)
             if _narration_prose:
                 session.remember_assistant(_narration_prose)
 
+            # 🛡️ gruumsh4pj (R7) : détection d'une DEMANDE DE JET dans la
+            # narration finale → `jet_attendu` + event `jet_demande` au
+            # joueur visé (sauvegarde ou compétence ; dé côté serveur).
+            try:
+                await _jet_poser_attente(
+                    session, partie_id, result.narration or "",
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)))
+            except Exception as e_jp:                      # noqa: BLE001
+                print(f"[dnd35] Pose jet demandé échouée (ignoré) : {e_jp}")
+
             # 5ter-h. 📓 Auto-mémorisation serveur de la narration du tour.
             # Le LLM n'appelait jamais `set_derniere_narration` (abd81275 :
             # champ resté vide après 15 min de jeu) — or ce résumé court sert
@@ -10044,6 +10910,17 @@ on_status=on_status)
             _events_joueur = [
                 _assainir_event_joueur(_ev) for _ev in result.tool_events
             ]
+            # 🛡️ gruumsh4pj (R2) : dédup INTER-TOURS — les blocs
+            # d'ambiance recopiés du tour précédent sont purgés avant
+            # diffusion (la précédente narration est encore dans
+            # `derniere_narration`, mise à jour après le broadcast).
+            try:
+                result.narration = _dedup_vs_derniere(
+                    result.narration or "",
+                    str(_etat_final.get("derniere_narration") or ""),
+                )
+            except Exception as e_dd:                       # noqa: BLE001
+                print(f"[dnd35] Dédup inter-tours échouée (ignoré) : {e_dd}")
             await session.broadcast({
                 "type": "dm",
                 "text": _assainir_texte_joueur(result.narration or ""),

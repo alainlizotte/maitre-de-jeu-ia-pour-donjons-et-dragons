@@ -175,7 +175,14 @@ async def incanter_sort(
         # ⛔ Clamp ≥ 0 (partie 2ca691ec) : un compteur de préparation est
         # passé à -1 (décréments successifs sur fiche non configurée),
         # rendant tout preparer_sorts ultérieur inopérant côté lectures.
-        etat_sorts["prepares"][sort["nom"]] = max(0, restants_prep - 1)
+        reste = max(0, restants_prep - 1)
+        if reste > 0:
+            etat_sorts["prepares"][sort["nom"]] = reste
+        else:
+            # 🧹 gruumsh4pj (P26b) : l'entrée à 0 est SUPPRIMÉE — un « 0 »
+            # résiduel polluait l'état (fiche lisible « Armure du mage: 0 »)
+            # et brouillait les lectures suivantes.
+            etat_sorts["prepares"].pop(sort["nom"], None)
     fiche["sorts"] = etat_sorts
     _save_fiche(ctx, nom_personnage, fiche)
 
@@ -309,6 +316,37 @@ async def incanter_sort(
     else:
         lignes.append(f"- Effet : {sort.get('description', 'utilitaire')}")
 
+    # 🛡️ gruumsh4pj (P24) : les sorts à effet d'ARMURE étaient purement
+    # narratifs — emplacement dépensé, prose « CA 18 », fiche inchangée
+    # (CA 14, aucune condition). L'effet mécanique est appliqué ici :
+    # champ racine `effets_actifs` (hors schéma `conditions` qui n'accepte
+    # que des chaînes) + bonus CA sur la fiche, purge automatique à échéance
+    # (voir `_purger_effets_expires` dans fiches.py).
+    if _norm(sort["nom"]) == _norm("Armure du mage"):
+        try:
+            from datetime import datetime as _dt, timedelta as _td
+            _bonus_ca = 4
+            _duree_min = 60 * max(1, nls_lanceur)   # 1 heure / niveau (3.5)
+            _fin = (_dt.now() + _td(minutes=_duree_min)).isoformat()
+            _effets = [e for e in (fiche.get("effets_actifs") or [])
+                       if isinstance(e, dict)
+                       and _norm(str(e.get("nom") or "")) != _norm("Armure du mage")]
+            _effets.append({"nom": "Armure du mage",
+                            "ca_bonus": _bonus_ca, "fin_ts": _fin})
+            fiche["effets_actifs"] = _effets
+            fiche["ca"] = int(fiche.get("ca", 10) or 10) + _bonus_ca
+            _save_fiche(ctx, nom_personnage, fiche)
+            _idx_am = _sync_pj(ctx, nom_personnage, {"ca": fiche["ca"]})
+            patches_cibles.append(_patch_pj(nom_personnage, _idx_am,
+                                            {"ca": fiche["ca"]}))
+            lignes.append(
+                f"- 🛡️ Armure magique : +{_bonus_ca} de CA (bonus d'armure) "
+                f"pour **{nom_personnage}** → CA **{fiche['ca']}** "
+                f"(durée {_duree_min // 60} h, s'efface automatiquement)."
+            )
+        except Exception as _e_am:                           # noqa: BLE001
+            lignes.append(f"- (effet Armure du mage non appliqué : {_e_am})")
+
     idx = _sync_pj(ctx, nom_personnage, {})
     # Patch final : signal lanceur + les patches PV/conditions des cibles
     # (pj.<i>.pv etc.) collectés ci-dessus → barres de vie en direct.
@@ -339,7 +377,10 @@ async def preparer_sorts(
 
     :param nom_personnage (str): nom du lanceur.
     :param preparations_json (str): JSON dict {nom du sort: nb de fois}
-        (ex. '{"Projectiles magiques": 2, "Armure du mage": 1}').
+        (ex. '{"Projectiles magiques": 2, "Armure du mage": 1}'). Une LISTE
+        de noms (ex. '["Sommeil", "Armure du mage"]') est aussi acceptée
+        (chaque sort compte pour 1) — le petit modèle envoyait une liste
+        native et la préparation était perdue (audit gruumsh4pj P1/P19).
     """
     from .. import sorts as cat
     from .fiches import _save_fiche, _sync_pj, _patch_pj
@@ -354,12 +395,46 @@ async def preparer_sorts(
             text=(f"⛔ {nom_personnage} ({classe}) est un lanceur "
                   f"{cat.type_lancement(classe)} : pas de préparation nécessaire.")
         )
-    try:
-        preps = json.loads(preparations_json or "{}")
-        if not isinstance(preps, dict):
-            raise ValueError
-    except (ValueError, TypeError):
-        return ToolResult(text="❌ preparations_json invalide : JSON dict attendu.")
+    _brut = preparations_json
+    if isinstance(_brut, str):
+        _txt = (_brut or "").strip()
+        try:
+            _brut = json.loads(_txt or "{}")
+        except (ValueError, TypeError):
+            # 🛡️ gruumsh4pj (P19) : le modèle (et certains relais) émet la
+            # REPRÉSENTATION python de la liste (guillemets simples) :
+            # « ['Sommeil', 'Armure du mage'] ». On tolère via literal_eval.
+            try:
+                import ast as _ast
+                _brut = _ast.literal_eval(_txt)
+            except (ValueError, SyntaxError):
+                # 🛡️ invoke_tool aplatit une liste native en chaîne « à
+                # plat » (« Sommeil, Armure du mage ») — traitée comme une
+                # liste de noms (chaque sort compte pour 1).
+                _noms_plats = [
+                    s.strip().strip("'\"")
+                    for s in _txt.replace("[", "").replace("]", "")
+                    .replace("\n", ",").split(",")
+                    if s.strip().strip("'\"")
+                ]
+                _brut = _noms_plats if _noms_plats else None
+    if _brut is None:
+        return ToolResult(text=(
+            "❌ preparations_json invalide : JSON attendu. Deux formats "
+            "acceptés — dict {\"Sort\": nb} (ex. '{\"Sommeil\": 1, "
+            "\"Armure du mage\": 1}') ou liste [\"Sort\", …] (chaque sort "
+            "compte pour 1)."
+        ))
+    if isinstance(_brut, list):
+        _brut = {str(n): 1 for n in _brut if str(n or "").strip()}
+    if not isinstance(_brut, dict):
+        return ToolResult(text=(
+            "❌ preparations_json invalide : JSON attendu. Deux formats "
+            "acceptés — dict {\"Sort\": nb} (ex. '{\"Sommeil\": 1, "
+            "\"Armure du mage\": 1}') ou liste [\"Sort\", …] (chaque sort "
+            "compte pour 1)."
+        ))
+    preps = _brut
 
     niveau = max(1, int(fiche.get("niveau") or 1))
     carac_cle = cat.carac_incantation(classe)
@@ -389,7 +464,16 @@ async def preparer_sorts(
             )
 
     etat_sorts = cat.sorts_de_fiche(fiche)
-    etat_sorts["prepares"] = {str(n): max(1, int(v or 1)) for n, v in preps.items()}
+    # 🧹 gruumsh4pj (P26b) : purger les compteurs à 0/negatif — un « 0 »
+    # residuel bloquait la lecture et polluait l'etat (l'entree disparait
+    # quand il ne reste plus rien a lancer).
+    for _s in [k for k, v in (etat_sorts["prepares"] or {}).items()
+               if int(v or 0) <= 0]:
+        etat_sorts["prepares"].pop(_s, None)
+    etat_sorts["prepares"] = {
+        str(n): max(1, int(v or 1)) for n, v in preps.items()
+        if int(v or 0) > 0
+    }
     etat_sorts["depenses"] = {}  # nouvelle journée d'incantation
     fiche["sorts"] = etat_sorts
     _save_fiche(ctx, nom_personnage, fiche)
@@ -398,7 +482,10 @@ async def preparer_sorts(
         text=(
             f"📖 Sorts préparés par **{nom_personnage}** : " + ", ".join(
                 f"{n} x{v}" for n, v in sorted(etat_sorts['prepares'].items()))
-            + f". Emplacements restaurés ({', '.join(f'n.{k}: {v}' for k, v in slots.items())})."
+            + f". Emplacements du jour ({', '.join(f'n.{k}: {v}' for k, v in slots.items())})."
+            + " ⚠️ La préparation est terminée : n'appelle PAS `repos_long`"
+              " pour elle — un repos n'est qu'une vraie nuit de sommeil jouée"
+              " (lieu sûr, veilles)."
         ),
         state_patch=_patch_pj(nom_personnage, idx, {}),
     )
@@ -438,6 +525,18 @@ async def repos_long(
     # temps de jeu ne s'écoule pas si vite sans narration de voyage.
     state_repos = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
     etat_repos = state_repos.load()
+    # 🛡️ gruumsh4pj (P2) : AUCUN repos long en combat. Observé deux fois
+    # dans la même partie : « 8 h de sommeil » narrées face au boss à 10 PV
+    # (PV + slots remis à zéro au mépris total du tour par tour). `forcer`
+    # ne passe PAS cette garde : un combat n'est jamais l'heure de dormir.
+    if str((etat_repos or {}).get("phase") or "") == "combat":
+        return ToolResult(text=(
+            "⛔ **Repos refusé : le groupe est EN COMBAT** — des ennemis "
+            "sont debout et la rotation est active. Le repos long n'est "
+            "possible qu'une la menace réglée (clôture du combat) : termine "
+            "le combat (attaques, `finir_combat`), soigne via "
+            "`fiche_perso_soigner`/potion si besoin."
+        ))
     dernier = str((etat_repos.get("repos_dernier") or ""))[:19]
     if dernier and not bool(forcer):
         try:

@@ -520,6 +520,18 @@ async def _distribuer_xp(ctx, res: ResultatBoucle, etat: dict) -> None:
     from ..game import xp as gxp
     from ..tools.fiches import _load_fiche, _save_fiche, _sync_pj, _patch_pj
 
+    def _blesse(m: dict) -> bool:
+        """Preuve de combat réel. Si la trace `degats_recus` EXISTE (tous
+        les combats créés par le moteur la posent), c'est elle qui fait foi :
+        un ennemi marqué « Détruit » à PV intacts n'a jamais été frappé.
+        Sans trace (snapshots anciens), PV sous le maximum fait office."""
+        if "degats_recus" in m:
+            return int(m.get("degats_recus") or 0) > 0
+        try:
+            return int(m.get("pv", 0) or 0) < int(m.get("pv_max", 0) or 0)
+        except (TypeError, ValueError):
+            return False
+
     vaincus = [
         m for m in etat.get("monstres_combat") or []
         if not m.get("allie")
@@ -528,23 +540,40 @@ async def _distribuer_xp(ctx, res: ResultatBoucle, etat: dict) -> None:
              # Même cohérence que _verifier_fin : 0 PV = vaincu (partie
              # 2ca691ec — PV patchés sans la condition « Détruit »).
              or (int(m.get("pv", 0) or 0) <= 0 and not m.get("inconnu")))
+        # 🛡️ gruumsh4pj (P15/P20) : un ennemi n'est payé que s'il a
+        # RÉELLEMENT encaissé des dégâts pendant ce combat. L'exploit
+        # constaté en partie : des ennemis « vaincus » sans AUCUN jet ni
+        # dégât (clôture automatique sur une salle marquée nettoyée)
+        # payaient +270 XP/perso à chaque tentative.
+        and _blesse(m)
     ]
     if not vaincus:
         # 🔧 Fallback : ennemis perdus avant la clôture → le snapshot des
         # derniers ennemis suivis fait foi (tous considérés détruits : la
         # clôture en victoire ne survient que s'ils ne menacent plus).
+        # 🛡️ gruumsh4pj : le snapshot n'est payable que si AU MOINS UN
+        # ennemi y porte la trace de dégâts réels — sinon aucune XP.
         derniers = etat.get("monstres_derniers") or []
-        if derniers:
+        if derniers and any(_blesse(m) for m in derniers
+                            if isinstance(m, dict)):
             vaincus = [
                 {"nom": str(m.get("nom") or "?"), "fp": m.get("fp"),
                  "conditions": ["Détruit"]}
-                for m in derniers if isinstance(m, dict) and m.get("nom")
+                for m in derniers
+                if isinstance(m, dict) and m.get("nom") and _blesse(m)
             ]
             res.events.append(
                 "⚙️ _Suivi de combat perdu — XP distribuée sur le snapshot "
-                "des derniers ennemis suivis._"
+                "des derniers ennemis suivis (dégâts constatés)._"
             )
     if not vaincus:
+        # 🛡️ gruumsh4pj : victoire SANS combat (ennemis jamais blessés) →
+        # aucune XP. Un message honnête remplace le bloc XP : la prose ne
+        # doit pas prétendre à un butin mécanique inexistant.
+        res.events.append(
+            "⚙️ _Aucun dégât infligé pendant ce combat — aucune XP "
+            "distribuée (une victoire ne se décrète pas, elle se frappe)._"
+        )
         return
     resume: list[str] = [
         f"🏆 **Victoire !** Ennemis vaincus : "
@@ -578,6 +607,46 @@ async def _distribuer_xp(ctx, res: ResultatBoucle, etat: dict) -> None:
         }))
         resume.extend(logs)
     res.events.append("\n".join(resume))
+
+
+def _avancer_memoire_mission(etat: dict, vaincus: list) -> None:
+    """🛡️ gruumsh4pj (P30) : le suivi de mission restait figé à « 0/4 » du
+    premier au dernier tour (scenario_etape jamais appelé par le MJ). À la
+    clôture d'une victoire, la mémoire de campagne enregistre les ennemis
+    vaincus dans les notes de la mission active et FRANCHIT l'étape de
+    bible quand le boss vaincu y est nommé."""
+    from datetime import datetime as _dt
+    from ..persos import _normaliser as _norm_txt  # tardif, évite les cycles
+    noms = [str(m.get("nom") or "") for m in vaincus
+            if isinstance(m, dict) and m.get("nom")]
+    if not noms:
+        return
+    memoire = etat.setdefault("memoire", {})
+    for mission in memoire.get("missions") or []:
+        if not isinstance(mission, dict) or mission.get("statut") != "active":
+            continue
+        notes = str(mission.get("notes") or "")
+        if "Ennemis vaincus :" not in notes:
+            mission["notes"] = (
+                (notes + (" " if notes else ""))
+                + "Ennemis vaincus : " + ", ".join(noms)
+            ).strip()[:600]
+    bible = ((etat.get("quete") or {}).get("bible") or {})
+    etapes = [str(e) for e in (bible.get("etapes") or []) if str(e).strip()]
+    courante = str(bible.get("etape_courante") or "")
+    if etapes and courante:
+        idx = next((i for i, e in enumerate(etapes)
+                    if e.strip() == courante.strip()), -1)
+        if idx >= 0 and idx + 1 < len(etapes):
+            _cour_n = _norm_txt(courante)
+            if any(_norm_txt(n) in _cour_n or _cour_n in _norm_txt(n)
+                   for n in noms if n):
+                bible["etape_courante"] = etapes[idx + 1]
+                bible["avancement"] = (
+                    "Étape franchie (" + courante + ") le "
+                    + _dt.now().strftime("%d/%m %H:%M")
+                    + " — " + etapes[idx + 1]
+                )[:600]
 
 
 def _memoriser_combat(etat: dict, raison: str) -> None:
@@ -640,6 +709,10 @@ async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
         # périmé chargé ci-dessus.
         etat = state.load()
         _memoriser_combat(etat, raison)
+        # 🛡️ gruumsh4pj (P30) : la mémoire de mission et l'étape de bible
+        # avancent À LA CLÔTURE (scenario_etape n'était jamais appelé par
+        # le MJ — le suivi restait à « 0/4 » toute la partie).
+        _avancer_memoire_mission(etat, etat.get("monstres_combat") or [])
         res.events.append(
             "⚔️ _Tous les ennemis sont à terre — le combat est terminé._"
         )

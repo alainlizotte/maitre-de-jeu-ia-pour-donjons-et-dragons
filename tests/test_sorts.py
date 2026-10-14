@@ -170,9 +170,11 @@ def test_incanter_preparation_puis_slot() -> None:
         # Niv.3 + mod INT +3 : emplacements niv.1 = 2 (base) + 1 (bonus) = 3.
         tr = asyncio.run(incanter_sort(ctx, "Zarkon", "Projectiles magiques", "Gobelin"))
         assert "✨" in tr.text and "Emplacements niv.1 : 1/3" in tr.text
-        # La préparation est consommée + le slot dépensé.
+        # La préparation est consommée + le slot dépensé. gruumsh4pj (P26b) :
+        # le compteur à 0 est SUPPRIMÉ (pas de « Projectiles magiques: 0 »
+        # résiduel qui polluait l'état et brouillait les lectures).
         d = json.loads((Path(tmp) / "fiches" / "fiche_zarkon.json").read_text(encoding="utf-8"))
-        assert d["sorts"]["prepares"]["Projectiles magiques"] == 0
+        assert "Projectiles magiques" not in d["sorts"]["prepares"]
         assert d["sorts"]["depenses"]["1"] == 1
         # 2e incantation : plus de préparation → refus.
         tr2 = asyncio.run(incanter_sort(ctx, "Zarkon", "Projectiles magiques", "Gobelin"))

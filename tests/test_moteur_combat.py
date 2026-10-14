@@ -109,11 +109,14 @@ def test_tour_monstre_joue_auto_puis_sarrete_sur_pj():
 def test_victoire_attribue_xp_et_croit_la_memoire():
     d = _fresh_dir()
     try:
-        # Monstre seul mais déjà détruit → le moteur doit clôturer en
-        # victoire et distribuer l'XP (PJ niveau 1, FP 1/3 → 135 XP DMG p.38).
+        # Monstre seul, DÉJÀ DÉTRUIT et réellement blessé (degats_recus > 0,
+        # gruumsh4pj P15/P20 : l'XP ne se paie que pour un ennemi touché) →
+        # le moteur clôture en victoire et distribue l'XP (PJ niveau 1,
+        # FP 1/3 → 135 XP DMG p.38).
         _setup(d, courant="Brunhild", monstre_fp="1/3", monstre_pv=5)
         etat = _etat(d)
         etat["monstres_combat"][0]["conditions"] = ["Détruit"]
+        etat["monstres_combat"][0]["degats_recus"] = 5
         PartyState(data_dir=d, partie_id=PID).save(etat)
 
         res = asyncio.run(boucle_auto(_ctx(d)))
@@ -148,6 +151,7 @@ def test_victoire_monte_de_niveau():
         etat = _etat(d)
         etat["pj"][0]["xp"] = 900
         etat["monstres_combat"][0]["conditions"] = ["Détruit"]
+        etat["monstres_combat"][0]["degats_recus"] = 12
         PartyState(data_dir=d, partie_id=PID).save(etat)
 
         random.seed(1)  # jet 1d10 (Guerrier) déterministe

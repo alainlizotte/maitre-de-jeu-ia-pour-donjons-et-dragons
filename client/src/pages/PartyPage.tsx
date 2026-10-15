@@ -146,7 +146,7 @@ export function PartyPage() {
     }
   }, [partyQuery.data, partie_id, addMonster, addScene, addSalle, removeMonsterByNom]);
 
-  const { sendSay, sendTeamSay, sendDice, socket } = useChatSocket(partie_id ?? null);
+  const { sendSay, sendTeamSay, sendDice, sendRoll, jetAttendu, socket } = useChatSocket(partie_id ?? null);
 
   // set_quest enregistre toujours un objet quête (même à titre vide pour
   // « aventure libre ») ; tant que rien n'est enregistré, le sélecteur reste
@@ -161,6 +161,11 @@ export function PartyPage() {
   const [panelDir, setPanelDir] = useState(0);
   const [ressourcesOuvertes, setRessourcesOuvertes] = useState(false);
   const teamUnread = useParty((s) => s.teamUnread);
+
+  // R7 : un jet demande bascule auto le mobile vers le panneau outils
+  useEffect(() => {
+    if (jetAttendu && isMobile) setMobileView("outils");
+  }, [jetAttendu, isMobile]);
   const touch = useRef<{ x: number; y: number } | null>(null);
 
   const goToMobileView = (v: MobileView) => {
@@ -267,7 +272,7 @@ export function PartyPage() {
       )}
       {/* Sur smartphone, avant le choix de quête, le sélecteur occupe toute
           la hauteur (le chat est masqué pour ne pas le réduire de moitié). */}
-      {!(showPicker && isMobile) && <ChatPanel sendSay={sendSay} />}
+      {!(showPicker && isMobile) && <ChatPanel sendSay={sendSay} jetAttendu={jetAttendu} sendRoll={sendRoll} />}
     </div>
   );
 

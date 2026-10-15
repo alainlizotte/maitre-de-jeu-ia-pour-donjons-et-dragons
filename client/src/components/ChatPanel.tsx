@@ -7,8 +7,16 @@ import { useParty } from "../store";
 import { renderMarkdown } from "../utils/markdown";
 import type { ChatMessage } from "../api/types";
 
+interface JetAttenduInfo {
+  categorie: string;
+  type: string;
+  personnage: string;
+}
+
 interface ChatPanelProps {
   sendSay: (text: string) => void;
+  jetAttendu?: JetAttenduInfo | null;
+  sendRoll?: () => void;
 }
 
 function MessageView({ m }: { m: ChatMessage }) {
@@ -51,7 +59,7 @@ function MessageView({ m }: { m: ChatMessage }) {
   );
 }
 
-export function ChatPanel({ sendSay }: ChatPanelProps) {
+export function ChatPanel({ sendSay, jetAttendu, sendRoll }: ChatPanelProps) {
   const messages = useParty((s) => s.messages);
   const thinking = useParty((s) => s.thinking);
   const thinkingLabel = useParty((s) => s.thinkingLabel);
@@ -112,6 +120,23 @@ export function ChatPanel({ sendSay }: ChatPanelProps) {
         <div ref={bottomRef} />
       </div>
 
+      {/* R7 : bandeau Jet demande - visible au-dessus du champ, peu
+          importe le panneau affiche (chat ou outils). */}
+      {jetAttendu && (
+        <div className="shrink-0 bg-amber-900/60 border-t border-amber-500 px-4 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-amber-200">
+              Jet de {jetAttendu.type} attendu ({jetAttendu.personnage})
+            </div>
+            <button
+              onClick={sendRoll}
+              className="shrink-0 px-4 py-1.5 rounded bg-amber-600 font-bold text-stone-900 hover:bg-amber-500"
+            >
+              Lancer
+            </button>
+          </div>
+        </div>
+      )}
       <form onSubmit={submit} className="shrink-0 border-t border-stone-800 p-3 flex gap-2">
         <input
           className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400 disabled:opacity-40"

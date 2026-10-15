@@ -1914,11 +1914,35 @@ def _jet_detecte(narration: str) -> Optional[tuple[str, str]]:
 
 async def _jet_poser_attente(
     session, partie_id: str, narration: str, data_dir: str | None = None,
+    tool_calls_trace: list | None = None,
 ) -> None:
     """Détecte une demande de jet dans la narration MJ, pose `jet_attendu`
     et diffuse `jet_demande` au joueur visé. Silencieux si rien à faire."""
     try:
         det = _jet_detecte(narration)
+        # R7-interception : le MJ a lance un jet POUR UN PJ ?
+        # (lancer_sauvegarde/lancer_d20 avec nom = un PJ) ->
+        # le resultat serveur est JETE, le joueur relance son
+        # propre de (total non declaratif, arbitrage MJ).
+        if not det and tool_calls_trace:
+            from .tools.fiches import _load_fiche as _lf_jd
+            from .tools.base import ToolContext as _tc_jd
+            _ctx_jd = _tc_jd(
+                partie_id=partie_id, joueur="",
+                data_dir=data_dir or str(cfg.abs(cfg.paths.data_dir)))
+            for _t in tool_calls_trace:
+                if _t.get("name") not in (
+                        "lancer_sauvegarde",
+                        "lancer_d20"):
+                    continue
+                _a = _t.get("args") or {}
+                _nj = str(_a.get("nom_personnage") or "").strip()
+                if not _nj:
+                    continue
+                _fj = _lf_jd(_ctx_jd, _nj)
+                if _fj is not None and _fj.get("proprietaire"):
+                    det = ("pj_jet", _nj)
+                    break
         if not det:
             return
         st = PartyState(
@@ -1992,7 +2016,10 @@ async def _jet_resoudre(
 
         bonus = 0
         bonus_txt = ""
-        if categorie == "sauvegarde":
+        if categorie == "pj_jet":
+            bonus = 0
+            bonus_txt = "jet brut"
+        elif categorie == "sauvegarde":
             t_n = _nn_jr(type_jet)
             t_n = {"reflex": "reflexes", "reflexe": "reflexes",
                    "fortitude": "vigueur"}.get(t_n, t_n)
@@ -10762,7 +10789,8 @@ on_status=on_status)
             try:
                 await _jet_poser_attente(
                     session, partie_id, result.narration or "",
-                    data_dir=str(cfg.abs(cfg.paths.data_dir)))
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    tool_calls_trace=result.tool_calls_trace)
             except Exception as e_jp:                      # noqa: BLE001
                 print(f"[dnd35] Pose jet demandé échouée (ignoré) : {e_jp}")
 

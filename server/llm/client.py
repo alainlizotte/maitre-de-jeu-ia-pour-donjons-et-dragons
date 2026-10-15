@@ -305,7 +305,7 @@ class OllamaClient:
         self._client = httpx.AsyncClient(
             base_url=config.base_url,
             headers={"Authorization": f"Bearer {config.api_key}"},
-            timeout=httpx.Timeout(300.0, connect=10.0),
+            timeout=httpx.Timeout(240.0, connect=10.0),
         )
 
     async def aclose(self) -> None:

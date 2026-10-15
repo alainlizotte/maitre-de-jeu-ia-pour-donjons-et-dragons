@@ -2949,6 +2949,12 @@ _INTENT_MONTER_RE = re.compile(
 # Intention « repos » : le joueur demande une récupération (« je me
 # repose », « on dort »…). Si le modèle narre sans appeler `repos_long`,
 # les PV ne sont JAMAIS restaurés (2× ignoré en partie abf74a77).
+
+
+_RE_INCANTE_EXCLUE = re.compile(
+    r"\b(?:incant\w*|lanc\w+\s+(?:le\s+|un\s+)?sort)\b",
+    re.IGNORECASE,
+)
 _INTENT_REPOS_RE = re.compile(
     r"\b(repos\w*|dormir|dormons|dormez|sommeil)\b"
     r"|\bme\s+reposer\b",
@@ -4254,6 +4260,7 @@ class Orchestrator:
                 dernier_user_correctif = (
                     "instruction INTERNE du moteur de jeu" in dernier_user
                 )
+                _incante_exclu = bool(_RE_INCANTE_EXCLUE.search(dernier_user or ""))
                 repos_deja_appele = any(
                     tc.get("name") == "repos_long"
                     for tc in result.tool_calls_trace
@@ -4261,9 +4268,10 @@ class Orchestrator:
                 if (
                     dernier_user
                     and not dernier_user_correctif
+                    and not _incante_exclu
                     and _INTENT_REPOS_RE.search(dernier_user)
                     and not repos_deja_appele
-                ):
+):
                     if not en_combat:
                         _log.warning(
                             "repos demandé sans appel d'outil → appel "

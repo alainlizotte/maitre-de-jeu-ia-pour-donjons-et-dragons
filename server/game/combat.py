@@ -199,7 +199,10 @@ _SIGNES = r"[+\-–—]"
 _RE_ARME_A = re.compile(
     r"(.+?)\s*(" + _SIGNES + r"\d+(?:/" + _SIGNES + r"\d+)*)\s*(?:\(|,|;|$)")
 # DRS : « Arme (+N … » — bonus ENTRE parenthèses.
-_RE_ARME_DRS = re.compile(r"([^+(()]*?)\(\s*(" + _SIGNES + r"?\d+)")
+# Le nom peut contenir un bonus d'ENCHANTEMENT (« *épée à deux mains +4
+# sainte* (+21 …) ») : on n'exclut donc que les parenthèses du nom, pas les
+# signes — le lazy s'arrête à la première « ( » suivie d'un nombre.
+_RE_ARME_DRS = re.compile(r"([^()]*)\(\s*(" + _SIGNES + r"?\d+)")
 _RE_DES = re.compile(r"(\d+)[dD](\d+)(" + _SIGNES + r"\s?\d+)?")
 
 

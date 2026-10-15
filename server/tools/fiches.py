@@ -1116,6 +1116,30 @@ async def fiche_perso_creer_rapide(
                 canon = c
                 break
     dv, bab_val, sauvegardes_base = _CLASSES_35.get(canon or "", (10, 0, (0, 0, 0)))
+    # 🛡️ Conformité PHB (audit classes) : la table ci-dessus ne décrit que le
+    # niveau 1 ET s'était trompée pour le rôdeur (BBA « bon » au lieu de
+    # « moyen » → +1 au lieu de +0 au niv. 1). On recalcule TOUJOURS depuis la
+    # progression canonique de `persos.CLASSES` (bon/moyen/mauvais, valable à
+    # tout niveau). Fallback : table locale pour les classes hors PHB
+    # (warlock, assassin, artificier, alchimiste).
+    try:
+        from ..persos import (  # pylint: disable=import-outside-toplevel
+            CLASSES as _CLASSES_P, resoudre_classe as _rc_canon,
+            _bab_par_niveau as _bab_n, _save_base as _save_n,
+        )
+        _canon_fr = _rc_canon(canon or classe) if canon else ""
+        _infos_p = _CLASSES_P.get(_canon_fr or "", None)
+        if _infos_p:
+            dv = int(_infos_p["de_vie"])
+            bab_val = _bab_n(_infos_p["bab"], int(niveau))
+            _bonnes = set(_infos_p["sauves_bonnes"])
+            sauvegardes_base = (
+                _save_n("Vigueur" in _bonnes, int(niveau)),
+                _save_n("Reflexes" in _bonnes, int(niveau)),
+                _save_n("Volonte" in _bonnes, int(niveau)),
+            )
+    except Exception:                                        # noqa: BLE001
+        pass  # persos indisponible → table locale niveau 1 (historique)
 
     # PV — PHB 3.5 p.22 : au niveau 1, PV = maximum du dé de vie + mod CON
     if int(niveau) == 1:

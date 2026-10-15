@@ -1038,6 +1038,9 @@ export function CharacterFormPage() {
   );
   const avancementAttente = modeEdition && avancementConfirme < form.niveau;
   const verrouille = modeEdition && !avancementAttente;
+  // R7/C6 : mode avancement = edition deverrouillee pour la whitelist
+  // (sorts, dons, competences, +1 carac, compagnon druide).
+  const modeAvancementUI = modeEdition && avancementAttente;
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1080,6 +1083,7 @@ export function CharacterFormPage() {
         ) : (
           <>
             {/* ------------------------- Identité ------------------------- */}
+            <fieldset disabled={modeAvancementUI} className="avancement-bloque">
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4">
               <h2 className="font-serif text-lg text-amber-200 mb-3">Identité</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1185,8 +1189,10 @@ export function CharacterFormPage() {
                 </div>
               </div>
             </section>
+            </fieldset>
 
             {/* --------------------- Caractéristiques --------------------- */}
+            <fieldset disabled={modeAvancementUI} className="avancement-bloque">
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-3">
                 <h2 className="font-serif text-lg text-amber-200">Caractéristiques</h2>
@@ -1257,6 +1263,7 @@ export function CharacterFormPage() {
                 </label>
               )}
             </section>
+            </fieldset>
 
             {/* -------------------- Calculs automatiques -------------------- */}
             <section className="bg-stone-800/40 border border-amber-700/30 rounded-lg p-4">
@@ -1399,6 +1406,7 @@ export function CharacterFormPage() {
             </section>
 
             {/* -------------------- Charge transportée -------------------- */}
+            <fieldset disabled={modeAvancementUI} className="avancement-bloque">
             <section
               className={`border rounded-lg p-4 ${
                 etatCharge.depasse
@@ -1486,8 +1494,10 @@ export function CharacterFormPage() {
                 </p>
               )}
             </section>
+            </fieldset>
 
             {/* ------------------------- Apparence ------------------------- */}
+            <fieldset disabled={modeAvancementUI} className="avancement-bloque">
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4">
               <div className="flex flex-wrap items-center gap-3 mb-1">
                 <h2 className="font-serif text-lg text-amber-200">Apparence</h2>
@@ -1571,6 +1581,7 @@ export function CharacterFormPage() {
                 </div>
               </div>
             </section>
+            </fieldset>
 
             {/* -------------- Équipement, armes, armures, or --------------- */}
             <section className="bg-stone-800/40 border border-stone-700/60 rounded-lg p-4 space-y-5">

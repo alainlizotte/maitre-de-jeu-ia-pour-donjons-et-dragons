@@ -3526,6 +3526,15 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
                 detail=f"Gain de caractéristique invalide : « {gain_carac} ».",
             )
         carac[gain_carac] = int(carac.get(gain_carac, 10)) + 1
+    # C6-garde : en mode avancement, la carac de base du payload est
+    # ignoree et remplacee par la base reconstruite de l existante
+    # (le +1 de palier passe par gain_carac ci-dessus, pas par une
+    # modification libre).
+    if mode_avancement:
+        carac = dict(_carac_base_c6)
+        if gain_carac:
+            carac[gain_carac] = int(carac.get(gain_carac, 10)) + 1
+
 
     race = (payload.get("race") or "").strip()
     classe = (payload.get("classe") or "").strip()
@@ -3569,12 +3578,20 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
                 ),
             )
         gains_carac_precedents = list(existante.get("gains_carac") or [])
+        # C6-garde : MODE AVANCEMENT = palier en attente + PJ deja joue.
+        # Les champs hors whitelist (or, apparence, equipement, carac,
+        # identite, familier non-compagnon) sont RESTAURES depuis
+        # lexistante - le payload tricheur est ignore sans erreur.
+        mode_avancement = bool(avancement_confirme < niveau and int(existante.get("xp", 0) or 0) > 0)
     else:
+        mode_avancement = False
         niveau = 1
         avancement_confirme = 1
         gains_carac_precedents = []
 
     equipement = _normaliser_equipement(payload.get("equipement"))
+    if mode_avancement:
+        equipement = list(_equip_rest)
     # Dons parsés tôt : ils alimentent les valeurs dérivées (comme les PV
     # plus bas via _bonus_dons_pv) — « Esquive » ajoute +1 de CA.
     dons = payload.get("dons") or []

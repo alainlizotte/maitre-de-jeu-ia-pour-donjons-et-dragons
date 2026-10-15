@@ -194,6 +194,13 @@ export class ChatSocket {
     this.send(payload);
   }
 
+  /** 🎲 gruumsh4pj (R7) : jet DEMANDÉ par le MJ (sauvegarde/compétence)
+   *  - le dé est jeté CÔTÉ SERVEUR (bonus officiel depuis la fiche), le
+   *  total n'est pas déclaratif ; le résultat revient en jet_resultat. */
+  roll(player: string): void {
+    this.send({ type: "roll", player });
+  }
+
   close(): void {
     this.manualClose = true;
     this.stopHeartbeat();

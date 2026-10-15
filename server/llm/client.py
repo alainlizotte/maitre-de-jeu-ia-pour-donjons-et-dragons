@@ -357,6 +357,17 @@ class OllamaClient:
                 last_exc = None
             except httpx.RequestError as e:
                 last_exc = e
+                # C8 watchdog : un RequestError apres le 1er
+                # essai signale un backend fige (slot mort,
+                # worker crash - 2 tours x 240 s perdus en passe
+                # 4). On force un RELOAD du modele avant la
+                # prochaine tentative.
+                if attempt >= 2:
+                    _log.warning('watchdog : backend fige, tentative %d', attempt)
+                    try:
+                        await self._llamacpp_load()
+                    except Exception as e_rl:
+                        _log.warning('watchdog reload echoue : %s', e_rl)
                 _log.warning("chat réseau erreur (tentative %d/%d): %s", attempt, len(delays), e)
         else:
             if last_exc:

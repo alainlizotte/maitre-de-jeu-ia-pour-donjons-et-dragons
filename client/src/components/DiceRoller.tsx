@@ -9,7 +9,15 @@ import { useState } from "react";
 
 const FACES = [4, 6, 8, 10, 12, 20, 100] as const;
 
-export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
+export function DiceRoller({
+  sendSay,
+  jetAttendu,
+  sendRoll,
+}: {
+  sendSay?: (text: string) => void;
+  jetAttendu?: { categorie: string; type: string; personnage: string } | null;
+  sendRoll?: () => void;
+}) {
   const [sides, setSides] = useState<(typeof FACES)[number]>(20);
   const [result, setResult] = useState<number | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -23,7 +31,24 @@ export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
     sendSay?.(`🎲 Jet manuel : 1d${sides} → ${r}${r === 20 ? " (20 naturel !)" : r === 1 ? " (1 naturel…)" : ""}`);
   };
 
+  // R7 : bandeau Jet demande quand le MJ appelle le joueur.
+  const bandeau = jetAttendu ? (
+    <div className="mb-3 w-full rounded border-2 border-amber-500 bg-amber-900/40 p-2 text-center">
+      <div className="text-sm text-amber-200">
+        Jet de {jetAttendu.type} attendu ({jetAttendu.personnage})
+      </div>
+      <button
+        onClick={sendRoll}
+        className="mt-1 w-full rounded bg-amber-600 px-3 py-1.5 font-bold text-stone-900 hover:bg-amber-500"
+      >
+        Lancer le de (serveur)
+      </button>
+    </div>
+  ) : null;
+
   return (
+    <>
+      {bandeau}
     <div className="flex flex-col items-center text-center">
       <div className="mb-3 flex flex-wrap justify-center gap-1.5">
         {FACES.map((n) => (
@@ -71,5 +96,6 @@ export function DiceRoller({ sendSay }: { sendSay?: (text: string) => void }) {
         </ul>
       )}
     </div>
+    </>
   );
 }

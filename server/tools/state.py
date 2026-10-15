@@ -1325,6 +1325,24 @@ async def demarrer_combat(ctx: ToolContext, initiative_liste: str) -> ToolResult
     etat["tour"] = 1
     etat["initiative"] = sorted(data, key=lambda x: x.get("init", 0), reverse=True)
     etat["courant_tour_pour"] = etat["initiative"][0].get("nom", "")
+    # 🛡️ gruumsh4pj (C5, passe Mystra) : « Rassasié » (auberge/repas) n'a
+    # aucun sens en combat — purgé des PJ au démarrage, comme les
+    # conditions résiduelles incohérentes (Inconscient avec PV pleins).
+    for _p_r in etat.get("pj") or []:
+        _conds_r = [str(c) for c in (_p_r.get("conditions") or [])]
+        if not _conds_r:
+            continue
+        _purge = [
+            c for c in _conds_r
+            if c.strip().lower() != "rassasié"
+            and c.strip().lower() != "rassasie"
+            and not (
+                c.strip().lower() == "inconscient"
+                and int(_p_r.get("pv", 1) or 0) >= 1
+            )
+        ]
+        if _purge != _conds_r:
+            _p_r["conditions"] = _purge
     err = state.save(etat)
     if err:
         return ToolResult(text=err)

@@ -1,7 +1,7 @@
 // Hook — branche une ChatSocket sur `/ws/{partie_id}` avec le store Zustand.
 // Gère le rejeu de l'historique au `joined` et l'accumulation des deltas.
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { ChatSocket } from "../api/ws";
 import { encounterFromUrl } from "../api/rest";
 import type { ChatMessage, ToolEvent, WsMessage } from "../api/types";
@@ -10,6 +10,12 @@ import { useParty, uid } from "../store";
 export function useChatSocket(partie_id: string | null) {
   const sockRef = useRef<ChatSocket | null>(null);
   const streamId = useRef<string | null>(null);
+  // R7 : jet demande en attente (null si aucun).
+  const [jetAttendu, setJetAttendu] = useState<{
+    categorie: string;
+    type: string;
+    personnage: string;
+  } | null>(null);
 
   // Callbacks du store capturés une fois (évite re-render storm).
   const addMessage = useParty((s) => s.addMessage);
@@ -472,5 +478,14 @@ export function useChatSocket(partie_id: string | null) {
     sockRef.current.dice(player, text, cid);
   };
 
-  return { sendSay, sendTeamSay, sendDice, socket: sockRef };
+  // R7 : jet attendu (sauvegarde/competence) - expose pour le bandeau
+  // Lancer ; sendRoll demande au serveur de jeter le de (bonus fiche
+  // officiel, total non declaratif).
+  const sendRoll = () => {
+    if (!sockRef.current || !player) return;
+    sockRef.current.roll(player);
+    setJetAttendu(null);
+  };
+
+  return { sendSay, sendTeamSay, sendDice, sendRoll, jetAttendu, socket: sockRef };
 }

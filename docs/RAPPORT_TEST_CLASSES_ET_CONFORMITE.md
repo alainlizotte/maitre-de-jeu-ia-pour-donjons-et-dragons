@@ -81,14 +81,16 @@ légers) — `tests/e2e_regles_drs.py` (33/33) et `tests/e2e_combats_reels.py`.
 | 2 | **Armes enchantées DRS non parsées** (« *épée à deux mains +4 sainte* (+21 …) ») : le `+4` du nom bloquait le regex → ces monstres (extérieurs, mortels puissants) ne jouaient JAMAIS leur attaque | `_RE_ARME_DRS` élargi (le nom n'exclut plus les signes ; arrêt à la première parenthèse suivie d'un nombre) → 400/400 monstres à dés exploitables |
 | 3 | Harnais E2E : fiches de test **persistantes entre les parties** (PV d'après-combat, morts) → « TPK fantôme » à l'engagement | Purge des fiches de test avant création dans `creer_fiche_deterministe` |
 | 4 | Harnais E2E : ré-engagement possible en plein combat (réinitialisation zombie, déjà corrigé au run précédent) + `engager_combat` appelé 9× par le 9B | Garde serveur confirmée efficace (refus avec orientation `combat_ajouter_combattant`) |
+| 5 | **RD par TYPE de dégâts non déduite** (« 2/contondant » d'une annis s'appliquait à une masse) | `regles35.py` : table des types PHB pour les 73 armes du catalogue + armes naturelles (morsure/griffe/coup…), type ajouté aux bypass, sémantique ET (conjonction « Bien et perforant ») / OU (alternatives « fer froid/bien ») ; sorts jamais soumis à la RD — 15 vérifications ajoutées au balayage (29/29) |
 
 ## 5. Limites connues (non bloquantes, documentées)
 
-- **RD par TYPE de dégâts** (« 5/contondant ») : le contournement est déduit
-  du nom d'arme (matériau/magie) mais pas du type tranchant/perforant/
-  contondant — une masse contre un squelette verrait sa RD appliquée à tort
-  de quelques points ; le MJ peut l'écraser. Amélioration possible : mapper
-  les types de dégâts par arme du catalogue.
+- ~~RD par TYPE de dégâts~~ → **implémenté depuis** (voir §4, #5) : les 73
+  armes du catalogue + armes naturelles courantes (morsure/griffe/coup) sont
+  typées contondant/perforant/tranchant ; une masse contourne
+  « RD 2/contondant » d'une annis, une épée non ; sémantique PHB des
+  conditions (« Bien et perforant » = conjonction, « fer froid/bien » =
+  alternatives) ; les sorts ne subissent jamais la RD.
 - Attaques sans dés du bestiaire (« fixation », venin) : effets narrés par le
   MJ, pas de rouage de dés (conforme à la donnée source).
 - Pilotage LLM (Qwen 9B) : narrations parfois vides/courtes en début de

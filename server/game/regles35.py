@@ -57,6 +57,96 @@ _BYPASS_MOTS = {
     "mal": ("mal",),
 }
 
+# --------------------------------------------------------------------------- #
+#  Type de dégâts des armes (PHB 3.5, Table 7-5) — chantier « RD par type »
+# --------------------------------------------------------------------------- #
+# contondant / perforant / tranchant par nom d'arme normalisé (« Mains nues »
+# = contondant, PHB ; « Filet » n'inflige pas de dégâts typés).
+_TYPE_DEGATS_ARME: dict[str, str] = {
+    # contondant
+    "baton": "contondant", "matraque": "contondant",
+    "masse d armes legere": "contondant", "masse d armes lourde": "contondant",
+    "etoile du matin": "contondant", "fleau d armes": "contondant",
+    "fleau d armes leger": "contondant", "fleau d armes lourd": "contondant",
+    "fleau double": "contondant", "marteau de guerre": "contondant",
+    "marteau leger": "contondant", "gantelet": "contondant",
+    "gantelet cloute": "contondant", "gourdin": "contondant",
+    "massue": "contondant", "nunchaku": "contondant", "bolas": "contondant",
+    "fronde": "contondant", "lance d arcon": "contondant",
+    "mains nues": "contondant", "coup": "contondant", "poing": "contondant",
+    "tentacule": "contondant", "queue": "contondant",
+    # perforant
+    "dague": "perforant", "dague coup-de-poing": "perforant",
+    "lance courte": "perforant", "lance": "perforant",
+    "lance longue": "perforant", "javeline": "perforant",
+    "javelot": "perforant", "flechette": "perforant", "sarbacane": "perforant",
+    "arbalete legere": "perforant", "arbalete lourde": "perforant",
+    "arbalete de poing": "perforant",
+    "arbalete legere a repetition": "perforant",
+    "arbalete lourde a repetition": "perforant", "epee courte": "perforant",
+    "rapiere": "perforant", "trident": "perforant", "arc court": "perforant",
+    "arc long": "perforant", "arc court composite": "perforant",
+    "arc long composite": "perforant", "epieu": "perforant",
+    "pique": "perforant", "marteau-piolet gnome": "perforant",
+    "pic de guerre leger": "perforant", "pic de guerre lourd": "perforant",
+    "sai": "perforant", "siangham": "perforant", "shuriken": "perforant",
+    "corseque": "perforant", "fleche": "perforant", "carreau": "perforant",
+    "morsure": "perforant", "corne": "perforant", "dard": "perforant",
+    # tranchant
+    "faucille": "tranchant", "epee longue": "tranchant",
+    "epee batarde": "tranchant", "hache d arme": "tranchant",
+    "hachette": "tranchant", "hache a deux mains": "tranchant",
+    "espadon": "tranchant", "glaive": "tranchant", "hallebarde": "tranchant",
+    "guisarme": "tranchant", "ransueur": "tranchant", "faux": "tranchant",
+    "cimeterre": "tranchant", "cimeterre a deux mains": "tranchant",
+    "coutille": "tranchant", "grande hache": "tranchant", "kama": "tranchant",
+    "fouet": "tranchant", "hache de guerre naine": "tranchant",
+    "chaine cloutee": "tranchant", "double-lame": "tranchant",
+    "hache double orque": "tranchant", "urgrosh nain": "tranchant",
+    "kukri": "tranchant", "griffe": "tranchant", "serpe": "tranchant",
+    "lame": "tranchant", "hache": "tranchant", "epee": "tranchant",
+    "sabre": "tranchant",
+}
+
+# Mots-clés de secours (armes naturelles du bestiaire hors catalogue).
+_MOTS_TYPE_DEGATS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("contondant", ("contondant", "massue", "marteau", "masse", "gourdin",
+                    "fleau", "baton", "matraque", "mains nues", "poing",
+                    "coup ", "nunchaku", "bolas", "fronde")),
+    ("perforant", ("perforant", "dague", "lance", "javel", "pique", "pieu",
+                   "rapiere", "arbalete", "arc ", "fleche", "carreau",
+                   "morsure", "corne", "dard", "sai ", "siangham",
+                   "shuriken", "epieu", "sarbacane", "flechette")),
+    ("tranchant", ("tranchant", "epee", "hache", "lame", "sabre", "cimeterre",
+                   "faux", "griffe", "glaive", "hallebarde", "guisarme",
+                   "faucille", "kama", "fouet", "chaine cloutee", "urgrosh",
+                   "kukri", "coutille")),
+)
+
+
+def type_degats_source(source: str) -> str:
+    """Type de dégâts d'une attaque d'arme : « tranchant », « perforant » ou
+    « contondant » (PHB Table 7-5), '' si indéterminé (sort, effet…).
+
+    1) nom d'arme du CATALOGUE cité dans la source (« Épée longue +1 »
+    contient « épée longue ») ; 2) mots-clés (armes naturelles du bestiaire :
+    morsure → perforant, griffe → tranchant, coup → contondant)."""
+    s = _norm(source)
+    if not s:
+        return ""
+    from ..catalogue import ARMES   # lazy : évite les cycles
+    for arme in ARMES:
+        nom_norm = _norm(str(arme.get("nom") or ""))
+        if nom_norm and nom_norm in s:
+            t = _TYPE_DEGATS_ARME.get(nom_norm)
+            if t:
+                return t
+    for t, mots in _MOTS_TYPE_DEGATS:
+        for mot in mots:
+            if mot in s:
+                return t
+    return ""
+
 _RE_RD = re.compile(
     r"reduction\s+des\s+degats\s*\(?([^)]*)\)?", re.IGNORECASE)
 _RE_RD2 = re.compile(r"\bRD\s*[: ]?\s*(\d+)\s*(?:/([\w\s/]+))?", re.IGNORECASE)
@@ -152,7 +242,9 @@ def element_de_source(source: str) -> str:
 
 
 def _bypass_de_source(source: str, bonus_mag: int) -> set[str]:
-    """Bypass de RD couverts par la source (« épée longue +1 » → magie)."""
+    """Conditions de RD CONTOURNÉES par la source (« épée longue +1 » →
+    magie) ET **type de dégâts de l'arme** (chantier « RD par type » :
+    une masse contourne « RD 5/contondant », une épée non)."""
     s = _norm(_norm_txt(source))
     out: set[str] = set()
     if bonus_mag >= 1 or re.search(r"\+\d", s):
@@ -162,6 +254,9 @@ def _bypass_de_source(source: str, bonus_mag: int) -> set[str]:
             continue
         if any(k in s for k in mots):
             out.add(bypass)
+    type_d = type_degats_source(source)
+    if type_d:
+        out.add(type_d)
     return out
 
 
@@ -215,9 +310,17 @@ def reduire_degats_monstre(
     if est_une_attaque_darme(source) and d["rd"]:
         bypass = _bypass_de_source(source, bonus_mag)
         for (montant, conditions) in d["rd"]:
-            conds = {c.strip() for c in str(conditions).split("/") if c.strip()}
-            conds = {c for c in conds if c not in ("—", "-", "")}
-            if conds and (conds & bypass):
+            # Sémantique PHB 3.5 : « fer froid/bien » = ALTERNATIVES (un seul
+            # terme suffit) ; « Bien et perforant » = CONJONCTION (il faut
+            # TOUS les termes, ex. une arme à la fois bien et perforante).
+            contourne = False
+            for bloc in str(conditions).split("/"):
+                sous = {_norm(c) for c in re.split(r"\s+ou\s+|\s+et\s+", bloc)
+                        if c.strip() and c.strip() not in ("—", "-", "")}
+                if sous and sous <= bypass:
+                    contourne = True
+                    break
+            if contourne:
                 continue                       # la source contourne cette RD
             avant = total
             total = max(0, total - montant)

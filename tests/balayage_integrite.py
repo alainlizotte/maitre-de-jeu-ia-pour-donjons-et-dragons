@@ -81,6 +81,40 @@ mult_hors = [str(m.get("nom")) for m in mons.values()
 ok("Bestiaire : multiplicateurs de critique dans [2..4]", not mult_hors,
    ", ".join(mult_hors[:8]))
 
+# ── RD par TYPE de dégâts (chantier « RD par type ») ─────────────────────
+from server.game.regles35 import (  # noqa: E402
+    reduire_degats_monstre as _rdm, type_degats_source as _tds,
+)
+for src, attendu in [("Épée longue", "tranchant"),
+                     ("Masse d'armes lourde", "contondant"),
+                     ("Mains nues", "contondant"), ("Dague +1", "perforant"),
+                     ("Arc long", "perforant"), ("Grande hache", "tranchant"),
+                     ("Boule de feu", "")]:
+    ok(f"Type de dégâts : {src} → {attendu}", _tds(src) == attendu,
+       f"reçu {_tds(src)!r}")
+_ANNIS = {"nom": "Annis",
+          "capacites": "réduction des dégâts (2/contondant)"}
+ok("RD typée : masse contourne 2/contondant (0 réduit)",
+   _rdm(_ANNIS, 10, "Masse d'armes lourde")[0] == 10)
+ok("RD typée : mains nues contournent 2/contondant",
+   _rdm(_ANNIS, 10, "Mains nues")[0] == 10)
+ok("RD typée : épée longue subit 2/contondant (−2)",
+   _rdm(_ANNIS, 10, "Épée longue")[0] == 8)
+_RAK = {"nom": "Rakshasa",
+        "capacites": "réduction des dégâts (15/Bien et perforant)"}
+ok("RD conjonctive : « Bien et perforant » exige LES DEUX (dague +1 → −15)",
+   _rdm(_RAK, 20, "Dague +1")[0] == 5)
+ok("RD conjonctive : épée longue → −15",
+   _rdm(_RAK, 20, "Épée longue")[0] == 5)
+_PLANTE = {"nom": "Plante TG",
+           "capacites": "réduction des dégâts (10/perforant)"}
+ok("RD typée : dague (perforante) contourne 10/perforant",
+   _rdm(_PLANTE, 20, "Dague")[0] == 20)
+ok("RD typée : épée longue subit 10/perforant (−10)",
+   _rdm(_PLANTE, 20, "Épée longue")[0] == 10)
+ok("RD : les SORTS ne subissent jamais la RD",
+   _rdm(_ANNIS, 10, "Trait de feu")[0] == 10)
+
 # ── 2. Scénarios ──────────────────────────────────────────────────────────
 scen_dir = os.path.join(DATA, "scenarios", "Laelith")
 n_scen = 0

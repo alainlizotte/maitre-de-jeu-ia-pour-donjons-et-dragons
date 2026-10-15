@@ -1,8 +1,9 @@
 # Section combats — injectée quand phase = combat
 
-Rappels de règles de combat **non codées** par les tools. Les tools gèrent déjà
-les jets (initiative, attaque, dégâts, sauvegarde) ; ces consignes couvrent les
-règles structurelles.
+Rappels de règles de combat. ⚡ Les règles marquées **CÂBLÉES** sont résolues par
+les tools/moteur (critiques, RD, conditions, AOO, attaques spéciales, surprise,
+préparer/attendre, non-létal, concentration) : appelle les tools, ne simule
+JAMAIS ces règles en prose. Les autres consignes couvrent les règles structurelles.
 
 ---
 
@@ -122,7 +123,10 @@ règles structurelles.
 1. **Round de surprise** : si une partie seulement est consciente (Détection /
    Perception auditive opposé à Déplacement silencieux), un round de surprise
    précède le combat. Les combattants surpris sont **flat-footed** (perte du bonus
-   de DEX à la CA, bouclier conservé), sauf *Esquise instinctive* (barbare, roublard).
+   de DEX à la CA, bouclier conservé), sauf *Esquive instinctive* (barbare, roublard).
+   ⚡ **CÂBLÉ** : passe les noms des surpris à
+   `engager_combat(monstres=..., surprise="Nom1, Nom2")` — le serveur retire leur
+   DEX à la CA (−2) au round 1 et l'affiche.
 
 2. **Initiative** : `1d20 + mod. DEX` (+4 avec *Science de l'initiative*), tri
    décroissant, conservé jusqu'à la fin du combat. Égalité → reroll 1d20 sans mod.
@@ -144,25 +148,56 @@ règles structurelles.
      au round suivant.
 
 4. **Attaques d'opportunité (AOO)** : provoquées par déplacement hors zone menacée
-   sans 5-foot step, action déconcentrante en zone menagée (sort, tir à distance,
-   dégainer une arme...). **Un seul AOO par provocant** par round ; le don
+   sans 5-foot step, action déconcentrante en zone menacée (sort, tir à distance,
+   dégainer une arme...). **Un seul AOO par provocateur** par round ; le don
    *Réflexes de combat* porte le plafond à **mod. DEX + 1**.
+   ⚡ **CÂBLÉ** : `attaque_opportunite(nom_attaquant, nom_cible, bonus_attaque,
+   ca_cible, arme)` — un compteur serveur refuse la 2e AOO du même attaquant
+   au même round.
 
-5. **Critiques** : 20 naturel = voie critique à confirmer (1d20 + bonus attaque vs CA
-   ; un second 20 = critique) ; multiplicateur ×2 / ×3 / ×4 selon l'arme.
-   **1 naturel** = maladresse.
+4bis. **Attaques spéciales CÂBLÉES** : `attaque_speciale(type_attaque, nom_attaquant,
+   nom_cible, bonus_attaquant, bonus_cible)` avec type = "renversement"
+   (jets d'attaque opposés, succès = condition **Renversé** appliquée, échec de 10+
+   = attaquant à terre), "desarmement", "bousculade", "aider" (succès = **+2 à la
+   prochaine attaque de l'allié**, appliqué automatiquement), "feinte" (succès =
+   la cible perd sa DEX contre ta prochaine attaque, appliqué automatiquement),
+   "immobilisation" (les deux **Agrippés**).
+
+4ter. **Conditions à effets réels** (appliquées par le serveur sur les jets) :
+   Fatigué −2 / Épuisé −6 à l'attaque, Renversé −4, Empêtré −2, Agrippé −2 et Dex
+   perdue à la CA, Aveuglé 50 % de rater, cible Invisible 50 % de rater, Pris en
+   tenaille +2 pour l'attaquant, Fragilisé/Secoué −2, Titubant −2. Pose-les via
+   `fiche_perso_condition` ; les malus s'appliqueront seuls.
+
+4quater. **Préparer une action / Attendre** :
+   `combat_preparer_action(declencheur="...")` consomme le tour et arme un
+   déclencheur (l'action se résout hors initiative au déclenchement) ;
+   `combat_attendre()` reporte le tour À LA FIN du round (ordre restauré au
+   round suivant).
+
+5. **Critiques** : 20 naturel (ou zone d'arme) = la confirmation est résolue
+   SERVEUR : le résultat affiche « CRITIQUE CONFIRMÉ » ou « NON confirmée ».
+   Sur confirmation, relance `lancer_degats` avec **multiplicateur=2** (×3/×4 si
+   l'arme le porte) — les DÉS sont doublés, pas le bonus. **1 naturel** = maladresse.
 
 6. **Dégâts** : modificateur de Force **×1,5** avec arme à deux mains, **×0,5** en
    main secondaire. Arme composite : pénalité si bonus de FOR insuffisant.
+   ⚡ **RD & résistances CÂBLÉES** : les défenses du bestiaire (RD X/…, résistances
+   feu/froid/électricité/acide/sonique, immunités, vulnérabilités) sont parsées et
+   APPLIQUÉES automatiquement par `fiche_perso_infliger_degats` — ne soustrais
+   JAMAIS la RD à la main, le serveur l'affiche.
+   ⚡ **Dégâts non-létaux CÂBLÉS** : `fiche_perso_infliger_degats(..., non_letal=true)`
+   — réserve dédiée, évanouissement sans -1 PV ; les soins entament cette réserve.
 
 7. **Massive Damage** : 50 PV en un seul coup → jet de Vigueur DD 15 ou mort.
 
 8. **Mort & agonie** : -10 PV = mort. Entre 0 et -9 PV, le PJ agonise
-   (perte 1 PV/round). Repos 8 h = récupération 1 PV/DV/jour.
+   (stabilisation 1d20 ≥ 10 par round, gérée par le serveur).
 
-9. **Lancement de sort sous menace** : jet de Concentration
-   (`1d20 + mod. carac de lanceur + niveau`) contre DD = 10 + dégâts subis
-   (ou 10 + niveau du sort pour distraction continue). Échec = sort perdu.
+9. **Lancement de sort sous menace** : `incanter_sort(..., degats_subis=N)` si le
+   lanceur a ENCAISSÉ des dégâts ce round — le jet de Concentration est comparé
+   serveur au DD officiel (10 + dégâts, max 20) ; échec = **sort perdu**
+   (emplacement dépensé, aucun effet).
 
 10. **Fin de combat — victoire** : la fin du combat (dernier ennemi
      Détruit, ou tous les héros à terre) est DÉTECTÉE ET CLÔTURÉE PAR LE

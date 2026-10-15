@@ -465,7 +465,8 @@ def _ennemis_canoniques_salle(etat: dict) -> list[str]:
 # (« registre engager_combat absent »).
 @tool
 async def engager_combat(
-    ctx: ToolContext, monstres: str, ajustement: str = ""
+    ctx: ToolContext, monstres: str, ajustement: str = "",
+    surprise: str = "",
 ) -> ToolResult:
     """
     Engage un combat contre un ou plusieurs monstres EN UN SEUL APPEL :
@@ -481,6 +482,11 @@ async def engager_combat(
         le bestiaire ni remplacer la créature du scénario. Ex.
         "pv 30%, attaque -4, dégâts -4, ca -3, fp 2". Les stats adaptées
         ne valent QUE pour ce combat.
+    :param surprise (str): OPTIONNEL — noms des combattants PRIS AU
+        DÉPOURVU au round 1 (PJ et/ou monstres, séparés par des virgules).
+        Règle 3.5 (round de surprise) : ils perdent leur bonus de DEX à la
+        CA (−2 appliqué serveur par `lancer_attaque`) et n'agissent pas
+        pendant le round de surprise — narre ce round avant l'initiative.
     """
     import random
 
@@ -564,6 +570,43 @@ async def engager_combat(
 
     state = _party(ctx)
     etat = state.load()
+
+    # 🔒 Chantier E2E (défaite zombie) : PAS de NOUVEL engagement pendant un
+    # combat en cours — un 2ᵉ `engager_combat` réinitialisait l'initiative
+    # (round 1) et figeait la partie dans un combat fantôme. Cas autorisés :
+    #   - re-call IDEMPOTENT (mêmes espèces que celles déjà engagées) ;
+    #   - tous les ennemis actuels sont détruits (vague suivante légitime).
+    # Des RENFORTS en pleine mêlée passent par `combat_ajouter_combattant`.
+    if str(etat.get("phase") or "") == "combat" \
+            and (etat.get("monstres_combat") or []):
+        import unicodedata as _ud_lock
+
+        def _tete(nom: str) -> str:
+            _n = "".join(
+                c for c in _ud_lock.normalize(
+                    "NFKD", str(nom or "").strip().lower())
+                if not _ud_lock.combining(c))
+            return (_n.split() or [""])[0]
+
+        _demandees = {_tete(n) for n in noms if _tete(n)}
+        _actuelles = {_tete(m.get("nom")) for m in etat["monstres_combat"]}
+        _vivantes = [
+            m for m in etat["monstres_combat"]
+            if not m.get("allie")
+            and "Détruit" not in (m.get("conditions") or [])
+            and "Detruit" not in (m.get("conditions") or [])
+            and int(m.get("pv", 0) or 0) > 0
+        ]
+        if _vivantes and not (_demandees and _demandees <= _actuelles):
+            return ToolResult(text=(
+                "⛔ **Combat DÉJÀ en cours** (round "
+                f"{etat.get('tour', 1)}, ennemis debout : "
+                + ", ".join(str(m.get("nom")) for m in _vivantes) + "). "
+                "NE réengage PAS : poursuis le combat en cours. Des "
+                "RENFORTS en pleine mêlée s'ajoutent via "
+                "`combat_ajouter_combattant` (jamais engager_combat, qui "
+                "réinitialiserait l'initiative)."
+            ))
 
     # 🔤 Partie 0e615b81 : upgrade VARIANTE d'après la narration — « un Loup
     # (Lycanthrope) d'environ 2 mètres » + engagement « Loup » engageait le
@@ -1173,6 +1216,18 @@ async def engager_combat(
     etat["tour_depuis"] = _dt.now().isoformat()
     # 🔧 Bêta (séquencement) : nouveau combat → marques « déjà agi » à zéro.
     etat["deja_agi"] = []
+    # 🆕 Round de surprise (chantier DRS P2-#10) : liste des combattants
+    # pris au dépourvu au round 1 — `lancer_attaque` leur retire le bonus
+    # de DEX à la CA (−2), purgé à la clôture du combat.
+    surpris = [s.strip() for s in str(surprise or "").split(",") if s.strip()]
+    etat["surpris"] = surpris
+    if surpris:
+        lignes.append(
+            "🫥 **Round de surprise** : pris au dépourvu au round 1 → "
+            + ", ".join(surpris)
+            + " (Dex perdue à la CA, appliquée serveur ; aucun acte pendant "
+              "le round de surprise — narre-le AVANT le premier round)."
+        )
     # ♻️ Historique des engagements (voir garde anti re-engagement) :
     # signature + horodatage, borné aux 8 dernières rencontres.
     _hist = [h for h in (etat.get("historique_engagements") or [])
@@ -1800,6 +1855,118 @@ async def terminer_mon_tour(ctx: ToolContext) -> ToolResult:
         ),
         state_patch={
             "tour": etat["tour"],
+            "courant_tour_pour": etat["courant_tour_pour"],
+        },
+    )
+
+
+# --------------------------------------------------------------------------- #
+#  ⏱️ Préparer une action / Attendre (chantier DRS P3-#21, DMG 3.5
+#  « Actions modifiant l'initiative »)
+# --------------------------------------------------------------------------- #
+@tool
+async def combat_preparer_action(
+    ctx: ToolContext, declencheur: str
+) -> ToolResult:
+    """
+    PRÉPARER UNE ACTION (3.5) : le combattant courant renonce à agir
+    immédiatement et prépare une action qui se déclenchera quand la
+    condition annoncée sera remplie (ex. « dès que la porte s'ouvre »,
+    « quand le gobelin entre dans la lumière »). Le tour est consommé ; au
+    déclenchement (narré par le MJ), l'action se résout par les tools
+    habituels (`lancer_attaque`, `incanter_sort`…) — le serveur accepte ces
+    jets hors initiative tant qu'une action préparée est en attente.
+
+    :param declencheur (str): condition de déclenchement, à la 3e personne
+        (ex. "attaque le premier gobelin qui franchit la porte").
+    """
+    from datetime import datetime as _dt
+    state = _party(ctx)
+    etat = state.load()
+    if etat.get("phase") != "combat" or not etat.get("initiative"):
+        return ToolResult(text="❌ Aucun combat en cours.")
+    courant = str(etat.get("courant_tour_pour") or "")
+    etat["action_preparee"] = {
+        "nom": courant, "declencheur": str(declencheur or "").strip(),
+        "tour": int(etat.get("tour") or 1),
+    }
+    deja = etat.setdefault("deja_agi", [])
+    if courant not in deja:
+        deja.append(courant)
+    # Le curseur avance : l'action sera jouée HORS tour au déclenchement.
+    idx = next((i for i, e in enumerate(etat["initiative"])
+                if e.get("nom") == courant), -1)
+    idx += 1
+    wrap = False
+    if idx >= len(etat["initiative"]):
+        idx = 0
+        wrap = True
+    vivant = _prochain_vivant(etat, etat["initiative"], idx)
+    if vivant != -1:
+        etat["courant_tour_pour"] = etat["initiative"][vivant].get("nom", "")
+    if wrap:
+        etat["tour"] = int(etat.get("tour", 0) or 0) + 1
+        etat["deja_agi"] = []
+    etat["tour_depuis"] = _dt.now().isoformat()
+    err = state.save(etat)
+    if err:
+        return ToolResult(text=err)
+    return ToolResult(
+        text=(
+            f"⏱️ **Action préparée** par {courant} : « {declencheur} ». "
+            "Tour consommé — c'est au tour de "
+            f"**{etat['courant_tour_pour']}**. Au déclenchement, narre "
+            "l'action et appelle les tools normaux (le jet hors initiative "
+            "est légitime grâce à l'action préparée)."
+        ),
+        state_patch={
+            "courant_tour_pour": etat["courant_tour_pour"],
+            "tour": etat["tour"],
+        },
+    )
+
+
+@tool
+async def combat_attendre(ctx: ToolContext) -> ToolResult:
+    """
+    ATTENDRE (delay, 3.5) : le combattant courant reporte son tour À LA FIN
+    du round (après tous les autres). Il conservera sa place habituelle aux
+    rounds suivants. Différence avec « préparer une action » : attendre ne
+    fixe AUCUN déclencheur, on agit simplement en dernier.
+    """
+    from datetime import datetime as _dt
+    state = _party(ctx)
+    etat = state.load()
+    if etat.get("phase") != "combat" or not etat.get("initiative"):
+        return ToolResult(text="❌ Aucun combat en cours.")
+    courant = str(etat.get("courant_tour_pour") or "")
+    ordre = etat["initiative"]
+    idx = next((i for i, e in enumerate(ordre) if e.get("nom") == courant), -1)
+    if idx == -1:
+        return ToolResult(text="❌ Combattant courant introuvable.")
+    # Ordre original mémorisé UNE fois (restauré au wrap de round).
+    etat.setdefault("initiative_originale",
+                    [dict(e) for e in ordre])
+    # Déplace le combattant à la fin de l'ordre du round courant.
+    entry = ordre.pop(idx)
+    ordre.append(entry)
+    # Au suivant.
+    idx_suivant = idx % len(ordre)
+    vivant = _prochain_vivant(etat, ordre, idx_suivant)
+    if vivant != -1:
+        etat["courant_tour_pour"] = ordre[vivant].get("nom", "")
+    etat["tour_depuis"] = _dt.now().isoformat()
+    err = state.save(etat)
+    if err:
+        return ToolResult(text=err)
+    return ToolResult(
+        text=(
+            f"⏳ {courant} ATTEND : son tour est reporté à la fin du round "
+            f"(ordre actuel : " + " → ".join(e["nom"] for e in ordre)
+            + f"). C'est à **{etat['courant_tour_pour']}**."
+        ),
+        state_patch={
+            "initiative": ordre,
             "courant_tour_pour": etat["courant_tour_pour"],
         },
     )

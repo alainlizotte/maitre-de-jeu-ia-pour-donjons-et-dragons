@@ -615,6 +615,19 @@ def bonus_arme_magique(arme: str) -> int:
     return _plus_n(_norm_key(str(arme or "")))
 
 
+def bonus_sauvegarde_magie(fiche: Optional[dict]) -> int:
+    """Bonus de sauvegarde des objets « Résistance +N » portés (PHB 3.5) :
+    le MAX des +N portés s'applique (deux objets Résistance +1 → +1 seul).
+    (Chantier DRS P3-#19 — auparavant seul la CA détectait ses objets.)"""
+    total = 0
+    for nom in _objets_portes(fiche):
+        n = _norm_key(nom)
+        if "resistance" in n or "résistance" in str(nom).lower():
+            v = _plus_n(n)
+            total = max(total, v)
+    return total
+
+
 def bonus_race_familier(fiche: Optional[dict], effet: str) -> int:
     """Bonus mécanique des CAPACITÉS RACIALES et du FAMILIER pour un effet
     donné (`effet` ∈ comp_*, sauvegarde_*… — clés normalisées : minuscule,
@@ -1715,7 +1728,7 @@ def _marquer_degats(cle: tuple) -> None:
 
 
 def _infliger_degats_monstre(
-    ctx: ToolContext, nom: str, d: int
+    ctx: ToolContext, nom: str, d: int, source: str = ""
 ) -> Optional[ToolResult]:
     """Applique des dégâts à un MONSTRE suivi par `engager_combat`
     (etat.monstres_combat). Renvoie None si `nom` ne correspond à aucun
@@ -1795,6 +1808,40 @@ def _infliger_degats_monstre(
                 )
             )
         )
+    # 🛡️ Défenses du monstre (chantier DRS P1-#2) : RD / résistances
+    # énergie / immunités / vulnérabilités, parsées du bestiaire. La source
+    # (nom d'ARME ou de SORT) vient du paramètre ou du mémo posé par
+    # `lancer_degats` au même tour — impossible d'oublier la RD.
+    note_def = ""
+    try:
+        from ..game.regles35 import (  # pylint: disable=import-outside-toplevel
+            defenses_monstre, reduire_degats_monstre,
+        )
+        src_def = str(source or "")
+        if not src_def:
+            from .dice import (  # pylint: disable=import-outside-toplevel
+                dernier_source_degats,
+            )
+            src_def = str(dernier_source_degats(
+                ctx.partie_id, str(ctx.tour_id or ""), nom
+            ).get("source") or "")
+        # L'entrée de suivi ne transporte pas les champs bestiaires :
+        # si les défenses n'y sont pas, on charge la fiche du bestiaire.
+        _fiche_def = cible
+        if not defenses_monstre(_fiche_def):
+            try:
+                from .monstres import _find_monstre  # noqa: PLC0415
+                _b = _find_monstre(ctx, str(cible.get("nom") or nom))
+                if _b is not None:
+                    _fiche_def = _b
+            except Exception:                                # noqa: BLE001
+                pass
+        if src_def and defenses_monstre(_fiche_def):
+            _d_red, note_def = reduire_degats_monstre(
+                _fiche_def, d, src_def)
+            d = _d_red
+    except Exception:                                        # noqa: BLE001
+        pass  # module indisponible → dégâts bruts (comportement historique)
     nv = int(cible.get("pv", 0)) - d
     cible["pv"] = nv
     # 🛡️ gruumsh4pj (P15/P20) : trace des dégâts RÉELLEMENT infligés — la
@@ -1848,12 +1895,15 @@ def _infliger_degats_monstre(
         f"PV {nv}/{cible.get('pv_max', '?')}{note}\n"
         f"Ennemis : {restants}"
     )
+    if note_def:
+        msg = f"{note_def}\n{msg}"
     return ToolResult(text=msg, state_patch={"monstres_combat": mons})
 
 
 @tool
 async def fiche_perso_infliger_degats(
-    ctx: ToolContext, nom: str, degats: int
+    ctx: ToolContext, nom: str, degats: int, source: str = "",
+    non_letal: bool = False,
 ) -> ToolResult:
     """
     Applique des dégâts à un personnage (réduit ses PV). Renvoie l'état après
@@ -1862,6 +1912,15 @@ async def fiche_perso_infliger_degats(
 
     :param nom (str): nom du personnage ou du monstre.
     :param degats (int): nombre de points de dégâts (≥0).
+    :param source (str): OPTIONNEL — nom de l'ARME ou du SORT qui a infligé
+        ces dégâts. Sert à appliquer automatiquement les défenses du monstre
+        cible (RD, résistances, immunités — chantier DRS). À défaut, la
+        dernière source enregistrée par `lancer_degats` au même tour est
+        relue automatiquement.
+    :param non_letal (bool): dégâts NON LÉTAUX (3.5) — cumulés dans la
+        réserve de PV non-létaux du PJ (chaleur, faim, mains nues…). À
+        hauteur des PV restants, le PJ s'effondre **Inconscient** sans
+        descendre sous 0 PV. Les soins entament d'abord cette réserve.
     """
     try:
         d = max(0, int(float(str(degats).strip())))
@@ -1888,7 +1947,7 @@ async def fiche_perso_infliger_degats(
             )
     fiche = _load_fiche(ctx, nom)
     if fiche is None:
-        r = _infliger_degats_monstre(ctx, nom, d)
+        r = _infliger_degats_monstre(ctx, nom, d, source=source)
         if r is not None:
             return r
         return ToolResult(
@@ -1912,6 +1971,35 @@ async def fiche_perso_infliger_degats(
                 "possible. Narre la scène en PROSE (sans tool) ou change "
                 "d'action."
             )
+        )
+    # ⚡ DÉGÂTS NON LÉTAUX (3.5, chantier DRS P3-#15) : réserve dédiée
+    # `pv_nl`. Si la réserve atteint les PV restants → **Inconscient** sans
+    # perte de PV (le PJ garde ses PV, il s'évanouit). Les soins entament
+    # d'abord cette réserve (voir fiche_perso_soigner).
+    if non_letal:
+        pv_act_nl = int(fiche.get("pv", 0) or 0)
+        nl = int(fiche.get("pv_nl", 0) or 0) + d
+        fiche["pv_nl"] = nl
+        conds_nl: list[str] = fiche.setdefault("conditions", [])
+        ko_nl = ""
+        if pv_act_nl > 0 and nl >= pv_act_nl \
+                and "Inconscient" not in conds_nl:
+            conds_nl.append("Inconscient")
+            ko_nl = (" — 💤 **INCONSCIENT** (dégâts non-létaux "
+                     f"{nl} ≥ PV {pv_act_nl}).")
+        try:
+            _save_fiche(ctx, nom, fiche)
+        except ValueError as e:
+            return ToolResult(text=f"❌ {e}")
+        idx_nl = _sync_pj(ctx, nom, {"conditions": conds_nl})
+        msg_nl = (
+            f"💫 {nom} subit {d} dégâts NON LÉTAUX → réserve "
+            f"{nl}/{pv_act_nl} PV{ko_nl} (PV inchangés : "
+            f"{fiche.get('pv', 0)})."
+        )
+        return ToolResult(
+            text=msg_nl,
+            state_patch=_patch_pj(nom, idx_nl, {"conditions": conds_nl}),
         )
     # D&D 3.5 (Injury and Death) : les PV peuvent descendre sous 0 ;
     # mort à -10 (ou gros dégâts d'un coup : mort si pv - d ≤ -10).
@@ -2068,7 +2156,8 @@ async def fiche_perso_soigner(
         _pv_g, _pm_g = int(fiche.get("pv") or 0), int(fiche.get("pv_max") or 0)
     except (TypeError, ValueError):
         _pv_g = _pm_g = 0
-    if _pm_g and _pv_g >= _pm_g:
+    if _pm_g and _pv_g >= _pm_g \
+            and int(fiche.get("pv_nl", 0) or 0) <= 0:
         return ToolResult(
             text=(
                 f"ℹ️ {nom} est DÉJÀ à {_pv_g}/{_pm_g} PV — soin inutile : "
@@ -2190,6 +2279,19 @@ async def fiche_perso_soigner(
             )
     try:
         max_pv = int(fiche.get("pv_max", 0))
+        # ⚡ Non-létal d'abord (3.5) : un soin entame la réserve de dégâts
+        # non-létaux AVANT de remonter les PV (chantier DRS P3-#15).
+        nl_avant = int(fiche.get("pv_nl", 0) or 0)
+        if nl_avant > 0 and int(fiche.get("pv", 0)) > 0:
+            nl_apres = max(0, nl_avant - s)
+            s_utilise_nl = nl_avant - nl_apres
+            if s_utilise_nl:
+                fiche["pv_nl"] = nl_apres
+                s = max(0, s - s_utilise_nl)
+                consomme_note += (
+                    f"\n💫 Non-létal d'abord : {s_utilise_nl} points de la "
+                    f"réserve effacés (reste {nl_apres})."
+                )
         nv = min(max_pv, int(fiche.get("pv", 0)) + s)
     except (TypeError, ValueError):
         # Données de fiche corrompues (ex. pv patché en texte par le LLM) :
@@ -2213,6 +2315,11 @@ async def fiche_perso_soigner(
         if c in conds and nv > 0:
             conds.remove(c)
             nettoye = True
+    # ⚡ Non-létal sous le seuil → reprise de conscience (3.5).
+    if "Inconscient" in conds and int(fiche.get("pv_nl", 0) or 0) \
+            < max(1, nv):
+        conds.remove("Inconscient")
+        nettoye = True
     try:
         _save_fiche(ctx, nom, fiche)
     except ValueError as e:
@@ -2264,6 +2371,9 @@ async def fiche_perso_condition(
         "inconscient", "paralyse", "petrifie", "panique", "effraye",
         "secoue", "malade", "titubant", "endormi", "saignant",
         "pris en tenaille", "affecte", "muet",
+        # chantier DRS P1-#4 : conditions 3.5 supplémentaires à effets
+        # mécaniques dans lancer_attaque (titubant=staggered déjà présent)
+        "chancelant", "fragilise", "nauseeux", "assomme",
         # gérées par le moteur de combat
         "mort", "mourant", "stabilise", "detruit", "invisible",
         "empoisonne",
@@ -2277,9 +2387,9 @@ async def fiche_perso_condition(
             "Conditions valides : Aveuglé, Confus, Charmé, Assourdi, "
             "Étourdi, Épuisé, Fatigué, Agrippé, Empêtré, Renversé, "
             "Inconscient, Paralysé, Pétrifié, Paniqué, Effrayé, Secoué, "
-            "Malade, Titubant, Endormi, Saignant, Pris en tenaille, "
-            "Invisible, Empoisonné (+ Mort/Mourant/Stabilisé gérées par le "
-            "moteur)."
+            "Malade, Titubant/Chancelant, Endormi, Saignant, Assommé, "
+            "Fragilisé, Nauséeux, Pris en tenaille, Invisible, Empoisonné "
+            "(+ Mort/Mourant/Stabilisé gérées par le moteur)."
             + (f" Suggéré : {', '.join(_sugg)}." if _sugg else "")
             + " Décrivez l'état dans la PROSE sans le poser en condition."
         ))

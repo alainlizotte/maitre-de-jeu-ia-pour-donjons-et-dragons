@@ -170,6 +170,14 @@ def _avancer_curseur(etat: dict) -> Optional[str]:
     # dès la première avance (double action redevenue possible).
     if wrap:
         etat["deja_agi"] = []
+        # ⏳ Chantier DRS (P3-#21) : un combattant a ATTENDU ce round →
+        # l'ordre a été perturbé ; on restaure l'ordre d'origine au wrap.
+        if etat.get("initiative_originale"):
+            etat["initiative"] = [
+                dict(e) for e in etat["initiative_originale"]]
+            etat.pop("initiative_originale", None)
+            ordre = etat["initiative"]
+            idx = 0
     vivant = _prochain_vivant(etat, ordre, idx)
     if vivant == -1:
         vivant = idx  # la clôture gérera ce cas
@@ -201,69 +209,100 @@ def _int_signe(txt: str) -> int:
     return int(t)
 
 
-def _arme_du_bestiaire(m: dict) -> Optional[tuple[str, int, int, int, int]]:
-    """(arme, bonus_atk, nb_des, faces, bonus_dmg) depuis la fiche bestiaire.
+def _attaques_du_bestiaire(
+    m: dict,
+) -> list[tuple[str, list[int], int, int, int]]:
+    """Liste COMPLÈTE des attaques d'une fiche bestiaire (chantier DRS P1-#3).
 
-    Gère les formats du bestiaire local :
-    - « Cimeterre +2 (corps à corps) » / « Griffe +4, mordre +4 » /
-      « Grande épée +12/+7 » (bonus hors parenthèses) ;
-    - DRS : « contact intangible (+3 contact au corps à corps, 1d6 ...) »
-      (bonus ENTRE parenthèses) — format majoritaire qui faisait renvoyer
-      None à l'ancien parseur (305/342 entrées) : les monstres ne jouaient
-      JAMAIS leur tour (Ombre muette en partie dfccc120).
-    Multi-attaques : segments séparés par « ; » — le premier segment
-    exploitable gagne. Les dés de dégâts sont relus dans `degs` après le
-    nom d'arme, à défaut dans le segment `attaques`, puis (dernier recours)
-    le premier dé du champ `degs` (cas « Griffe +4 » avec degs « 1d4+4 »).
+    Retour : [(arme, [bonus_atk…], nb_des, faces, bonus_dmg), …]
+    — « Grande épée +12/+7/+2 » → une entrée, 3 bonus (attaques itératives) ;
+    — « Griffe +4, mordre +4 » → deux entrées (attaques naturelles) ;
+    — « contact intangible (+3 …, 1d6 …) » (DRS) → une entrée.
+    Les virgules DANS les parenthèses ne séparent pas les attaques.
     """
     attaques = str(m.get("attaques") or "").strip()
     if not attaques:
-        return None
+        return []
     degs = str(m.get("degs") or "")
+    out: list[tuple[str, list[int], int, int, int]] = []
     for segment in re.split(r"\s*;\s*", attaques):
         segment = segment.strip()
         if not segment:
             continue
-        # Retire les suffixes de type d'attaque DRS entre l'arme et son
-        # bonus (« Dague +2 au corps à corps (1d4+1…) » → « Dague +2 (…) »)
-        # pour que le format « Arme +N ( » s'applique.
-        segment = re.sub(
-            r"\s+(?:au\s+corps\s+à\s+corps|à\s+distance|corps\s+à\s+corps"
-            r"|distance)(?=\s*\()",
-            " ", segment, flags=re.IGNORECASE).strip()
-        arme: Optional[str] = None
-        bonus_atk = 0
-        # Format « Arme +N » (suivi de « ( », « , », « ; » ou fin).
-        mm = _RE_ARME_A.match(segment)
-        if mm and mm.group(1).strip():
-            arme = mm.group(1).strip()
-            bonus_atk = _int_signe(mm.group(2).split("/")[0])
-        else:
-            # Format DRS « Arme (+N ...) » : bonus entre parenthèses.
-            md0 = _RE_ARME_DRS.match(segment)
-            if md0:
-                arme = md0.group(1).strip().strip(",;")
-                bonus_atk = _int_signe(md0.group(2))
-        if not arme:
-            continue
-        # Retire un éventuel compte initial (« 2 tentacules » → « tentacules »).
-        arme = re.sub(r"^\d+\s+", "", arme).strip() or arme
-        # Dés de dégâts : d'abord dans `degs` après le nom d'arme...
-        pos = degs.lower().find(arme.lower())
-        bloc = degs[pos + len(arme):] if pos >= 0 else ""
-        md = _RE_DES.search(bloc)
-        if not md:
-            # ... à défaut dans le segment `attaques` lui-même (DRS).
-            md = _RE_DES.search(segment)
-        if not md:
-            # Dernier recours : le premier dé du champ `degs` (attaques
-            # sans dés, « Griffe +4 » avec degs « 1d4+4 »).
-            md = _RE_DES.search(degs)
-        if not md:
-            continue
-        bonus_dmg = _int_signe((md.group(3) or "0").replace(" ", ""))
-        return (arme, bonus_atk, int(md.group(1)), int(md.group(2)), bonus_dmg)
-    return None
+        # Split sur les virgules HORS parenthèses (DRS : « arme (+3, 1d6) »).
+        morceaux: list[str] = []
+        profondeur = 0
+        courant: list[str] = []
+        for ch in segment:
+            if ch == "(":
+                profondeur += 1
+            elif ch == ")":
+                profondeur = max(0, profondeur - 1)
+            if ch == "," and profondeur == 0:
+                morceaux.append("".join(courant))
+                courant = []
+            else:
+                courant.append(ch)
+        morceaux.append("".join(courant))
+        for morceau in morceaux:
+            morceau = morceau.strip()
+            if not morceau:
+                continue
+            # « ou coup (+18 …) » = attaque ALTERNATIVE (DRS) : le monstre
+            # choisit L'UNE des options, il ne les enchaîne pas.
+            if re.match(r"^ou\b", morceau, re.IGNORECASE):
+                continue
+            seg = re.sub(
+                r"\s+(?:au\s+corps\s+à\s+corps|à\s+distance|corps\s+à\s+corps"
+                r"|distance)(?=\s*\()",
+                " ", morceau, flags=re.IGNORECASE).strip()
+            arme: Optional[str] = None
+            bonus_chain: list[int] = []
+            mm = _RE_ARME_A.match(seg)
+            if mm and mm.group(1).strip():
+                arme = mm.group(1).strip()
+                bonus_chain = [
+                    _int_signe(b)
+                    for b in re.findall(_SIGNES + r"\s?\d+", mm.group(2))]
+            else:
+                md0 = _RE_ARME_DRS.match(seg)
+                if md0:
+                    arme = md0.group(1).strip().strip(",;")
+                    bonus_chain = [_int_signe(md0.group(2))]
+            if not arme:
+                continue
+            arme = re.sub(r"^\d+\s+", "", arme).strip() or arme
+            pos = degs.lower().find(arme.lower())
+            bloc = degs[pos + len(arme):] if pos >= 0 else ""
+            md = (_RE_DES.search(bloc) or _RE_DES.search(seg)
+                  or _RE_DES.search(degs))
+            if not md:
+                continue
+            bonus_dmg = _int_signe((md.group(3) or "0").replace(" ", ""))
+            if not bonus_chain:
+                bonus_chain = [0]
+            out.append((arme, bonus_chain[:4], int(md.group(1)),
+                        int(md.group(2)), bonus_dmg))
+            if len(out) >= 4:
+                return out        # garde-fou : 4 lignes d'attaque max
+    return out
+
+
+def _arme_du_bestiaire(m: dict) -> Optional[tuple[str, int, int, int, int]]:
+    """(arme, bonus_atk, nb_des, faces, bonus_dmg) — PREMIÈRE attaque de la
+    fiche bestiaire (compat historique ; voir `_attaques_du_bestiaire`)."""
+    lst = _attaques_du_bestiaire(m)
+    if not lst:
+        return None
+    arme, chain, nb_des, faces, bonus_dmg = lst[0]
+    return (arme, chain[0], nb_des, faces, bonus_dmg)
+
+
+def _multiplicateur_crit_bestiaire(m: dict) -> int:
+    """Multiplicateur de critique du bestiaire (« ×3 » dans degs/attaques)."""
+    txt = _norm(str(m.get("degs") or "") + " " + str(m.get("attaques") or ""))
+    mm = re.search(r"[x×]\s*(\d)", txt)
+    return min(4, max(2, int(mm.group(1)))) if mm else 2
 
 
 def _premiere_cible_pj(etat: dict) -> Optional[tuple[str, int]]:
@@ -328,6 +367,7 @@ async def _attaque_auto(
     # créature a été engagée avec `ajustement=…` (engager_combat /
     # combat_ajouter_combattant), les deltas d'attaque/dégâts s'appliquent
     # aux attaques automatiques — la fiche du bestiaire reste inchangée.
+    _aj_attaque, _aj_degats = 0, 0
     mo_aj = next(
         (mo for mo in etat.get("monstres_combat") or []
          if _norm(mo.get("nom")) == _norm(attaquant)),
@@ -335,13 +375,13 @@ async def _attaque_auto(
     )
     if mo_aj is not None and mo_aj.get("_ajuste"):
         try:
-            bonus_atk += int(mo_aj.get("_aj_attaque") or 0)
+            _aj_attaque = int(mo_aj.get("_aj_attaque") or 0)
         except (TypeError, ValueError):
-            pass
+            _aj_attaque = 0
         try:
-            bonus_dmg += int(mo_aj.get("_aj_degats") or 0)
+            _aj_degats = int(mo_aj.get("_aj_degats") or 0)
         except (TypeError, ValueError):
-            pass
+            _aj_degats = 0
 
     if ennemi:
         cible_ca = _premiere_cible_pj(etat)
@@ -387,47 +427,103 @@ async def _attaque_auto(
             res.events.append(tr.text)
         return
 
-    tr_atk = await _tool(
-        ctx, "lancer_attaque",
-        {
-            "nom_attaquant": attaquant, "arme": nom_arme,
-            "bonus_attaque": bonus_atk, "nom_cible": cible, "ca_cible": ca,
-        },
-        res,
-    )
-    if tr_atk is None or tr_atk.text.startswith("❌"):
-        return
-    res.events.append(
-        tr_atk.text.replace(
-            "⚔️ **Attaque** :", f"⚔️ **Attaque ({camp})** :", 1
-        )
-    )
-    if ("✅ **Touché**" not in tr_atk.text) and ("⭐ **20 naturel**" not in tr_atk.text):
-        return
-
-    tr_dm = await _tool(
-        ctx, "lancer_degats",
-        {
-            "nb_des": nb_des, "faces": faces, "bonus": bonus_dmg,
-            "arme_ou_sort": nom_arme, "cible": cible,
-            # La fiche du monstre attaquant fait foi pour les dés (tailles
-            # spéciales) — pas le catalogue du joueur (cf. dice.lancer_degats).
-            "attaquant": attaquant,
-        },
-        res,
-    )
-    if tr_dm is None:
-        return
-    res.events.append(tr_dm.text)
-    md = _RE_DEGATS.search(tr_dm.text)
-    if not md:
-        return
-    tr_inf = await _tool(
-        ctx, "fiche_perso_infliger_degats",
-        {"nom": cible, "degats": int(md.group(1))}, res,
-    )
-    if tr_inf is not None and not tr_inf.text.startswith("❌"):
-        res.events.append(tr_inf.text)
+    # 🗡️ ATTAQUES COMPLÈTES (chantier DRS P1-#3) : TOUTES les attaques de la
+    # fiche bestiaire — itératives (« +12/+7/+2 » = 3 jets) ET naturelles
+    # (« Griffe +4, mordre +4 » = 2 jets). Un monstre ne se contente plus de
+    # sa première attaque. Confirmation des critiques incluse (P1-#1).
+    # ⚖️ L'ajustement temporaire d'équilibrage (delta attaque/dégâts) s'applique
+    # à CHAQUE attaque de la série.
+    mult_crit = _multiplicateur_crit_bestiaire(m or {})
+    nb_attaques_jouees = 0
+    for arme_l, bonus_chain, nb_d, fa, bonus_dm in _attaques_du_bestiaire(
+            m or {}):
+        for bonus_atk in bonus_chain:
+            if nb_attaques_jouees >= 6:      # garde-fou anti-déluge
+                break
+            bonus_atk_j = bonus_atk + _aj_attaque
+            bonus_dm_j = bonus_dm + _aj_degats
+            # La cible est-elle encore debout ? (mort au milieu d'un
+            # full attack → on ne frappe pas un cadavre)
+            if ennemi:
+                _pj_c = _pj_depuis_etat(_party(ctx).load(), cible)
+                if _pj_c is not None:
+                    ok_p, raison_p = _pj_peut_agir(_pj_c)
+                    if raison_p == "mort" or int(
+                            _pj_c.get("pv", 0) or 0) <= -10:
+                        break
+            tr_atk = await _tool(
+                ctx, "lancer_attaque",
+                {
+                    "nom_attaquant": attaquant, "arme": arme_l,
+                    "bonus_attaque": bonus_atk_j, "nom_cible": cible,
+                    "ca_cible": ca,
+                },
+                res,
+            )
+            if tr_atk is None or tr_atk.text.startswith("❌"):
+                return
+            if nb_attaques_jouees == 0:
+                res.events.append(
+                    tr_atk.text.replace(
+                        "⚔️ **Attaque** :",
+                        f"⚔️ **Attaque ({camp})** :", 1))
+            else:
+                # Attaques suivantes : on ne ré-affiche que le résultat.
+                for ligne in tr_atk.text.splitlines():
+                    if ("Total attaque" in ligne or "**Touché**" in ligne
+                            or "**Manqué**" in ligne
+                            or "naturel" in ligne):
+                        res.events.append(f"   ↳ {ligne.strip()}")
+            nb_attaques_jouees += 1
+            _touche = ("**Touché**" in tr_atk.text
+                       or "naturel → **touché**" in tr_atk.text)
+            if not _touche:
+                continue
+            mult = 1
+            if "CRITIQUE CONFIRMÉ" in tr_atk.text:
+                mult = mult_crit
+                res.events.append(
+                    f"   🌟 Critique confirmé → dégâts ×{mult} "
+                    f"({arme_l}).")
+            tr_dm = await _tool(
+                ctx, "lancer_degats",
+                {
+                    "nb_des": nb_d, "faces": fa, "bonus": bonus_dm_j,
+                    "arme_ou_sort": arme_l, "cible": cible,
+                    # La fiche du monstre attaquant fait foi pour les dés (tailles
+                    # spéciales) — pas le catalogue du joueur (cf. dice.lancer_degats).
+                    "attaquant": attaquant, "multiplicateur": mult,
+                },
+                res,
+            )
+            if tr_dm is None:
+                return
+            if nb_attaques_jouees == 1:
+                res.events.append(tr_dm.text)
+            else:
+                md_txt = _RE_DEGATS.search(tr_dm.text)
+                if md_txt:
+                    res.events.append(
+                        f"   💥 {arme_l} → {cible} : "
+                        f"**{md_txt.group(1)}** dégâts.")
+            md = _RE_DEGATS.search(tr_dm.text)
+            if not md:
+                return
+            tr_inf = await _tool(
+                ctx, "fiche_perso_infliger_degats",
+                {"nom": cible, "degats": int(md.group(1)),
+                 "source": arme_l}, res,
+            )
+            if tr_inf is not None and not tr_inf.text.startswith("❌"):
+                if nb_attaques_jouees == 1:
+                    res.events.append(tr_inf.text)
+                else:
+                    for ligne in tr_inf.text.splitlines():
+                        if "subit" in ligne:
+                            res.events.append(f"   ↳ {ligne.strip()}")
+                            break
+        if nb_attaques_jouees >= 6:
+            break
 
 
 # --------------------------------------------------------------------------- #
@@ -685,6 +781,102 @@ def _fermer_etat(etat: dict, raison: str) -> None:
     etat["monstres_combat"] = []
     etat["tour_depuis"] = None
     etat["deja_agi"] = []
+    # 🔸 Chantier DRS : purge des états de combat éphémères.
+    etat["surpris"] = []
+    etat["combat_effets"] = {}
+    etat["aoo_tour"] = {}
+
+
+async def _distribuer_butin(ctx, res: ResultatBoucle, etat: dict) -> None:
+    """💰 Trésor officiel par ND (DMG 3.5 / DRS « Trésors », chantier #11) :
+    à la VICTOIRE, génération du butin de la rencontre (3 jets d100 :
+    pièces / biens / objets) et répartition équitable entre les PJ vivants.
+
+    Garde anti-doublon : si la salle courante du scénario porte un trésor
+    canonique RÉDIGÉ non encore réclamé, le moteur ne génère RIEN (c'est le
+    trésor de l'auteur qui fait foi, crédité par le parseur de main.py)."""
+    from ..game import regles35 as g35
+    from ..tools.fiches import _load_fiche, _save_fiche, _sync_pj, _patch_pj
+    # 1) Garde trésor canonique de salle -----------------------------------
+    try:
+        _dj = etat.get("donjon") or {}
+        _cour = list(_dj.get("courant") or [0, 0])
+        _grilles = [_dj.get("grille") or []]
+        for _fl in (_dj.get("etages") or {}).values():
+            if isinstance(_fl, dict):
+                _grilles.append(_fl.get("grille") or [])
+        _salle = None
+        for _gr in _grilles:
+            for s in _gr:
+                if isinstance(s, dict):
+                    try:
+                        if (int(s.get("x")), int(s.get("y"))) \
+                                == (int(_cour[0]), int(_cour[1])):
+                            _salle = s
+                            break
+                    except (TypeError, ValueError):
+                        continue
+            if _salle:
+                break
+        if _salle is not None:
+            _txt_t = str(_salle.get("tresor") or "").strip()
+            if _txt_t and not _salle.get("tresor_pris"):
+                res.events.append(
+                    "💰 _Trésor canonique de la salle non réclamé — pas de "
+                    "butin moteur supplémentaire (pas de doublon)._"
+                )
+                return
+    except Exception:                                        # noqa: BLE001
+        pass
+    # 2) ND de la rencontre = FP du plus gros vaincu ------------------------
+    vaincus = [
+        m for m in etat.get("monstres_combat") or []
+        if not m.get("allie")
+        and ("Détruit" in (m.get("conditions") or [])
+             or "Detruit" in (m.get("conditions") or []))
+    ]
+    if not vaincus:
+        vaincus = [m for m in (etat.get("monstres_derniers") or [])
+                   if isinstance(m, dict)]
+    nd = 1
+    for m in vaincus:
+        mm = re.match(r"(\d+)(?:/(\d+))?",
+                      str(m.get("fp") or "1").strip())
+        if mm:
+            val = int(mm.group(1)) / (int(mm.group(2)) if mm.group(2) else 1)
+            nd = max(nd, int(round(val)))
+    tresor = g35.generer_tresor(nd)
+    if not tresor.get("total_pc"):
+        res.events.append(
+            "💰 _Butin de la rencontre : le tirage DMG ne donne RIEN (pas de "
+            "trésor pour cette rencontre) — c'est légitime, narrez-le tel "
+            "quel._")
+        return
+    # 3) Répartition équitable entre PJ vivants ------------------------------
+    pjs = [p for p in etat.get("pj") or []
+           if _pj_peut_agir(p)[1] != "mort"]
+    if not pjs:
+        return
+    part = int(tresor["total_pc"]) // len(pjs)
+    for p in pjs:
+        nom = str(p.get("nom") or "")
+        fiche = _load_fiche(ctx, nom)
+        if fiche is None:
+            continue
+        fiche["or"] = int(fiche.get("or", 0) or 0) + part
+        try:
+            _save_fiche(ctx, nom, fiche)
+        except ValueError as e:
+            res.events.append(f"❌ (butin {nom}) {e}")
+            continue
+        idx = _sync_pj(ctx, nom, {"or": fiche["or"]})
+        res.patches.append(_patch_pj(nom, idx, {"or": fiche["or"]}))
+    txt = g35.decrire_tresor(tresor)
+    txt += f"\n➡️ **{part} pc crédités à chaque PJ vivant**"
+    if tresor.get("biens"):
+        txt += (" (les gemmes/objets de valeur sont convertis en monnaie — "
+                "les PJ peuvent narrativement les garder en étalage).")
+    res.events.append(txt)
 
 
 async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
@@ -707,6 +899,10 @@ async def cloturer(ctx, res: ResultatBoucle, raison: str) -> None:
         # liste `pj` (via _sync_pj → sa propre sauvegarde). Sans ce rechargement,
         # le save final ci-dessous écraserait ces mises à jour avec l'état
         # périmé chargé ci-dessus.
+        etat = state.load()
+        # 💰 Butin officiel par ND (chantier DRS #11) — après l'XP, avant le
+        # save final (idem : il écrit `or` sur les fiches + patches).
+        await _distribuer_butin(ctx, res, etat)
         etat = state.load()
         _memoriser_combat(etat, raison)
         # 🛡️ gruumsh4pj (P30) : la mémoire de mission et l'étape de bible

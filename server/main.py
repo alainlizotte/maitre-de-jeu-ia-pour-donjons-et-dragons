@@ -10272,6 +10272,68 @@ on_status=on_status)
                 except Exception as e_piege:              # noqa: BLE001
                     print(f"[dnd35] Filet piège échoué (ignoré) : {e_piege}")
 
+                # --- 5quater-g-ter. 🪂 Chute / 🌊 noyade narrés SANS tool
+                # (chantier DRS P2-#6/7) : la narration annonce une chute
+                # (« il tombe de 9 mètres ») ou une noyade sans appeler
+                # `danger_chute`/`danger_noyade` — les dégâts ou la mort
+                # seraient inventés. On rejoue avec le tool officiel.
+                try:
+                    _narre_chute = _re_mod.search(
+                        r"\b(tombe?|tomb[ée]e?s?|chute?s?|d[ée]gringol\w*"
+                        r"|s['']?écras\w+ au sol|gliss\w* dans le vide)\b"
+                        r"[^.;]{0,80}?\b(\d{1,3})\s*(?:m|mètres)\b",
+                        result.narration or "", _re_mod.IGNORECASE)
+                    _chute_deja = any(
+                        str(tc.get("name")) in ("danger_chute", "lancer_degats")
+                        for tc in result.tool_calls_trace)
+                    if (_narre_chute and not _chute_deja
+                            and int(_narre_chute.group(2)) >= 3):
+                        _h_chute = int(_narre_chute.group(2))
+                        _obj_chute = (
+                            "⚠️ ERREUR système : tu as narré une CHUTE de "
+                            f"{_h_chute} m SANS tool. Appelle MAINTENANT "
+                            "`danger_chute` (nom_personnage=<celui qui "
+                            f"tombe>, hauteur_m={_h_chute}"
+                            + ", saut_delibre=true si le PJ a sauté "
+                            "volontairement"
+                            + ", surface_meuble=true si sable/boue"
+                            + ", dans_eau=true si l'eau termine la chute"
+                            + ") — il applique la règle officielle 1d6 par "
+                            "3 m. NE narre AUCUN montant de dégâts sans "
+                            "tool."
+                        )
+                        await _rejoue_correctif(
+                            orch, messages, ctx, result, on_event,
+                            _obj_chute, "chute", on_status=on_status)
+                except Exception as e_chute:              # noqa: BLE001
+                    print(f"[dnd35] Filet chute échoué (ignoré) : {e_chute}")
+                try:
+                    _narre_noyade = _re_mod.search(
+                        r"\b(se noie|noy[ée]e?s?|retient? son souffle"
+                        r"|retiens? son souffle|asphyxi\w*|[ée]touff\w*"
+                        r"|manque d'air|sans air)\b",
+                        (result.narration or "") + " " + (text or ""),
+                        _re_mod.IGNORECASE)
+                    _noyade_deja = any(
+                        str(tc.get("name")) == "danger_noyade"
+                        for tc in result.tool_calls_trace)
+                    if _narre_noyade and not _noyade_deja:
+                        _obj_noy = (
+                            "⚠️ ERREUR système : la scène met en jeu un "
+                            "manque d'AIR (noyade/asphyxie) SANS tool. "
+                            "Appelle MAINTENANT `danger_noyade` "
+                            "(nom_personnage=<celui qui manque d'air>, "
+                            "sous_eau=true si immergé) — la séquence "
+                            "officielle (souffle 2×CON, tests de CON DD "
+                            "10+1, 0 PV → -1 PV → mort) est résolue par le "
+                            "serveur. N'invente NI les rounds NI l'issue."
+                        )
+                        await _rejoue_correctif(
+                            orch, messages, ctx, result, on_event,
+                            _obj_noy, "noyade", on_status=on_status)
+                except Exception as e_noyade:             # noqa: BLE001
+                    print(f"[dnd35] Filet noyade échoué (ignoré) : {e_noyade}")
+
                 # --- 5quater-d2. ⚔️ Engagement de combat NARRÉ sans outil
                 # (phase exploration). Le LLM écrit « Engagement du combat /
                 # Initiative : X vs Y » et joue même les tours de monstres —

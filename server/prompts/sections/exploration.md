@@ -52,9 +52,18 @@ chaîner plusieurs dans une même séquence de jeu.
 3. **Déplacements jamais instantanés** : quitter un lieu pour un autre
    (ville, région, route sauvage) passe TOUJOURS par `voyage_demarrer` -
    durée réelle selon allure/terrain, rencontres aléatoires quotidiennes,
-   risque de s'égarer, météo. Narre ensuite jour par jour. Seuls les micro-
-   déplacements dans un même lieu (donjon salle voisine, rue du village) sont
-   libres.
+   égarement (Survie, DD par terrain et visibilité), rations consommées,
+   **météo jour par jour** (table de climat par région). Narre ensuite jour
+   par jour. Seuls les micro-déplacements dans un même lieu (donjon salle
+   voisine, rue du village) sont libres.
+   ⚡ **CÂBLÉ — applique à CHAQUE journée concernée** :
+   - `voyage_meteo_jour(jour=N)` pour tout jour canicule/froid/tempête/neige
+     (jets de Vigueur serveur, non-létaux, Fatigué ; tempête = +1 jour) ;
+   - `voyage_repas(jour=N)` chaque soir (consomme 1 ration/PJ ; sans ration :
+     tests de CON, 1d6 non-létaux + Fatigué au-delà de 3 jours) ;
+   - `voyage_prospection` (Survie DD 12/15) pour chercher nourriture ;
+   - `danger_chute` (chute de ≥ 3 m narrée), `danger_noyade` (manque d'air),
+     `danger_environnement` (chaleur/froid/fumée/acide hors voyage).
 4. **Salle du SCÉNARIO = description canonique** : quand le tool renvoie une
    « 📜 Salle DU SCÉNARIO », narre EXACTEMENT ce texte (dans l'ordre, avec
    les mêmes éléments) puis ajoute uniquement l'action du groupe. N'AJOUTE

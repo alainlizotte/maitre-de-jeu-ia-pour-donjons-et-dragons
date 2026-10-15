@@ -1,7 +1,5 @@
 ﻿# 🐉 Maître du Jeu IA — Donjons & Dragons 3.5
 
-### PROJET EN COURS DE DÉVELOPPEMENT ###
-
 Application web **multijoueur autonome** qui joue le rôle de **Maître du Jeu (MJ)** pour une
 table de Donjons & Dragons 3.5 : un LLM local (Gemma 4 ou Qwen 3.5, via **llama.cpp** par
 défaut ou Ollama) narre l'aventure, mais **la mécanique est décidée par le serveur** —
@@ -15,11 +13,11 @@ connectent depuis leur navigateur sur le réseau local.
 
 | | |
 |---|---|
-| **Backend** | FastAPI + WebSocket, **76 tools Python** (function-calling) |
+| **Backend** | FastAPI + WebSocket, **86 tools Python** (function-calling) |
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
-| **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD |
-| **Qualité** | **958 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) |
+| **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD ; **critiques confirmés, RD/résistances, attaques multiples, conditions à effets, dangers d'environnement, climat par région, trésors par ND** |
+| **Qualité** | **970 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) |
 | **Images** | ComfyUI — tout modèle de votre choix (**recommandé : Qwen-Image 1.0 ou FLUX.1-schnell**, Apache 2.0) — optionnel |
 | **Cartes** | Carte du monde par univers/scénario avec épingles, **chemin parcouru et lieux visités persistants**, plein écran projeté |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
@@ -136,8 +134,46 @@ connectent depuis leur navigateur sur le réseau local.
   écrive « +200 po » lui-même. Prix unitaire reconnu (« 10 po pièce » = pas un total),
   un seul crédit par salle (marqueur persistant), bornes anti-fiction, et
   **anti-double-crédit** quand le MJ a déjà chiffré le gain.
-- **Voyage hors donjon** conforme au SRD : durée réelle (vitesse, terrain, marche forcée),
-  rencontres aléatoires, risque de s'égarer et météo.
+- **Voyage hors donjon** conforme au SRD **et à la DRS « Climat »** : durée réelle
+  (vitesse, terrain, marche forcée, ralentissement si charge Moyenne/Lourde),
+  rencontres aléatoires, **égarement à la table DRS** (DD par terrain, visibilité,
+  Survie du guide), **climat quotidien par région** (tempéré/froid/désert, saison),
+  rations consommées de l'inventaire, et **application serveur de la météo**
+  (`voyage_meteo_jour` : chaleur/froid → jets de Vigueur, non-létaux, Fatigué ;
+  tempête = +1 jour) et des repas (`voyage_repas`, `voyage_prospection`).
+- **Dangers d'environnement câblés (DRS « Environnement »)** : `danger_chute`
+  (1d6/3 m, saut délibéré, surface meuble, chute dans l'eau), `danger_noyade`
+  (souffle 2×CON, tests de CON, séquence 0 → -1 → mort), `danger_environnement`
+  (chaleur, froid, fumée, acide) — avec rattrapages serveur quand la narration
+  décrit une chute ou une noyade sans tool.
+
+### Combat 3.5 fidèle (chantier DRS)
+- **Critiques confirmés par le serveur** : menace (20 ou zone d'arme 19-20/18-20),
+  second jet de confirmation, `lancer_degats(multiplicateur=2/3/4)` — les **dés**
+  sont doublés, pas le bonus.
+- **Réductions des dégâts, résistances et immunités appliquées** : les défenses du
+  bestiaire (« RD 15/adamantium », « résistance au feu (10) », « immunité contre
+  l'électricité ») sont parsées et soustraites automatiquement ; les armes
+  enchantées/en adamantium/en argent contournent les RD correspondantes.
+- **Attaques complètes des monstres** : itératives (« +12/+7/+2 ») et naturelles
+  multiples (« griffe, mordre ») jouées par le moteur ; attaques alternatives
+  (« ou … ») correctement exclues ; multiplicateurs de critique ×3/×4 lus sur la
+  fiche.
+- **Conditions à effets mécaniques** : Fatigué −2/Épuisé −6 à l'attaque,
+  Renversé −4, Empêtré/Agrippé −2 et Dex perdue à la CA, Aveuglé 50 % de rater,
+  cible Invisible 50 % de rater, Pris en tenaille +2, **dégâts non-létaux** avec
+  réserve dédiée (évanouissement sans -1 PV, soins entamant la réserve).
+- **Attaques d'opportunité et attaques spéciales** : `attaque_opportunite`
+  (1/round suivi serveur), `attaque_speciale` (renversement, désarmement,
+  bousculade, aider autrui +2, feinte — bonus consommé par `lancer_attaque` —,
+  immobilisation) ; `combat_preparer_action` et `combat_attendre` (ordre
+  restauré au round suivant) ; **round de surprise** via
+  `engager_combat(surprise=...)` (Dex perdue à la CA au round 1).
+- **Concentration officielle** : `incanter_sort(degats_subis=N)` compare le jet
+  au DD 10+dégâts (max 20) ; échec = **sort perdu** (emplacement dépensé).
+- **Butin DMG par ND** : à la victoire, trésor officiel tiré aux tables
+  (pièces/biens/objets, ND du plus gros vaincu), réparti entre les PJ vivants —
+  sans jamais doubler le trésor canonique rédigé des salles de scénario.
 - **Carte du monde interactive, par univers et par scénario** (Côte des Épées,
   plan de la Cité Sainte de Laelith, Stensia/Innistrad…) : position du groupe par
   ville repère, **zoom ×5 centré sur le groupe** (bascule carte entière ↔ groupe),

@@ -232,7 +232,13 @@ def verifier_tour(avant: dict, apres: dict, trace: list, bilan: Bilan):
 
         # ♻️ Garde anti-doublon du serveur (re-narration détectée) : l'état
         # n'a PAS été modifié par cet appel → hors simulation, hors échec.
-        if "Doublon ignoré" in texte:
+        # (« Doublon ignoré » historique + « Re-narration ignorée » chantier
+        # DRS — même sémantique.)
+        if "Doublon ignoré" in texte or "Re-narration ignorée" in texte:
+            continue
+        # ⛔ Garde acharnement : une créature DÉTRUITE ne subit plus rien —
+        # l'appel est refusé SANS effet (aucune baisse attendue).
+        if "déjà DÉTRUIT" in texte or "est déjà MORT" in texte:
             continue
 
         if nom_outil == "fiche_perso_infliger_degats":

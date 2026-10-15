@@ -148,17 +148,21 @@ def test_attaque_auto_geant_inflige_degats(monkeypatch):
     try:
         _bestiaire(d)
         _etat_combat(d)
-        # Jet d'attaque sûr (20 naturel) + dés max → dégâts = 3d6 max + 13.
+        # Jet d'attaque sûr (20 naturel) + dés max + confirmation max →
+        # CRITIQUE confirmé, ×3 (grande hache 3d6+13/x3) :
+        # dégâts = 3d6 max ×3 + 13 = 67 (les dés sont triplés, pas le bonus).
         monkeypatch.setattr(random, "randint", lambda a, b: b)
         res = ResultatBoucle()
         asyncio.run(_attaque_auto(_ctx(d), res, GEANT, ennemi=True))
         assert not any("⛔" in e for e in res.events), res.events
         assert any("Dégâts infligés" in e for e in res.events), res.events
-        assert any(f"Dégâts infligés : {_GEANT_DMG}" in e
+        assert any("CRITIQUE CONFIRMÉ" in e for e in res.events), res.events
+        _crit_dmg = 3 * 18 + 13   # 3d6 max ×3 + 13
+        assert any(f"Dégâts infligés : {_crit_dmg}" in e
                    for e in res.events), res.events
         with open(os.path.join(d, "fiches", "fiche_brunhild.json"),
                   encoding="utf-8") as f:
             fiche = json.load(f)
-        assert fiche["pv"] == 100 - _GEANT_DMG, fiche
+        assert fiche["pv"] == 100 - _crit_dmg, fiche
     finally:
         shutil.rmtree(d, ignore_errors=True)

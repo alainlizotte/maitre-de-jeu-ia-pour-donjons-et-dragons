@@ -74,6 +74,7 @@ async def incanter_sort(
     nom_personnage: str,
     nom_sort: str,
     cible: str = "",
+    degats_subis: int = 0,
 ) -> ToolResult:
     """
     Lance un sort en appliquant les règles D&D 3.5 : classe autorisée,
@@ -87,6 +88,11 @@ async def incanter_sort(
     :param nom_sort (str): nom exact du sort (ex. « Boule de feu »).
     :param cible (str): nom de la cible (PJ ou monstre). Vide = soi-même /
         utilitaire.
+    :param degats_subis (int): OPTIONNEL — dégâts ENCAISSÉS CE ROUND par le
+        lanceur : force un jet de CONCENTRATION comparé serveur au DD
+        officiel 10 + dégâts (max 20) ; échec = le sort est PERDU
+        (emplacement dépensé). 0 = lancement tranquille (chantier DRS
+        P3-#18).
     """
     from .. import sorts as cat
     from .fiches import _save_fiche, _sync_pj, _patch_pj
@@ -205,7 +211,11 @@ async def incanter_sort(
     # dépend de la scène — le MJ compare ce total au DD du moment. La
     # compétence Concentration (CON) est recoupée depuis la fiche (rangs +
     # mod. CON), elle n'est plus jamais inapplicable.
-    if "concentration" in str(sort.get("duree") or "").lower():
+    # ⚡ Chantier DRS (P3-#18) : avec `degats_subis` > 0, le DD est
+    # OFFICIEL et COMPARÉ SERVEUR (10 + dégâts, max 20) — échec = sort perdu.
+    concentration_perdue = False
+    if "concentration" in str(sort.get("duree") or "").lower() \
+            or int(degats_subis or 0) > 0:
         try:
             _rangs = 0
             for _nom_c, _r in (fiche.get("competences") or {}).items():
@@ -215,11 +225,25 @@ async def incanter_sort(
             _val_con = int((fiche.get("carac") or {}).get("CON", 10) or 10)
             _mod_con = (_val_con - 10) // 2
             _jet = random.randint(1, 20)
+            _total_con = _jet + _rangs + _mod_con
+            _dd_ctx = ""
+            if int(degats_subis or 0) > 0:
+                _dd = 10 + min(20, int(degats_subis))
+                _ok = (_jet == 20 or (_total_con >= _dd and _jet != 1))
+                concentration_perdue = not _ok
+                _dd_ctx = (
+                    f" — DD {10 + min(20, int(degats_subis))} (10 + "
+                    f"{int(degats_subis)} dégâts subis ce round) → "
+                    + ("✅ **concentration tenue**."
+                       if _ok else
+                       "❌ **ÉCHEC — le sort est PERDU** (emplacement "
+                       "dépensé, aucun effet).")
+                )
             lignes.append(
                 f"- 🎯 Jet de Concentration — Concentration {_rangs} rangs "
                 f"+ CON {_val_con} ({_mod_con:+d}) : jet brut {_jet} → "
-                f"**{_jet + _rangs + _mod_con}** (à comparer au DD de "
-                "contexte : 10 + dégâts subis…)"
+                f"**{_total_con}** (à comparer au DD de contexte : 10 + "
+                f"dégâts subis…){_dd_ctx}"
             )
         except Exception:                                    # noqa: BLE001
             pass  # fiche illisible → pas de jet de concentration
@@ -227,6 +251,14 @@ async def incanter_sort(
     # 6) Effet mécanique -------------------------------------------------------
     effet = sort.get("effet") or {}
     type_effet = effet.get("type")
+    # ⚡ Concentration brisée (degats_subis) → SORT PERDU : aucun effet
+    # mécanique ; l'emplacement est dépensé (règle 3.5, chantier P3-#18).
+    if concentration_perdue:
+        effet = {}
+        type_effet = None
+        lignes.append(
+            "- ❌ **Sort PERDU** (concentration brisée) : aucun effet "
+            "mécanique appliqué — l'emplacement est dépensé.")
     # Patches PV/conditions des cibles (pj.<i>.pv…) à propager au front.
     patches_cibles: list[dict] = []
     if type_effet == "degats":
@@ -263,8 +295,35 @@ async def incanter_sort(
             )
         if cible:
             from .fiches import fiche_perso_infliger_degats
-            tr_deg = await fiche_perso_infliger_degats(ctx, cible, total_deg)
+            # 🛡️ Défenses du monstre cible (chantier DRS P1-#2) : immunités,
+            # résistances (feu/froid/électricité/acide/sonique) et RD
+            # applicables — l'élément est déduit du NOM du sort.
+            _note_def_sp = ""
+            try:
+                from ..game.state import PartyState as _PS_sp
+                from ..game.regles35 import (
+                    defenses_monstre as _dm_sp, reduire_degats_monstre as _rd_sp,
+                )
+                _et_sp = _PS_sp(data_dir=ctx.data_dir,
+                                partie_id=ctx.partie_id).load()
+                _cn_sp = _norm(cible)
+                _mo_sp = next(
+                    (mo for mo in _et_sp.get("monstres_combat") or []
+                     if _norm(mo.get("nom")) == _cn_sp), None)
+                if _mo_sp is None:
+                    from .monstres import _find_monstre as _fm_sp
+                    _mo_sp = _fm_sp(ctx, cible)
+                if _mo_sp is not None and _dm_sp(_mo_sp):
+                    _avant_sp = total_deg
+                    total_deg, _note_def_sp = _rd_sp(
+                        _mo_sp, total_deg, str(sort.get("nom") or ""))
+            except Exception:                                # noqa: BLE001
+                pass
+            tr_deg = await fiche_perso_infliger_degats(
+                ctx, cible, total_deg, source=str(sort.get("nom") or ""))
             lignes.append(f"- {tr_deg.text}")
+            if _note_def_sp:
+                lignes.append(f"- {_note_def_sp}")
             # Le patch PV de la cible (pj.<i>.pv) est propagé au front pour
             # une mise à jour en direct de la barre de vie.
             if tr_deg.state_patch:

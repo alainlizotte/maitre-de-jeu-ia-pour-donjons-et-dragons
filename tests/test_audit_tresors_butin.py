@@ -85,14 +85,16 @@ def test_1b_invariant_diagonale_annonce_mais_non_tenu():
 # --------------------------------------------------------------------------- #
 #  2. La clôture de combat distribue-t-elle autre chose que de l'XP ?
 # --------------------------------------------------------------------------- #
-def test_2_cloture_combat_ne_distribue_que_xp():
+def test_2_cloture_combat_ne_distribue_que_xp_sans_doublon_de_tresor():
+    """Chantier DRS #11 : la clôture distribue l'XP ET un butin aléatoire
+    par ND — MAIS la garde anti-doublon doit exister : pas de butin moteur
+    quand la salle de scénario porte un trésor canonique non réclamé."""
     src = inspect.getsource(gcombat)
-    for interdit in ("_distribuer_or", "_distribuer_butin", "_distribuer_objet",
-                      "_distribuer_tresor", "_distribuer_loot",
-                      "_distribuer_monnaie"):
-        assert interdit not in src, (
-            f"{interdit} existe dans game/combat.py — re-vérifier ce test"
-        )
+    assert "_distribuer_butin" in src, (
+        "_distribuer_butin attendu dans game/combat.py (chantier DRS #11)")
+    assert "tresor_pris" in src, (
+        "la garde anti-doublon (trésor canonique de salle) doit être "
+        "vérifiée dans _distribuer_butin")
 
 
 def test_2b_tuer_un_monstre_ne_credite_ni_or_ni_objet():

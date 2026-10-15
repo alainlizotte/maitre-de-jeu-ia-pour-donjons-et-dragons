@@ -1676,6 +1676,98 @@ async def _resoudre_piege_salle(
     return "\n".join(lignes), patches
 
 
+# 🪤 Chantier DRS (P3-#14) : pièges À COMPÉTENCE (« Fouille DD 20 »,
+# « Désamorçage/sabotage DD 22 », « Crochetage DD 15 ») — désormais
+# interceptés aussi : le meilleur PJ effectue le test serveur à l'entrée.
+_COMPET_PIEGE_RE = re.compile(
+    r"\b(fouille|detection|desamorcage|crochetage)\b[^.;]{0,30}?\bdd\s*(\d{1,2})",
+    re.IGNORECASE,
+)
+_COMPET_CLE = {
+    "fouille": "Fouille", "detection": "Détection",
+    "desamorcage": "Désamorçage/sabotage", "crochetage": "Crochetage",
+}
+
+
+def _parser_piege_competence(piege: str) -> Optional[dict[str, Any]]:
+    """Détecte un piège À COMPÉTENCE (« fouille DD 20 ») dans `piege`."""
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", piege or "")
+    t = "".join(c for c in nf if not _ud.combining(c)).lower()
+    m = _COMPET_PIEGE_RE.search(t)
+    if not m:
+        return None
+    try:
+        dd = int(m.group(2))
+    except (TypeError, ValueError):
+        return None
+    if dd <= 0 or dd > 40:
+        return None
+    return {"competence": _COMPET_CLE.get(m.group(1), "Fouille"),
+            "cle_norm": m.group(1), "dd": dd}
+
+
+async def _resoudre_piege_competence(
+    ctx: ToolContext, salle: dict[str, Any], action: str
+) -> tuple[str, dict[str, Any]]:
+    """Test de compétence serveur pour un piège à compétence : le MEILLEUR
+    PJ (rangs les plus élevés dans la compétence visée) tente Fouille /
+    Détection / Désamorçage / Crochetage. Réussite de Fouille/Détection =
+    piège repéré (le MJ narre la détection, Désamorçage possible) ;
+    échec = non repéré (déclenchement narratif possible). Une seule
+    résolution par salle (flag `piege_competence_fait`)."""
+    piege_c = _parser_piege_competence(str(salle.get("piege") or ""))
+    if piege_c is None or salle.get("piege_competence_fait"):
+        return "", {}
+    salle["piege_competence_fait"] = True
+    etat = _charger_etat(ctx)
+    from .dice import lancer_d20
+    from .fiches import _load_fiche as _lf_pc
+    _meilleur, _mod_meilleur = "", -99
+    for p in (etat.get("pj") or []):
+        nom = str(p.get("nom") or "").strip()
+        fiche = _lf_pc(ctx, nom)
+        if fiche is None:
+            continue
+        conds = [str(c).lower() for c in (p.get("conditions") or [])]
+        if "mort" in conds:
+            continue
+        rangs = int((fiche.get("competences") or {})
+                    .get(piege_c["competence"], 0) or 0)
+        if rangs > _mod_meilleur:
+            _meilleur, _mod_meilleur = nom, rangs
+    if not _meilleur:
+        return "", {}
+    tr = await lancer_d20(
+        ctx, modificateur=0,
+        raison=(f"piège à compétence ({action}) : "
+                f"{piege_c['competence']} DD {piege_c['dd']}"),
+        difficulte=piege_c["dd"], nom_personnage=_meilleur,
+        competence=piege_c["competence"],
+    )
+    ok = "✅" in tr.text or "réussite automatique" in tr.text
+    echec_auto = "échec automatique" in tr.text
+    lignes = [
+        f"🪤 **PIÈGE À COMPÉTENCE RÉSOLU PAR LE SERVEUR** ({action}) : "
+        + str(salle.get("piege") or "").strip(),
+        f"- Test de {piege_c['competence']} DD {piege_c['dd']} par le "
+        f"meilleur qualifié : **{_meilleur}** :",
+        *("    " + l.strip() for l in tr.text.splitlines()[1:6]),
+    ]
+    if ok:
+        lignes.append(
+            "  ➡️ ✅ Piège REPÉRÉ avant déclenchement : narre la découverte "
+            "(fil de détente, plaque, serrure…). Un "
+            f"{piege_c['competence']} supplémentaire (Désamorçage) peut "
+            "neutraliser — relance via `lancer_d20`.")
+    elif echec_auto or "❌" in tr.text:
+        lignes.append(
+            "  ➡️ ❌ NON repéré : le piège reste armé — narre la suite "
+            "selon le texte (déclenchement, contournement possible par "
+            "un autre PJ avec un nouveau test).")
+    return "\n".join(lignes), {}
+
+
 def _sync_etage(donjon: dict[str, Any]) -> None:
     """Archive l'étage courant (grille/courant…) dans `donjon["etages"]`.
     Préserve le `nom` d'étage porté par un manifeste de scénario."""
@@ -2025,6 +2117,13 @@ async def carte_donjon_explorer(ctx: ToolContext, direction: str) -> ToolResult:
         bloc_piege, patches_piege = await _resoudre_piege_salle(
             ctx, salle, f"entrée dans la salle ({nx},{ny})"
         )
+        # 🪤 Chantier DRS (P3-#14) : piège à compétence (Fouille/Crochetage).
+        bloc_pc, patches_pc = await _resoudre_piege_competence(
+            ctx, salle, f"entrée dans la salle ({nx},{ny})")
+        if bloc_pc:
+            bloc_piege = ((bloc_piege + "\n\n" + bloc_pc)
+                          if bloc_piege else bloc_pc).strip()
+            patches_piege.update(patches_pc)
     if deja_visitee:
         # ── Salle déjà visitée : restituer la description et l'état figés ──
         # (description MJ, ou secours déterministe si jamais figée).
@@ -2244,6 +2343,12 @@ async def carte_donjon_etage(ctx: ToolContext, direction: str) -> ToolResult:
     for s_trappee in (cour, salle_arrivee or {}):
         bloc_i, patches_i = await _resoudre_piege_salle(
             ctx, s_trappee or {}, "emprunt de l'escalier")
+        # 🪤 Chantier DRS (P3-#14) : piège à compétence sur l'escalier aussi.
+        bloc_c, patches_c = await _resoudre_piege_competence(
+            ctx, s_trappee or {}, "emprunt de l'escalier")
+        if bloc_c:
+            bloc_i = ((bloc_i + "\n\n" + bloc_c) if bloc_i else bloc_c)
+            patches_i.update(patches_c)
         if bloc_i:
             blocs_trappee.append(bloc_i)
             patches_piege.update(patches_i)

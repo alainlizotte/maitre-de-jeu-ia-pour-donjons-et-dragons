@@ -272,6 +272,137 @@ def _as_int(v: Any, defaut: int = 0) -> int:
 
 
 # --------------------------------------------------------------------------- #
+#  🎯 Mémo des sources de dégâts (chantier DRS) — lancer_degats enregistre la
+#  source (arme ou sort) du dernier jet par cible ; `_infliger_degats_monstre`
+#  (fiches.py) la relit pour appliquer RD / résistances énergie / immunités.
+# --------------------------------------------------------------------------- #
+_DERNIERS_DEGATS: dict[tuple, dict] = {}
+
+
+def enregistrer_source_degats(
+    partie_id: str, tour_id: str, cible: str, source: str,
+    non_letal: bool = False,
+) -> None:
+    _DERNIERS_DEGATS[(str(partie_id or ""), str(tour_id or ""),
+                      _norm_arme(cible))] = {
+        "source": str(source or ""), "non_letal": bool(non_letal)}
+
+
+def dernier_source_degats(partie_id: str, tour_id: str, cible: str) -> dict:
+    return dict(_DERNIERS_DEGATS.get(
+        (str(partie_id or ""), str(tour_id or ""), _norm_arme(cible)) or {},
+        {"source": "", "non_letal": False}))
+
+
+# --------------------------------------------------------------------------- #
+#  ⚡ Effets mécaniques des CONDITIONS (chantier DRS P1-#4) — DMG 3.5
+#  « States préjudiciables ». Renvoient des modificateurs réellement
+#  appliqués aux jets d'attaque / CA / chances de rater, plus des notes.
+# --------------------------------------------------------------------------- #
+def _conditions_de(ctx: ToolContext, nom: str) -> list[str]:
+    """Conditions d'un combattant : fiche PJ si elle existe, sinon l'entrée
+    `monstres_combat` du combat en cours."""
+    fiche = _fiche_pj(ctx, nom)
+    if fiche is not None:
+        return [str(c) for c in (fiche.get("conditions") or [])]
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        etat = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+        nn = _norm_arme(nom)
+        for mo in etat.get("monstres_combat") or []:
+            if _norm_arme(mo.get("nom")) == nn:
+                return [str(c) for c in (mo.get("conditions") or [])]
+    except Exception:                                        # noqa: BLE001
+        pass
+    return []
+
+
+def _ncond(conds: list[str]) -> set[str]:
+    return {_norm_arme(c) for c in conds}
+
+
+def modificateurs_conditions_attaque(
+    conds_attaquant: list[str], conds_cible: list[str],
+    a_distance: bool = False,
+) -> dict:
+    """Modificateurs 3.5 des conditions sur un jet d'attaque.
+
+    Retour : {att: int, ca: int, miss_pct: int, notes: list[str]}
+    — `att` : modificateur du jet d'attaque de l'attaquant ;
+    — `ca` : ajustement de la CA de la cible (Dex perdue, etc.) ;
+    — `miss_pct` : % de chances de rater (camouflage, invisibilité, aveuglé).
+    """
+    out = {"att": 0, "ca": 0, "miss_pct": 0, "notes": []}
+    a = _ncond(conds_attaquant)
+    c = _ncond(conds_cible)
+
+    def note(txt: str) -> None:
+        out["notes"].append(txt)
+
+    # --- Attaquant -----------------------------------------------------------
+    if "epuise" in a:
+        out["att"] -= 6
+        note("attaquant Épuisé (−6)")
+    elif "fatigue" in a:
+        out["att"] -= 2
+        note("attaquant Fatigué (−2)")
+    if "empetre" in a:
+        out["att"] -= 2
+        note("attaquant Empêtré (−2)")
+    if "agrippe" in a or "saisi" in a:
+        out["att"] -= 2
+        note("attaquant Agrippé/Saisi (−2)")
+    if "renverse" in a:
+        out["att"] -= 4
+        note("attaquant Renversé (−4)")
+    if "secoue" in a or "effraye" in a:
+        out["att"] -= 2
+        note("attaquant Secoué/Effrayé (−2)")
+    if "fragilise" in a:
+        out["att"] -= 2
+        note("attaquant Fragilisé (−2)")
+    if "titubant" in a:
+        out["att"] -= 2
+        note("attaquant Titubant (−2, pas d'attaque totale)")
+    if "aveugle" in a:
+        out["miss_pct"] = max(out["miss_pct"], 50)
+        note("attaquant Aveuglé — cible à camouflage TOTAL (50 % de rater)")
+    # --- Cible ---------------------------------------------------------------
+    if "renverse" in c:
+        if not a_distance:
+            out["ca"] -= 4
+            note("cible Renversée (−4 CA au corps à corps, Dex perdue)")
+        else:
+            out["ca"] += 4
+            note("cible Renversée (+4 CA à distance, Dex perdue)")
+    if "aveugle" in c or "inconscient" in c or "endormi" in c \
+            or "paralyse" in c or "petrifie" in c or "titubant" in c:
+        out["ca"] -= 2
+        note("cible sans bonus de Dextérité (−2 CA)")
+    if "empetre" in c:
+        out["ca"] -= 2
+        note("cible Empêtrée (Dex −4 → −2 CA)")
+    if "agrippe" in c or "saisi" in c:
+        out["ca"] -= 2
+        note("cible Agrippée/Saisie (Dex perdue, −2 CA)")
+    if "pris en tenaille" in c:
+        out["att"] += 2
+        note("cible Prise en tenaille (+2 attaque)")
+    if "invisible" in c:
+        out["miss_pct"] = max(out["miss_pct"], 50)
+        note("cible Invisible — camouflage TOTAL (50 % de rater)")
+    return out
+
+
+def _confirm_critique(bonus_final: int, ca_cible: int) -> tuple[bool, int]:
+    """Second jet de confirmation d'un critique (3.5 : un jet d'attaque qui
+    touche à nouveau la CA confirme ; 20 = confirmation automatique)."""
+    jet = random.randint(1, 20)
+    return (jet == 20 or (jet + bonus_final >= ca_cible and jet != 1)), jet
+
+
+# --------------------------------------------------------------------------- #
 #  Tools
 # --------------------------------------------------------------------------- #
 @tool
@@ -366,6 +497,27 @@ async def lancer_d20(
                     )
                     val = int((fiche.get("carac") or {}).get(cara_cle, 10) or 10)
                     calc = rangs + (val - 10) // 2 + bonus_don + bonus_rf
+                    # ⚖️ Charge (chantier DRS P2-#12) : une charge Moyenne
+                    # ou Lourde applique un malus type « malus d'armure »
+                    # (−3 / −6) aux tests basés sur FOR ou DEX (PHB 3.5,
+                    # Table : effets de la charge).
+                    _pen_charge = 0
+                    try:
+                        from .inventaire import (  # noqa: PLC0415
+                            _recalculer_charge,
+                        )
+                        _cat_c = str(
+                            fiche.get("etat_encumbrance") or "")
+                        if not _cat_c:
+                            _cat_c = _recalculer_charge(fiche)[1]
+                        if cara_cle in ("FOR", "DEX"):
+                            if _cat_c == "Moyenne":
+                                _pen_charge = -3
+                            elif _cat_c in ("Lourde", "Depassee"):
+                                _pen_charge = -6
+                        calc += _pen_charge
+                    except Exception:                            # noqa: BLE001
+                        _pen_charge = 0
                     if calc != modificateur:
                         mod_final = calc
                         detail = (
@@ -379,6 +531,8 @@ async def lancer_d20(
                             detail += f" + {bonus_don} (dons)"
                         if bonus_rf:
                             detail += f" + {bonus_rf} (race/familier)"
+                        if _pen_charge:
+                            detail += f" {_pen_charge} (charge)"
                         note_mod = (
                             f"\n- ⚠️ Modificateur recalculé {modificateur:+d} → "
                             f"{calc:+d} (fiche de {nom_personnage} : {detail})."
@@ -907,13 +1061,82 @@ async def lancer_attaque(
     except Exception:                                           # noqa: BLE001
         pass  # fiche absente (monstre ?) → on trust le bonus fourni
 
+    # --- ⚡ Conditions préjudiciables (DMG 3.5) — effets mécaniques réels ---
+    # Fatigué/Épuisé/Renversé/Empêtré/Agrippé/Secoué/Fragilisé/Titubant →
+    # malus d'attaque ; cible Renversée/Aveuglée/Empêtrée/Agrippée/Paralysée
+    # → ajustement de CA (Dex perdue) ; attaquant Aveuglé / cible Invisible
+    # → % de rater (camouflage total) ; cible « surprise » au round 1 → Dex
+    # perdue (−2 CA).
+    note_conditions = ""
+    try:
+        _conds_att = _conditions_de(ctx, nom_attaquant)
+        _conds_cib = _conditions_de(ctx, nom_cible)
+        _a_distance_l = any(
+            m in (arme or "").lower() for m in
+            ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard",
+             "sarbacane"))
+        mc = modificateurs_conditions_attaque(
+            _conds_att, _conds_cib, a_distance=_a_distance_l)
+        try:
+            from ..game.state import PartyState  # lazy : évite les cycles
+            _et_s = PartyState(data_dir=ctx.data_dir,
+                               partie_id=ctx.partie_id).load()
+            if int(_et_s.get("tour") or 0) <= 1 and str(
+                    nom_cible or "").strip() in [
+                        str(x) for x in (_et_s.get("surpris") or [])]:
+                mc["ca"] -= 2
+                mc["notes"].append(
+                    f"{nom_cible} PRIS AU DÉPOURVU (round de surprise — Dex "
+                    "perdue, −2 CA)")
+            # 🤝 Aider autrui / feinte (attaque_speciale) : bonus à
+            # CONSOMMER sur la prochaine attaque du bénéficiaire.
+            _effets = dict(_et_s.get("combat_effets") or {})
+            _aides = [a for a in (_effets.get("aides") or [])
+                      if _norm_arme(a.get("beneficiaire") or "")
+                      == _norm_arme(nom_attaquant)]
+            if _aides:
+                mc["att"] += 2
+                mc["notes"].append("+2 Aider autrui")
+                _effets["aides"] = [a for a in (_effets.get("aides") or [])
+                                    if a not in _aides]
+            _feinte = next(
+                (f for f in (_effets.get("feintes") or [])
+                 if _norm_arme(f.get("attaquant") or "")
+                 == _norm_arme(nom_attaquant)), None)
+            if _feinte:
+                mc["att"] += 2
+                mc["ca"] -= 2
+                mc["notes"].append(
+                    "cible prise de vitesse (feinte réussie — Dex perdue)")
+                _effets["feintes"] = [
+                    f for f in (_effets.get("feintes") or [])
+                    if f is not _feinte]
+            if _aides or _feinte:
+                _et_s["combat_effets"] = _effets
+                PartyState(data_dir=ctx.data_dir,
+                           partie_id=ctx.partie_id).save(_et_s)
+        except Exception:                                    # noqa: BLE001
+            pass
+        if mc["att"]:
+            bonus_final += mc["att"]
+        if mc["ca"]:
+            ca_cible = max(1, ca_cible + mc["ca"])
+        if mc["notes"]:
+            note_conditions = (
+                f"\n- ⚡ Conditions : attaque {mc['att']:+d}, CA cible "
+                f"{mc['ca']:+d} → {ca_cible} ("
+                + " ; ".join(mc["notes"]) + ").")
+    except Exception:                                        # noqa: BLE001
+        pass  # état indisponible → attaque sans conditions
+
     jet = random.randint(1, 20)
     total = jet + bonus_final
     lignes = [
         f"⚔️ **Attaque** : {nom_attaquant} [{arme}] vs {nom_cible} (CA {ca_cible})",
         f"- Jet brut d'attaque : {jet}",
         f"- Bonus total : {bonus_final:+d}"
-        + note_arme + note_bonus + note_ca + note_ammo + detail_crit,
+        + note_arme + note_bonus + note_ca + note_ammo + detail_crit
+        + note_conditions,
         f"- **Total attaque : {total}**",
     ]
     if cible_renote:
@@ -921,21 +1144,55 @@ async def lancer_attaque(
     if note_degats:
         lignes.append(note_degats.strip().lstrip("\n"))
     if jet >= seuil_crit:
-        lignes.append(
-            f"- ⭐ **{jet} naturel** → toucher automatique + menace de "
-            "critique (effectuer un second jet d'attaque pour confirmer ; "
-            "si réussi, dégâts doublés/triplés selon arme)."
-        )
+        touche = (total >= ca_cible) or jet == 20
+        # 20 naturel touche toujours ; sinon la menace doit dépasser la CA.
+        if not touche:
+            touche = True  # jet == 20
+        confirme, jet_conf = _confirm_critique(bonus_final, ca_cible)
+        if confirme:
+            lignes.append(
+                f"- ⭐ **{jet} naturel** → **Touché** + menace de critique "
+                f"— 🌟 **CRITIQUE CONFIRMÉ** (confirmation : {jet_conf}"
+                f"{bonus_final:+d} ≥ CA {ca_cible}) — relance `lancer_degats`"
+                " avec **multiplicateur=2** (les dés de dégâts sont doublés, "
+                "pas le bonus)."
+            )
+        else:
+            lignes.append(
+                f"- ⭐ **{jet} naturel** → **Touché** + menace de critique "
+                f"NON confirmée (confirmation : {jet_conf}{bonus_final:+d} = "
+                f"{jet_conf + bonus_final} < CA {ca_cible}) — coup normal, "
+                "dégâts simples."
+            )
     elif jet == 1:
         lignes.append(
             "- ❌ **1 naturel** → maladresse : attaque ratée automatiquement "
             "(conséquences possibles : arme lâchée, etc.)."
         )
     else:
+        # ⚡ % de rater (attaquant aveuglé / cible invisible) : camouflage.
+        _miss = 0
+        try:
+            _a_distance_l2 = any(
+                m in (arme or "").lower() for m in
+                ("arc", "arbalète", "arbalet", "fronde", "javelot", "dard",
+                 "sarbacane"))
+            _mc2 = modificateurs_conditions_attaque(
+                _conds_att, _conds_cib, a_distance=_a_distance_l2)
+            _miss = int(_mc2.get("miss_pct") or 0)
+        except Exception:                                    # noqa: BLE001
+            _miss = 0
         ok = total >= ca_cible
-        lignes.append(
-            f"- CA {ca_cible} → " + ("✅ **Touché**." if ok else "❌ **Manqué**.")
-        )
+        if ok and _miss and random.randint(1, 100) <= _miss:
+            lignes.append(
+                f"- ❌ **Manqué par camouflage** ( {_miss} % de rater : "
+                "attaque aveugle/invisible) — le coup passe à côté."
+            )
+        else:
+            lignes.append(
+                f"- CA {ca_cible} → "
+                + ("✅ **Touché**." if ok else "❌ **Manqué**.")
+            )
     return ToolResult(text="\n".join(lignes))
 
 
@@ -949,6 +1206,8 @@ async def lancer_degats(
     cible: str,
     attaquant: str = "",
     distance_m: Any = None,
+    multiplicateur: int = 1,
+    non_letal: bool = False,
 ) -> ToolResult:
     """
     Effectue le jet de dégâts D&D 3.5 selon la formule NdF + bonus. Renvoie les
@@ -966,10 +1225,17 @@ async def lancer_degats(
     :param distance_m (float): distance estimée en mètres jusqu'à la cible
         (optionnel). À ≤ 9 m, le don « Tir de près » d'un PJ ajoute +1
         dégâts (arme à distance uniquement).
+    :param multiplicateur (int): 1 = coup normal ; 2/3/4 = CRITIQUE confirmé
+        (règle 3.5 : on multiplie les DÉS, pas le bonus — un ×2 lance deux
+        fois les dés). N'appeler avec 2+ qu'après un « CRITIQUE CONFIRMÉ ».
+    :param non_letal (bool): dégâts NON LÉTAUX (mains nues, arme à -4, fléau)
+        — cumulés dans la réserve de PV non-létaux de la cible ; à hauteur
+        des PV restants, la cible s'effondre Inconsciente (sans -1 PV).
     """
     nb_des = max(1, _as_int(nb_des, 1))
     faces = _as_int(faces, 6)
     bonus = _as_int(bonus)
+    multiplicateur = max(1, _as_int(multiplicateur, 1))
     if faces not in (2, 3, 4, 6, 8, 10, 12, 20, 100):
         return ToolResult(text=f"⚠️ Type de dé {faces} non standard en D&D 3.5.")
 
@@ -1078,11 +1344,17 @@ async def lancer_degats(
                         f"faces={_fa} (le bonus de Force reste inchangé)."
                     ))
     jets = [random.randint(1, faces) for _ in range(nb_des)]
+    # 🌟 CRITIQUE confirmé (règle 3.5) : on multiplie les DÉS — un ×2 lance
+    # nb_des dés SUPPLÉMENTAIRES (pas « total × 2 »).
+    jets_crit: list[int] = []
+    if multiplicateur > 1:
+        jets_crit = [random.randint(1, faces)
+                     for _ in range(nb_des * (multiplicateur - 1))]
     # 🛡️ B46 (audit parties complètes) : un coup qui touche inflige au minimum
     # 1 point de dégâts en D&D 3.5. Un `lancer_degats` à 0 (le modèle confond
     # bonus et total) produisait « ✅ Touché … subit 0 dégâts », et le MJ
     # inventait une règle pour le justifier.
-    brut = sum(jets) + bonus
+    brut = sum(jets) + sum(jets_crit) + bonus
     if brut <= 0 and not _est_nom_de_sort(arme_ou_sort):
         note_min = (
             "\n- ℹ️ Total nul ou négatif porté au minimum de 1 "
@@ -1094,11 +1366,15 @@ async def lancer_degats(
         total = max(0, brut)   # jamais de dégâts négatifs (min 0)
     lignes = [
         f"💥 **Dégâts** : {arme_ou_sort} → {cible}",
-        f"- Formule : {nb_des}d{faces}{'+' if bonus >= 0 else ''}{bonus}",
-        f"- Jets bruts : {jets}",
-        f"- Total jets : {sum(jets)}",
+        f"- Formule : {nb_des}d{faces}{'+' if bonus >= 0 else ''}{bonus}"
+        + (f" ×{multiplicateur} (critique : +{nb_des * (multiplicateur - 1)}"
+           " dés)" if multiplicateur > 1 else ""),
+        f"- Jets bruts : {jets}"
+        + (f" + critique {jets_crit}" if jets_crit else ""),
+        f"- Total jets : {sum(jets) + sum(jets_crit)}",
         f"- Bonus dégâts : {bonus:+d}" + note_bonus_dm,
-        f"- **Dégâts infligés : {total}**",
+        f"- **Dégâts infligés : {total}**"
+        + (" (NON LÉTAUX)" if non_letal else ""),
     ]
     if note_min:
         lignes.append(note_min.strip("\n"))
@@ -1106,6 +1382,52 @@ async def lancer_degats(
         lignes.append(
             "- ℹ️ Total négatif ramené à 0 (les dégâts ne soignent pas la cible)."
         )
+    # ⚡ Mémo source (arme/sort) : `_infliger_degats_monstre` relit cette
+    # source pour appliquer RD / résistances énergie / immunités du monstre.
+    try:
+        enregistrer_source_degats(
+            ctx.partie_id, str(ctx.tour_id or ""), cible,
+            arme_ou_sort, non_letal)
+    except Exception:                                        # noqa: BLE001
+        pass
+    # 🛡️ Défenses du monstre cible : si la cible est un monstre SUIVI doté
+    # de RD / résistances, on affiche le montant réellement à infliger —
+    # `fiche_perso_infliger_degats` ré-appliquera le même calcul côté serveur
+    # (impossible d'oublier ou de tricher).
+    try:
+        from ..game.state import PartyState  # lazy : évite les cycles
+        from ..game.regles35 import (reduire_degats_monstre,
+                                     defenses_monstre)
+        _et_d = PartyState(data_dir=ctx.data_dir,
+                           partie_id=ctx.partie_id).load()
+        _cn = _norm_arme(cible)
+        _mo = next(
+            (m for m in (_et_d.get("monstres_combat") or [])
+             if _norm_arme(m.get("nom")) == _cn
+             and int(m.get("pv", 0) or 0) > 0
+             and "Détruit" not in (m.get("conditions") or [])
+             and "Detruit" not in (m.get("conditions") or [])), None)
+        if _mo is None:
+            from .monstres import _find_monstre   # lazy
+            _mo = _find_monstre(ctx, cible)
+        if _mo is not None and defenses_monstre(_mo):
+            _mag = 0
+            try:
+                from .fiches import bonus_arme_magique
+                _mag = bonus_arme_magique(arme_ou_sort)
+            except Exception:                                # noqa: BLE001
+                pass
+            _reduit, _note_r = reduire_degats_monstre(
+                _mo, total, arme_ou_sort, _mag)
+            if _note_r:
+                lignes.append(_note_r)
+                lignes.append(
+                    f"- ➡️ **Dégâts à infliger via "
+                    f"`fiche_perso_infliger_degats` : {_reduit}** "
+                    "(le serveur re-vérifie la RD à l'application)."
+                )
+    except Exception:                                        # noqa: BLE001
+        pass
     return ToolResult(text="\n".join(lignes))
 
 
@@ -1181,11 +1503,22 @@ async def lancer_sauvegarde(
                         )
                     except Exception:                        # noqa: BLE001
                         bonus_don = 0
-                    off_total = off + bonus_don
+                    # ✨ Objets « Résistance +N » (chantier DRS P3-#19) :
+                    # bonus de sauvegarde magique = le MAX des +N portés.
+                    try:
+                        from .fiches import (  # pylint: disable=import-outside-toplevel
+                            bonus_sauvegarde_magie,
+                        )
+                        _mag_sv = bonus_sauvegarde_magie(fiche)
+                    except Exception:                        # noqa: BLE001
+                        _mag_sv = 0
+                    off_total = off + bonus_don + _mag_sv
                     if off_total != mod_final:
                         detail = f"{label} {off:+d}"
                         if bonus_don:
                             detail += f" + {bonus_don} (dons)"
+                        if _mag_sv:
+                            detail += f" + {_mag_sv} (Résistance magique)"
                         note_mod = (
                             f"\n- ⚠️ Modificateur recalculé {modificateur:+d} → "
                             f"{off_total:+d} (fiche de {nom_personnage} : "
@@ -1318,3 +1651,256 @@ async def lancer_des(
         f"- **Total : {total}**",
     ]
     return ToolResult(text="\n".join(lignes))
+
+
+# --------------------------------------------------------------------------- #
+#  🗡️ Attaques d'opportunité & attaques spéciales (chantier DRS P3-#16/20)
+# --------------------------------------------------------------------------- #
+@tool
+async def attaque_opportunite(
+    ctx: ToolContext,
+    nom_attaquant: str,
+    nom_cible: str,
+    bonus_attaque: Any = 0,
+    ca_cible: Any = 10,
+    arme: str = "",
+) -> ToolResult:
+    """
+    Attaque d'opportunité D&D 3.5 : la cible s'est déplacée hors de votre
+    menace, a lancé un sort, tiré à distance ou s'est relevée À VOTRE PORTÉE.
+    Une SEULE attaque d'opportunité par round et par attaquant (dons de
+    supplémentaires : le MJ les résout avec un second appel).
+
+    :param nom_attaquant (str): nom de l'attaquant.
+    :param nom_cible (str): nom de la cible qui a PROVOQUÉ l'attaque.
+    :param bonus_attaque (int): bonus d'attaque officiel (fiche pour un PJ,
+        bestiaire pour un monstre — recoupé automatiquement pour un PJ).
+    :param ca_cible (int): CA de la cible (recoupée automatiquement).
+    :param arme (str): arme utilisée.
+    """
+    from ..game.state import PartyState  # lazy
+    ps = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+    etat = ps.load()
+    round_actuel = int(etat.get("tour") or 1)
+    deja = etat.setdefault("aoo_tour", {})
+    cle_rond = str(round_actuel)
+    joues = deja.get(cle_rond) or []
+    if _norm_arme(nom_attaquant) in {_norm_arme(x) for x in joues}:
+        return ToolResult(text=(
+            f"⛔ {nom_attaquant} a DÉJÀ utilisé son attaque d'opportunité "
+            f"au round {round_actuel} (règle 3.5 : 1/round sans Réflexes de "
+            "combat). Attendre le round suivant."))
+    joues.append(nom_attaquant)
+    deja[cle_rond] = joues
+    ps.save(etat)
+    tr = await lancer_attaque(
+        ctx, bonus_attaque=bonus_attaque, ca_cible=ca_cible,
+        nom_attaquant=nom_attaquant, arme=arme or "arme", nom_cible=nom_cible)
+    prefix = f"⚡ **Attaque d'opportunité** ({nom_attaquant} profite d'une " \
+             f"faute de {nom_cible}) — 1/round consommée.\n"
+    return ToolResult(text=prefix + tr.text)
+
+
+@tool
+async def attaque_speciale(
+    ctx: ToolContext,
+    type_attaque: str,
+    nom_attaquant: str,
+    nom_cible: str,
+    bonus_attaquant: Any = 0,
+    bonus_cible: Any = 0,
+) -> ToolResult:
+    """
+    Attaque spéciale D&D 3.5 (jets opposés résolus serveur).
+
+    :param type_attaque (str): l'une de —
+        "renversement" (trip : attaque toucher vs attaque toucher ; échec de
+        10+ = attaquant Renversé ; succès = cible Renversée) ;
+        "desarmement" (opposed attacks ; succès = arme de la cible au sol ;
+        échec de 10+ = VOTRE arme au sol) ;
+        "bousculade" (opposed Force ; succès de 5+ = cible repoussée) ;
+        "aider" (test d'attaque DD 10 contre CA 10 — allié désigné par
+        `nom_cible` gagne +2 à sa prochaine attaque, appliqué serveur) ;
+        "feinte" (Bluff vs Perception auditive/Sense Motive opposé — succès :
+        la cible perd sa DEX contre VOTRE prochaine attaque, appliqué serveur) ;
+        "immobilisation" (toucher puis opposed Force ; succès : les DEUX sont
+        Agrippés ; échec : attaquant Agrippé).
+    :param nom_attaquant (str): nom de l'attaquant (PJ ou monstre).
+    :param nom_cible (str): nom de la cible — ou de l'ALLIÉ aidé pour
+        type_attaque="aider".
+    :param bonus_attaquant (int): bonus de jet d'attaque (ou mod. Force pour
+        bousculade/immobilisation).
+    :param bonus_cible (int): bonus équivalent de la cible (fiche/bestiaire).
+    """
+    t = _norm_arme(type_attaque).replace(" ", "_")
+    b_atq = _as_int(bonus_attaquant)
+    b_cib = _as_int(bonus_cible)
+    from ..game.state import PartyState  # lazy
+    ps = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+    etat = ps.load()
+    effets = dict(etat.get("combat_effets") or {})
+
+    def _poser_condition_pj(nom: str, condition: str) -> str:
+        """Pose une condition via le tool officiel (PJ) ou l'entrée suivie
+        (monstre). Renvoie une note."""
+        try:
+            from .fiches import _load_fiche, _save_fiche, _sync_pj
+            fiche = _load_fiche(ctx, nom)
+            if fiche is not None:
+                conds = fiche.setdefault("conditions", [])
+                if condition not in conds:
+                    conds.append(condition)
+                _save_fiche(ctx, nom, fiche)
+                _sync_pj(ctx, nom, {"conditions": conds})
+                return f"{nom} → condition **{condition}** appliquée."
+        except Exception:                                # noqa: BLE001
+            pass
+        for mo in etat.get("monstres_combat") or []:
+            if _norm_arme(mo.get("nom")) == _norm_arme(nom):
+                conds = mo.setdefault("conditions", [])
+                if condition not in conds:
+                    conds.append(condition)
+                return (f"{nom} (monstre) → condition **{condition}** "
+                        "appliquée au suivi de combat.")
+        return f"{nom} : condition **{condition}** à narrer (cible inconnue)."
+
+    if t in ("renversement", "renverse"):
+        j_a, j_c = random.randint(1, 20), random.randint(1, 20)
+        t_a, t_c = j_a + b_atq, j_c + b_cib
+        lignes = [
+            f"🦵 **Renversement** : {nom_attaquant} vs {nom_cible}",
+            f"- {nom_attaquant} : {j_a}+{b_atq} = {t_a} — "
+            f"{nom_cible} : {j_c}+{b_cib} = {t_c}",
+        ]
+        if j_a == 20 or (t_a > t_c and j_a != 1):
+            lignes.append(f"- ✅ **Renversé !** " + _poser_condition_pj(
+                nom_cible, "Renversé"))
+            note = f"- 🗒️ Renversé : −4 attaque, CA sans Dex (−4 mêlée)."
+        elif t_a <= t_c - 10 and j_a != 20:
+            lignes.append(f"- ❌ Échec de 10+ → {nom_attaquant} chute : "
+                          + _poser_condition_pj(nom_attaquant, "Renversé"))
+            note = ""
+        else:
+            lignes.append("- ❌ Échec — la cible tient debout.")
+            note = ""
+        lignes.append(note)
+        ps.save(etat)
+        return ToolResult(text="\n".join(lignes))
+
+    if t in ("desarmement", "désarmement"):
+        j_a, j_c = random.randint(1, 20), random.randint(1, 20)
+        t_a, t_c = j_a + b_atq, j_c + b_cib
+        lignes = [
+            f"🤺 **Désarmement** : {nom_attaquant} vs {nom_cible}",
+            f"- {nom_attaquant} : {j_a}+{b_atq} = {t_a} — "
+            f"{nom_cible} : {j_c}+{b_cib} = {t_c}",
+        ]
+        if t_a > t_c or j_a == 20:
+            lignes.append(
+                f"- ✅ **Arme désarmée !** L'arme de {nom_cible} tombe au "
+                "sol (à récupérer : action de mouvement, AOO possible).")
+        elif t_c - t_a >= 10:
+            lignes.append(
+                f"- ❌ Échec de 10+ → **l'arme de {nom_attaquant} tombe au "
+                "sol** (la cible riposte au désarmement).")
+        else:
+            lignes.append("- ❌ Échec — la cible garde son arme.")
+        return ToolResult(text="\n".join(lignes))
+
+    if t == "bousculade":
+        j_a, j_c = random.randint(1, 20), random.randint(1, 20)
+        t_a, t_c = j_a + b_atq, j_c + b_cib
+        lignes = [
+            f"🐗 **Bousculade** : {nom_attaquant} vs {nom_cible}",
+            f"- Force : {j_a}+{b_atq} = {t_a} vs {j_c}+{b_cib} = {t_c}",
+        ]
+        if t_a >= t_c + 5:
+            lignes.append(
+                f"- ✅ **Repoussé !** {nom_cible} recule de 1,50 m ( "
+                f"{nom_attaquant} peut le suivre en diagonale).")
+        elif t_a > t_c:
+            lignes.append(
+                f"- ⚖️ Succès court : {nom_attaquant} avance de 1,50 m, "
+                f"{nom_cible} ne recule pas.")
+        else:
+            lignes.append(
+                f"- ❌ Échec : {nom_attaquant} recule de 1,50 m.")
+        return ToolResult(text="\n".join(lignes))
+
+    if t in ("aider", "aide"):
+        jet = random.randint(1, 20)
+        total = jet + b_atq
+        lignes = [
+            f"🤝 **Aider autrui** — {nom_attaquant} prête main-forte à "
+            f"{nom_cible}",
+            f"- Jet d'attaque DD 10 : {jet}+{b_atq} = {total}",
+        ]
+        if total >= 10 or jet == 20:
+            aides = effets.setdefault("aides", [])
+            aides.append({"beneficiaire": nom_cible, "bonus": 2})
+            etat["combat_effets"] = effets
+            ps.save(etat)
+            lignes.append(
+                f"- ✅ Réussite — **+2 à la prochaine attaque de "
+                f"{nom_cible}** (appliqué automatiquement par le serveur).")
+        else:
+            lignes.append("- ❌ Échec — pas d'aide, et l'attaquant a "
+                          "potentiellement provoqué une AOO.")
+        return ToolResult(text="\n".join(lignes))
+
+    if t == "feinte":
+        j_a, j_c = random.randint(1, 20), random.randint(1, 20)
+        t_a, t_c = j_a + b_atq, j_c + b_cib
+        lignes = [
+            f"🎭 **Feinte** : {nom_attaquant} (Bluff) vs {nom_cible} "
+            "(Perception)",
+            f"- Bluff : {j_a}+{b_atq} = {t_a} — Perception : "
+            f"{j_c}+{b_cib} = {t_c}",
+        ]
+        if t_a > t_c or j_a == 20:
+            feintes = effets.setdefault("feintes", [])
+            feintes.append({"attaquant": nom_attaquant, "cible": nom_cible})
+            etat["combat_effets"] = effets
+            ps.save(etat)
+            lignes.append(
+                f"- ✅ **Feinte réussie** — {nom_cible} perd sa DEX contre "
+                f"la prochaine attaque de {nom_attaquant} (+2 attaque, −2 "
+                "CA cible, appliqués automatiquement).")
+        else:
+            lignes.append("- ❌ Feinte repérée — aucune ouverture.")
+        return ToolResult(text="\n".join(lignes))
+
+    if t in ("immobilisation", "empoignade", "grapple"):
+        jet_touch = random.randint(1, 20)
+        lignes = [
+            f"🤼 **Immobilisation** : {nom_attaquant} tente d'agripper "
+            f"{nom_cible}",
+            f"- Touche-à-touche : {jet_touch}+{b_atq} = "
+            f"{jet_touch + b_atq} vs CA de contact de {nom_cible} "
+            "(le MJ fournit sa CA − armure/bouclier).",
+        ]
+        if jet_touch == 1:
+            lignes.append("- ❌ Toucher raté — tentative échouée.")
+            return ToolResult(text="\n".join(lignes))
+        j_a, j_c = random.randint(1, 20), random.randint(1, 20)
+        t_a, t_c = j_a + b_atq, j_c + b_cib
+        lignes.append(
+            f"- Force opposée : {j_a}+{b_atq} = {t_a} vs {j_c}+{b_cib} = "
+            f"{t_c}")
+        if t_a > t_c:
+            lignes.append("- ✅ **Agrippés tous les deux !** "
+                          + _poser_condition_pj(nom_cible, "Agrippé"))
+            lignes.append(_poser_condition_pj(nom_attaquant, "Agrippé"))
+            lignes.append(
+                "- 🗒️ Agrippé : −2 attaques (sauf contre son agrippeur), "
+                "Dex perdue à la CA, pas de mouvement.")
+        else:
+            lignes.append("- ❌ La cible résiste et VOUS agrippe : "
+                          + _poser_condition_pj(nom_attaquant, "Agrippé"))
+        ps.save(etat)
+        return ToolResult(text="\n".join(lignes))
+
+    return ToolResult(text=(
+        f"⚠️ type_attaque inconnu : '{type_attaque}'. Attendu : "
+        "renversement, desarmement, bousculade, aider, feinte, "
+        "immobilisation."))

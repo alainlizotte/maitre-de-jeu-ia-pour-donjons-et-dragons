@@ -1,6 +1,20 @@
 # Rapport d'audit — couverture des règles DRS (D&D 3.5) dans l'application
 
 **Date :** 14 octobre 2026
+**Statut : ✅ IMPLÉMENTÉ ET VALIDÉ (15 octobre 2026)** — les chantiers P1, P2 et P3
+de ce rapport ont été codés puis validés : **970 tests pytest verts** (0 échec,
+3 sauts), smoke test dédié `tests/smoke_drs.py` (15/15) et **E2E piloté avec LLM
+réel** `tests/e2e_regles_drs.py` (**33 vérifications vertes, 0 échec**) : combat
+avec feinte (`attaque_speciale`), butin DMG par ND crédité, chute
+(`danger_chute`), voyage avec climat par région (`voyage_demarrer` +
+`jours_meteo` persistés) et repas (`voyage_repas`). Corrections de bugs réels
+découvertes par les E2E : outils nouveaux masqués par les listes de phase de
+l'orchestrateur (ajoutés aux 4 ensembles), ré-engagement en plein combat
+(réinitialisation zombie → refus serveur avec orientation
+`combat_ajouter_combattant`), alternatives d'attaques du bestiaire (« ou … »)
+jouées comme des attaques successives (exclues), ajustement temporaire
+d'équilibrage perdu sur les attaques multiples (réappliqué par attaque).
+
 **Périmètre :** comparaison entre l'application (serveur Python/FastAPI + MJ-LLM, client React) et le
 chapitre « Combat », le chapitre « Aventure » (dont « Environnement ») et la section « Trésors » de la
 DRS (regles-donjons-dragons.com, pages 1530–1675 et 1716).

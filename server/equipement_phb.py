@@ -270,6 +270,34 @@ def _articles_phb() -> list[dict[str, Any]]:
 
     # --- Substances (page 413) ----------------------------------------------
     E(_art("Acide (flasque)", "substance", po=10, kg=0.5, niveau_marchand=4))
+    # --- Matériaux spéciaux (DRS « Matériaux spéciaux », chantier P3-#22) ---
+    # Surcoûts officiels : argent alchimique (+50 lame légère, +500 une main,
+    # +1500 deux mains), adamantium (+3000 une main, +6000 deux mains),
+    # mithral (armure légère +1000, intermédiaire +4000, lourde +9000),
+    # fer froid (prix de base ×2).
+    E(_art("Épée longue (argent alchimique)", "arme", po=515,
+           kg=1.8, niveau_marchand=5,
+           description="Lame en argent alchimique : contourne la RD "
+                       "argent (+1 au malus, dégâts −1)."))
+    E(_art("Dague (argent alchimique)", "arme", po=52,
+           kg=0.5, niveau_marchand=4,
+           description="Contourne la RD argent (+1 au malus, dégâts −1)."))
+    E(_art("Épée longue (adamantium)", "arme", po=3015,
+           kg=1.8, niveau_marchand=6,
+           description="Contourne la RD adamantium ; ignore la dureté "
+                       "menaçante (ARMES, options)."))
+    E(_art("Marteau de guerre (fer froid)", "arme", po=24,
+           kg=2.7, niveau_marchand=3,
+           description="Fer froid brut : contourne la RD fer froid "
+                       "(créatures féeriques/extérieures)."))
+    E(_art("Chemise de mailles (mithral)", "armure", po=1100,
+           kg=5.7, niveau_marchand=6,
+           description="Mithral : CA +4, Dex max +6, malus 0, "
+                       "considérée légère, pas de déplacement réduit."))
+    E(_art("Cotte de mailles (mithral)", "armure", po=4150,
+           kg=9.1, niveau_marchand=6,
+           description="Mithral : CA +5, Dex max +4, malus 0, "
+                       "considérée légère, pas de déplacement réduit."))
     E(_art("Allume-feu", "substance", po=1, kg=0.0))
     E(_art("Antidote (fiole)", "substance", po=50, kg=0.0))
     E(_art("Bâton éclairant", "substance", po=2, kg=0.5))

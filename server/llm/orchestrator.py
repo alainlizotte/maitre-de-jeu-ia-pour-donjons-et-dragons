@@ -103,6 +103,18 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "carte_joueurs_position",
         # Voyage hors donjon : durée réelle, rencontres, météo (jamais instantané).
         "voyage_demarrer",
+        # Chantier DRS : climat appliqué mécaniquement + rations/prospection.
+        "voyage_meteo_jour",
+        "voyage_repas",
+        "voyage_prospection",
+        # Chantier DRS : dangers d'environnement résolus par le serveur.
+        "danger_chute",
+        "danger_noyade",
+        "danger_environnement",
+        # Chantier DRS : attaques spéciales/AOO jouables hors combat aussi
+        # (embuscade, escarmouche narrative).
+        "attaque_speciale",
+        "attaque_opportunite",
         "monstre_consulter",
         "lancer_d20",
         "lancer_sauvegarde",
@@ -188,6 +200,15 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "inventaire_consommer_munition",
         "terminer_mon_tour",
         "monstre_consulter",
+        # Chantier DRS : tactique avancée câblée (critiques, conditions,
+        # RD/résistances côté serveur) + dangers survenant EN mêlée.
+        "attaque_speciale",
+        "attaque_opportunite",
+        "combat_preparer_action",
+        "combat_attendre",
+        "danger_chute",
+        "danger_noyade",
+        "danger_environnement",
         # Fuite / retraite : le MJ clôt le combat quand le groupe décroche
         # ou que les ennemis se rendent/fuient (aucune XP de victoire).
         "retraite_combat",
@@ -266,6 +287,10 @@ _OUTILS_DECISION = frozenset({
     "equipement_catalogue", "auberge_commander",
     # Jets de dés isolés (jet de caractéristique, test de compétence…)
     "lancer_d20", "lancer_sauvegarde", "lancer_des",
+    # Chantier DRS : dangers d'environnement + suite du voyage + escarmouches
+    "danger_chute", "danger_noyade", "danger_environnement",
+    "voyage_meteo_jour", "voyage_repas", "voyage_prospection",
+    "attaque_speciale", "attaque_opportunite",
 })
 
 # Garde-fou : la phase de décision ne peut déclencher que 2 outils par tour
@@ -286,6 +311,10 @@ _COMBAT_PRIORITAIRES = frozenset({
     "fiche_perso_condition", "fiche_perso_niveau_negatif",
     "inventaire_consommer_munition", "retraite_combat",
     "combat_ajouter_combattant", "appeler_familier",
+    # Chantier DRS : tactique câblée + dangers de mêlée
+    "attaque_speciale", "attaque_opportunite",
+    "combat_preparer_action", "combat_attendre",
+    "danger_chute", "danger_noyade", "danger_environnement",
 })
 
 # Plafond BASSE d'exposition des outils : en dessous de cette taille, un jeu

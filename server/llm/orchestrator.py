@@ -1090,6 +1090,67 @@ def _action_deplacement_dans_donjon(action: str, etat: dict[str, Any]) -> bool:
     return any((salle.get("portes") or {}).values())
 
 
+# Intention EXPLICITE du joueur d'entrer dans un lieu clos (« nous entrons
+# dans les catacombes », « on pousse la porte ») — débloque
+# `_refus_entree_ouverture_hors_donjon` (sans elle, « Débute la partie »
+# suffit à bloquer toute entrée).
+_INTENT_ENTREE_EXPLICITE_RE = re.compile(
+    r"\b(entrons?|entrer|entr[ée]e\s+dans|descend(?:ons|ez|re[sz]?|s)?|"
+    r"franchi\w*|p[ée]n[ée]tr\w*|seuil\b|ouvr\w+\s+la\s+porte|"
+    r"pouss\w+\s+la\s+porte|on\s+y\s+va|allons[-\s]y)\b",
+    re.IGNORECASE,
+)
+
+
+async def _refus_entree_ouverture_hors_donjon(
+    ctx: Any, work: list[Message],
+) -> Optional[str]:
+    """⛔ Partie 48b239fa : un scénario à `ouverture_hors_donjon` (briefing
+    en ville / au porche — Dues For The Dead, Crypts Kelemvor) ne doit PAS
+    être initialisé au tour d'ouverture. Le 9B appelait
+    `carte_donjon_entrer` LUI-MÊME malgré l'ancre (« n'appelle PAS… ») et
+    narrait l'intérieur (« la porte se verrouille derrière vous »). Refus
+    systématique tant que : (a) c'est le tour d'ouverture (`histoire`
+    vide), (b) le donjon n'est pas initialisé, (c) le message du joueur ne
+    contient AUCUNE intention d'entrée explicite."""
+    try:
+        from ..game.state import PartyState      # noqa: PLC0415
+        etat = PartyState(
+            data_dir=str(ctx.data_dir), partie_id=str(ctx.partie_id),
+            max_history=0,
+        ).load()
+        if not isinstance(etat, dict) or "_erreur" in etat:
+            return None
+        if (etat.get("donjon") or {}).get("id"):
+            return None                          # plan déjà initialisé
+        if etat.get("histoire"):
+            return None                          # l'ouverture est jouée
+        from .prompt_builder import _manifest_scenario_disque  # noqa: PLC0415
+        man = _manifest_scenario_disque(etat, str(ctx.data_dir))
+        if not (man or {}).get("ouverture_hors_donjon"):
+            return None                          # scénario canonique
+        dernier_user = ""
+        for m in reversed(work or []):
+            if getattr(m, "role", "") == "user":
+                dernier_user = m.content or ""
+                break
+        if _INTENT_ENTREE_EXPLICITE_RE.search(dernier_user or ""):
+            return None                          # le joueur a décidé d'entrer
+        dep = (man or {}).get("depart")
+        lieu = str((dep or {}).get("nom") if isinstance(dep, dict)
+                   else dep or "").strip() or "la localité de départ"
+        return (
+            "⛔ Ouverture HORS DU DONJON (manifeste `ouverture_hors_donjon`) : "
+            f"ce tour-ci est le BRIEFING à {lieu}. Ne narre PAS l'intérieur "
+            "du donjon et ne l'initialise PAS : pose la scène d'approche "
+            "(briefing de la mission, remise du matériel) puis demande au "
+            "joueur s'il franchit le seuil. `carte_donjon_entrer` ne sera "
+            "légitime qu'après SA décision explicite (partie 48b239fa)."
+        )
+    except Exception:                            # noqa: BLE001
+        return None
+
+
 # 🎁 Remises d'OBJETS DE QUÊTE narrées (partie e55cc855) : « Thukmuul tend la
 # fiole de vérité vers Margoth », « Margoth range la fiole de vérité, le
 # parchemin de la route et la baguette de téléportation dans son sac à dos »
@@ -5989,6 +6050,12 @@ class Orchestrator:
                     work, name, call.get("id"), refus_monstres,
                 )
                 continue
+            refus_ouv = await _refus_entree_ouverture_hors_donjon(ctx, work)
+            if refus_ouv:
+                self._reply_tool_error(
+                    work, name, call.get("id"), refus_ouv,
+                )
+                continue
             spec = self.tools[resolved]
             args, notes = sanitize_tool_args(spec, args)
             tr = await self._run_one_tool(spec, ctx, args, on_event, result)
@@ -6060,6 +6127,14 @@ class Orchestrator:
                     role="tool",
                     name=resolved,
                     content=refus_monstres,
+                ))
+                continue
+            refus_ouv = await _refus_entree_ouverture_hors_donjon(ctx, work)
+            if refus_ouv:
+                work.append(Message(
+                    role="tool",
+                    name=resolved,
+                    content=refus_ouv,
                 ))
                 continue
             spec = self.tools[resolved]

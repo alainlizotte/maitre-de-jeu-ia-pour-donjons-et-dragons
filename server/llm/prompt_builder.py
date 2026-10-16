@@ -249,14 +249,17 @@ def _lieu_depart_canonique(
             "HORS DU DONJON : "
             + (f"à {lieu_dep} " if lieu_dep else "")
             + "(le groupe y est placé sur la carte du monde), DEVANT le "
-            f"seuil du donjon {did or 'du scénario'}. Le décor du seuil : "
-            f"{str(s0.get('type') or '?').strip()} "
-            f"({s0.get('x')},{s0.get('y')}) — « "
-            f"{str(s0.get('description')).strip()[:_MAX_DESC_BLOC]} » . "
-            "Le groupe N'EST PAS encore entré dans le donjon : pose la "
-            "scène d'approche (porche, briefing de la mission, remise du "
-            "matériel) et n'appelle PAS `carte_donjon_entrer` tant que le "
-            "joueur n'a pas décidé d'y entrer. N'invente AUCUN autre lieu."
+            f"seuil du donjon {did or 'du scénario'}. La description du "
+            f"seuil — {str(s0.get('type') or '?').strip()} "
+            f"({s0.get('x')},{s0.get('y')}) : « "
+            f"{str(s0.get('description')).strip()[:_MAX_DESC_BLOC]} » — "
+            "décrit CE QUI ATTEND DERRIÈRE la porte (aperçu, attente), PAS "
+            "la scène en cours. Le groupe N'EST PAS encore entré dans le "
+            "donjon : CE TOUR-CI, pose la scène d'approche (porche, "
+            "briefing de la mission, remise du matériel) et N'APPELLE PAS "
+            "`carte_donjon_entrer` — l'entrée n'aura lieu que lorsque le "
+            "joueur décidera explicitement de franchir le seuil. N'invente "
+            "AUCUN autre lieu."
         ]
     else:
         lignes = [

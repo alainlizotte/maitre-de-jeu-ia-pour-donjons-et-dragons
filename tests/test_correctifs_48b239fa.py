@@ -124,6 +124,79 @@ def test_d0_fouille_et_dialogue_ne_declenchent_pas():
 
 
 # --------------------------------------------------------------------------- #
+#  1bis. Verrou serveur : PAS d'entrée de donjon à l'ouverture hors donjon
+# --------------------------------------------------------------------------- #
+
+def test_verrou_entree_ouverture_hors_donjon(tmp_path):
+    """`_refus_entree_ouverture_hors_donjon` : au tour d'ouverture d'un
+    scénario flaggé, `carte_donjon_entrer` est REFUSÉ tant que le joueur
+    n'a pas annoncé entrer (le 9B l'appelait lui-même, 48b239fa)."""
+    import asyncio
+
+    from server.llm.orchestrator import (
+        _INTENT_ENTREE_EXPLICITE_RE, _refus_entree_ouverture_hors_donjon)
+    from server.tools.base import ToolContext
+
+    dd = _data_dir_48b(tmp_path, MANIFEST_HORS_DJ)
+    (dd / f"partie_{PID}.json").write_text(json.dumps(
+        _etat_48b(), ensure_ascii=False), encoding="utf-8")
+    ctx = ToolContext(partie_id=PID, joueur="Alain", data_dir=str(dd))
+
+    class _Msg:
+        def __init__(self, role, content):
+            self.role = role
+            self.content = content
+
+    # « Débute la partie » → refus.
+    refus = asyncio.run(_refus_entree_ouverture_hors_donjon(
+        ctx, [_Msg("user", "Débute la partie")]))
+    assert refus and "HORS DU DONJON" in refus and "Phlan" in refus, refus
+    # Le joueur annonce l'entrée → le tool passe.
+    refus2 = asyncio.run(_refus_entree_ouverture_hors_donjon(
+        ctx, [_Msg("user", "Nous descendons l'escalier et nous entrons "
+                           "dans les catacombes")]))
+    assert refus2 is None, refus2
+    # L'intention est bien détectée par le regex.
+    assert _INTENT_ENTREE_EXPLICITE_RE.search("on pousse la porte")
+    assert not _INTENT_ENTREE_EXPLICITE_RE.search("Débute la partie")
+
+
+def test_verrou_inactif_apres_ouverture_ou_hors_flag(tmp_path):
+    """Le verrou ne s'applique qu'au tour d'ouverture des scénarios
+    flaggés : après l'ouverture (histoire non vide) ou sans flag, l'entrée
+    reste libre (Duel au pinceau, Crown of Mystra…)."""
+    import asyncio
+
+    from server.llm.orchestrator import _refus_entree_ouverture_hors_donjon
+    from server.tools.base import ToolContext
+
+    class _Msg:
+        def __init__(self, role, content):
+            self.role = role
+            self.content = content
+
+    # a) Histoire non vide → décision libre.
+    dd = _data_dir_48b(tmp_path, MANIFEST_HORS_DJ)
+    etat_joue = _etat_48b(
+        histoire=[{"evenement": "Début de l'aventure : …"}])
+    (dd / f"partie_{PID}.json").write_text(
+        json.dumps(etat_joue, ensure_ascii=False), encoding="utf-8")
+    ctx = ToolContext(partie_id=PID, joueur="Alain", data_dir=str(dd))
+    assert asyncio.run(_refus_entree_ouverture_hors_donjon(
+        ctx, [_Msg("user", "Débute la partie")])) is None
+
+    # b) Manifeste SANS flag → pas de verrou.
+    man2 = json.loads(json.dumps(MANIFEST_HORS_DJ))
+    man2.pop("ouverture_hors_donjon")
+    dd2 = _data_dir_48b(tmp_path / "b", man2)
+    (dd2 / f"partie_{PID}.json").write_text(
+        json.dumps(_etat_48b(), ensure_ascii=False), encoding="utf-8")
+    ctx2 = ToolContext(partie_id=PID, joueur="Alain", data_dir=str(dd2))
+    assert asyncio.run(_refus_entree_ouverture_hors_donjon(
+        ctx2, [_Msg("user", "Débute la partie")])) is None
+
+
+# --------------------------------------------------------------------------- #
 #  2. Ancre d'ouverture HORS DU DONJON (`ouverture_hors_donjon`)
 # --------------------------------------------------------------------------- #
 
@@ -177,7 +250,7 @@ def test_ancre_hors_donjon(tmp_path):
     assert "HORS DU DONJON" in ancre
     assert "Phlan" in ancre
     assert "N'EST PAS encore entré" in ancre
-    assert "n'appelle PAS `carte_donjon_entrer`" in ancre
+    assert "N'APPELLE PAS `carte_donjon_entrer`" in ancre
     # PNJ du module toujours injectés (désambiguïsation PJ/PNJ).
     assert "Cassyt" in ancre
 
@@ -302,7 +375,7 @@ def test_download_png_retransmet_le_type_temp(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-#  4. Manifeste Dues For The Dead : trame pré-donjon lisible
+#  4. Manifestes : ouverture hors donjon par scénario (audit vivant)
 # --------------------------------------------------------------------------- #
 
 def test_manifest_dues_ouverture_hors_donjon():
@@ -346,3 +419,96 @@ def test_objectifs_dues_etape_porche_sans_salle():
     assert res["objectifs"][0]["type"] == "pnj"
     assert res["objectifs"][0]["salle"] == ""
     assert len(titres) == 5 and titres[1].startswith("Enquêter dans les")
+
+
+def test_manifest_crypts_kelemvor_ouverture_hors_donjon():
+    """Crypts Kelemvor (Dragon+ 18) : même traitement — la salle (0,0) est
+    un INTÉRIEUR de crypte (« porte se verrouille derrière vous ») alors
+    que le module démarre au temple de Kelemvor à Neverwinter (briefing,
+    remise lanterne/pierre à feu, PUIS descente enfermée)."""
+    man = json.loads(
+        (DATA_REEL / "scenarios" / "Divers" / "Crypts Kelemvor.donjon.json")
+        .read_text(encoding="utf-8"))
+    assert man.get("ouverture_hors_donjon") is True
+    assert str(man.get("depart", {}).get("nom") or "") == "Neverwinter"
+    etapes = man.get("etapes") or []
+    assert etapes[0]["cle"] == "temple_neverwinter"
+    assert etapes[0]["type"] == "pnj"
+    assert not str(etapes[0].get("salle") or "").strip()
+    assert "Neverwinter" in str(etapes[0].get("detail") or "")
+    assert etapes[1]["cle"] == "sceaux"
+
+
+def test_ancre_crypts_kelemvor_hors_donjon():
+    """L'ancre du 2e scénario flaggé s'ancre À NEVERWINTER, devant le seuil
+    (lecture froide du manifeste réel, donjon non initialisé)."""
+    from server.llm.prompt_builder import _lieu_depart_canonique
+    etat = {
+        "histoire": [],
+        "donjon": {},
+        "quete": {
+            "source": "[divers_crypts_kelemvor] /data/scenarios/x.pdf",
+            "titre": "Les Cryptes de Kelemvor",
+        },
+    }
+    ancre = _lieu_depart_canonique(etat, str(DATA_REEL))
+    assert ancre, "l'ancre doit être produite"
+    assert "HORS DU DONJON" in ancre
+    assert "Neverwinter" in ancre
+    assert "N'APPELLE PAS `carte_donjon_entrer`" in ancre
+
+
+def test_audit_flags_ouverture_hors_donjon():
+    """Audit vivant : seuls les scénarios dont la salle (0,0) est un
+    INTÉRIEUR de donjon ALORS QUE le module démarre en ville portent le
+    flag (les 29 autres manifestes modèlent la scène d'ouverture DANS la
+    salle (0,0) : place, taverne, seuil, grotte, route… — comportement
+    canonique inchangé). Tout nouveau flag doit passer par une revue ici."""
+    manifestes = sorted(glob.glob(
+        str(DATA_REEL / "scenarios" / "**" / "*.donjon.json"),
+        recursive=True))
+    assert manifestes, "manifestes de scénarios introuvables"
+    flaggues = set()
+    for chemin in manifestes:
+        man = json.loads(Path(chemin).read_text(encoding="utf-8"))
+        if man.get("ouverture_hors_donjon"):
+            flaggues.add(os.path.basename(chemin))
+    assert flaggues == {
+        "Dues for the Dead.donjon.json",
+        "Crypts Kelemvor.donjon.json",
+    }, (
+        f"flags inattendus : {sorted(flaggues - {
+            'Dues for the Dead.donjon.json', 'Crypts Kelemvor.donjon.json'})}"
+        f" / manquants : {sorted({
+            'Dues for the Dead.donjon.json',
+            'Crypts Kelemvor.donjon.json'} - flaggues)}")
+
+
+# --------------------------------------------------------------------------- #
+#  1ter. Suggestion d'outil : direction du JOUEUR lue sur SON message
+# --------------------------------------------------------------------------- #
+
+def test_suggestion_outil_direction_sur_message_joueur():
+    """5quater-b : « Je vais à l'ouest » (groupe en (0,0), porte ouest)
+    doit suggérer `carte_donjon_explorer(direction='ouest')` — la direction
+    se lit sur le message du JOUEUR, même quand la narration combinée
+    empêche l'ancre $ de matcher (partie 48b239fa : carte restée figée en
+    (0,0), la fosse jamais atteinte)."""
+    from server.main import _suggestion_outil_explo
+    etat = _etat_d0(courant=(0, 0))
+    etat["donjon"]["grille"] = [
+        {"x": 0, "y": 0, "type": "entrée", "visitee": True,
+         "portes": {"nord": True, "ouest": True}},
+        {"x": -1, "y": 0, "type": "puits", "portes": {"est": True}},
+    ]
+    sugg = _suggestion_outil_explo(etat, "Je vais à l'ouest")
+    assert sugg and "carte_donjon_explorer(direction='ouest')" in sugg, sugg
+
+
+def test_suggestion_outil_mouvement_interne_none():
+    """Mouvement DANS la salle (« centre de la salle », 6746fc6c) : aucune
+    suggestion — pas de déplacement forcé."""
+    from server.main import _suggestion_outil_explo
+    etat = _etat_d0(courant=(0, 0))
+    assert _suggestion_outil_explo(
+        etat, "Je me dirige au centre de la salle") is None

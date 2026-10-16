@@ -8757,16 +8757,33 @@ async def _handle_say(
                 # « histoire vide » est désarmé pour eux : le filet n'agit
                 # que sur une entrée NARRÉE (le joueur a décidé d'entrer).
                 from .tools.cartes import _manifest_pour
+                from .llm.orchestrator import _INTENT_ENTREE_EXPLICITE_RE
                 _man_ent = _manifest_pour(ctx, "")
                 _ouv_hors_dj = bool((_man_ent or {}).get(
                     "ouverture_hors_donjon"))
+                _joueur_veut_entrer_ent = bool(
+                    _INTENT_ENTREE_EXPLICITE_RE.search(text or ""))
+                # Hors ouverture (histoire non vide) : comportement
+                # canonique inchangé. À l'ouverture hors donjon : l'entrée
+                # narrée n'est honorée que sur décision du joueur.
+                _entree_narree_ok = (
+                    not _ouv_hors_dj
+                    or bool(_etat_ent.get("histoire"))
+                    or _joueur_veut_entrer_ent
+                )
                 if (
                     _etat_ent.get("phase") != "combat"
                     and not (_etat_ent.get("donjon") or {}).get("id")
                     and not _deja_entree_reussie
                     and (
-                        _entree_donjon_narree(
-                            (text or "") + " " + (result.narration or ""))
+                        # Entrée narrée par le MJ : légitime, SAUF à
+                        # l'ouverture d'un scénario hors donjon où le
+                        # JOUEUR n'a pas annoncé entrer (48b239fa).
+                        (
+                            _entree_narree_ok
+                            and _entree_donjon_narree(
+                                (text or "") + " " + (result.narration or ""))
+                        )
                         # 🔧 Bêta (résidu carte) : scénario À MANIFESTE dont
                         # l'ouverture se déroule DANS le donjon (salle 0,0 du
                         # plan — ex. « Duel au pinceau » : le duel a lieu sur
@@ -10072,10 +10089,17 @@ on_status=on_status)
                 explo_pas_appele = not (_outils_appeles & _EXPLORATION_TOOLS)
                 if phase_explo and explo_pas_appele and _estnarration_explo(
                         (text or "") + " " + (result.narration or "")):
-                    _outil_qb = _suggestion_outil_explo(
-                        _etat_rejouer,
-                        (text or "") + " " + (result.narration or ""),
-                    )
+                    # 🔧 Partie 48b239fa : la DIRECTION explicite du joueur
+                    # (« Je vais à l'ouest ») doit être lue sur SON message,
+                    # pas sur le texte combiné joueur+narration — l'ancre $
+                    # de `_MOVE_INTENT_RE` échouait sur la concaténation et
+                    # le déplacement narré en prose restait à jamais
+                    # invisible (carte figée en (0,0), E2E 48b239fa).
+                    _outil_qb = (_suggestion_outil_explo(
+                        _etat_rejouer, text or "")
+                        or _suggestion_outil_explo(
+                            _etat_rejouer,
+                            (text or "") + " " + (result.narration or "")))
                     # None = mouvement DANS la salle / prose sans intention
                     # spatiale : la narration du MJ est correcte, ne force
                     # RIEN (partie 6746fc6c : « centre de la salle »
@@ -11055,6 +11079,11 @@ on_status=on_status)
     except Exception as e:                                           # noqa: BLE001
         # Le tour a crashé (LLM injoignable, timeout…) : on prévient la table
         # plutôt que de laisser les clients attendre indéfiniment.
+        # 🔧 Partie 48b239fa : le message seul (« name 'etat' is not
+        # defined ») est indiable sans la PILE — on logge le traceback
+        # complet avant le résumé une-ligne.
+        import traceback as _tb
+        _tb.print_exc()
         print(f"[dnd35] Tour MJ échoué ({partie_id}/{player}) : {e}")
         await session.broadcast({
             "type": "dm",

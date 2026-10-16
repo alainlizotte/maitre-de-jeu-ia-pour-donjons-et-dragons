@@ -3526,14 +3526,6 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
                 detail=f"Gain de caractéristique invalide : « {gain_carac} ».",
             )
         carac[gain_carac] = int(carac.get(gain_carac, 10)) + 1
-    # C6-garde : en mode avancement, la carac de base du payload est
-    # ignoree et remplacee par la base reconstruite de l existante
-    # (le +1 de palier passe par gain_carac ci-dessus, pas par une
-    # modification libre).
-    if mode_avancement:
-        carac = dict(_carac_base_c6)
-        if gain_carac:
-            carac[gain_carac] = int(carac.get(gain_carac, 10)) + 1
 
 
     race = (payload.get("race") or "").strip()
@@ -3589,9 +3581,35 @@ async def persos_sauver(payload: dict[str, Any], utilisateur: str = Depends(util
         avancement_confirme = 1
         gains_carac_precedents = []
 
+    # C6-garde (d61883d, réparé 48b239fa) : en mode avancement, la carac de
+    # base du payload est ignorée et remplacée par la base RECONSTRUITE de
+    # l'existant — carac final (fiche) − ajustements raciaux − +1 des
+    # paliers précédents. Le +1 du palier courant passe par `gain_carac`,
+    # pas par une modification libre du formulaire.
+    # ⚠️ Le bloc était initialement inséré AVANT la définition de
+    # `mode_avancement` (UnboundLocalError 500 sur CHAQUE POST /api/persos)
+    # et référençait `_carac_base_c6`, jamais définie.
+    if mode_avancement:
+        _mods_race_c6 = persos_mod.RACES.get(
+            persos_mod.resoudre_race(race) or race, {}).get("mods", {})
+        _carac_ex_c6 = existante.get("carac") or {}
+        carac = {
+            c: max(1, int(_carac_ex_c6.get(c, 10) or 10)
+                   - int(_mods_race_c6.get(c, 0))
+                   - sum(1 for g in gains_carac_precedents if g == c))
+            for c in persos_mod.CARACS
+        }
+        if gain_carac:
+            carac[gain_carac] = int(carac.get(gain_carac, 10)) + 1
+
     equipement = _normaliser_equipement(payload.get("equipement"))
     if mode_avancement:
-        equipement = list(_equip_rest)
+        # 🔧 C6-garde (d61883d, réparé 48b239fa) : l'équipement est
+        # RESTAURÉ depuis l'existante (champ hors whitelist — le payload
+        # tricheur est ignoré). `_equip_rest` n'a jamais été définie
+        # (NameError, même commit que le garde carac).
+        equipement = _normaliser_equipement(
+            existante.get("equipement") or [])
     # Dons parsés tôt : ils alimentent les valeurs dérivées (comme les PV
     # plus bas via _bonus_dons_pv) — « Esquive » ajoute +1 de CA.
     dons = payload.get("dons") or []

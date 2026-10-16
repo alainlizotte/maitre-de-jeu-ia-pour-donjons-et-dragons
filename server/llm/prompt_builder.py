@@ -85,21 +85,23 @@ _ENTREE_DISQUE_CACHE: dict[
 _ENTREE_DISQUE_TTL = 2.0   # s — une édition du manifeste reste prise en compte presque en direct
 
 
-def _entree_manifeste_disque(
+def _manifest_scenario_disque(
     etat: dict[str, Any], data_dir: str
 ) -> Optional[dict[str, Any]]:
-    """Salle d'entrée canonique lue FROIDE du manifeste de scénario
-    (`.donjon.json`) quand le donjon n'est PAS encore initialisé dans
-    l'état — l'ouverture précède `carte_donjon_entrer`, or l'ancre d'intro
-    exigeait un donjon déjà chargé (parties Dead of Night 241ece89 /
-    Dues for the Dead 451746d7 : manifeste jamais consulté, intro
-    improvisée depuis le résumé anglais — fusion PJ/PNJ « Margoth, barde »).
+    """Manifeste `.donjon.json` du scénario de la quête, lu FROID du disque.
 
     Découverte identique à `objectifs._manifest_etapes` : manifeste dont
     `scenario` == id du scénario de la quête (`[id] ` en tête de
     `quete.source`, id de CHAPITRE inclus — les manifestes listent les
-    ids de tous les chapitres). Renvoie la salle portée par
-    `etages[0].entree` (défaut (0,0)) — None si aucun manifeste."""
+    ids de tous les chapitres). Renvoie le manifeste COMPLET (ou None),
+    mis en cache ~2 s — une édition du manifeste reste prise en compte
+    presque en direct.
+
+    🔧 Partie 48b239fa : expose aussi `ouverture_hors_donjon` (la scène
+    d'ouverture se joue HORS du donjon — briefing en ville/au porche —
+    l'entrée ne se fait que sur décision explicite du joueur) et `depart`
+    (localité de départ sur la carte du monde).
+    """
     if not data_dir:
         return None
     try:
@@ -116,9 +118,9 @@ def _entree_manifeste_disque(
     if _hit and (_now - _hit[0]) < _ENTREE_DISQUE_TTL:
         return _hit[1]
 
-    def _finish(salle: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
-        _ENTREE_DISQUE_CACHE[cache_key] = (time.monotonic(), salle)
-        return salle
+    def _finish(man: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        _ENTREE_DISQUE_CACHE[cache_key] = (time.monotonic(), man)
+        return man
 
     base = os.path.join(data_dir, "scenarios")
     if not os.path.isdir(base):
@@ -138,33 +140,52 @@ def _entree_manifeste_disque(
             ids = scen if isinstance(scen, list) else [scen]
             if sid not in {str(x).strip() for x in ids if x}:
                 continue
-            etages = [
-                e for e in (man.get("etages") or []) if isinstance(e, dict)
-            ]
-            if not etages:
+            if not [e for e in (man.get("etages") or []) if isinstance(e, dict)]:
                 continue
-            salles = [
-                s for s in (etages[0].get("salles") or [])
-                if isinstance(s, dict)
-            ]
-            ent = etages[0].get("entree") or [0, 0]
-            try:
-                ex, ey = int(ent[0]), int(ent[1])
-            except Exception:                                       # noqa: BLE001
-                ex, ey = 0, 0
-
-            def _cxy(s: dict[str, Any]) -> tuple[int, int] | None:
-                try:
-                    return (int(s.get("x")), int(s.get("y")))
-                except (TypeError, ValueError):
-                    return None
-
-            s0 = next(
-                (s for s in salles if _cxy(s) == (ex, ey)),
-                salles[0] if salles else None,
-            )
-            return _finish(s0)
+            return _finish(man)
     return _finish(None)
+
+
+def _entree_manifeste_disque(
+    etat: dict[str, Any], data_dir: str
+) -> Optional[dict[str, Any]]:
+    """Salle d'entrée canonique lue FROIDE du manifeste de scénario
+    (`.donjon.json`) quand le donjon n'est PAS encore initialisé dans
+    l'état — l'ouverture précède `carte_donjon_entrer`, or l'ancre d'intro
+    exigeait un donjon déjà chargé (parties Dead of Night 241ece89 /
+    Dues for the Dead 451746d7 : manifeste jamais consulté, intro
+    improvisée depuis le résumé anglais — fusion PJ/PNJ « Margoth, barde »).
+
+    Renvoie la salle portée par `etages[0].entree` (défaut (0,0)) — None
+    si aucun manifeste. Le dict renvoyé est CELUI du manifeste en cache
+    (`_manifest_scenario_disque`) : même identité d'objet entre deux
+    lectures rapprochées."""
+    man = _manifest_scenario_disque(etat, data_dir)
+    if not man:
+        return None
+    etages = [
+        e for e in (man.get("etages") or []) if isinstance(e, dict)
+    ]
+    salles = [
+        s for s in (etages[0].get("salles") or [])
+        if isinstance(s, dict)
+    ]
+    ent = etages[0].get("entree") or [0, 0]
+    try:
+        ex, ey = int(ent[0]), int(ent[1])
+    except Exception:                                           # noqa: BLE001
+        ex, ey = 0, 0
+
+    def _cxy(s: dict[str, Any]) -> tuple[int, int] | None:
+        try:
+            return (int(s.get("x")), int(s.get("y")))
+        except (TypeError, ValueError):
+            return None
+
+    return next(
+        (s for s in salles if _cxy(s) == (ex, ey)),
+        salles[0] if salles else None,
+    )
 
 
 def _lieu_depart_canonique(
@@ -194,24 +215,58 @@ def _lieu_depart_canonique(
     if etat.get("histoire"):
         return ""
     s0: Optional[dict[str, Any]] = None
+    man: Optional[dict[str, Any]] = None
     donjon = etat.get("donjon") or {}
-    if donjon.get("id") and donjon.get("grille"):
+    dj_initialise = bool(donjon.get("id") and donjon.get("grille"))
+    if dj_initialise:
         s0 = next(
             (s for s in (donjon.get("grille") or []) if s.get("visitee")),
             None,
         )
+        if data_dir:
+            man = _manifest_scenario_disque(etat, data_dir)
     elif data_dir:
+        man = _manifest_scenario_disque(etat, data_dir)
         s0 = _entree_manifeste_disque(etat, data_dir)
     if not (s0 and str(s0.get("description") or "").strip()):
         return ""
-    lignes = [
-        "LIEU DE DÉPART CANONIQUE — la scène d'ouverture s'y déroule : "
-        f"{str(s0.get('type') or '?').strip()} "
-        f"({s0.get('x')},{s0.get('y')}) — « "
-        f"{str(s0.get('description')).strip()[:_MAX_DESC_BLOC]} » . "
-        "N'invente AUCUN autre lieu (pas de « donjon de… » absent d'ici) "
-        "et n'y entre PAS : c'est déjà où se trouve le groupe."
-    ]
+    # 🔧 Partie 48b239fa : ouverture HORS DU DONJON (manifeste
+    # `ouverture_hors_donjon`) — le briefing se joue en ville / au porche,
+    # PAS dans la salle (0,0) : l'ancre interdit l'entrée tant que le
+    # joueur n'a pas décidé de franchir le seuil. (Donjon déjà initialisé
+    # = le groupe est entré → ancre normale.)
+    hors_dj = bool((man or {}).get("ouverture_hors_donjon")) and not dj_initialise
+    if hors_dj:
+        dep = (man or {}).get("depart")
+        lieu_dep = ""
+        if isinstance(dep, dict):
+            lieu_dep = str(dep.get("nom") or "").strip()
+        lieu_dep = lieu_dep or str(
+            (etat.get("lieu") or {}).get("nom") or "").strip()
+        did = str((man or {}).get("donjon_id") or "").strip()
+        lignes = [
+            "LIEU DE DÉPART CANONIQUE — la scène d'ouverture se déroule "
+            "HORS DU DONJON : "
+            + (f"à {lieu_dep} " if lieu_dep else "")
+            + "(le groupe y est placé sur la carte du monde), DEVANT le "
+            f"seuil du donjon {did or 'du scénario'}. Le décor du seuil : "
+            f"{str(s0.get('type') or '?').strip()} "
+            f"({s0.get('x')},{s0.get('y')}) — « "
+            f"{str(s0.get('description')).strip()[:_MAX_DESC_BLOC]} » . "
+            "Le groupe N'EST PAS encore entré dans le donjon : pose la "
+            "scène d'approche (porche, briefing de la mission, remise du "
+            "matériel) et n'appelle PAS `carte_donjon_entrer` tant que le "
+            "joueur n'a pas décidé d'y entrer. N'invente AUCUN autre lieu."
+        ]
+    else:
+        lignes = [
+            "LIEU DE DÉPART CANONIQUE — la scène d'ouverture s'y déroule : "
+            f"{str(s0.get('type') or '?').strip()} "
+            f"({s0.get('x')},{s0.get('y')}) — « "
+            f"{str(s0.get('description')).strip()[:_MAX_DESC_BLOC]} » . "
+            "N'invente AUCUN autre lieu (pas de « donjon de… » absent d'ici) "
+            "et n'y entre PAS : c'est déjà où se trouve le groupe."
+        ]
     pnj = [str(p).strip() for p in (s0.get("pnj") or []) if str(p or "").strip()]
     if pnj:
         lignes.append(

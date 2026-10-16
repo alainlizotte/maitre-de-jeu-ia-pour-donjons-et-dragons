@@ -8749,6 +8749,17 @@ async def _handle_say(
                     tc.get("name") == "carte_donjon_entrer"
                     for tc in result.tool_calls_trace
                 )
+                # 🔧 Partie 48b239fa : les scénarios À OUVERTURE HORS DONJON
+                # (`ouverture_hors_donjon` du manifeste — ex. Dues For The
+                # Dead : briefing à Phlan, au porche du cimetière, AVANT la
+                # descente) ne doivent PAS être téléportés en salle (0,0)
+                # au tour d'ouverture. Le déclencheur automatique
+                # « histoire vide » est désarmé pour eux : le filet n'agit
+                # que sur une entrée NARRÉE (le joueur a décidé d'entrer).
+                from .tools.cartes import _manifest_pour
+                _man_ent = _manifest_pour(ctx, "")
+                _ouv_hors_dj = bool((_man_ent or {}).get(
+                    "ouverture_hors_donjon"))
                 if (
                     _etat_ent.get("phase") != "combat"
                     and not (_etat_ent.get("donjon") or {}).get("id")
@@ -8764,7 +8775,8 @@ async def _handle_say(
                         # le plan restait à jamais non initialisé (carte du
                         # monde affichée pendant que la narration vivait dans
                         # le donjon). À l'ouverture avec un manifeste, on
-                        # initialise le plan DÉTERMINISTEMENT.
+                        # initialise le plan DÉTERMINISTEMENT — SAUF ouverture
+                        # hors donjon (48b239fa).
                         # 🔧 Partie 3f52e912 : le signal d'un tour d'ouverture
                         # est `histoire` VIDE, pas la phase — la quête choisie
                         # via l'interface positionne déjà phase=« exploration »
@@ -8773,12 +8785,13 @@ async def _handle_say(
                         # plan n'était initialisé que bien plus tard EN PLEINE
                         # AVENTURE : l'entrée forcée téléportait alors le
                         # groupe en salle (0,0), hors de toute cohérence.
-                        or not (_etat_ent.get("histoire"))
+                        or (
+                            not (_etat_ent.get("histoire"))
+                            and not _ouv_hors_dj
+                        )
                     )
                 ):
-                    from .tools.cartes import _manifest_pour
-                    _man = _manifest_pour(ctx, "")
-                    _did = str((_man or {}).get("donjon_id") or "").strip()
+                    _did = str((_man_ent or {}).get("donjon_id") or "").strip()
                     if _did:
                         # 🎬 Tour d'OUVERTURE ? — si le MJ a « narré » une
                         # entrée de donjon dès l'ouverture, sa prose

@@ -62,6 +62,29 @@ _QUEST = {
 
 def _post(path: str, body: dict) -> dict:
     data = json.dumps(body).encode()
+    headers = {"Content-Type": "application/json"}
+    # Compte de test : la création de partie est protégée (Bearer).
+    if path.startswith("/api/parties"):
+        headers["Authorization"] = f"Bearer {_compte_test()}"
+    req = urllib.request.Request(
+        f"{BASE}{path}", data=data, headers=headers)
+    return json.loads(urllib.request.urlopen(req, timeout=20).read())
+
+
+def _compte_test() -> str:
+    """Compte E2E : inscription, ou connexion si déjà créé."""
+    import urllib.error
+    compte, mdp = "e2e_audit_testeur", "e2e-audit-2026!"
+    try:
+        return _post_auth("/api/auth/inscription",
+                          {"nom": compte, "mot_de_passe": mdp})["token"]
+    except urllib.error.HTTPError:
+        return _post_auth("/api/auth/connexion",
+                          {"nom": compte, "mot_de_passe": mdp})["token"]
+
+
+def _post_auth(path: str, body: dict) -> dict:
+    data = json.dumps(body).encode()
     req = urllib.request.Request(
         f"{BASE}{path}", data=data,
         headers={"Content-Type": "application/json"})

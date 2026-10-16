@@ -3,7 +3,13 @@
 ComfyUI expose une API locale HTTP sur `http://127.0.0.1:8188`. On lui soumet
 un workflow JSON via `POST /prompt` puis on interroge `GET /history/{id}`
 jusqu'à ce que l'exécution soit terminée. Le PNG produit est alors téléchargé
-via `GET /view?filename=...&type=output` et mis en cache localement.
+via `GET /view?filename=...&type=temp` et mis en cache localement.
+
+⚠️ Les workflows utilisent le node **PreviewImage** (et non `SaveImage*`) :
+l'image va dans le dossier TEMP de ComfyUI, rien n'est écrit dans `output/`
+(parti 48b239fa : les illustrations s'accumulaient dans le dossier Output).
+L'historique signale l'aperçu avec `type: "temp"` — `_download_png` le
+transmet tel quel à `/view`.
 
 Un seul workflow par usage cible est chargé en mémoire (depuis
 `server/image/workflows/<usage>.json`). Le graphe doit être au **format
@@ -222,7 +228,9 @@ class ComfyUIBackend:
         """Identifie l'image de sortie dans l'historique, la télécharge via
         /view et la sauvegarde à dest_path. Renvoie le chemin final."""
         outputs = history_entry.get("outputs") or {}
-        # Le premier node avec un champ `images` (SaveImage/VSaveImage) gagne.
+        # Le premier node avec un champ `images` (PreviewImage → type
+        # « temp », SaveImage → type « output ») gagne : le type est
+        # retransmis à /view tel quel.
         for node_id, payload in outputs.items():
             images = payload.get("images") or []
             if not images:

@@ -43,7 +43,8 @@ de texte pur sans `tool_calls`) :
 | « garde / sauve / crée la fiche de X » | `fiche_perso_creer_rapide(nom="X")` (pas `_creer`, trop complexe). |
 | « montre la fiche / consulte le monstre X » | `monstre_consulter(nom="X")` |
 | « j'entre dans le donjon X » | `carte_donjon_entrer(donjon_id="X")` |
-| « je vais / j'explore vers le nord/sud/est/ouest » | `carte_donjon_explorer(direction="nord")` |
+| « je vais au nord/sud/est/ouest / j'explore VERS une direction » | `carte_donjon_explorer(direction="nord")` — une DIRECTION explicite est requise (48b239fa) |
+| « j'explore / je fouille / j'examine la pièce où je me trouve » (SANS direction) | **PAS de déplacement** — reste SUR PLACE : narre la fouille et, si un jet s'impose, `lancer_d20(nom_personnage=…, competence="Fouille"|"Détection", difficulte=…)` (partie 48b239fa : « j'explore la fosse » avait téléporté le groupe) |
 | « je quitte le donjon » | `carte_donjon_sortir()` |
 | « je monte/descend l'escalier, a l'etage superieur/inferieur » | `carte_donjon_etage(direction="monter"|"descendre")` - JAMAIS carte_donjon_explorer pour un changement d etage (60446e2f) |
 | « montre la carte du donjon » | `carte_donjon_get()` |
@@ -222,6 +223,7 @@ ou image** à ce tour — même si le joueur dit seulement « débute la partie 
 - Réinventer une salle DÉJÀ VISITÉE (RÈGLE N°9) ou narrer une salle nouvelle
   sans `carte_donjon_decrire_salle` ; se déplacer de plus d'une salle par tour.
 - Confondre changement d ETAGE et deplacement cardinal : monter/descendre un escalier = carte_donjon_etage, JAMAIS carte_donjon_explorer (partie 60446e2f).
+- Déplacer le groupe parce que le joueur EXPLORE la pièce où il se trouve : « j'explore la fosse », « je fouille la salle » (sans direction) = recherche SUR PLACE, la carte ne bouge PAS (partie 48b239fa : deux déplacements induits, la fosse jamais fouillée).
 
 - Annoncer un monstre sans `monstre_consulter` ; échange de coups sans
   `engager_combat` ; déplacement hors donjon sans `voyage_demarrer` ;

@@ -1056,7 +1056,13 @@ _ACTION_DEPLACEMENT_RE = re.compile(
     # Partie b59b4a9a : actions COMPOSÉES (« je demande…, puis j'explore
     # la galerie vers l'est ») et départs (« je pars de… », « j'emprunte
     # la porte est », « je prends la route ») restaient invisibles du D0.
-    r"j'explore|on\s+avance|nous\s+avan[çc]ons|je\s+pars|"
+    # 🔧 Partie 48b239fa : « j'explore » SANS direction (« j'explore la
+    # fosse minutieusement ») est une FOUILLE SUR PLACE — ce n'est PAS un
+    # déplacement ; seule une direction cardinale explicite (« j'explore
+    # la galerie vers l'est ») déclenche l'outil de déplacement.
+    r"j'explore\s+[^.!?;\n]{0,60}?\b(?:vers\s+|au\s+|à\s+l['']|a\s+l['']|"
+    r"du\s+|de\s+l['']|de\s+la\s+|d[''])?(nord|sud|est|ouest)\b|"
+    r"on\s+avance|nous\s+avan[çc]ons|je\s+pars|"
     r"j'emprunte|je\s+prends\s+(?:la\s+route|le\s+passage|le\s+couloir|"
     r"la\s+porte|le\s+sentier)|"
     # Partie d9f65ed2 : « je continue ma route vers le puits de Nulentok »
@@ -3433,7 +3439,11 @@ class Orchestrator:
                 "\"outils\" OBLIGATOIRE avec `carte_donjon_explorer("
                 "direction=…)` et une porte OUVERTE de la salle courante "
                 "(liste ci-dessus). La carte DOIT avancer : ne réponds PAS "
-                "\"narrer\"."
+                "\"narrer\". 🔧 À l'inverse, si le message n'indique AUCUNE "
+                "direction ni destination (fouille, examen, exploration "
+                "SUR PLACE de la pièce courante), réponds « narrer » : "
+                "déplacer le groupe serait une téléportation non désirée "
+                "(partie 48b239fa)."
             )
         messages_dec = []
         decision: Optional[dict[str, Any]] = None

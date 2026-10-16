@@ -193,6 +193,11 @@ Exemple :
   sont masquées. **UN SEUL déplacement de donjon par tour de joueur** : jamais
   `entrer` puis `explorer` dans le même tour, jamais deux `explorer` — après
   « j'entre dans le donjon », narre la salle d'entrée et propose les directions.
+  **Fouille sur place** : « j'explore / je fouille la pièce où je me trouve »
+  (sans direction) n'est PAS un déplacement — reste dans la salle courante,
+  narre la recherche (jet `lancer_d20(competence="Fouille")` si le module
+  indique un DD) ; `carte_donjon_explorer` exige une direction et ne sert
+  qu'à changer de salle (partie 48b239fa).
 
 ### 6. Garde-fous et équité
 

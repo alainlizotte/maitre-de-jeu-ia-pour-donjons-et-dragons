@@ -5019,7 +5019,16 @@ class Orchestrator:
                 # de la tour pour « aller chez le marchand » (même ville)
                 # est libre (règle 7) ; D1 relançait et le modèle, sans
                 # bonne option, bouclait sur la copie de [5].
-                if _depl_narre and _deplacement_local(narration, etat):
+                try:
+                    from ..game.state import PartyState as _PS_d1  # noqa: PLC0415
+                    _etat_d1 = _PS_d1(
+                        data_dir=str(ctx.data_dir),
+                        partie_id=ctx.partie_id, max_history=0,
+                    ).load()
+                except Exception:                      # noqa: BLE001
+                    _etat_d1 = {}
+                if _depl_narre and _deplacement_local(
+                        narration, _etat_d1 or {}):
                     _depl_narre = None
                 if _depl_narre:
                     # 🔧 Partie 89174f50 : au 2e déplacement narré

@@ -275,7 +275,7 @@ _RE_DEGATS_SUBIS_PJ = _re_mod.compile(
 # réel : le modèle narrait « tu traverses le passage est » sans tool). Un rejeu
 # correctif force l'outil, qui arbitre (refus si pas de porte dans ce mur).
 _MOVE_INTENT_RE = _re_mod.compile(
-    r"^\s*(?:je\s+(?:vais|souhaite\s+aller|passe|avance)\s+(?:au|à l'|a l'|vers\s+le\s+|vers\s+la\s+)?"
+    r"^\s*(?:je\s+(?:vais|souhaite\s+aller|passe|avance|continue)\s+(?:au|à l'|a l'|vers\s+le\s+|vers\s+la\s+)?"
     r"|on\s+va\s+(?:au|à l'|a l')?|allons\s+(?:au|à l'|a l')?|direction\s+)?"
     r"\s*(nord|sud|est|ouest)\s*[.!?]*\s*$",
     _re_mod.IGNORECASE,
@@ -8163,13 +8163,28 @@ async def _handle_say(
                     for tc in result.tool_calls_trace
                 )
                 _attaque_non_resolue = _attaque_declaree and not _outil_attaque
+                # Partie 48b239fa (NC-1) : l'attaque declaree DANS LE
+                # TOUR D'ENGAGEMENT ("j'attaque !" + engager_combat au
+                # meme tour) n'etait jamais resolue - etat_avant.phase
+                # etait encore "exploration" et actif_avant vide : le
+                # MJ narre le kill en prose sans AUCUN jet.
+                _engage_ce_tour = any(
+                    tc.get("name") == "engager_combat" and tc.get("ok")
+                    for tc in result.tool_calls_trace
+                )
+                _actif_48 = (
+                    actif_avant
+                    or (str(apres.get("courant_tour_pour") or "")
+                        if _engage_ce_tour else "")
+                )
                 if (
-                    etat_avant.get("phase") == "combat"
+                    (etat_avant.get("phase") == "combat"
+                     or (_engage_ce_tour and apres.get("phase") == "combat"))
                     and apres.get("phase") == "combat"
-                    and actif_avant
+                    and _actif_48
                     and (
                         str(apres.get("courant_tour_pour") or "")
-                        == actif_avant
+                        == _actif_48
                         or _attaque_non_resolue
                         # 🛡️ gruumsh4pj (P27) : un TOUR MANGÉ PAR UN TIMEOUT
                         # FANTÔME (« la limite de vingt secondes dépassée »
@@ -8194,7 +8209,7 @@ async def _handle_say(
                 ):
                     pj_actif_apres = next(
                         (p for p in (apres.get("pj") or [])
-                         if p.get("nom") == actif_avant), None,
+                         if p.get("nom") == _actif_48), None,
                     )
                     est_monstre = pj_actif_apres is None
 
@@ -8235,13 +8250,13 @@ async def _handle_say(
                             and _ACTION_COMBAT_RE.search(text or "")
                         ):
                             print(
-                                f"[dnd35] Tour PJ {actif_avant} : action "
+                                f"[dnd35] Tour PJ {_actif_48} : action "
                                 "annoncée sans aucun jet — rejeu correctif"
                             )
                             corrective_pj = (
                                 "(Rappel système MJ — ⚠️ ERREUR : le joueur "
                                 "a annoncé une action de combat pour "
-                                f"**{actif_avant}** mais tu n'as résolu "
+                                f"**{_actif_48}** mais tu n'as résolu "
                                 "AUCUN jet de dés. Résous MAINTENANT cette "
                                 "action avec les outils : attaque → "
                                 "`lancer_attaque` puis `lancer_degats` puis "
@@ -8321,14 +8336,14 @@ async def _handle_say(
                                     result.iterations += result2.iterations
                                     await reset_stream()
                                     print(
-                                        f"[dnd35] Rejeu PJ {actif_avant} "
+                                        f"[dnd35] Rejeu PJ {_actif_48} "
                                         f"réussi ({len(
                                             result2.tool_calls_trace)} "
                                         f"tools appelés)"
                                     )
                                 else:
                                     print(
-                                        f"[dnd35] Rejeu PJ {actif_avant} "
+                                        f"[dnd35] Rejeu PJ {_actif_48} "
                                         "toujours sans jet — avancement forcé"
                                     )
                                     # Le LLM n'appellera JAMAIS l'outil
@@ -8361,7 +8376,7 @@ async def _handle_say(
                                                 _atk_resolue_det = True
                                                 print(
                                                     f"[dnd35] Attaque PJ "
-                                                    f"{actif_avant} résolue "
+                                                    f"{_actif_48} résolue "
                                                     "déterministiquement "
                                                     "(tools serveur)."
                                                 )
@@ -8400,7 +8415,7 @@ async def _handle_say(
                                             "aucun dé) :_\n\n" + _note_atk2
                                         ).strip()
                                         print(
-                                            f"[dnd35] Attaque PJ {actif_avant} "
+                                            f"[dnd35] Attaque PJ {_actif_48} "
                                             "résolue déterministement "
                                             "(filet post-rejeu)."
                                         )
@@ -8781,12 +8796,23 @@ async def _handle_say(
                     "ouverture_hors_donjon"))
                 _joueur_veut_entrer_ent = bool(
                     _INTENT_ENTREE_EXPLICITE_RE.search(text or ""))
-                # Hors ouverture (histoire non vide) : comportement
-                # canonique inchangé. À l'ouverture hors donjon : l'entrée
-                # narrée n'est honorée que sur décision du joueur.
+                # 🔧 Partie 48b239fa (run 3) : l'ouverture se détecte au
+                # MARQUEUR « Début de l'aventure », pas à `histoire` vide —
+                # un PJ ressuscité qui rejoint une partie porte déjà
+                # l'événement « ⚠️ <nom> arrive dans cette nouvelle partie »
+                # : `histoire` n'est JAMAIS vide et le filet forçait
+                # l'entrée dès le tour d'ouverture.
+                _ouv_jouee_ent = any(
+                    isinstance(_x, dict)
+                    and str(_x.get("evenement") or "").startswith(
+                        "Début de l'aventure")
+                    for _x in (_etat_ent.get("histoire") or []))
+                # Hors ouverture : comportement canonique inchangé. À
+                # l'ouverture hors donjon : l'entrée narrée n'est honorée
+                # que sur décision du joueur.
                 _entree_narree_ok = (
                     not _ouv_hors_dj
-                    or bool(_etat_ent.get("histoire"))
+                    or _ouv_jouee_ent
                     or _joueur_veut_entrer_ent
                 )
                 if (
@@ -11072,6 +11098,31 @@ on_status=on_status)
             _events_joueur = [
                 _assainir_event_joueur(_ev) for _ev in result.tool_events
             ]
+            # ⚔️ 5bis-atk (partie 48b239fa, NC-1) : RÉSULTATS D'ATTAQUE
+            # INVISIBLES — les jets officiels ont tourné (`lancer_attaque`
+            # ok=True) mais la narration finale ne reflétait AUCUN résultat
+            # (prose parasite : la bague qui vibre…). Le joueur ne voyait
+            # jamais son dé. Si la prose ne contient pas le verdict
+            # officiel, on ajoute le texte du tool en bloc mécanique.
+            try:
+                _txts_atk = [
+                    (tc.get("text") or "").strip()
+                    for tc in result.tool_calls_trace
+                    if tc.get("name") in ("lancer_attaque", "lancer_degats")
+                    and tc.get("ok") and (tc.get("text") or "").strip()
+                ]
+                if _txts_atk and not any(
+                    m in (result.narration or "")
+                    for m in ("Jet brut d'attaque", "Total attaque",
+                              "Jet de dégâts", "Dégâts infligés")
+                ):
+                    result.narration = (
+                        (result.narration or "").rstrip()
+                        + "\n\n🎲 **Jets officiels du tour :**\n\n"
+                        + "\n\n".join(_txts_atk)
+                    )
+            except Exception as e_atk48:                    # noqa: BLE001
+                print(f"[dnd35] filet résultats d'attaque ignoré : {e_atk48}")
             # 🛡️ gruumsh4pj (R2) : dédup INTER-TOURS — les blocs
             # d'ambiance recopiés du tour précédent sont purgés avant
             # diffusion (la précédente narration est encore dans

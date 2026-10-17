@@ -1052,7 +1052,7 @@ _ACTION_DEPLACEMENT_RE = re.compile(
     r"\b(j'?avance|j'?entre|je\s+pénètre|je\s+franchis|je\s+traverse|"
     r"je\s+vais\s+(?:vers|à|au|aux|dans)|je\s+me\s+dirige|je\s+monte|"
     r"je\s+descends?|je\s+quitte|"
-    r"je\s+continue\s+(?:vers|dans|sur\s+la\s+route)|"
+    r"je\s+continue\s+(?:vers|dans|sur\s+la\s+route|au\s+|à\s+l['’]a?l?|à\s+l['’])|"
     # Partie b59b4a9a : actions COMPOSÉES (« je demande…, puis j'explore
     # la galerie vers l'est ») et départs (« je pars de… », « j'emprunte
     # la porte est », « je prends la route ») restaient invisibles du D0.
@@ -1123,7 +1123,15 @@ async def _refus_entree_ouverture_hors_donjon(
             return None
         if (etat.get("donjon") or {}).get("id"):
             return None                          # plan déjà initialisé
-        if etat.get("histoire"):
+        # 🔧 Partie 48b239fa (run 3) : marqueur « Début de l'aventure » et
+        # non `histoire` vide — un PJ ressuscité porte déjà l'événement
+        # d'arrivée : `histoire` n'est jamais vide à sa première partie.
+        _ouv_jouee = any(
+            isinstance(_x, dict)
+            and str(_x.get("evenement") or "").startswith(
+                "Début de l'aventure")
+            for _x in (etat.get("histoire") or []))
+        if _ouv_jouee:
             return None                          # l'ouverture est jouée
         from .prompt_builder import _manifest_scenario_disque  # noqa: PLC0415
         man = _manifest_scenario_disque(etat, str(ctx.data_dir))
@@ -4412,6 +4420,27 @@ class Orchestrator:
                 # depuis la narration et on force l'engagement (le plafond
                 # d'équilibre interne arbitre ensuite la quantité).
                 if not en_combat:
+                    # 🔧 Partie 48b239fa (NC-5) : re-vérifie l'état VIVANT —
+                    # un combat peut avoir été engagé DEPUIS le début du tour
+                    # (filets, D0, appel précédent) : forcer `engager_combat`
+                    # ici était systématiquement refusé (⛔ « combat déjà en
+                    # cours ») et nourrissait la confusion du modèle.
+                    try:
+                        from ..game.state import PartyState as _PS_fc  # noqa: PLC0415
+                        _etat_fc = _PS_fc(
+                            data_dir=str(ctx.data_dir),
+                            partie_id=str(ctx.partie_id), max_history=0,
+                        ).load()
+                        if _etat_fc.get("phase") == "combat" and any(
+                            int((m or {}).get("pv", 0) or 0) > 0
+                            and not any(c in ((m or {}).get("conditions") or [])
+                                        for c in ("Détruit", "Detruit"))
+                            for m in (_etat_fc.get("monstres_combat") or [])
+                        ):
+                            en_combat = True
+                    except Exception:                      # noqa: BLE001
+                        pass
+                if not en_combat:
                     monstres_str = _ennemis_annonces(chat.content or "", ctx)
                     if not monstres_str:
                         # Partie b59b4a9a : l'embuscade CANONIQUE de la
@@ -6308,6 +6337,18 @@ class Orchestrator:
             # réelle : attaque touchée restée sans effet sur le monstre).
             "text": tr.text[:900],
         })
+        # ⚔️ Partie 48b239fa (NC-1) : le RÉSULTAT officiel d'une attaque doit
+        # toujours atteindre le joueur. La narration finale pouvait l'oublier
+        # (prose parasite — « la bague qui vibre ») : on dépose le texte du
+        # jet dans `notes_mecaniques`, file qui SURVIT aux rejeux correctifs
+        # et est fusionnée à la dm finale par main.py.
+        # (lancer_degats hors combat - pieges, tests - n'est PAS note :
+        # le filet orphelins de main.py couvre son application, cf. dfccc120)
+        if spec.name == "lancer_attaque" and ok:
+            try:
+                result.notes_mecaniques.append(tr.text.strip()[:900])
+            except Exception:                                # noqa: BLE001
+                pass
         _log.info("tool_call done name=%s ok=%s text=%s",
                   spec.name, ok, tr.text[:150].replace("\n", " "))
         for ev in tr.events:

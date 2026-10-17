@@ -497,6 +497,9 @@ async def engager_combat(
     )
 
     noms = [n.strip() for n in monstres.split(",") if n.strip()]
+    # Note de quantité canonique (vide : la dilatation M6 logue côté
+    # serveur ; le bloc n'est rempli que par un filet explicite).
+    _note_quantite = ""
     # 🛡️ gruumsh4pj (P9) : « Bandit ×2 » (quantité collée au nom) faisait
     # échouer la garde de fidélité (espèce « bandit x2 » inconnue) alors que
     # la quantité est déjà gérée par M6 — on normalise chaque nom.
@@ -704,7 +707,20 @@ async def engager_combat(
         str((m or {}).get("nom") or "").strip().casefold()
         for m in monstres_ok
     )
-    _sig = ",".join(f"{n}x{c}" for n, c in sorted(_counts.items()))
+    # Partie 48b239fa (NC-4) : la signature inclut la SALLE - le meme
+    # type de creature dans une AUTRE salle est une rencontre canonique
+    # legitime (les 5 squelettes de l'embuscade (0,-2) etaient confondus
+    # avec le squelette solitaire deja vaincu et refuses a jamais).
+    _dj_sig = etat.get("donjon") or {}
+    _cour_sig = list(_dj_sig.get("courant") or [0, 0])
+    try:
+        _salle_sig = (str(_dj_sig.get("id") or "") + "@"
+                      + f"{int(_cour_sig[0])},{int(_cour_sig[1])}"
+                      if _dj_sig.get("id") else "monde")
+    except (TypeError, ValueError):
+        _salle_sig = "monde"
+    _sig = (_salle_sig + "|"
+            + ",".join(f"{n}x{c}" for n, c in sorted(_counts.items())))
     _maintenant = _time.time()
     for _h in (etat.get("historique_engagements") or []):
         if not isinstance(_h, dict) or _h.get("sig") != _sig:

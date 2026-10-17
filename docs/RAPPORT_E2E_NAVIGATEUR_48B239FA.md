@@ -78,6 +78,28 @@ Causes combinées :
 6. **Consolider la souveraineté** : interdire les répliques du PJ dans les filets de rejeu (post-traitement `_corriger_pronoms_pj` étendu aux actions « Krask dit/Range/accepte »).
 7. **UI** : un bouton d'action de combat officiel (attaquer/retraite) dans le panneau ⚔️ éviterait la dépendance à la volonté du 9B.
 
+## 6. Re-test apres correctifs (17 oct 2026)
+
+Correctifs implémentés puis re-testés (suite 996 verts + 4 skips) :
+
+| Correctif | NC visée | Vérification |
+|---|---|---|
+| **F1** - filet 5bis-f + verrou orchestrator : detection d'ouverture par le marqueur "Debut de l'aventure" (un PJ ressuscite porte l'evenement d'arrivee : histoire jamais vide) | ouverture forcee | E2E navigateur run 4 (Krask ressuscite) : AUCUNE entree forcee, ouverture au porche - OK |
+| **F2** - signature de dedup = espece + quantite + SALLE (donjon.id@x,y) | NC-4 | 4 tests unitaires (meme salle refusee, autre salle autorisee, hors donjon inchange, signature ecrite) - OK |
+| **F4b** - le texte officiel de lancer_attaque depose dans notes_mecaniques (file qui survit aux rejeux) + filet 5bis-atk | NC-1 | E2E navigateur : le verdict officiel ("Attaque : Krask [hache d'armes] vs Squelette (CA 15) - Jet brut : 4 - Total : +5") est VISIBLE dans la narration - OK |
+| **F3** - 5bis-a elargi : l'attaque declaree DANS le tour d'engagement est resolue (etat_avant.phase etait encore "exploration") | NC-1/2 | Code + suite verte |
+| **F5** - regex de deplacement etendues ("je continue AU nord") | NC-10/11 | Deplacement reussi en E2E navigateur apres extension - OK |
+| **F6** - traceback complet sur crash de tour | diagnostic | En place - OK |
+
+Decouvertes complementaires :
+
+- **La dilatation de quantite canonique EXISTAIT deja** (M6/P9, state.py) : "Squelette x5" -> 3 creatures pour 2 PJ (plafond d'equilibre), 1 pour un solo. Le x1 observe en session venait du combat JAMAIS engage (le MJ narrait des squelettes morts) - pas d'un defaut M6. Un essai d'extension F3 a ete ANNULE (redondant, et une premiere decoupe avait avale le garde B25 - restaure via git).
+- **Le combat reste instable sur tours longs** : passe ~50k chars de contexte, le 9B narre des tours fantomes ("votre tour expire", sorts improvises refuses par le filet) et n'appelle plus les tools de facon fiable. Les filets (F4b, 5bis-a, 5bis-atk) garantivent desormais que l'ETAT et le VERDICT officiel restent corrects et visibles, mais l'experience reste degradee sur les combats longs en solo.
+
+### Verdict mis a jour
+
+Le scenario complet en solo reste difficile (equilibrage 3-4 PJ + derive du 9B en combat long), mais les resultats officiels sont desormais TOUJOURS visibles et l'etat toujours correct : les des sont jetes, les CA corrigees, l'XP attribuee, les morts conformes. La recommandation structurante reste le MODE COMBAT 100 POUR CENT DETERMINISTE (boutons d'action UI ou resolution serveur complete du round), independant de la fiabilite du 9B.
+
 ## 6. Traçabilité
 
 - Partie run 1 : `4c58b42b` (chat `server/data/chat_4c58b42b.json`, 27 messages)

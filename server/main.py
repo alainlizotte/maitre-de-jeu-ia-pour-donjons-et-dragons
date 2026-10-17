@@ -4559,6 +4559,53 @@ async def combat_attendre(
     }
 
 
+# - Route OUTIL generique pour les boutons UI (48b239fa) ---
+# Whitelist FERMEE : seuls ces tools sont invoquables par bouton.
+_OUTILS_BOUTONS = frozenset({
+    'carte_donjon_explorer', 'carte_donjon_etage',
+    'incanter_sort', 'terminer_mon_tour', 'combat_attendre',
+    'repos_long', 'preparer_sorts',
+    'marche_consulter', 'marche_acheter', 'marche_vendre',
+    'inventaire_consulter', 'inventaire_consommer',
+})
+
+
+@app.post("/api/parties/{partie_id}/outil")
+async def outil_bouton(
+    partie_id: str, payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Invoque un tool DETERMINISTE de la whitelist pour les boutons UI."""
+    nom = str(payload.get("nom") or "").strip()
+    args = payload.get("args") or {}
+    joueur = str(payload.get("joueur") or "")
+    if nom not in _OUTILS_BOUTONS:
+        raise HTTPException(status_code=403, detail="Tool hors whitelist.")
+    if not isinstance(args, dict):
+        raise HTTPException(status_code=400, detail="args invalide.")
+    ctx = _ctx(partie_id, joueur)
+    async with sessions.get(partie_id).turn_lock:
+        from .tools.base import _TOOL_REGISTRY, invoke_tool
+        spec = _TOOL_REGISTRY.get(nom)
+        if spec is None:
+            raise HTTPException(status_code=500, detail="tool absent.")
+        try:
+            tr = await invoke_tool(spec, ctx, args)
+        except Exception as e_out:
+            raise HTTPException(status_code=500, detail=f"{nom} : {e_out}")
+        etat = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
+    ok = not tr.text.startswith(("X", "!"))
+    return {
+        "ok": ok,
+        "events": [_epure_pour_table(tr.text)],
+        "phase": etat.get("phase"),
+        "courant": etat.get("courant_tour_pour"),
+        "tour": etat.get("tour"),
+    }
+
+
+
 # --------------------------------------------------------------------------- #
 #  Routes RAG (admin) — ingestion et stats du vector store ChromaDB.
 # --------------------------------------------------------------------------- #

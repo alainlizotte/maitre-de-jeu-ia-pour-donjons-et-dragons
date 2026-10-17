@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
+import { api } from "../api/rest";
 
 interface DonjonCellule {
   id?: string;
@@ -122,7 +123,36 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
   // Portes disponibles de la salle courante
   const portes = listePortes(salleCourante?.portes);
   const goDir = (dir: string) => {
-    if (sendSay) sendSay(`Je vais au ${dir}`);
+    // 48b239fa : navigation DETERMINISTE via la route /outil (le tool
+    // refuse proprement les directions sans porte). Repli chat si erreur.
+    if (!partieId) {
+      if (sendSay) sendSay(`Je vais au ${dir}`);
+      return;
+    }
+    api
+      .outil(partieId, "carte_donjon_explorer", { direction: dir })
+      .then((r) => {
+        if (!r.ok && sendSay) sendSay(`Je vais au ${dir}`);
+      })
+      .catch(() => {
+        if (sendSay) sendSay(`Je vais au ${dir}`);
+      });
+  };
+
+  const etage = (dir: "monter" | "descendre", phrase: string) => {
+    // 48b239fa : changement d'etage DETERMINISTE via la route /outil.
+    if (!partieId) {
+      if (sendSay) sendSay(phrase);
+      return;
+    }
+    api
+      .outil(partieId, "carte_donjon_etage", { direction: dir })
+      .then((r) => {
+        if (!r.ok && sendSay) sendSay(phrase);
+      })
+      .catch(() => {
+        if (sendSay) sendSay(phrase);
+      });
   };
 
   // Escalier : monter/descendre ne sont possibles que depuis une salle
@@ -171,7 +201,7 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
                 className={peutMonter ? btnZoom : btnZoomOff}
                 title={titreMonter}
                 disabled={!peutMonter}
-                onClick={() => sendSay("Nous montons l'escalier vers l'étage supérieur")}
+                onClick={() => etage("monter", "Nous montons l'escalier vers l'étage supérieur")}
               >
                 ↑
               </button>
@@ -179,7 +209,7 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
                 className={peutDescendre ? btnZoom : btnZoomOff}
                 title={titreDescendre}
                 disabled={!peutDescendre}
-                onClick={() => sendSay("Nous descendons l'escalier vers l'étage inférieur")}
+                onClick={() => etage("descendre", "Nous descendons l'escalier vers l'étage inférieur")}
               >
                 ↓
               </button>

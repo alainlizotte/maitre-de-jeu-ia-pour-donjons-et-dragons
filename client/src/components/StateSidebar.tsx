@@ -792,12 +792,48 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
 function CombatActions({ state }: { state: PartyState }) {
   const partieId = useParty((s) => s.partie_id);
   const utilisateur = useParty((s) => s.utilisateur);
+  const player = useParty((s) => s.player);
+  const personnage = useParty((s) => s.personnage);
   const [cible, setCible] = useState("");
+  const [arme, setArme] = useState("");
+  const [sort, setSort] = useState("");
+  const [armes, setArmes] = useState<string[]>([]);
+  const [sorts, setSorts] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string[]>([]);
 
   const actif = String(state.courant_tour_pour ?? "");
   const pjActif = (state.pj ?? []).find((p) => p.nom === actif);
+
+  // Fiche du PJ actif : armes portees + sorts prepares/connus (48b239fa).
+  useEffect(() => {
+    if (!actif || !pjActif) return;
+    let vivant = true;
+    api
+      .getFiche(actif)
+      .then(({ fiche }) => {
+        if (!vivant) return;
+        const inv = (fiche.equipement as Array<{ nom?: string }> | undefined) ?? [];
+        // Filtre heuristique : les non-armes courantes (parchemins, cordes,
+        // rations...) sont exclues — le lancer_degats serveur valide de toute
+        // facon l'arme contre la fiche/catalogue.
+        const NON_ARMES = /parchemin|corde|grappin|ration|torche|sac|outils|lanterne|couverture|piece|pc\b|po\b|amulette|totem|eau benite|cle/i;
+        setArmes(inv.map((e) => String(e.nom ?? "")).filter((n) => n && !NON_ARMES.test(n)));
+        const s = (fiche.sorts as {
+          prepares?: Record<string, string[] | number> | string[];
+          connus?: string[];
+        } | undefined) ?? {};
+        // prepares : dict {nom: nb de fois} OU liste de noms (P19)
+        const prepFlat = Object.entries(s.prepares ?? {}).flatMap(
+          ([nom, q]) => (typeof q === "number" ? [nom] : [nom]),
+        );
+        setSorts(prepFlat.length > 0 ? prepFlat : (s.connus ?? []));
+      })
+      .catch(() => {});
+    return () => {
+      vivant = false;
+    };
+  }, [actif]);
   const ennemis = (state.monstres_combat ?? []).filter(
     (m) =>
       !m.allie &&
@@ -805,11 +841,15 @@ function CombatActions({ state }: { state: PartyState }) {
       (m.pv ?? 1) > 0,
   );
   // Seul le joueur proprietaire du PJ actif voit les boutons.
+  // Le PJ actif appartient-il au joueur connecte ? Le champ `joueur` du PJ
+  // porte le pseudo WS (store `player` OU compte `utilisateur`, selon le
+  // parcours) OU le nom du personnage choisi (store `personnage`).
+  const mesIdentites = [utilisateur, player, personnage]
+    .map((s) => String(s ?? "").trim().toLowerCase())
+    .filter(Boolean);
   const aMaMain = Boolean(
     pjActif &&
-      utilisateur &&
-      String(pjActif.joueur ?? "").trim().toLowerCase() ===
-        utilisateur.trim().toLowerCase(),
+      mesIdentites.includes(String(pjActif.joueur ?? "").trim().toLowerCase()),
   );
 
   const debug48 = {
@@ -845,8 +885,22 @@ function CombatActions({ state }: { state: PartyState }) {
       api.combatAction(partieId ?? "", {
         attaquant: actif,
         cible,
+        arme: arme || undefined,
         joueur: String(pjActif?.joueur ?? utilisateur),
       }),
+    );
+  const lancerSort = () =>
+    run(() =>
+      api.outil(
+        partieId ?? "",
+        "incanter_sort",
+        {
+          nom_personnage: actif,
+          nom_sort: sort,
+          cible: cible || actif,
+        },
+        String(pjActif?.joueur ?? utilisateur),
+      ),
     );
   const finir = () =>
     run(() =>
@@ -885,6 +939,32 @@ function CombatActions({ state }: { state: PartyState }) {
           </option>
         ))}
       </select>
+      <select
+        value={arme}
+        onChange={(e) => setArme(e.target.value)}
+        className="w-full bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm mb-1"
+      >
+        <option value="">— Arme (auto : équipement) —</option>
+        {armes.map((a) => (
+          <option key={a} value={a}>
+            {a}
+          </option>
+        ))}
+      </select>
+      {sorts.length > 0 && (
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+          className="w-full bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm mb-1"
+        >
+          <option value="">— Sort (optionnel) —</option>
+          {sorts.map((sp) => (
+            <option key={sp} value={sp}>
+              ✨ {sp}
+            </option>
+          ))}
+        </select>
+      )}
       <div className="grid grid-cols-2 gap-1">
         <button
           disabled={busy || !cible}
@@ -907,6 +987,15 @@ function CombatActions({ state }: { state: PartyState }) {
         >
           ⏳ Attendre
         </button>
+        {sort && (
+          <button
+            disabled={busy || !sort}
+            onClick={lancerSort}
+            className="px-2 py-1 rounded bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-xs text-stone-100 col-span-2"
+          >
+            ✨ Lancer {sort}
+          </button>
+        )}
         <button
           disabled={busy}
           onClick={retraite}
@@ -917,6 +1006,113 @@ function CombatActions({ state }: { state: PartyState }) {
       </div>
       {feedback.length > 0 && (
         <div className="text-xs mt-1 text-stone-300 max-h-28 overflow-y-auto space-y-1">
+          {feedback.map((f, i) => (
+            <p key={i} className="whitespace-pre-wrap border-l-2 border-stone-700 pl-1">
+              {f}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+//  Actions rapides d'exploration (48b239fa) : repos long + marche
+//  deterministes (moteur serveur, sans LLM). Visibles hors combat.
+// --------------------------------------------------------------------------- //
+function ActionsRapides({ state }: { state: PartyState }) {
+  const partieId = useParty((s) => s.partie_id);
+  const utilisateur = useParty((s) => s.utilisateur);
+  const personnage = useParty((s) => s.personnage);
+  const player = useParty((s) => s.player);
+  const [busy, setBusy] = useState(false);
+  const [ouvert, setOuvert] = useState(false);
+  const [article, setArticle] = useState("");
+  const [qte, setQte] = useState(1);
+  const [feedback, setFeedback] = useState<string[]>([]);
+
+  const joueur = String(personnage || utilisateur || player || "");
+  if (state.phase !== "exploration") return null;
+  const lieuType = String(state.lieu?.type ?? "").toLowerCase();
+  const enVille = /ville|cité|cite|bourg|village|hameau|phlan|laelith|mintarn/.test(
+    lieuType + " " + String(state.lieu?.nom ?? "").toLowerCase(),
+  );
+
+  const run = async (nom: string, args: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      const r = await api.outil(partieId ?? "", nom, args, joueur);
+      setFeedback(r.events ?? []);
+    } catch (e) {
+      setFeedback([String(e)]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-4 border border-emerald-900/40 rounded p-2 bg-stone-900/60">
+      <h3 className="text-xs uppercase text-emerald-300 mb-1">
+        🎒 Actions rapides
+      </h3>
+      <div className="grid grid-cols-2 gap-1">
+        <button
+          disabled={busy}
+          onClick={() => run("repos_long", { forcer: true })}
+          title="Repos long de 8 h (PV + préparation de sorts)"
+          className="px-2 py-1 rounded bg-sky-800 hover:bg-sky-700 disabled:opacity-40 text-xs text-stone-100"
+        >
+          🛏️ Repos long
+        </button>
+        {enVille && (
+          <button
+            disabled={busy}
+            onClick={() => {
+              setOuvert((o) => !o);
+              run("marche_consulter", {});
+            }}
+            className="px-2 py-1 rounded bg-amber-800 hover:bg-amber-700 disabled:opacity-40 text-xs text-stone-100"
+          >
+            🛒 Marché
+          </button>
+        )}
+      </div>
+      {ouvert && enVille && (
+        <div className="mt-1 space-y-1">
+          <input
+            value={article}
+            onChange={(e) => setArticle(e.target.value)}
+            placeholder="Article (ex : potion de soins)"
+            className="w-full bg-stone-900 border border-stone-700 rounded px-2 py-1 text-xs"
+          />
+          <div className="flex gap-1">
+            <input
+              type="number"
+              min={1}
+              value={qte}
+              onChange={(e) => setQte(Math.max(1, Number(e.target.value) || 1))}
+              className="w-16 bg-stone-900 border border-stone-700 rounded px-2 py-1 text-xs"
+            />
+            <button
+              disabled={busy || !article}
+              onClick={() => run("marche_acheter", { nom: joueur, article, quantite: qte })}
+              className="flex-1 px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-xs"
+            >
+              Acheter
+            </button>
+            <button
+              disabled={busy || !article}
+              onClick={() => run("marche_vendre", { nom: joueur, article, quantite: qte })}
+              className="flex-1 px-2 py-1 rounded bg-stone-700 hover:bg-stone-600 disabled:opacity-40 text-xs"
+            >
+              Vendre
+            </button>
+          </div>
+        </div>
+      )}
+      {feedback.length > 0 && (
+        <div className="text-xs mt-1 text-stone-300 max-h-32 overflow-y-auto space-y-1">
           {feedback.map((f, i) => (
             <p key={i} className="whitespace-pre-wrap border-l-2 border-stone-700 pl-1">
               {f}
@@ -1044,6 +1240,7 @@ export function StateSidebar() {
         </div>
       )}
       <CombatActions state={state} />
+      <ActionsRapides state={state} />
 
       <div className="mb-4">
         <h3 className="text-xs uppercase text-stone-500 mb-1">

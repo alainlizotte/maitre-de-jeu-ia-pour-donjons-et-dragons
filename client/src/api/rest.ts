@@ -223,6 +223,12 @@ export const api = {
   }) => post<CombatResult>(`${API}/parties/${partieId}/combat/boucle`, payload),
   combatRetraite: (partieId: string, payload?: { joueur?: string }) =>
     post<CombatResult>(`${API}/parties/${partieId}/combat/retraite`, payload),
+  // Invoque un tool determinant de la whitelist serveur (boutons UI).
+  outil: (partieId: string, nom: string, args?: Record<string, unknown>, joueur?: string) =>
+    post<CombatResult>(`${API}/parties/${partieId}/outil`, {
+      nom, args: args ?? {}, joueur: joueur ?? "",
+    }),
+
   combatAttendre: (partieId: string, payload?: { joueur?: string }) =>
     post<CombatResult>(`${API}/parties/${partieId}/combat/attendre`, payload),
 

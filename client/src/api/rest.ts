@@ -17,6 +17,18 @@ import type {
 
 const API = "/api";
 
+/** Reponse des routes /combat/* (moteur serveur determinant). */
+export interface CombatResult {
+  ok: boolean;
+  events: string[];
+  patches?: unknown[];
+  phase?: string;
+  courant?: string | null;
+  tour?: number;
+  combat_termine?: string | null;
+  touche?: boolean;
+}
+
 // --------------------------------------------------------------------------- //
 //  Auth — token Bearer mémorisé (localStorage), injecté dans chaque requête.
 // --------------------------------------------------------------------------- //
@@ -202,6 +214,18 @@ export const api = {
     ),
 
   // -- Scénarios (sélecteur de quête) ------------------------------------ //
+  // -- Combat deterministe (boutons - aucun LLM implique) --------------- //
+  combatAction: (partieId: string, payload: {
+    attaquant: string; cible: string; arme?: string; joueur?: string;
+  }) => post<CombatResult>(`${API}/parties/${partieId}/combat/action`, payload),
+  combatBoucle: (partieId: string, payload?: {
+    force?: boolean; joueur?: string;
+  }) => post<CombatResult>(`${API}/parties/${partieId}/combat/boucle`, payload),
+  combatRetraite: (partieId: string, payload?: { joueur?: string }) =>
+    post<CombatResult>(`${API}/parties/${partieId}/combat/retraite`, payload),
+  combatAttendre: (partieId: string, payload?: { joueur?: string }) =>
+    post<CombatResult>(`${API}/parties/${partieId}/combat/attendre`, payload),
+
   listScenarios: (partieId?: string) =>
     fetch(`${API}/scenarios${partieId ? `?partie_id=${encodeURIComponent(partieId)}` : ""}`).then(
       jq<Universe[]>,

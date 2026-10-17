@@ -4409,7 +4409,22 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
         joueur = str(payload.get("joueur") or attaquant)
         ctx = _ctx(partie_id, joueur)
 
-        arme = str(payload.get("arme") or "arme improvisée")
+        arme = str(payload.get("arme") or "").strip()
+        if not arme:
+            # 🔧 Boutons de combat (48b239fa) : première ARME du catalogue
+            # portée par le PJ (le lancer_degats lit ensuite les dés
+            # officiels de cette arme) ; sinon arme improvisée 1d6.
+            try:
+                from .tools.fiches import _load_fiche as _lf_w
+                from . import catalogue as _cat_w
+                _porte = [str(e.get("nom") or "").strip()
+                          for e in (_lf_w(ctx, attaquant) or {}).get(
+                              "equipement") or []]
+                _armes_cat = {a["nom"] for a in _cat_w.ARMES}
+                arme = next((n for n in _porte if n in _armes_cat),
+                            "arme improvisée")
+            except Exception:                                # noqa: BLE001
+                arme = "arme improvisée"
         nb_des = int(payload.get("nb_des") or 1)
         faces = int(payload.get("faces") or 6)
         bonus_degats = int(payload.get("bonus") or 0)
@@ -4486,6 +4501,61 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
         "patches": res.patches, "phase": etat.get("phase"),
         "courant": etat.get("courant_tour_pour"),
         "combat_termine": res.combat_termine,
+    }
+
+
+@app.post("/api/parties/{partie_id}/combat/retraite")
+async def combat_retraite(
+    partie_id: str, payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Retraite DÉTERMINISTE (bouton UI ⚔️) : clôt le combat via le tool
+    `retraite_combat` (phase→exploration, sans XP) — aucun LLM impliqué."""
+    payload = payload or {}
+    joueur = str(payload.get("joueur") or "")
+    ctx = _ctx(partie_id, joueur)
+    async with sessions.get(partie_id).turn_lock:
+        from .tools.base import _TOOL_REGISTRY, invoke_tool
+        spec = _TOOL_REGISTRY.get("retraite_combat")
+        if spec is None:
+            raise HTTPException(
+                status_code=500, detail="tool retraite_combat absent.")
+        tr = await invoke_tool(spec, ctx, {})
+        etat = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
+    return {
+        "ok": not tr.text.startswith(("❌", "⛔")),
+        "events": [_epure_pour_table(tr.text)],
+        "phase": etat.get("phase"),
+        "courant": etat.get("courant_tour_pour"),
+    }
+
+
+@app.post("/api/parties/{partie_id}/combat/attendre")
+async def combat_attendre(
+    partie_id: str, payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Attendre (delay 3.5, bouton UI ⚔️) : reporte le tour du combattant
+    courant à la fin du round via le tool `combat_attendre` — aucun LLM."""
+    payload = payload or {}
+    joueur = str(payload.get("joueur") or "")
+    ctx = _ctx(partie_id, joueur)
+    async with sessions.get(partie_id).turn_lock:
+        from .tools.base import _TOOL_REGISTRY, invoke_tool
+        spec = _TOOL_REGISTRY.get("combat_attendre")
+        if spec is None:
+            raise HTTPException(
+                status_code=500, detail="tool combat_attendre absent.")
+        tr = await invoke_tool(spec, ctx, {})
+        etat = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
+    return {
+        "ok": not tr.text.startswith(("❌", "⛔")),
+        "events": [_epure_pour_table(tr.text)],
+        "phase": etat.get("phase"),
+        "courant": etat.get("courant_tour_pour"),
+        "tour": etat.get("tour"),
     }
 
 

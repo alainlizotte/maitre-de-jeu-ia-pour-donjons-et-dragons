@@ -7,7 +7,8 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/rest";
 import { useParty } from "../store";
-import type { Personnage } from "../api/types";
+import type { PartyState, Personnage } from "../api/types";
+import type { CombatResult } from "../api/rest";
 import { busteImage } from "../utils/imageBust";
 import { XpBar, ChargeBar } from "./Bars";
 import { sortsEtat } from "../lib/sorts";
@@ -782,6 +783,151 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
 // --------------------------------------------------------------------------- //
 //  Colonne
 // --------------------------------------------------------------------------- //
+// --------------------------------------------------------------------------- //
+//  Actions de combat deterministes (boutons - moteur serveur, sans LLM).
+//  Attaque : POST /combat/action (jet officiel + degats + rotation).
+//  Fin de tour : /combat/boucle (le moteur joue les tours de monstres).
+//  Attendre / Retraite : tools serveur dedies. Etat mis a jour par le poll.
+// --------------------------------------------------------------------------- //
+function CombatActions({ state }: { state: PartyState }) {
+  const partieId = useParty((s) => s.partie_id);
+  const utilisateur = useParty((s) => s.utilisateur);
+  const [cible, setCible] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string[]>([]);
+
+  const actif = String(state.courant_tour_pour ?? "");
+  const pjActif = (state.pj ?? []).find((p) => p.nom === actif);
+  const ennemis = (state.monstres_combat ?? []).filter(
+    (m) =>
+      !m.allie &&
+      !(m.conditions ?? []).includes("Détruit") &&
+      (m.pv ?? 1) > 0,
+  );
+  // Seul le joueur proprietaire du PJ actif voit les boutons.
+  const aMaMain = Boolean(
+    pjActif &&
+      utilisateur &&
+      String(pjActif.joueur ?? "").trim().toLowerCase() ===
+        utilisateur.trim().toLowerCase(),
+  );
+
+  const debug48 = {
+    phase: state.phase,
+    ennemis: ennemis.length,
+    aMaMain,
+    actif,
+    joueurPj: pjActif?.joueur,
+    utilisateur,
+  };
+  if (state.phase !== "combat" || !aMaMain || ennemis.length === 0) {
+    return (
+      <div className="text-[10px] text-stone-500 p-1">
+        DBG48 {JSON.stringify(debug48)}
+      </div>
+    );
+  }
+
+  const run = async (fn: () => Promise<CombatResult>) => {
+    setBusy(true);
+    try {
+      const r = await fn();
+      setFeedback(r.events ?? []);
+    } catch (e) {
+      setFeedback([String(e)]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const attaquer = () =>
+    run(() =>
+      api.combatAction(partieId ?? "", {
+        attaquant: actif,
+        cible,
+        joueur: String(pjActif?.joueur ?? utilisateur),
+      }),
+    );
+  const finir = () =>
+    run(() =>
+      api.combatBoucle(partieId ?? "", {
+        force: true,
+        joueur: String(pjActif?.joueur ?? utilisateur),
+      }),
+    );
+  const attendre = () =>
+    run(() =>
+      api.combatAttendre(partieId ?? "", {
+        joueur: String(pjActif?.joueur ?? utilisateur),
+      }),
+    );
+  const retraite = () =>
+    run(() =>
+      api.combatRetraite(partieId ?? "", {
+        joueur: String(pjActif?.joueur ?? utilisateur),
+      }),
+    );
+
+  return (
+    <div className="mb-4 border border-rose-900/40 rounded p-2 bg-stone-900/60">
+      <h3 className="text-xs uppercase text-rose-300 mb-1">
+        ⚔️ Actions — {actif}
+      </h3>
+      <select
+        value={cible}
+        onChange={(e) => setCible(e.target.value)}
+        className="w-full bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm mb-1"
+      >
+        <option value="">— Choisir une cible —</option>
+        {ennemis.map((m) => (
+          <option key={m.nom} value={m.nom}>
+            {m.nom} ({m.pv}/{m.pv_max})
+          </option>
+        ))}
+      </select>
+      <div className="grid grid-cols-2 gap-1">
+        <button
+          disabled={busy || !cible}
+          onClick={attaquer}
+          className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-40 text-xs text-stone-100"
+        >
+          ⚔️ Attaquer
+        </button>
+        <button
+          disabled={busy}
+          onClick={finir}
+          className="px-2 py-1 rounded bg-stone-700 hover:bg-stone-600 disabled:opacity-40 text-xs text-stone-100"
+        >
+          ⏭️ Fin du tour
+        </button>
+        <button
+          disabled={busy}
+          onClick={attendre}
+          className="px-2 py-1 rounded bg-stone-700 hover:bg-stone-600 disabled:opacity-40 text-xs text-stone-100"
+        >
+          ⏳ Attendre
+        </button>
+        <button
+          disabled={busy}
+          onClick={retraite}
+          className="px-2 py-1 rounded bg-amber-800 hover:bg-amber-700 disabled:opacity-40 text-xs text-stone-100"
+        >
+          🏃 Retraite
+        </button>
+      </div>
+      {feedback.length > 0 && (
+        <div className="text-xs mt-1 text-stone-300 max-h-28 overflow-y-auto space-y-1">
+          {feedback.map((f, i) => (
+            <p key={i} className="whitespace-pre-wrap border-l-2 border-stone-700 pl-1">
+              {f}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StateSidebar() {
   const state = useParty((s) => s.state);
   const participants = useParty((s) => s.participants);
@@ -897,6 +1043,7 @@ export function StateSidebar() {
           )}
         </div>
       )}
+      <CombatActions state={state} />
 
       <div className="mb-4">
         <h3 className="text-xs uppercase text-stone-500 mb-1">

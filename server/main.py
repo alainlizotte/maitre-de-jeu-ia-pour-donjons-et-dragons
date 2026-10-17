@@ -4496,6 +4496,8 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
         etat = PartyState(
             data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
         ).load()
+    await _diffuser_resultat(
+        partie_id, "Combat - " + attaquant, events, res.patches)
     return {
         "ok": True, "touche": touche, "events": events,
         "patches": res.patches, "phase": etat.get("phase"),
@@ -4523,9 +4525,11 @@ async def combat_retraite(
         etat = PartyState(
             data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
         ).load()
+    events_r = [_epure_pour_table(tr.text)]
+    await _diffuser_resultat(partie_id, "Retraite", events_r)
     return {
         "ok": not tr.text.startswith(("❌", "⛔")),
-        "events": [_epure_pour_table(tr.text)],
+        "events": events_r,
         "phase": etat.get("phase"),
         "courant": etat.get("courant_tour_pour"),
     }
@@ -4550,16 +4554,41 @@ async def combat_attendre(
         etat = PartyState(
             data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
         ).load()
+    events_a = [_epure_pour_table(tr.text)]
+    await _diffuser_resultat(partie_id, "Attendre", events_a)
     return {
         "ok": not tr.text.startswith(("❌", "⛔")),
-        "events": [_epure_pour_table(tr.text)],
+        "events": events_a,
         "phase": etat.get("phase"),
         "courant": etat.get("courant_tour_pour"),
         "tour": etat.get("tour"),
     }
 
 
-# - Route OUTIL generique pour les boutons UI (48b239fa) ---
+async def _diffuser_resultat(
+    partie_id: str, titre: str, events: list[str],
+    patches: list[dict[str, Any]] | None = None,
+) -> None:
+    """Diffuse le resultat d'une action deterministe (boutons) dans la
+    fenetre de CHAT (partie 48b239fa) - type dm, action: true."""
+    texte = chr(10).join(e for e in events if (e or "").strip())
+    if not texte.strip():
+        return
+    try:
+        session = sessions.get(partie_id)
+        await session.broadcast({
+            "type": "dm",
+            "text": f"{chr(0x1f3b2)} **{titre}**" + chr(10) + texte,
+            "action": True,
+            "tool_calls_trace": [],
+            "tool_events": [],
+            "state_patches": patches or [],
+        })
+    except Exception:                                            # noqa: BLE001
+        pass
+
+
+
 # Whitelist FERMEE : seuls ces tools sont invoquables par bouton.
 _OUTILS_BOUTONS = frozenset({
     'carte_donjon_explorer', 'carte_donjon_etage',
@@ -4596,9 +4625,11 @@ async def outil_bouton(
             data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
         ).load()
     ok = not tr.text.startswith(("X", "!"))
+    events = [_epure_pour_table(tr.text)]
+    await _diffuser_resultat(partie_id, "Action - " + nom, events)
     return {
         "ok": ok,
-        "events": [_epure_pour_table(tr.text)],
+        "events": events,
         "phase": etat.get("phase"),
         "courant": etat.get("courant_tour_pour"),
         "tour": etat.get("tour"),

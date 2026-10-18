@@ -799,14 +799,19 @@ function CombatActions({ state }: { state: PartyState }) {
   const [sort, setSort] = useState("");
   const [armes, setArmes] = useState<string[]>([]);
   const [sorts, setSorts] = useState<string[]>([]);
+  const [objets, setObjets] = useState<string[]>([]);
+  const [objet, setObjet] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string[]>([]);
 
   const actif = String(state.courant_tour_pour ?? "");
   const pjActif = (state.pj ?? []).find((p) => p.nom === actif);
 
-  // Fiche du PJ actif : armes portees + sorts prepares/connus (48b239fa).
+  // Fiche du PJ actif : armes POSSEDEES (fiche x catalogue), sorts
+  // prepares/connus et objets utilisables (potions/kits) - 48b239fa.
+  const armesCatalogue = useParty((s) => s.armesCatalogue);
   useEffect(() => {
+    if (armesCatalogue.length === 0) return;
     if (!actif || !pjActif) return;
     let vivant = true;
     api
@@ -814,26 +819,28 @@ function CombatActions({ state }: { state: PartyState }) {
       .then(({ fiche }) => {
         if (!vivant) return;
         const inv = (fiche.equipement as Array<{ nom?: string }> | undefined) ?? [];
-        // Filtre heuristique : les non-armes courantes (parchemins, cordes,
-        // rations...) sont exclues — le lancer_degats serveur valide de toute
-        // facon l'arme contre la fiche/catalogue.
-        const NON_ARMES = /parchemin|corde|grappin|ration|torche|sac|outils|lanterne|couverture|piece|pc\b|po\b|amulette|totem|eau benite|cle/i;
-        setArmes(inv.map((e) => String(e.nom ?? "")).filter((n) => n && !NON_ARMES.test(n)));
+        const porte = inv.map((e) => String(e.nom ?? ""));
+        // Armes POSSEDEES uniquement : nom exact dans le catalogue d'armes.
+        setArmes(porte.filter((n) => armesCatalogue.includes(n)));
         const s = (fiche.sorts as {
           prepares?: Record<string, string[] | number> | string[];
           connus?: string[];
         } | undefined) ?? {};
-        // prepares : dict {nom: nb de fois} OU liste de noms (P19)
-        const prepFlat = Object.entries(s.prepares ?? {}).flatMap(
-          ([nom, q]) => (typeof q === "number" ? [nom] : [nom]),
-        );
+        const prepFlat = Object.keys(s.prepares ?? {});
         setSorts(prepFlat.length > 0 ? prepFlat : (s.connus ?? []));
+        // Objets utilisables : potions, fioles, kits, eau benite.
+        const f_inv = (fiche.inventaire as Array<{ nom?: string }> | undefined) ?? [];
+        const UTILISABLE = /potion|fiole|kit|trousse|flacon|eau b\u00e9nite|eau benite/i;
+        const objets = f_inv
+          .map((e) => String(e.nom ?? ""))
+          .filter((n) => n && UTILISABLE.test(n));
+        setObjets(objets);
       })
       .catch(() => {});
     return () => {
       vivant = false;
     };
-  }, [actif]);
+  }, [actif, armesCatalogue.length]);
   const ennemis = (state.monstres_combat ?? []).filter(
     (m) =>
       !m.allie &&
@@ -852,20 +859,8 @@ function CombatActions({ state }: { state: PartyState }) {
       mesIdentites.includes(String(pjActif.joueur ?? "").trim().toLowerCase()),
   );
 
-  const debug48 = {
-    phase: state.phase,
-    ennemis: ennemis.length,
-    aMaMain,
-    actif,
-    joueurPj: pjActif?.joueur,
-    utilisateur,
-  };
-  if (state.phase !== "combat" || !aMaMain || ennemis.length === 0) {
-    return (
-      <div className="text-[10px] text-stone-500 p-1">
-        DBG48 {JSON.stringify(debug48)}
-      </div>
-    );
+    if (state.phase !== "combat" || !aMaMain || ennemis.length === 0) {
+    return null;
   }
 
   const run = async (fn: () => Promise<CombatResult>) => {
@@ -965,6 +960,20 @@ function CombatActions({ state }: { state: PartyState }) {
           ))}
         </select>
       )}
+      {objets.length > 0 && (
+        <select
+          value={objet}
+          onChange={(e) => setObjet(e.target.value)}
+          className="w-full bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm mb-1"
+        >
+          <option value="">— Objet à utiliser —</option>
+          {objets.map((o) => (
+            <option key={o} value={o}>
+              🧪 {o}
+            </option>
+          ))}
+        </select>
+      )}
       <div className="grid grid-cols-2 gap-1">
         <button
           disabled={busy || !cible}
@@ -994,6 +1003,28 @@ function CombatActions({ state }: { state: PartyState }) {
             className="px-2 py-1 rounded bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-xs text-stone-100 col-span-2"
           >
             ✨ Lancer {sort}
+          </button>
+        )}
+        {objet && (
+          <button
+            disabled={busy}
+            onClick={() =>
+              run(() =>
+                api.outil(
+                  partieId ?? "",
+                  "fiche_perso_soigner",
+                  {
+                    nom: actif,
+                    soin: 0,
+                    source: objet,
+                  },
+                  String(pjActif?.joueur ?? utilisateur),
+                ),
+              )
+            }
+            className="px-2 py-1 rounded bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-xs text-stone-100 col-span-2"
+          >
+            🧪 Utiliser {objet}
           </button>
         )}
         <button
@@ -1031,8 +1062,30 @@ function ActionsRapides({ state }: { state: PartyState }) {
   const [article, setArticle] = useState("");
   const [qte, setQte] = useState(1);
   const [feedback, setFeedback] = useState<string[]>([]);
+  const [objets, setObjets] = useState<string[]>([]);
+  const [objet, setObjet] = useState("");
+  const stateRev = useParty((s) => s.stateRev);
+  const bumpStateRev = useParty((s) => s.bumpStateRev);
 
   const joueur = String(personnage || utilisateur || player || "");
+
+  // Objets utilisables (fiche du personnage choisi) - 48b239fa.
+  useEffect(() => {
+    if (!personnage) return;
+    let vivant = true;
+    api
+      .getFiche(personnage)
+      .then(({ fiche }) => {
+        if (!vivant) return;
+        const f_inv = (fiche.inventaire as Array<{ nom?: string }> | undefined) ?? [];
+        const UTILISABLE = /potion|fiole|kit|trousse|flacon|eau b\u00e9nite|eau benite/i;
+        setObjets(f_inv.map((e) => String(e.nom ?? "")).filter((n) => n && UTILISABLE.test(n)));
+      })
+      .catch(() => {});
+    return () => {
+      vivant = false;
+    };
+  }, [personnage, stateRev]);
   if (state.phase !== "exploration") return null;
   const lieuType = String(state.lieu?.type ?? "").toLowerCase();
   const enVille = /ville|cité|cite|bourg|village|hameau|phlan|laelith|mintarn/.test(
@@ -1065,6 +1118,33 @@ function ActionsRapides({ state }: { state: PartyState }) {
         >
           🛏️ Repos long
         </button>
+        {objets.length > 0 && (
+          <select
+            value={objet}
+            onChange={(e) => setObjet(e.target.value)}
+            className="w-full bg-stone-900 border border-stone-700 rounded px-2 py-1 text-xs mb-1 mt-1"
+          >
+            <option value="">— Objet à utiliser —</option>
+            {objets.map((o) => (
+              <option key={o} value={o}>
+                🧪 {o}
+              </option>
+            ))}
+          </select>
+        )}
+        {objet && (
+          <button
+            disabled={busy}
+            onClick={() => run("fiche_perso_soigner", {
+              nom: personnage || joueur,
+              soin: 0,
+              source: objet,
+            })}
+            className="w-full px-2 py-1 rounded bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-xs text-stone-100 mb-1"
+          >
+            🧪 Utiliser {objet}
+          </button>
+        )}
         {enVille && (
           <button
             disabled={busy}

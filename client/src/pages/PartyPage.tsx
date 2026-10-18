@@ -72,7 +72,18 @@ export function PartyPage() {
   // depuis l'état persisté : journal des rencontres + monstres de combat
   // vivants (leur portrait reste affiché jusqu'à leur mort), et illustration
   // de la salle où se trouve le groupe (tant qu'on est dans la pièce).
-  const hydratedFor = useRef<string | null>(null);
+    // 48b239fa : charge le catalogue d'armes une fois (filtre des boutons).
+  const armesCatalogue = useParty((s) => s.armesCatalogue);
+  const setArmesCatalogue = useParty((s) => s.setArmesCatalogue);
+  useEffect(() => {
+    if (armesCatalogue.length > 0) return;
+    api
+      .catalogueArmes()
+      .then((d) => setArmesCatalogue(d.armes))
+      .catch(() => {});
+  }, [armesCatalogue.length, setArmesCatalogue]);
+
+const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
     const etat = partyQuery.data?.etat;
     if (!etat || "_erreur" in etat || !partie_id) return;

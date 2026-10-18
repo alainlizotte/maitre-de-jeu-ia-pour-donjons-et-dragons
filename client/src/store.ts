@@ -48,6 +48,10 @@ function initialPassword(): string {
 }
 
 interface PartyStore {
+  // -- Catalogue d'armes (noms exacts) pour le filtre des boutons --------- //
+  armesCatalogue: string[];
+  setArmesCatalogue: (a: string[]) => void;
+
   // -- Compte connecté ----------------------------------------------------- //
   utilisateur: string;
   setUtilisateur: (u: string) => void;
@@ -189,6 +193,9 @@ export const useParty = create<PartyStore>((set) => ({
       /* sessionStorage indisponible */
     }
   },
+
+  armesCatalogue: [],
+  setArmesCatalogue: (a) => set({ armesCatalogue: a }),
 
   state: null,
   setState: (s) => set({ state: s }),

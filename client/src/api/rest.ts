@@ -232,6 +232,11 @@ export const api = {
   combatAttendre: (partieId: string, payload?: { joueur?: string }) =>
     post<CombatResult>(`${API}/parties/${partieId}/combat/attendre`, payload),
 
+  catalogueArmes: () =>
+    fetch(`${API}/catalogue/armes`, { headers: entetes() }).then(
+      jq<{ armes: string[] }>,
+    ),
+
   listScenarios: (partieId?: string) =>
     fetch(`${API}/scenarios${partieId ? `?partie_id=${encodeURIComponent(partieId)}` : ""}`).then(
       jq<Universe[]>,

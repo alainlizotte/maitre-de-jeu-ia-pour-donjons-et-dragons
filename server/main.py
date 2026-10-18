@@ -4571,7 +4571,15 @@ async def _diffuser_resultat(
 ) -> None:
     """Diffuse le resultat d'une action deterministe (boutons) dans la
     fenetre de CHAT (partie 48b239fa) - type dm, action: true."""
-    texte = chr(10).join(e for e in events if (e or "").strip())
+    # 48b239fa : assainit CHAQUE event (les tool texts contiennent des
+    # consignes MJ : Salle DU SCENARIO, spoilers, instructions) - seules
+    # les infos joueur restent (description, portes, jets, butin).
+    events_joueur = []
+    for e in events:
+        ej = _assainir_texte_joueur(e or "")
+        if ej.strip():
+            events_joueur.append(ej)
+    texte = chr(10).join(events_joueur)
     if not texte.strip():
         return
     try:
@@ -4596,7 +4604,18 @@ _OUTILS_BOUTONS = frozenset({
     'repos_long', 'preparer_sorts',
     'marche_consulter', 'marche_acheter', 'marche_vendre',
     'inventaire_consulter', 'inventaire_consommer',
+    'fiche_perso_soigner',
 })
+
+
+@app.get("/api/catalogue/armes")
+async def catalogue_armes() -> dict[str, Any]:
+    """Liste des ARMES du catalogue PHB (noms exacts) - sert au filtre des
+    boutons de combat (armes possedees = fiche equipement inter catalogue)."""
+    from . import catalogue as _cat
+    return {
+        "armes": [a["nom"] for a in _cat.ARMES],
+    }
 
 
 @app.post("/api/parties/{partie_id}/outil")

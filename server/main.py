@@ -4425,9 +4425,36 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
                             "arme improvisée")
             except Exception:                                # noqa: BLE001
                 arme = "arme improvisée"
-        nb_des = int(payload.get("nb_des") or 1)
-        faces = int(payload.get("faces") or 6)
-        bonus_degats = int(payload.get("bonus") or 0)
+        # Boutons de combat (48b239fa) : DES officiels de l'arme depuis
+        # le catalogue PHB - Grande hache = 1d12, pas 1d6 (rapport Alain :
+        # lancer_degats refusait non conforme, le monstre ne perdait RIEN).
+        _des_arme = None
+        try:
+            from . import catalogue as _cat_d
+            _arme_d = next((a for a in _cat_d.ARMES
+                            if a["nom"] == arme), None)
+            if _arme_d and _arme_d.get("degats"):
+                m_d = _re_mod.match(
+                    r"(\d+)d(\d+)", str(_arme_d["degats"]))
+                if m_d:
+                    _des_arme = (int(m_d.group(1)), int(m_d.group(2)))
+        except Exception:
+            _des_arme = None
+        nb_des = int(payload.get("nb_des") or (
+            _des_arme[0] if _des_arme else 1))
+        faces = int(payload.get("faces") or (
+            _des_arme[1] if _des_arme else 6))
+        # Bonus degats = mod FOR de la fiche (le tool applique x1.5
+        # deux mains selon l'arme du catalogue).
+        bonus_degats = 0
+        try:
+            from .tools.fiches import _load_fiche as _lf_b
+            _f_b = _lf_b(ctx, attaquant)
+            if _f_b:
+                _for_b = int((_f_b.get("carac") or {}).get("FOR", 10) or 10)
+                bonus_degats = (_for_b - 10) // 2
+        except Exception:
+            bonus_degats = 0
 
         # Bonus d'attaque depuis la fiche (BBA + mod FOR/DEX) si non fourni.
         bonus_attaque = payload.get("bonus_attaque")

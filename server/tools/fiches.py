@@ -2132,14 +2132,26 @@ async def fiche_perso_soigner(
                 f"{nb_p}d{faces_p}+{bonus_p} = {s} PV."
             )
         elif "kit" in cle_p or "trousse" in cle_p:
-            # 🧰 Audit eb46aeef (point 4 de 120e9243) : le 9B appelle le tool
-            # avec source="kit…" SANS montant → le soin était REFUSÉ (« montant
-            # invalide ») alors que le joueur demandait explicitement son kit.
-            # Comme pour les potions, le serveur tire LUI-MÊME le 1d4 du kit.
-            s = _random_potion.randint(1, 4)
+            # REGLES 3.5 (SRD Heal + Healer's Kit, rapport Alain 48b239fa) :
+            # le kit NE restaure PAS de PV. Il donne +2 de circonstance
+            # aux tests de Soigner. Premiers secours (action simple,
+            # seuil 15) : STABILISE un mourant - zéro PV restauré.
+            # Conforme : on applique les premiers secours au lanceur
+            # lui-même (le seuil de 15 avec le bonus kit).
+            import random as _rnd_heal
+            _sag = int((fiche.get("carac") or {}).get("SAG", 10) or 10)
+            _mod_sag = (_sag - 10) // 2
+            _jet = _rnd_heal.randint(1, 20)
+            _total = _jet + _mod_sag + 2  # +2 : circonstance du kit
             note_auto = (
-                f"\n🎲 **Soin du kit tiré par le serveur** : 1d4 = {s} PV."
+                f"\\n**Premiers secours (kit)** - Test de Soigner (seuil 15) : "
+                f"d20={_jet} + SAG {_mod_sag:+d} + kit +2 = {_total} - "
+                + ("SUCCÈS : stabilisé (0 PV restauré - le kit ne soigne "
+                   "pas les PV en 3.5)." if _total >= 15 else
+                   "ÉCHEC : non stabilisé (relançable tant que le "
+                   "patient vit).")
             )
+            # 1 charge consommée par tentative (le kit s'épuise après 10).
     if not s:
         try:
             s = max(0, int(float(soin_txt)))
@@ -2289,18 +2301,9 @@ async def fiche_perso_soigner(
                 f"\n📦 **{consomme}** consommé — "
                 + (f"restant : {reste}" if reste else "dose épuisée")
             )
-    elif not source and s <= 4:
-        # Petit soin conventionnel (le 1d4 de l'app) = soin par le kit :
-        # 1 charge déduite automatiquement si un kit est porté. Sans kit,
-        # le soin passe sans tracking (soin magique ou narratif).
-        ok, charges = _consommer_charge_kit(fiche)
-        if ok:
-            consomme_note = (
-                f"\n🧰 **Kit de premiers secours** — 1 charge consommée "
-                f"({charges}/10 restantes)"
-                + (" — ⚠️ kit ÉPUISÉ, à remplacer !" if charges == 0 else "")
-                + " (source non précisée : petit soin = kit par convention)"
-            )
+    # 48b239fa : la rule-maison "petit soin <= 4 = kit" est RETIRE -
+    # non conforme aux regles 3.5 (SRD Heal + Healer's Kit) : le kit ne
+    # restaure pas de PV, il donne +2 de circonstance aux tests de Soigner.
     try:
         max_pv = int(fiche.get("pv_max", 0))
         # ⚡ Non-létal d'abord (3.5) : un soin entame la réserve de dégâts

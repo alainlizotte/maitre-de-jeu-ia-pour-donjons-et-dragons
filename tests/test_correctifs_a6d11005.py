@@ -310,12 +310,17 @@ def test_kit_charge_deduite_source_explicite(tmp_path):
 
 
 def test_kit_charge_auto_sur_petit_soin_sans_source(tmp_path):
+    """48b239fa : conformité 3.5 (SRD Heal + Healer's Kit) — le kit NE
+    restaure PAS de PV ; les petits soins sans source ne consomment plus
+    de charge automatiquement (rule-maison retirée)."""
     d = str(tmp_path)
     _fiche_avec_kit(d, "Utturgut", charges=7)
     ctx = ToolContext(partie_id=PID, joueur="alain", data_dir=d)
     tr = asyncio.run(fiche_perso_soigner(ctx, "Utturgut", 3))
-    assert "1 charge consommée (6/10" in tr.text, tr.text
-    assert _lire_fiche(d, "Utturgut")["inventaire"][0]["charges"] == 6
+    # Le soin passe (3 PV) MAIS aucune charge n'est consommée.
+    fiche = _lire_fiche(d, "Utturgut")
+    assert fiche["inventaire"][0]["charges"] == 7, fiche["inventaire"][0]
+    assert int(fiche["pv"]) == 8 + 3  # pv initial 8 + soin 3 = 11 (soin appliqué)
 
 
 def test_grand_soin_sans_source_ne_consomme_pas_de_charge(tmp_path):

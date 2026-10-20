@@ -4683,6 +4683,52 @@ async def outil_bouton(
 
 
 
+@app.get("/api/parties/{partie_id}/sorts")
+async def sorts_etat(
+    partie_id: str, nom: str = "",
+) -> dict[str, Any]:
+    """Etat de preparation des sorts d un PJ pour le panneau UI (48b239fa)."""
+    from .tools.fiches import _load_fiche as _lf_s
+    ctx = _ctx(partie_id, nom)
+    fiche = _lf_s(ctx, nom)
+    if fiche is None:
+        raise HTTPException(status_code=404, detail="fiche introuvable.")
+    from . import sorts as _cat_s
+    classe = str(fiche.get("classe") or "").strip()
+    type_l = _cat_s.type_lancement(classe)
+    niveau = int(fiche.get("niveau") or 1)
+    carac_cle = _cat_s.carac_incantation(classe)
+    val_c = int((fiche.get("carac") or {}).get(carac_cle, 10) or 10)
+    mod_c = (val_c - 10) // 2
+    empl = _cat_s.emplacements(classe, niveau, mod_c)
+    max_lvl = _cat_s.niveau_sort_max(classe, niveau)
+    sorts_classe = [
+        {
+            "nom": str(s.get("nom") or ""),
+            "niveau": int(s.get("niveau") or 0),
+            "ecole": str(s.get("ecole") or ""),
+        }
+        for s in _cat_s.SORTS
+        if classe in (s.get("classes") or [])
+        and int(s.get("niveau") or 0) <= max_lvl
+    ]
+    sorts_classe.sort(key=lambda x: (x["niveau"], x["nom"]))
+    st = fiche.get("sorts") or {}
+    return {
+        "nom": nom,
+        "classe": classe,
+        "type_lancement": type_l,
+        "niveau": niveau,
+        "carac_cle": carac_cle,
+        "mod": mod_c,
+        "emplacements": {str(k): v for k, v in empl.items()},
+        "prepares": (st.get("prepares") or {}),
+        "depenses": (st.get("depenses") or {}),
+        "connus": (st.get("connus") or []),
+        "castable": max_lvl >= 0,
+        "sorts_classe": sorts_classe,
+    }
+
 # --------------------------------------------------------------------------- #
 #  Routes RAG (admin) — ingestion et stats du vector store ChromaDB.
 # --------------------------------------------------------------------------- #

@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/rest";
 import { useParty } from "../store";
 import type { PartyState, Personnage } from "../api/types";
-import type { CombatResult } from "../api/rest";
+import type { CombatResult, SortsEtat } from "../api/rest";
 import { busteImage } from "../utils/imageBust";
 import { XpBar, ChargeBar } from "./Bars";
 import { sortsEtat } from "../lib/sorts";
@@ -789,6 +789,139 @@ export function SheetModal({ nom, onClose }: { nom: string; onClose: () => void 
 //  Fin de tour : /combat/boucle (le moteur joue les tours de monstres).
 //  Attendre / Retraite : tools serveur dedies. Etat mis a jour par le poll.
 // --------------------------------------------------------------------------- //
+function SortsPanel({ state }: { state: PartyState }) {
+  const partieId = useParty((s) => s.partie_id);
+  const personnage = useParty((s) => s.personnage);
+  const [busy, setBusy] = useState(false);
+  const [data, setData] = useState<SortsEtat | null>(null);
+  const [choix, setChoix] = useState<Record<string, number>>({});
+  const [feedback, setFeedback] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!partieId || !personnage) return;
+    let vivant = true;
+    setChoix({});
+    fetch(
+      `/api/parties/${partieId}/sorts?nom=${encodeURIComponent(personnage)}`,
+      { headers: { Authorization: `Bearer ${localStorage.getItem("dnd35.token") || ""}` } },
+    )
+      .then((r) => r.json())
+      .then((d) => vivant && setData(d))
+      .catch(() => {});
+    return () => {
+      vivant = false;
+    };
+  }, [partieId, personnage]);
+
+  if (!data || !data.castable) return null;
+
+  const parNiveau: Record<number, typeof data.sorts_classe> = {};
+  for (const s of data.sorts_classe) {
+    (parNiveau[s.niveau] ??= []).push(s);
+  }
+  const niveaux = Object.keys(parNiveau)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  const bascule = (nom: string) => {
+    setChoix((c) => ({ ...c, [nom]: c[nom] ? 0 : 1 }));
+  };
+
+  const preparer = async () => {
+    if (!partieId || !personnage) return;
+    setBusy(true);
+    const prep: Record<string, number> = {};
+    for (const [nom, nb] of Object.entries(choix)) {
+      if (nb > 0) prep[nom] = nb;
+    }
+    try {
+      const r = await api.outil(
+        partieId,
+        "preparer_sorts",
+        { nom_personnage: personnage, preparations_json: JSON.stringify(prep) },
+        personnage,
+      );
+      setFeedback(r.events ?? []);
+      const rr = await fetch(
+        `/api/parties/${partieId}/sorts?nom=${encodeURIComponent(personnage)}`,
+        { headers: { Authorization: `Bearer ${localStorage.getItem("dnd35.token") || ""}` } },
+      );
+      setData(await rr.json());
+      setChoix({});
+    } catch (e) {
+      setFeedback([String(e)]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const compteParNiveau: Record<number, number> = {};
+  for (const [nom, nb] of Object.entries(choix)) {
+    if (!nb) continue;
+    const s = data.sorts_classe.find((x) => x.nom === nom);
+    if (s) compteParNiveau[s.niveau] = (compteParNiveau[s.niveau] ?? 0) + nb;
+  }
+
+  return (
+    <div className="mb-4 border border-violet-900/40 rounded p-2 bg-stone-900/60">
+      <h3 className="text-xs uppercase text-violet-300 mb-1">
+        ✨ Sorts — {data.classe} {data.type_lancement}
+      </h3>
+      {data.type_lancement === "spontané" && (
+        <p className="text-xs text-stone-400 mb-1">
+          Lanceur spontané — pas de préparation nécessaire ({data.connus.length} sorts connus).
+        </p>
+      )}
+      {data.type_lancement === "préparé" && (
+        <>
+          <div className="text-xs text-stone-400 mb-1">
+            Emplacements :{" "}
+            {niveaux.map((l) => (
+              <span key={l} className="mr-2">
+                n.{l} : <strong>{compteParNiveau[l] ?? 0}/{data.emplacements[String(l)] ?? 0}</strong>
+              </span>
+            ))}
+          </div>
+          <div className="max-h-48 overflow-y-auto space-y-1 mb-1">
+            {niveaux.map((l) => (
+              <div key={l}>
+                <div className="text-[10px] uppercase text-stone-500">Niveau {l}</div>
+                {parNiveau[l].map((s) => (
+                  <button
+                    key={s.nom}
+                    onClick={() => bascule(s.nom)}
+                    className={
+                        "w-full text-left text-xs px-1 py-0.5 rounded " +
+                        (choix[s.nom]
+                          ? "bg-violet-800/70 text-violet-100"
+                          : "text-stone-300 hover:bg-stone-800")
+                    }
+                  >
+                    {choix[s.nom] ? "✓ " : ""}{s.nom}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+          <button
+            disabled={busy}
+            onClick={preparer}
+            className="w-full px-2 py-1 rounded bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-xs text-stone-100"
+          >
+            ✨ Préparer ces sorts
+          </button>
+        </>
+      )}
+      {feedback.length > 0 && (
+        <div className="text-xs mt-1 text-stone-300 max-h-24 overflow-y-auto space-y-1">
+          {feedback.map((f, i) => (
+            <p key={i} className="whitespace-pre-wrap border-l-2 border-stone-700 pl-1">{f}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 function CombatActions({ state }: { state: PartyState }) {
   const partieId = useParty((s) => s.partie_id);
   const utilisateur = useParty((s) => s.utilisateur);
@@ -1057,6 +1190,7 @@ function ActionsRapides({ state }: { state: PartyState }) {
   const utilisateur = useParty((s) => s.utilisateur);
   const personnage = useParty((s) => s.personnage);
   const player = useParty((s) => s.player);
+  const [sortsOuvert, setSortsOuvert] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ouvert, setOuvert] = useState(false);
   const [article, setArticle] = useState("");
@@ -1145,6 +1279,14 @@ function ActionsRapides({ state }: { state: PartyState }) {
             🧪 Utiliser {objet}
           </button>
         )}
+        <button
+          disabled={busy}
+          onClick={() => setSortsOuvert((o) => !o)}
+          className="w-full px-2 py-1 rounded bg-violet-800 hover:bg-violet-700 disabled:opacity-40 text-xs text-stone-100"
+        >
+          ✨ Préparer les sorts
+        </button>
+        {sortsOuvert && <SortsPanel state={state} />}
         {enVille && (
           <button
             disabled={busy}

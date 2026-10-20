@@ -18,6 +18,21 @@ import type {
 const API = "/api";
 
 /** Reponse des routes /combat/* (moteur serveur determinant). */
+export interface SortsEtat {
+  nom: string;
+  classe: string;
+  type_lancement: "préparé" | "spontané";
+  niveau: number;
+  carac_cle: string;
+  mod: number;
+  emplacements: Record<string, number>;
+  prepares: Record<string, number>;
+  depenses: Record<string, number>;
+  connus: string[];
+  castable: boolean;
+  sorts_classe: Array<{ nom: string; niveau: number; ecole: string }>;
+}
+
 export interface CombatResult {
   ok: boolean;
   events: string[];
@@ -228,6 +243,12 @@ export const api = {
     post<CombatResult>(`${API}/parties/${partieId}/outil`, {
       nom, args: args ?? {}, joueur: joueur ?? "",
     }),
+
+  sortsEtat: (partieId: string, nom: string) =>
+    fetch(
+      `${API}/parties/${partieId}/sorts?nom=${encodeURIComponent(nom)}`,
+      { headers: entetes() },
+    ).then(jq<SortsEtat>),
 
   combatAttendre: (partieId: string, payload?: { joueur?: string }) =>
     post<CombatResult>(`${API}/parties/${partieId}/combat/attendre`, payload),

@@ -42,7 +42,7 @@ from . import sorts as sorts_mod
 from . import villes as villes_mod
 from .config import AppConfig, get_config, set_config
 from .game.session import PartySession, registry as sessions
-from .game.state import PartyState, SCHEMA_PARTIE
+from .game.state import PartyState, SCHEMA_PARTIE, ouverture_non_jouee
 from .llm.client import Message
 from .llm.client import OllamaClient
 from .llm.orchestrator import EventCallback, Orchestrator
@@ -1408,6 +1408,24 @@ def _narration_prose_seule(narration: str) -> str:
     if m:
         narration = narration[:m.start()]
     return narration.strip()
+
+
+def _narration_mecanique_seule(narration: str) -> str:
+    """Complément EXACT de `_narration_prose_seule` : les BLOCS MÉCANIQUES
+    du serveur seuls (⚙️ initiative, ⚔️ résolutions, ⚖️ dégâts, 🏆 victoire…).
+
+    🔧 Correctif 2052e3ae (demande joueur) : ces blocs étaient affichés en
+    direct (payload « dm » complet) mais RETIRÉS de l'historique persisté
+    (`remember_assistant` stocke la prose seule, 5b4e2bbe) — au
+    rechargement, la régularisation ⚙️ et l'initiative 🎲 disparaissaient
+    du chat. Ils voyagent désormais à part (`Message.mecanique`) pour être
+    re-joués à l'affichage SANS jamais nourrir le contexte du LLM."""
+    if not narration:
+        return ""
+    m = _RE_BLOC_MECANIQUE_SERVEUR.search(narration)
+    if not m:
+        return ""
+    return narration[m.start():].strip()
 
 
 # ⚙️ Harmonisation de l'état narré sur l'état SERVEUR. Le petit modèle local
@@ -4783,8 +4801,12 @@ async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> 
     Envoyé uniquement aux clients authentifiés - pour une partie protégée par
     mot de passe, l'historique ne doit pas fuiter avant la vérification.
     """
+    # 🔧 2052e3ae : les blocs mécaniques du serveur (⚙️ initiative,
+    # ⚖️ dégâts auto…) accompagnent les messages assistant pour être
+    # re-joués au rechargement — ils n'entrent JAMAIS dans le contexte LLM.
     history_payload = [
-        {"role": m.role, "content": m.content}
+        {"role": m.role, "content": m.content,
+         **({"mecanique": m.mecanique} if m.mecanique else {})}
         for m in session.history
         if m.role in ("user", "assistant") and m.content
     ]
@@ -5592,6 +5614,24 @@ async def _appliquer_degats_oublies(
             continue
         uniques = sorted(set(montants))
         if len(uniques) != 1:
+            # 🛡️ Correctif run 09f9f8a6 : un montants AMBIGUS (plusieurs
+            # chiffres près du nom — « 3/3 PV » du monstre côtoyant le
+            # montant narré) faisait ABANDONNER silencieusement le
+            # rattrapage : le coup réussi restait sans effet et la
+            # créature semblait invulnérable. Dernier recours identique
+            # au cas sans montant : le serveur jette LUI-MÊME les dégâts
+            # de l'arme (bestiaire si le MONSTRE attaque, catalogue PHB
+            # pour un PJ — PJ et monstres traités symétriquement).
+            tr_roll = await _rouler_degats_attaque(
+                orch, ctx, on_event, result,
+                attaquant=str((tc.get("args") or {}).get("nom_attaquant")
+                              or ""),
+                arme=str((tc.get("args") or {}).get("arme") or ""),
+                cible=cible,
+            )
+            if tr_roll is not None:
+                cibles_traitees.add(cle_cible)
+                lignes.append(tr_roll)
             continue
         cibles_traitees.add(cle_cible)
         tr = await orch.execute_tool_direct(
@@ -7125,6 +7165,34 @@ def _detecter_combat_prose(
     return list(_dedup.keys())
 
 
+def _rattrapage_desarme_ouverture(
+    etat: dict[str, Any], attaque_joueur: bool, ennemis_canoniques: bool,
+) -> bool:
+    """True si le rattrapage combat-prose (5ter) est DÉSARMÉ pour ce tour.
+
+    🛡️ Correctif 2052e3ae (parties 2052e3ae & 22d78403, deux tentatives
+    sur Dues For The Dead) : à l'OUVERTURE (marqueur « Début de
+    l'aventure » absent de l'histoire), les marqueurs de prose et les
+    dégâts chiffrés NARRÉS PAR LE MJ ne suffisent plus à engager un
+    combat. L'exposition de mission en regorge : « Il s'approche de vous »
+    (Yovir qui vient confier la mission), « Cassyt … s'avance vers vous »
+    (l'acolyte-guide qui se présente) — et le mot « acolyte » résolvait
+    l'entrée bestiaire « Acolyte » (FP ¼) → `engager_combat("Acolyte")`
+    en pleine introduction pacifique. b401206f désarmait déjà l'hostilité
+    imminente ; ce filet étend le désarmement aux marqueurs/dégâts.
+
+    Restent ARMÉS à l'ouverture :
+    - l'attaque DÉCLARÉE par le joueur (`attaque_joueur`) — agency du
+      joueur, jamais de la prose du MJ ;
+    - les salles à ennemis canoniques (`ennemis_canoniques`) — réserve
+      b401206f : 13/31 manifestes placent des ennemis DÈS la salle
+      d'entrée (« À la chasse aux gobs », « Oeil-de-Gruumsh »).
+    """
+    if attaque_joueur or ennemis_canoniques:
+        return False
+    return ouverture_non_jouee(etat)
+
+
 def _load_bestiaire_plain(data_dir: str) -> dict[str, Any]:
     """Charge le bestiaire JSON directement (sans ToolContext).
 
@@ -7418,18 +7486,51 @@ def _coupe_narration_evenement(narration: str, limite: int = 300) -> str:
     return coupe + "…"
 
 
+# ⚖️ Anti-dégénérescence (run 09f9f8a6) : tools qui LISENT ou journalisent
+# sans faire avancer la mécanique — un tour qui n'en sort pas est « inerte ».
+_TOOLS_PASSIFS_INERTIE = {
+    "etat_partie_get", "ajouter_evenement_histoire",
+    "set_derniere_narration", "manuels_lister",
+    "memoire_evenement", "memoire_lieu", "memoire_mission",
+    "memoire_personnage", "memoire_position", "memoire_intrigue",
+}
+
+
+def _maj_inertie_mj(etat: dict, tool_calls_trace: list) -> int:
+    """Met à jour le COMPTEUR d'inertie du MJ (tours consécutifs sans
+    AUCUN tool mécanique) et renvoie la nouvelle valeur — l'écriture dans
+    l'état est laissée à l'appelant.
+
+    Au seuil de 3 (prompt_builder), le récap ré-ancre le modèle sur la
+    salle courante et l'objectif : la prose sans mécanique s'auto-
+    entretient sinon (run 09f9f8a6 : le MJ narrait des murs invisibles
+    pendant que le groupe ne bougeait plus). Plafonné à 9."""
+    _mecanique = any(
+        (tc.get("name") not in _TOOLS_PASSIFS_INERTIE)
+        for tc in (tool_calls_trace or []))
+    _avant = int(etat.get("inertie_mj") or 0)
+    return 0 if _mecanique else min(9, _avant + 1)
+
+
 def _journaliser_ouverture_si_besoin(etat: dict[str, Any], narration: str) -> bool:
     """Premier tour narré de la partie → consigne l'ouverture dans
     `histoire`. Renvoie True si l'événement a été ajouté.
 
     Sans cela, la directive « ⚠️ DÉBUT DE L'AVENTURE » (injectée par le
-    prompt_builder TANT QUE `histoire` est vide) restait active CHAQUE
-    tour : le MJ re-narrait l'accroche du scénario et re-remettait le
-    matériel à l'infini (partie 5a9b99c8 : le parchemin de Teleshann
-    remis trois tours de suite, le MJ « recommençant » l'ouverture)."""
-    if etat.get("histoire"):
-        return False
+    prompt_builder TANT QUE l'ouverture n'est pas jouée) restait active
+    CHAQUE tour : le MJ re-narrait l'accroche du scénario et re-remettait
+    le matériel à l'infini (partie 5a9b99c8 : le parchemin de Teleshann
+    remis trois tours de suite, le MJ « recommençant » l'ouverture).
+
+    🔧 Correctif 2052e3ae : la porte `histoire` vide empêchait JAMAIS
+    plus la journalisation dès qu'un PJ ressuscité portait l'événement
+    structurel « ⚠️ … arrive dans cette nouvelle partie » (48b239fa) —
+    le marqueur n'était JAMAIS écrit et la directive (désormais porte sur
+    `ouverture_non_jouee`) restait active à vie. On journalise dès que le
+    marqueur manque et que l'histoire ne contient QUE du structurel."""
     if not (narration or "").strip():
+        return False
+    if not ouverture_non_jouee(etat):
         return False
     from datetime import datetime as _dt
     etat.setdefault("histoire", []).append({
@@ -9910,9 +10011,14 @@ async def _handle_say(
                 # Les signaux EXPLICITES (marqueurs de combat, dégâts
                 # chiffrés, attaque déclarée du joueur) restent armés pour
                 # TOUS les scénarios.
-                _hist_ouv_5t = etat_detect.get("histoire") or []
+                # 🛡️ Correctif 2052e3ae : l'ouverture se détecte au
+                # MARQUEUR « Début de l'aventure » (`ouverture_non_jouee`),
+                # pas à la taille de `histoire` — un PJ ressuscité porte
+                # déjà « ⚠️ … arrive dans cette nouvelle partie »
+                # (48b239fa) et d'autres événements structurels peuvent
+                # précéder la vraie scène d'intro.
                 _tour_ouverture_5t = (
-                    _renar_5bisf or len(_hist_ouv_5t) <= 1
+                    _renar_5bisf or ouverture_non_jouee(etat_detect)
                 )
                 _dj_ouv_5t = etat_detect.get("donjon") or {}
                 _courant_ouv_5t = list(_dj_ouv_5t.get("courant")
@@ -9967,15 +10073,37 @@ async def _handle_say(
                             str(p.get("nom") or "")
                             for p in (etat_detect.get("pj") or [])
                         ]
-                        _types = _detecter_combat_prose(
-                            str(cfg.abs(cfg.paths.data_dir)),
-                            result.narration or "",
+                        # 🛡️ Correctif 2052e3ae : à l'OUVERTURE, les
+                        # marqueurs de prose et les dégâts chiffrés NARRÉS
+                        # PAR LE MJ ne déclenchent PLUS le rattrapage —
+                        # « Il s'approche de vous » / « Cassyt s'avance vers
+                        # vous » matchaient `_COMBAT_PROSE_MARKERS` et le
+                        # mot « acolyte » (la guide ALLIÉE) résolvait
+                        # l'entrée bestiaire « Acolyte » : combat engagé en
+                        # pleine intro, deux parties de suite. La garde
+                        # laisse armés l'attaque DÉCLARÉE par le joueur et
+                        # les salles à ennemis canoniques (réserve b401206f).
+                        if _rattrapage_desarme_ouverture(
                             etat_detect,
-                            forcer_declencheur=(
-                                _attaque_joueur_5t or _menace_imminente_5t
-                            ),
-                            exclure=_noms_pj_m20,
-                        )
+                            _attaque_joueur_5t,
+                            _ennemis_salle_5t,
+                        ):
+                            print(
+                                "[dnd35] 5ter désarmé à l'ouverture "
+                                "(2052e3ae) : la prose d'intro ne peut pas "
+                                "engager de combat."
+                            )
+                            _types = []
+                        else:
+                            _types = _detecter_combat_prose(
+                                str(cfg.abs(cfg.paths.data_dir)),
+                                result.narration or "",
+                                etat_detect,
+                                forcer_declencheur=(
+                                    _attaque_joueur_5t or _menace_imminente_5t
+                                ),
+                                exclure=_noms_pj_m20,
+                            )
                         if _types:
                             from .tools.base import (
                                 _TOOL_REGISTRY, invoke_tool,
@@ -11179,9 +11307,39 @@ on_status=on_status)
             # résolutions, victoire) et les consignes LLM sont destinés à
             # l'affichage, PAS au contexte du tour suivant — sinon le petit
             # modèle les recopie dans sa prose (partie 5b4e2bbe).
+            # 🔧 2052e3ae (demande joueur) : ces blocs ⚙️ voyagent désormais
+            # avec le message assistant (`Message.mecanique`) pour survivre
+            # au rechargement du chat — sans jamais entrer dans le contexte
+            # LLM (`to_openai` ne les expose pas).
             _narration_prose = _narration_prose_seule(result.narration or "")
             if _narration_prose:
-                session.remember_assistant(_narration_prose)
+                session.remember_assistant(
+                    _narration_prose,
+                    mecanique=_narration_mecanique_seule(result.narration or ""),
+                )
+            # ⚖️ Anti-dégénérescence (run 09f9f8a6) : un tour sans AUCUN
+            # tool mécanique (hors lecture/mémoire/narration) n'avance pas
+            # la partie. Au 3ᵉ consécutif, le récap du tour suivant
+            # ré-ancre le modèle (salle + objectif, prompt_builder).
+            try:
+                _st_in = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                )
+                _et_in = _st_in.load()
+                if "_erreur" not in _et_in:
+                    _in_ap = _maj_inertie_mj(_et_in,
+                                             result.tool_calls_trace)
+                    if _in_ap != int(_et_in.get("inertie_mj") or 0):
+                        _et_in["inertie_mj"] = _in_ap
+                        _st_in.save(_et_in)
+                        if _in_ap >= 3:
+                            print("[dnd35] Inertie MJ détectée : "
+                                  f"{_in_ap} tours sans tool mécanique "
+                                  "— rappel salle/objectif injecté au "
+                                  "prochain récap.")
+            except Exception as e_in:
+                print(f"[dnd35] Suivi d'inertie échoué (ignoré) : {e_in}")
 
             # 🛡️ gruumsh4pj (R7) : détection d'une DEMANDE DE JET dans la
             # narration finale → `jet_attendu` + event `jet_demande` au

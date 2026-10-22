@@ -29,7 +29,7 @@ import re
 from typing import Any, Optional
 
 from .base import ToolContext, ToolResult, tool
-from ..game.state import PartyState
+from ..game.state import PartyState, ouverture_non_jouee
 
 
 # --------------------------------------------------------------------------- #
@@ -849,6 +849,38 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             "(destination " + _dest_v + "). Impossible "
             "d'entrer dans un donjon maintenant - termine le "
             "voyage (arrivee, retraite) avant."
+        ))
+    # 🛡️ Correctif 2052e3ae-suite (e2e 3747c9ae & a47471a5) : les scénarios
+    # à OUVERTURE HORS DONJON (manifeste `ouverture_hors_donjon` + `depart`
+    # — Dues For The Dead : briefing au porche du cimetière de Phlan, AVANT
+    # la descente ; Crypts Kelemvor) interdisent l'entrée AU TOUR
+    # D'OUVERTURE : le petit modèle appelait l'outil dès l'intro
+    # (« Debute la partie »), téléportant le groupe en salle (0,0) et
+    # sautant le briefing narratif prévu par le module (l'e2e 48b239fa
+    # échouait : donjon initialisé, scène de 565 car. sans briefing).
+    # La règle est GÉNÉRIQUE, la donnée est PAR SCÉNARIO : chaque
+    # manifeste déclare son lieu de départ (`depart`) et son mode
+    # d'ouverture — aucun code spécifique par module. Le verrou saute
+    # dès que l'ouverture est jouée (marqueur « Début de l'aventure ») :
+    # la descente redevient libre, sur décision des joueurs.
+    try:
+        _man_ouv = _manifest_pour(ctx, str(donjon_id or "").strip())
+    except Exception:                                            # noqa: BLE001
+        _man_ouv = None
+    if (isinstance(_man_ouv, dict)
+            and _man_ouv.get("ouverture_hors_donjon")
+            and ouverture_non_jouee(etat)):
+        _dep = (_man_ouv.get("depart") or {})
+        _lieu_ouv = str(_dep.get("nom") or "lieu de départ canonique")
+        return ToolResult(text=(
+            "⛔ **Ouverture HORS DONJON** (module : « "
+            + str(_man_ouv.get("titre") or _man_ouv.get("donjon_id")
+                  or donjon_id) + " ») : l'aventure commence À "
+            "L'EXTÉRIEUR — à " + _lieu_ouv + " (briefing, rencontre du "
+            "donneur de mission), cf. lieu de départ canonique du récap. "
+            "Narre cette scène d'ouverture SANS entrer dans le donjon ; "
+            "`carte_donjon_entrer` redeviendra disponible au tour "
+            "suivant, quand les joueurs décideront de descendre."
         ))
     # Garde-fou : si un donjon est déjà ouvert avec le même id, on refuse
     # poliment de l'écraser — le MJ doit utiliser `carte_donjon_explorer`

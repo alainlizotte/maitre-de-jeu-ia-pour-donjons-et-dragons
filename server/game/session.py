@@ -103,9 +103,19 @@ class PartySession:
         self._truncate_and_persist()
         return msg
 
-    def remember_assistant(self, content: str, tool_calls: Optional[list[dict]] = None) -> None:
+    def remember_assistant(
+        self,
+        content: str,
+        tool_calls: Optional[list[dict]] = None,
+        mecanique: str = "",
+    ) -> None:
+        """Journalise un tour du MJ : `content` = PROSE seule (contexte LLM,
+        5b4e2bbe), `mecanique` = blocs serveur (⚙️ initiative, ⚖️ dégâts…)
+        destinés à l'AFFICHAGE au rechargement (2052e3ae) — jamais renvoyés
+        au modèle."""
         self.history.append(
-            Message(role="assistant", content=content, tool_calls=tool_calls)
+            Message(role="assistant", content=content, tool_calls=tool_calls,
+                    mecanique=mecanique)
         )
         self._truncate_and_persist()
 
@@ -201,6 +211,9 @@ class PartySession:
             d["tool_call_id"] = m.tool_call_id
         if m.name:
             d["name"] = m.name
+        # 🔧 2052e3ae : les blocs mécaniques ⚙️ survivent au rechargement.
+        if m.mecanique:
+            d["mecanique"] = m.mecanique
         return d
 
     @staticmethod
@@ -211,6 +224,7 @@ class PartySession:
             tool_calls=d.get("tool_calls"),
             tool_call_id=d.get("tool_call_id"),
             name=d.get("name"),
+            mecanique=str(d.get("mecanique") or ""),
         )
 
     async def broadcast(self, payload: dict[str, Any]) -> None:

@@ -207,7 +207,7 @@ export interface ChatMessage {
 //  WS payloads — discriminant `type`.
 // --------------------------------------------------------------------------- //
 export type WsMessage =
-  | { type: "sys"; event: "joined"; partie_id: string; participants: string[]; history: { role: string; content: string }[]; team_history: { player: string; text: string }[] }
+  | { type: "sys"; event: "joined"; partie_id: string; participants: string[]; history: { role: string; content: string; mecanique?: string }[]; team_history: { player: string; text: string }[] }
   | { type: "sys"; event: "participant_joined"; player: string; personnage?: string | null }
   | { type: "sys"; event: "auth_required"; detail?: string }
   | { type: "sys"; event: "auth_failed"; detail: string }

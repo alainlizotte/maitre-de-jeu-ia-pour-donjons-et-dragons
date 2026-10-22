@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..config import AppConfig
-from ..game.state import PartyState
+from ..game.state import PartyState, ouverture_non_jouee
 
 _log = logging.getLogger(__name__)
 
@@ -77,6 +77,38 @@ _DEBUT_AVENTURE = (
 
 _MAX_SALLES_BLOC = 40       # plafond de salles listées dans le bloc donjon
 _MAX_DESC_BLOC = 400        # plafond de la description reprise par salle
+
+
+def _bloc_inertie(etat: dict) -> str:
+    """⚖️ Anti-dégénérescence (run 09f9f8a6) : au 3ᵉ tour consécutif sans
+    AUCUN tool mécanique (compteur `inertie_mj`, cf. main._handle_say),
+    ré-ancre le modèle sur la salle courante et l'objectif — la prose
+    sans mécanique s'auto-entretient sinon (le MJ finissait par narre des
+    murs invisibles pendant que le groupe ne bougeait plus). Injecté dans
+    le récap MINIMAL (chemin live en exploration) ET le récap complet."""
+    try:
+        inert = int(etat.get("inertie_mj") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if inert < 3:
+        return ""
+    cour = list((etat.get("donjon") or {}).get("courant") or [])
+    try:
+        salle = (f"({int(cour[0])},{int(cour[1])})"
+                 if len(cour) >= 2 else "hors donjon")
+    except (TypeError, ValueError):
+        salle = "hors donjon"
+    objectif = str(
+        ((etat.get("quete") or {}).get("bible") or {}).get("objectif")
+        or (etat.get("memoire") or {}).get("objectif_courant") or "")
+    return (
+        "⚖️ INERTIE — les " + str(inert) + " derniers tours n'ont appelé "
+        "AUCUN tool. Toute action au résultat incertain (déplacement, "
+        "attaque, jet de compétence, fouille, réparation) DOIT être "
+        "résolue MAINTENANT par un tool officiel (carte_donjon_explorer, "
+        "lancer_attaque, lancer_d20, fiche_perso_infliger_degats…), "
+        "JAMAIS en prose seule. Salle courante : " + salle + "."
+        + (" Objectif courant : " + objectif[:160] if objectif else ""))
 
 
 _ENTREE_DISQUE_CACHE: dict[
@@ -1417,7 +1449,7 @@ class PromptBuilder:
                     f"Quête en cours : {quete_min.get('titre', '(sans titre)')} "
                     f"— {quete_min.get('pitch', '')}"
                 )
-                if not (etat.get("histoire") or []):
+                if ouverture_non_jouee(etat):
                     lignes.append(_DEBUT_AVENTURE)
                     _ancre = _lieu_depart_canonique(etat, data_dir)
                     if _ancre:
@@ -1470,6 +1502,11 @@ class PromptBuilder:
             _rappel_pos_min = _rappel_final_position(etat)
             if _rappel_pos_min:
                 lignes.append(_rappel_pos_min)
+            # ⚖️ Anti-dégénérescence : chemin MINIMAL = chemin live en
+            # exploration — le bloc doit être injecté ICI aussi.
+            _bloc_in = _bloc_inertie(etat)
+            if _bloc_in:
+                lignes.append(_bloc_in)
             lignes.append("=" * 48)
             return "\n".join(lignes)
 
@@ -1717,10 +1754,13 @@ class PromptBuilder:
                 f"\nQuête en cours : {quete.get('titre','(sans titre)')} "
                 f"— {quete.get('pitch','')}"
             )
-            # Début d'aventure : quête choisie mais aucun événement d'histoire
-            # → on force la mise en contexte narrative AVANT toute action.
-            if (quete.get("titre") or "").strip() and not (
-                etat.get("histoire") or []
+            # Début d'aventure : quête choisie mais ouverture PAS encore
+            # jouée (🔧 2052e3ae : au MARQUEUR « Début de l'aventure », pas
+            # à `histoire` vide — un PJ ressuscité porte déjà « ⚠️ … arrive
+            # dans cette nouvelle partie », 48b239fa) → on force la mise en
+            # contexte narrative AVANT toute action.
+            if (quete.get("titre") or "").strip() and ouverture_non_jouee(
+                etat
             ):
                 lignes.append(_DEBUT_AVENTURE)
                 _ancre_riche = _lieu_depart_canonique(etat, data_dir)
@@ -1732,6 +1772,11 @@ class PromptBuilder:
                 quete, etat=etat, data_dir=data_dir, partie_id=partie_id)
             if bible_bloc:
                 lignes.append(bible_bloc)
+            # ⚖️ Anti-dégénérescence : même garde sur le chemin complet
+            # (phase combat/clôture — cf. _bloc_inertie).
+            _bloc_in = _bloc_inertie(etat)
+            if _bloc_in:
+                lignes.append(_bloc_in)
 
         derniere = etat.get("derniere_narration", "")
         if derniere:

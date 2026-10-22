@@ -265,6 +265,12 @@ class Message:
     tool_calls: Optional[list[dict[str, Any]]] = None  # fonction-calling natif
     tool_call_id: Optional[str] = None                  # pour role="tool"
     name: Optional[str] = None                           # pour role="tool"
+    # 🔧 2052e3ae : blocs mécaniques du SERVEUR (⚙️ initiative, ⚖️ dégâts…)
+    # d'un tour assistant — AFFICHAGE SEUL (re-joués au rechargement du
+    # chat), JAMAIS envoyés au LLM : `to_openai()` reste un allowlist
+    # strict, et la persistance les porte à part du `content` (prose
+    # seule, 5b4e2bbe) pour ne pas polluer le contexte du modèle.
+    mecanique: str = ""
 
     def to_openai(self) -> dict[str, Any]:
         d: dict[str, Any] = {"role": self.role, "content": self.content}

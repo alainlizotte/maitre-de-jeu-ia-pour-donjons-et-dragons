@@ -197,7 +197,13 @@ export function useChatSocket(partie_id: string | null) {
                 return {
                   id: `replay-${i}`,
                   role: "dm" as const,
-                  content: h.content,
+                  // 🔧 2052e3ae : les blocs mécaniques serveur (⚙️
+                  // initiative, ⚖️ dégâts auto…) voyagent à part — on les
+                  // re-fusionne au contenu pour un rendu identique au
+                  // direct (le `content` reste la prose seule pour le LLM).
+                  content:
+                    h.content +
+                    (h.mecanique ? `\n\n${h.mecanique}` : ""),
                   ts: 0,
                 };
               });

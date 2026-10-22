@@ -1658,6 +1658,33 @@ async def combat_ajouter_combattant(
         return ToolResult(text=_refus_generique_texte(ctx, nom, m))
     label_base = str((m or {}).get("nom") or nom).strip() or nom
 
+    # ── 🛡️ GARDE DE FIDÉLITÉ AU MODULE (run 09f9f8a6) ──────────────────
+    # Un RENFORT ENNEMI inventé en pleine mêlée (« Loup-garou (humain) »,
+    # 32 PV, ajouté via combat_ajouter_combattant au poste de sentinelle
+    # canonique Kobold + 2 Zombies) a failli détruire un groupe niveau 1.
+    # Si la salle courante a une liste `ennemis` canonique (B25), tout
+    # renfort ENNEMI doit en faire partie. Les ALLIÉS (invoquations des
+    # PJ, familiers — allie=True) restent libres : c'est un pouvoir de
+    # joueur, pas une improvisation du MJ.
+    if not allie:
+        _canon_r = _ennemis_canoniques_salle(etat)
+        if _canon_r:
+            from .fiches import _espece_cle as _ec_renfort  # noqa: PLC0415
+            _attendues_r = set()
+            for _e in _canon_r:
+                _esp_r, _q_r = _split_espece_quantite(_e)
+                if _esp_r:
+                    _attendues_r.add(_ec_renfort(_esp_r))
+            if _attendues_r and _ec_renfort(label_base) not in _attendues_r:
+                return ToolResult(text=(
+                    "⛔ **Renfort hors module refusé** : la salle courante "
+                    "du scénario prévoit UNIQUEMENT ("
+                    + ", ".join(_canon_r) + ") — « " + label_base + " » "
+                    "n'y figure pas. Narre l'acharnement des défenseurs "
+                    "existants, leur repli ou la fin du combat au lieu "
+                    "d'inventer des renforts."
+                ))
+
     # Désambiguïsation vs les combattants DÉJÀ sur le plateau (homonymes).
     # ⚠️ La base n'est PAS le label nu : il faut indexer les noms déjà
     # suffixés. L'ancien code comptait `vus[base]` — toujours 1 dès qu'un

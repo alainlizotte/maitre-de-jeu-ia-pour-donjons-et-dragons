@@ -1,4 +1,4 @@
-﻿"""Tools magie D&D 3.5 : incantation avec validation stricte, préparation
+"""Tools magie D&D 3.5 : incantation avec validation stricte, préparation
 quotidienne des sorts, repos long.
 
 La mécanique appliquée par `incanter_sort` (PHB 3.5) :
@@ -688,3 +688,273 @@ async def repos_long(
     except Exception:                                        # noqa: BLE001
         pass
     return ToolResult(text="\n".join(lignes), state_patch=patches)
+
+
+# --------------------------------------------------------------------------- #
+#  ⚜️ Réprouver les morts-vivants (Clerc 3.5, PHB ch. 8) — jet DÉTERMINISTE
+# --------------------------------------------------------------------------- #
+#  Partie 09f9f8a6 : le Réprouver était résolu EN PROSE par le LLM, qui
+#  roulait le Charisme du MAUVAIS personnage (« jet de CHA de Flick » pour
+#  le sort d'Aurora). Comme tout le reste, la répulsion devient un tool
+#  serveur : classe, niveau, CHA, DV des morts-vivants engagés et table
+#  officielle sont lus côté serveur — le MJ narre le résultat.
+_RE_DV_ENTETE = None  # compilé paresseusement (voir _dv_mort_vivant)
+
+
+def _dv_mort_vivant(dv_brut: str) -> float:
+    """Nombre de DÉS de vie d'une entrée bestiaire : « 1d8+1 » → 1,
+    « 4d8+4 » → 4, « 1/2 d8 » → 0.5 (Squelette). 0 si illisible."""
+    import re as _re
+    m = _re.search(r"(\d+(?:\s*/\s*\d+)?)\s*d", str(dv_brut or "").lower())
+    if not m:
+        return 0.0
+    brut = m.group(1).replace(" ", "")
+    if "/" in brut:
+        try:
+            num, den = brut.split("/")
+            return max(0.5, float(num) / float(den))
+        except (ValueError, ZeroDivisionError):
+            return 0.0
+    try:
+        return float(brut)
+    except ValueError:
+        return 0.0
+
+
+_MOTS_MORT_VIVANT = (
+    "mort-vivant", "mort vivant", "squelette", "zombie", "zombi", "goule",
+    "spectre", "vampi", "wight", "wraith", "liche", "momie", "ombre",
+    "fantome", "osseux", "ghoul", "necros",
+)
+
+
+def _est_mort_vivant(fiche_monstre: dict, nom: str) -> bool:
+    """True si l'entrée bestiaire est de type Mort-vivant (champ `type`) ;
+    repli sur des mots-clés du nom si le type est absent."""
+    t = _norm(str(fiche_monstre.get("type") or ""))
+    if "mort-vivant" in t or "mort vivant" in t:
+        return True
+    n = _norm(nom)
+    return any(m in n for m in _MOTS_MORT_VIVANT)
+
+
+def _plafond_repulsion(resultat_jet: int, niveau: int) -> float:
+    """Table 3.5 « Turning Check Result → Most Powerful Undead Affected »
+    (DV max affectés, par rapport au niveau du clerc). Plancher 1/2 DV."""
+    if resultat_jet <= 0:
+        delta = -4
+    elif resultat_jet <= 3:
+        delta = -3
+    elif resultat_jet <= 6:
+        delta = -2
+    elif resultat_jet <= 9:
+        delta = -1
+    elif resultat_jet <= 12:
+        delta = 0
+    elif resultat_jet <= 15:
+        delta = 1
+    elif resultat_jet <= 18:
+        delta = 2
+    elif resultat_jet <= 21:
+        delta = 3
+    elif resultat_jet <= 25:
+        delta = 4
+    else:
+        delta = 8
+    return max(0.5, niveau + delta)
+
+
+@tool
+async def reprouver_morts_vivants(
+    ctx: ToolContext, nom_personnage: str,
+) -> ToolResult:
+    """
+    Réprouver les morts-vivants (Clerc 3.5) — jet et effets RÉSOLUS par le
+    serveur. Vérifie la classe (Clerc ; Paladin niveau ≥ 3, niveau
+    effectif −2), lance la répulsion officielle : 1d20 + CHA contre
+    DD = 10 + DV du plus fort mort-vivant ENGAGÉ ; en cas de réussite,
+    repousse (fuite 10 rounds) les morts-vivants dans la limite de la
+    table et des dégâts de répulsion (2d6 + niveau + CHA) — et les
+    DÉTRUIT si le niveau du clerc vaut au moins le double de leurs DV.
+    Limite quotidienne : 3 + mod. CHA tentatives (remise à zéro au repos
+    long). NE PAS narre le jet vous-même : appelez ce tool, puis narre.
+
+    :param nom_personnage (str): le clerc qui invoque son dieu
+        (ex. "Aurora").
+    """
+    from datetime import datetime as _dt
+
+    from ..game.state import PartyState  # lazy : évite les cycles
+
+    fiche = _fiche_pj(ctx, nom_personnage)
+    if fiche is None:
+        return ToolResult(
+            text=f"❌ Aucune fiche trouvée pour « {nom_personnage} ».")
+    classe = _norm(str(fiche.get("classe") or ""))
+    niveau = int(fiche.get("niveau", 1) or 1)
+    if classe == "paladin":
+        if niveau < 3:
+            return ToolResult(text=(
+                f"⛔ {nom_personnage} (Paladin {niveau}) ne réprouve les "
+                "morts-vivants qu'à partir du niveau 3."))
+        niveau_effectif = niveau - 2
+    elif classe == "clerc":
+        niveau_effectif = niveau
+    else:
+        return ToolResult(text=(
+            f"⛔ {nom_personnage} ({fiche.get('classe')}) n'a PAS le pouvoir "
+            "de réprouver les morts-vivants (Clerc, ou Paladin niveau ≥ 3)."))
+
+    carac = fiche.get("carac") or {}
+    if isinstance(carac, str):
+        import json as _json
+        try:
+            carac = _json.loads(carac)
+        except ValueError:
+            carac = {}
+    try:
+        cha = int((carac or {}).get("CHA", 10) or 10)
+    except (TypeError, ValueError):
+        cha = 10
+    mod_cha = (cha - 10) // 2
+
+    # Limite quotidienne (3 + mod. CHA), remise à zéro chaque jour.
+    today = _dt.now().strftime("%Y-%m-%d")
+    rep_jour = fiche.get("reprouver_jour") or {}
+    if rep_jour.get("date") != today:
+        rep_jour = {"date": today, "utilisations": 0}
+    plafond_jour = 3 + max(0, mod_cha)
+    if int(rep_jour.get("utilisations", 0)) >= plafond_jour:
+        return ToolResult(text=(
+            f"⛔ {nom_personnage} a épuisé ses tentatives de répulsion "
+            f"aujourd'hui ({plafond_jour}/jour). Un repos long les "
+            "restaure."))
+
+    # Mort-vivants ENGAGÉS et vivants, avec leurs DV bestiaires.
+    st = PartyState(data_dir=ctx.data_dir, partie_id=ctx.partie_id)
+    etat = st.load()
+    if etat.get("phase") != "combat":
+        return ToolResult(text=(
+            "❌ Réprouver s'utilise EN COMBAT : aucun mort-vivant engagé "
+            "pour l'instant."))
+    from .monstres import _find_monstre
+    import re as _re
+
+    morts_vivants: list[tuple[dict, float]] = []
+    details: list[str] = []
+    for mo in etat.get("monstres_combat") or []:
+        if mo.get("allie"):
+            continue
+        conds = [str(c) for c in (mo.get("conditions") or [])]
+        if "Détruit" in conds or "Detruit" in conds or \
+                int(mo.get("pv", 0) or 0) <= 0:
+            continue
+        nom_mo = _re.sub(r"\s*\(\d+\)\s*$", "",
+                         str(mo.get("nom") or "")).strip()
+        fiche_m = _find_monstre(ctx, nom_mo) or {}
+        if not _est_mort_vivant(fiche_m, nom_mo):
+            continue
+        dv = _dv_mort_vivant(str(fiche_m.get("dv") or ""))
+        if dv <= 0:
+            # Repli FP→DV approximatif (FP 1 = 1 DV, +1 DV par FP).
+            try:
+                dv = max(1.0, float(str(fiche_m.get("fp") or "1").split("/")[0]))
+            except (TypeError, ValueError):
+                dv = 1.0
+        morts_vivants.append((mo, dv))
+        details.append(f"{mo.get('nom')} ({dv:g} DV)")
+
+    if not morts_vivants:
+        return ToolResult(text=(
+            "❌ Aucun mort-vivant ENGAGÉ dans ce combat — Réprouver n'a "
+            "aucune cible (la tentative n'est PAS consommée)."))
+
+    # Jet de répulsion officiel : 1d20 + CHA vs DD 10 + DV du plus fort.
+    plus_fort = max(dv for _, dv in morts_vivants)
+    jet = random.randint(1, 20)
+    total = jet + mod_cha
+    dd = 10 + int(-(-plus_fort // 1))  # plafond DV arrondi au supérieur
+    reussi = total >= dd
+
+    lignes = [
+        f"⚜️ **{nom_personnage}** lève son saint symbole — **Réprouver les "
+        f"morts-vivants** (tentative "
+        f"{int(rep_jour.get('utilisations', 0)) + 1}/{plafond_jour} ce jour) :",
+        f"- Jet de répulsion : **d20={jet}** {mod_cha:+d} (CHA {cha}) = "
+        f"**{total}** contre DD **{dd}** (10 + {int(-(-plus_fort // 1))} DV "
+        f"du plus fort : {', '.join(details)}).",
+    ]
+    fiche["reprouver_jour"] = {
+        "date": today,
+        "utilisations": int(rep_jour.get("utilisations", 0)) + 1,
+    }
+    from .fiches import _save_fiche  # lazy
+
+    if not reussi:
+        try:
+            _save_fiche(ctx, nom_personnage, fiche)
+        except ValueError as e:
+            return ToolResult(text=f"❌ {e}")
+        lignes.append(
+            f"- ❌ **Échec** ({total} < {dd}) : la foi vacille, les morts-"
+            "vivants ne reculent pas. La tentative est consommée.")
+        return ToolResult(text="\n".join(lignes))
+
+    # Réussite : table + dégâts de répulsion (2d6 + niveau + CHA).
+    plafond_dv = _plafond_repulsion(total, niveau_effectif)
+    budget = (random.randint(1, 6) + random.randint(1, 6)
+              + niveau_effectif + mod_cha)
+    lignes.append(
+        f"- ✅ **Réussite** — plafond de répulsion : morts-vivants de "
+        f"**{plafond_dv:g} DV max** ; dégâts de répulsion : "
+        f"**{budget} DV** au total.")
+    touches = sorted(
+        ((mo, dv) for mo, dv in morts_vivants if dv <= plafond_dv),
+        key=lambda x: x[1])
+    effects: list[str] = []
+    for mo, dv in touches:
+        if budget < dv:
+            continue
+        budget -= dv
+        nom_mo = str(mo.get("nom") or "")
+        if niveau_effectif >= 2 * dv:
+            mo["pv"] = 0
+            conds = mo.setdefault("conditions", [])
+            if "Détruit" not in conds:
+                conds.append("Détruit")
+            effects.append(
+                f"  - ☠️ **{nom_mo}** ({dv:g} DV ≤ niveau ×2) — "
+                "**DÉTRUIT** par la puissance de Kelemvor.")
+        else:
+            conds = mo.setdefault("conditions", [])
+            if "Repoussé" not in conds:
+                conds.append("Repoussé")
+            effects.append(
+                f"  - 🏃 **{nom_mo}** ({dv:g} DV) — **REPOUSSÉ** (fuit 10 "
+                "rounds ; cowering si bloqué).")
+    if effects:
+        lignes.extend(effects)
+        non_affectes = [d for d in details
+                        if not any(d.split(" (")[0] in e for e in effects)]
+        if non_affectes:
+            lignes.append(
+                "  — Non affectés (DV trop élevés ou budget épuisé) : "
+                + ", ".join(non_affectes) + ".")
+    else:
+        lignes.append(
+            "  — Aucun mort-vivant dans la limite du plafond : ils "
+            "résistent tous (DV trop élevés).")
+    err = st.save(etat)
+    if err:
+        return ToolResult(text=f"❌ {err}")
+    try:
+        _save_fiche(ctx, nom_personnage, fiche)
+    except ValueError as e:
+        return ToolResult(text=f"❌ {e}")
+    lignes.append(
+        "_⚙️ Répulsion résolue par le serveur (jet officiel, table 3.5) — "
+        "narre la fuite/la destruction SANS rejeter de dés._")
+    return ToolResult(
+        text="\n".join(lignes),
+        state_patch={"monstres_combat": etat.get("monstres_combat") or []},
+    )

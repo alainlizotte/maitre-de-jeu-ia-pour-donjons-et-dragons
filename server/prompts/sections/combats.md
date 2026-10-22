@@ -131,6 +131,10 @@ JAMAIS ces règles en prose. Les autres consignes couvrent les règles structure
 2. **Initiative** : `1d20 + mod. DEX` (+4 avec *Science de l'initiative*), tri
    décroissant, conservé jusqu'à la fin du combat. Égalité → reroll 1d20 sans mod.
    Utilise `calculer_initiative` puis `demarrer_combat`.
+   **Réprouver les morts-vivants** (Clerc) : NARRATION INTERDITE sans tool —
+   appelle `reprouver_morts_vivants(nom_personnage=<clerc>)` : le serveur
+   jette la répulsion (1d20 + CHA, DD 10 + DV du plus fort), applique la
+   table et marque Repoussé/Détruit. Narre ensuite le résultat du tool.
    **Nouveau combattant en cours de mêlée** (monstre invoqué par un sort
    d'invocation, squelettes de clerc, renfort qui surgit) : appelle
    `combat_ajouter_combattant(nom=..., allie=vrai_si_côté_JOUEURS)` — il

@@ -127,6 +127,19 @@ async def test_engager_autorise_apres_cloture():
     d = _fresh_dir()
     try:
         await _creer_pj(d)
+        # 🛡️ Anti-flake (run 09f9f8a6) : `boucle_auto` joue le round 1 des
+        # monstres (respect de l'initiative). Avec 1-10 PV aléatoires, le
+        # mannequin MOURAIT parfois aux deux rounds auto-joués (Gobelin
+        # puis Squelette) → défaite → clôture qui vide monstres_combat
+        # avant l'assertion. Le test porte sur le GARDE de re-engagement,
+        # pas sur la létalité : mannequin survivable.
+        await tool(d, "fiche_perso_mettre_a_jour", nom="Bargoum",
+                   champ="pv", valeur="60")
+        await tool(d, "fiche_perso_mettre_a_jour", nom="Bargoum",
+                   champ="pv_max", valeur="60")
+        await tool(d, "etat_partie_patch", chemin="pj.0.pv", valeur="60")
+        await tool(d, "etat_partie_patch", chemin="pj.0.pv_max",
+                   valeur="60")
         r = await tool(d, "engager_combat", monstres="Gobelin")
         assert not r.text.startswith("⛔"), r.text
         # Tuer le gobelin (dégâts > PV) puis une NOUVELLE vague est légitime.

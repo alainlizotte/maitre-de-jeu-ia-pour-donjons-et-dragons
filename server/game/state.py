@@ -50,6 +50,12 @@ SCHEMA_PARTIE: dict[str, Any] = {
     # Journal des illustrations de monstres croisés ({nom, url}) — sert à
     # réhydrater la galerie « Monstres rencontrés » après rechargement.
     "rencontres_images": [],
+    # ⚖️ Anti-dégénérescence (run 09f9f8a6) : nombre de tours consécutifs
+    # sans AUCUN tool mécanique. Au seuil de 3, le prompt_builder
+    # ré-injecte salle courante + objectif dans le récap (la prose sans
+    # mécanique s'auto-entretient sinon). Remis à 0 dès qu'un tool
+    # mécanique tourne (cf. main._handle_say).
+    "inertie_mj": 0,
     # Mémoire de campagne longue (cohérence) : missions, lieux, PNJ,
     # monstres combattus (rempli par le moteur de combat), position.
     # `intrigue_resume` (résumé continu), `objectif_courant` (ce qu'il faut
@@ -66,6 +72,44 @@ SCHEMA_PARTIE: dict[str, Any] = {
         "evenements_rencents": [],
     },
 }
+
+
+# --------------------------------------------------------------------------- #
+#  Détection du tour d'OUVERTURE (marqueur « Début de l'aventure »)
+# --------------------------------------------------------------------------- #
+def _evenement_structurel_arrivee(txt: str) -> bool:
+    """True pour l'événement STRUCTUREL d'entrée d'un PJ ressuscité/blessé
+    (« ⚠️ <nom> arrive dans cette nouvelle partie : … », persos.py) —
+    écrit à la CRÉATION de la partie, AVANT tout tour narré."""
+    txt = str(txt or "").strip()
+    return txt.startswith("⚠️") and "arrive dans cette nouvelle partie" in txt
+
+
+def ouverture_non_jouee(etat: dict) -> bool:
+    """True tant que la SCÈNE D'OUVERTURE n'a pas été jouée.
+
+    🛡️ Correctif 2052e3ae (parties 2052e3ae & 22d78403) : l'ouverture se
+    détecte au MARQUEUR « Début de l'aventure » (journalisé par
+    `main._journaliser_ouverture_si_besoin` au premier tour narré), pas à
+    `histoire` vide — un PJ ressuscité qui rejoint la partie porte déjà
+    « ⚠️ … arrive dans cette nouvelle partie » (48b239fa) : `histoire`
+    n'est JAMAIS vide et les détecteurs d'ouverture restaient aveugles.
+
+    Les seuls événements tolérés avant le premier tour narré sont ces
+    événements structurels d'arrivée ; toute AUTRE histoire (y compris les
+    vieilles parties antérieures au marqueur) = partie déjà jouée → False.
+    Sert à la directive « DÉBUT DE L'AVENTURE » du prompt_builder, au
+    désarmement du rattrapage combat-prose et à la journalisation."""
+    hist = (etat or {}).get("histoire") or []
+    for ev in hist:
+        txt = str((ev or {}).get("evenement") or "") \
+            if isinstance(ev, dict) else str(ev or "")
+        if _evenement_structurel_arrivee(txt):
+            continue
+        # Vrai événement joué (y compris le marqueur « Début de
+        # l'aventure » lui-même) : l'ouverture est derrière nous.
+        return False
+    return True
 
 
 class PartyState:

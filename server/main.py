@@ -54,6 +54,7 @@ from .tools.base import ToolContext
 from .tools.monstres import image_pour
 from .tools.registry import discover_tools
 from .game.combat import boucle_auto as _boucle_combat
+from .tools.dice import _AUTO_DEGATS_TOUR
 
 import re as _re_mod
 
@@ -99,6 +100,19 @@ _ACTION_ATTAQUE_RE = _re_mod.compile(
 # SANS « lance » (« je lance un sort » n'est pas une attaque armée).
 _ATTAQUE_JOUEUR_RE = _re_mod.compile(
     r"\b(?:attaqu\w*|frapp\w*|ass[ée]n\w*|hach\w*|transpers\w*|tir\w*)\b",
+    _re_mod.IGNORECASE,
+)
+
+# 🛡️ 5bis-g (run 090ec0af) : INTENTION DE CONFRONTATION du joueur — sommer
+# un ennemi de se rendre, l'attaquer, l'interpeller. Sert au filet
+# « rencontre canonique non engagée » : face à une salle du module dont les
+# `ennemis` ne sont pas encore rencontrés, une confrontation ne peut pas
+# être esquivée en prose (le MJ y a répondu par un REPOS dans le repaire du
+# nécromancien lui-même — le climax du module sauté).
+_CONFRONTATION_RE = _re_mod.compile(
+    r"\b(?:rend(?:s|ez)[\s-]*vous|capitul\w*|attaqu\w*|frapp\w*|combatt\w*"
+    r"|provoc\w*|arr[êe]t\w*(?:ez|er|ons)?\b|tu[ée]s?\b|tuer\b|duel\b"
+    r"|interpell\w*|envahi\w*|surrend\w*|pars?\s+combat\w*)\b",
     _re_mod.IGNORECASE,
 )
 
@@ -376,6 +390,17 @@ def _assainir_texte_joueur(texte: str) -> str:
         r"\*\*(?:nord|sud|est|ouest)\*\* n'a PAS eu lieu[^_]*_",
         "\nℹ️ _Aucune porte dans ce mur — le groupe n'a pas bougé._", t)
     t = _re_mod.sub(r"\n*⚙️ _Rattrapage serveur[^_]*_", "", t)
+    # 🛡️ 090ec0af : consignes d'OUTILS recopiées (le bandeau du Marché
+    # fuyait à l'affichage du Marché ; mêmes patterns côté narration via
+    # _RE_CONSIGNES_LLM_STRIP).
+    t = _re_mod.sub(r"[ \t]*💡\s*\d+ marchand\(s\) ici[^\n]*", "", t)
+    t = _re_mod.sub(r"[ \t]*⚠️ La préparation est terminée[^\n]*", "", t)
+    t = _re_mod.sub(r"[ \t]*➡️ ⚡ Chaque jour à effet[^\n]*", "", t)
+    t = _re_mod.sub(
+        r"[ \t]*—\s*appelle `lancer_sauvegarde` pour chaque PJ par heure\.",
+        "", t)
+    t = _re_mod.sub(r"[ \t]*⚙️ _Répulsion résolue par le serveur[^_]*_", "", t)
+    t = _re_mod.sub(r"[ \t]*NE PAS narre le jet vous-même[^\n]*", "", t)
     t = t.replace("📦 **Rattrapage serveur**", "📦 Butin")
     t = _re_mod.sub(r"\n{3,}", "\n\n", t)
     return t.strip()
@@ -1374,7 +1399,15 @@ _RE_CONSIGNES_LLM_STRIP = _re_mod.compile(
     r"\s*:[^.\n]*\.?"
     r"|>[ \t]*———?\s*et engage via `engager_combat`[^\n]*"
     r"|[ \t]*⚔️\s*Ennemis DU SC[ÉE]NARIO[^\n]*"
-    r"|[ \t]*📝\s*Note du module[^\n]*",
+    r"|[ \t]*📝\s*Note du module[^\n]*"
+    # 🛡️ 090ec0af : consignes d'OUTILS recopiées telles quelles par le
+    # petit modèle (le bandeau du Marché fuyait à l'affichage).
+    r"|[ \t]*💡\s*\d+ marchand\(s\) ici[^\n]*"
+    r"|[ \t]*⚠️ La préparation est terminée[^\n]*"
+    r"|[ \t]*➡️ ⚡ Chaque jour à effet[^\n]*"
+    r"|[ \t]*—\s*appelle `lancer_sauvegarde` pour chaque PJ par heure\."
+    r"|[ \t]*⚙️ _Répulsion résolue par le serveur[^_]*_"
+    r"|[ \t]*NE PAS narre le jet vous-même[^\n]*",
     _re_mod.IGNORECASE,
 )
 
@@ -4364,6 +4397,105 @@ async def combat_engager(partie_id: str, payload: dict[str, Any]) -> dict[str, A
     }
 
 
+@app.post("/api/parties/{partie_id}/game-over/resurrection")
+async def game_over_resurrection(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """🎁 Bouton game-over « Résurrection négociée » : applique la
+    résurrection serveur (pénalité officielle Raise Dead) SANS négociation
+    en prose — l'acceptation par le bouton EST la décision de la table."""
+    joueur = str(payload.get("joueur") or "table")
+    ctx = _ctx(partie_id, joueur)
+    note = await _resurrection_sur_acceptation(app, ctx, joueur)
+    if not note:
+        raise HTTPException(
+            status_code=409,
+            detail="Aucun héros mort à ressusciter (ou partie non terminée).")
+    session = sessions.get(partie_id)
+    await session.broadcast({
+        "type": "dm",
+        "text": "✨ **Résurrection acceptée par la table.**\n\n" + note,
+        "tool_events": [], "state_patches": [], "tool_calls_trace": [],
+    })
+    await session.broadcast({"type": "status", "description": "", "done": True})
+    etat = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    return {"ok": True, "note": note, "phase": etat.get("phase"),
+            "game_over": etat.get("game_over")}
+
+
+@app.post("/api/parties/{partie_id}/game-over/nouvelle-partie")
+async def game_over_nouvelle_partie(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """🔄 Bouton game-over « Nouvelle partie » : réinitialise l'état de la
+    partie (même table, même identifiant — nouveau départ confirmé par les
+    joueurs ; les fiches repartent à neuf à la prochaine création)."""
+    from .game.state import PartyState as _PS_reset
+    _PS_reset(data_dir=str(cfg.abs(cfg.paths.data_dir)),
+              partie_id=partie_id).reset()
+    session = sessions.get(partie_id)
+    note = ("🔄 **Nouvelle partie** — l'état a été réinitialisé. Recréez "
+            "vos personnages et relancez l'aventure.")
+    session.remember_assistant(note)
+    await session.broadcast({
+        "type": "dm", "text": note,
+        "tool_events": [], "state_patches": [], "tool_calls_trace": [],
+    })
+    await session.broadcast({"type": "status", "description": "", "done": True})
+    return {"ok": True}
+
+
+@app.post("/api/parties/{partie_id}/chapitre/suivant")
+async def chapitre_suivant(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """📖 Campagnes en chapitres : charge le chapitre SUIVANT dans la MÊME
+    partie (bouton déterministe — le petit modèle n'appelait jamais
+    `scenarios_laelith_charger` lui-même). XP, fiches et continuité de
+    campagne sont conservés ; le briefing complet va au MJ via la bible."""
+    from .tools.base import _TOOL_REGISTRY, invoke_tool
+    etat = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    _bible = ((etat.get("quete") or {}).get("bible") or {})
+    _suivant = str(_bible.get("chapitre_suivant") or "").strip()
+    if not _suivant:
+        raise HTTPException(
+            status_code=409,
+            detail="Aucun chapitre suivant : la campagne est terminée.")
+    _num_actuel = _bible.get("chapitre")
+    _total = _bible.get("chapitre_total") or "?"
+    _titre_suiv = ""
+    try:
+        from .tools.scenarios import _charger_catalogue_plat as _ccp
+        _flat = _ccp(_ctx(partie_id, "système"))
+        _nxt = next((x for x in _flat
+                     if str(x.get("id", "")) == _suivant), None)
+        _titre_suiv = str((_nxt or {}).get("titre") or _suivant)
+    except Exception:                                        # noqa: BLE001
+        pass
+    ctx = _ctx(partie_id, str(payload.get("joueur") or "système"))
+    spec = _TOOL_REGISTRY.get("scenarios_laelith_charger")
+    if spec is None:
+        raise HTTPException(status_code=500, detail="tool charger absent.")
+    tr = await invoke_tool(spec, ctx, {"scenario_id": _suivant})
+    if tr.text.startswith("❌"):
+        raise HTTPException(status_code=500, detail=tr.text[:200])
+    session = sessions.get(partie_id)
+    note = (f"📖 **Chapitre {(_num_actuel or 0) + 1 if isinstance(_num_actuel, int) else '?'}"
+            f"/{_total}** : « {_titre_suiv} » — la campagne continue (XP et "
+            "équipement conservés).")
+    session.remember_assistant(note)
+    await session.broadcast({
+        "type": "dm", "text": note,
+        "tool_events": [], "state_patches": [], "tool_calls_trace": [],
+    })
+    await session.broadcast({"type": "status", "description": "", "done": True})
+    _et = PartyState(
+        data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+    ).load()
+    _nb = ((_et.get("quete") or {}).get("bible") or {}).get("chapitre")
+    return {"ok": True, "chapitre": _nb,
+            "chapitre_suivant": ((_et.get("quete") or {}).get("bible") or {})
+            .get("chapitre_suivant")}
+
+
 @app.post("/api/parties/{partie_id}/combat/boucle")
 async def combat_boucle(partie_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     """Exécute une passe du moteur de combat serveur : joue les tours de
@@ -4801,15 +4933,12 @@ async def _send_joined(ws: WebSocket, session: PartySession, partie_id: str) -> 
     Envoyé uniquement aux clients authentifiés - pour une partie protégée par
     mot de passe, l'historique ne doit pas fuiter avant la vérification.
     """
-    # 🔧 2052e3ae : les blocs mécaniques du serveur (⚙️ initiative,
-    # ⚖️ dégâts auto…) accompagnent les messages assistant pour être
-    # re-joués au rechargement — ils n'entrent JAMAIS dans le contexte LLM.
-    history_payload = [
-        {"role": m.role, "content": m.content,
-         **({"mecanique": m.mecanique} if m.mecanique else {})}
-        for m in session.history
-        if m.role in ("user", "assistant") and m.content
-    ]
+    # 🔧 2052e3ae + 090ec0af : la TRANSCRIPTION complète (affichage) est
+    # rejouée au rechargement — plus la fenêtre LLM de 50 messages qui
+    # effaçait les actions des combats à chaque remontée du client.
+    # Les blocs `mecanique` (⚙️ initiative, ⚖️ dégâts auto…) voyagent avec
+    # leurs messages et n'entrent JAMAIS dans le contexte LLM.
+    history_payload = session.payload_historique()
     await _ws_envoi(ws, {
         "type": "sys",
         "event": "joined",
@@ -5471,6 +5600,49 @@ async def _bonus_degats_pj(ctx: ToolContext, attaquant: str, arme: str) -> int:
         return 0
 
 
+def _resoudre_cible_degats(etat: dict[str, Any], nom: str,
+                           _norm_nom) -> str:
+    """🔧 Run gobs 74de6b94 : corrige un nom de cible de dégâts contre les
+    combattants SUIVIS. Le modèle confondait la fiction (« Gobelin »
+    recopié du combat d'entrée) avec l'ennemi suivi (« Voleur ») : les
+    dégâts partaient en « fiche introuvable » et la créature semblait
+    invulnérable — le groupe entier est mort. Règles, dans l'ordre :
+    PJ correspondant → inchangé ; monstre exact → inchangé (le tool gère
+    vivants-prioritaires) ; préfixe → inchangé (le tool gère) ; sinon,
+    UN SEUL ennemi vivant suivi → c'est LUI (la fiction et le plateau ne
+    peuvent pas diverger sur un combat à un seul ennemi)."""
+    try:
+        _n = _norm_nom(nom)
+        if not _n:
+            return nom
+        for _p in (etat.get("pj") or []):
+            if _norm_nom(_p.get("nom")) == _n:
+                return nom
+        _mons = etat.get("monstres_combat") or []
+        for _mo in _mons:
+            if _norm_nom(_mo.get("nom")) == _n:
+                return nom
+        for _mo in _mons:
+            _mn = _norm_nom(_mo.get("nom"))
+            if len(_n) >= 4 and (_mn.startswith(_n) or _n.startswith(_mn)):
+                return nom
+        _vivants = [
+            _mo for _mo in _mons
+            if not _mo.get("allie")
+            and int(_mo.get("pv", 0) or 0) > 0
+            and "Détruit" not in (_mo.get("conditions") or [])
+            and "Detruit" not in (_mo.get("conditions") or [])
+        ]
+        if len(_vivants) == 1:
+            corrige = str(_vivants[0].get("nom") or "")
+            print(f"[dnd35] cible de dégâts corrigée : « {nom} » → "
+                  f"« {corrige} » (unique ennemi suivi).")
+            return corrige
+    except Exception:                                        # noqa: BLE001
+        pass
+    return nom
+
+
 async def _appliquer_degats_oublies(
     orch: Orchestrator,
     result: Any,
@@ -5496,6 +5668,15 @@ async def _appliquer_degats_oublies(
     def _norm_nom(s: str) -> str:
         n = _uni.normalize("NFKD", str(s or "").strip().lower())
         return "".join(c for c in n if not _uni.combining(c))
+
+    # 🔧 74de6b94 : état pour la correction de cible (voir
+    # `_resoudre_cible_degats` — la fiction ne doit pas diverger du
+    # plateau sur les dégâts).
+    try:
+        etat_net = PartyState(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+    except Exception:                                        # noqa: BLE001
+        etat_net = {}
 
     trace = result.tool_calls_trace
     # File des jets orphelins : cible normalisée → liste de totaux.
@@ -5531,10 +5712,12 @@ async def _appliquer_degats_oublies(
     # Jets restés orphelins → le serveur les applique (toujours indiqués).
     lignes: list[str] = []
     for cible_norm, totaux in orphelins.items():
+        cible_resolue = _resoudre_cible_degats(etat_net, cible_norm,
+                                               _norm_nom)
         for total in totaux:
             tr = await orch.execute_tool_direct(
                 "fiche_perso_infliger_degats",
-                {"nom": cible_norm, "degats": total},
+                {"nom": cible_resolue, "degats": total},
                 ctx, on_event, result,
             )
             if tr is not None and not tr.text.startswith("❌"):
@@ -5580,10 +5763,37 @@ async def _appliquer_degats_oublies(
         texte_tc = tc.get("text") or ""
         if ("✅ **Touché**" not in texte_tc) and ("⭐ **20 naturel**" not in texte_tc):
             continue
+        # 💥 Auto-dégâts (correctif structural) : le serveur a DÉJÀ roulé
+        # et appliqué les dégâts dans `lancer_attaque` — rien à rattraper.
+        if "dégâts infligés automatiquement" in texte_tc:
+            continue
         cible = str((tc.get("args") or {}).get("nom_cible") or "").strip()
         cle_cible = _norm_nom(cible)
         if (not cible or cle_cible in degats_jetes
                 or cle_cible in deja_applique or cle_cible in cibles_traitees):
+            continue
+        # 💥 Mémo auto-dégâts présente pour cette cible → le jet SERVEUR
+        # fait foi (roulé au moment de l'attaque) : appliqué ici, sans lire
+        # les montants narrés.
+        _partie_ad = str(getattr(ctx, "partie_id", "") or "")
+        _tour_ad = str(getattr(ctx, "tour_id", "") or "")
+        _cle_memo_ad = next(
+            (k for k in _AUTO_DEGATS_TOUR
+             if k[0] == _partie_ad and k[1] == _tour_ad
+             and k[2] == cle_cible),
+            None,
+        )
+        if _cle_memo_ad is not None:
+            _info_ad = _AUTO_DEGATS_TOUR.pop(_cle_memo_ad)
+            cibles_traitees.add(cle_cible)
+            for _d_ad in list(_info_ad.get("montants") or []):
+                tr = await orch.execute_tool_direct(
+                    "fiche_perso_infliger_degats",
+                    {"nom": cible, "degats": _d_ad},
+                    ctx, on_event, result,
+                )
+                if tr is not None and not tr.text.startswith("❌"):
+                    lignes.append(tr.text)
             continue
         montants: list[int] = []
         for m_nom in _re_mod.finditer(_re_mod.escape(cible), narration,
@@ -5606,7 +5816,7 @@ async def _appliquer_degats_oublies(
                 orch, ctx, on_event, result,
                 attaquant=str((tc.get("args") or {}).get("nom_attaquant") or ""),
                 arme=str((tc.get("args") or {}).get("arme") or ""),
-                cible=cible,
+                cible=_resoudre_cible_degats(etat_net, cible, _norm_nom),
             )
             if tr_roll is not None:
                 cibles_traitees.add(cle_cible)
@@ -5627,7 +5837,7 @@ async def _appliquer_degats_oublies(
                 attaquant=str((tc.get("args") or {}).get("nom_attaquant")
                               or ""),
                 arme=str((tc.get("args") or {}).get("arme") or ""),
-                cible=cible,
+                cible=_resoudre_cible_degats(etat_net, cible, _norm_nom),
             )
             if tr_roll is not None:
                 cibles_traitees.add(cle_cible)
@@ -5636,11 +5846,42 @@ async def _appliquer_degats_oublies(
         cibles_traitees.add(cle_cible)
         tr = await orch.execute_tool_direct(
             "fiche_perso_infliger_degats",
-            {"nom": cible, "degats": uniques[0]},
+            {"nom": _resoudre_cible_degats(etat_net, cible, _norm_nom),
+             "degats": uniques[0]},
             ctx, on_event, result,
         )
         if tr is not None and not tr.text.startswith("❌"):
             lignes.append(tr.text)
+    # 💥 Mémos d'AUTO-DÉGÂTS non consommés (090ec0af) : un lancer_attaque
+    # TOUCHÉ dont les dégâts serveur n'ont été ni roulés par `lancer_degats`
+    # ni appliqués par un `infliger` → le serveur applique SA mémo (jet
+    # déterministe déjà effectué au moment de l'attaque). Les cibles que le
+    # modèle a résolues lui-même sont purgées de la mémo par
+    # `lancer_degats`/l'infliger ci-dessus.
+    try:
+        _partie_purge = str(getattr(ctx, "partie_id", "") or "")
+        _tour_purge = str(getattr(ctx, "tour_id", "") or "")
+        _cles_ad = [
+            k for k in _AUTO_DEGATS_TOUR
+            if k[0] == _partie_purge and k[1] == _tour_purge
+        ]
+        for _k in _cles_ad:
+            _info = _AUTO_DEGATS_TOUR.pop(_k)
+            _montants_ad = list(_info.get("montants") or [])
+            if not _montants_ad:
+                continue
+            _cible_ad = _k[2]
+            for _d_ad in _montants_ad:
+                tr = await orch.execute_tool_direct(
+                    "fiche_perso_infliger_degats",
+                    {"nom": _cible_ad, "degats": _d_ad},
+                    ctx, on_event, result,
+                )
+                if tr is not None and not tr.text.startswith("❌"):
+                    lignes.append(tr.text)
+    except Exception as _e_ad:                           # noqa: BLE001
+        print(f"[dnd35] application mémo auto-dégâts échouée (ignoré) : "
+              f"{_e_ad}")
     return "\n\n".join(lignes)
 
 
@@ -7193,6 +7434,121 @@ def _rattrapage_desarme_ouverture(
     return ouverture_non_jouee(etat)
 
 
+# 🛡️ 5bis-g (run 090ec0af) : mécanique hostile suffisante pour le filet
+# « rencontre canonique non engagée ».
+_TOOLS_HOSTILES_5G = frozenset({
+    "lancer_attaque", "lancer_degats", "attaque_opportunite",
+    "fiche_perso_infliger_degats",
+})
+
+
+def _norm_txt_5g(s: str) -> str:
+    """Normalisation accent/casse pour les rapprochements du filet 5bis-g."""
+    import unicodedata as _ud
+    nf = _ud.normalize("NFKD", (s or "").lower())
+    return " ".join(
+        "".join(c for c in nf if not _ud.combining(c)).split())
+
+
+def _especes_nettoyees_salle(etat: dict) -> bool:
+    """True si TOUTES les espèces canoniques de la salle courante sont déjà
+    dans `donjon.salles_nettoyees` (F3) — la rencontre a été résolue : le
+    filet 5bis-g ne doit pas la relancer."""
+    from .tools.fiches import _espece_cle as _ec_5g
+    from .tools.state import _ennemis_canoniques_salle
+    canon = _ennemis_canoniques_salle(etat)
+    if not canon:
+        return False
+    dj = etat.get("donjon") or {}
+    cur = list(dj.get("courant") or [0, 0])
+    try:
+        cle = f"{int(cur[0])},{int(cur[1])}"
+    except (TypeError, ValueError):
+        return False
+    nettoyees = {
+        _ec_5g(str(x)) for x in
+        ((dj.get("salles_nettoyees") or {}).get(cle) or [])
+    }
+    if not nettoyees:
+        return False
+    especes_canon = {
+        _ec_5g(str(e or "").split("×")[0].split("x")[0].strip())
+        for e in canon
+    }
+    return especes_canon and especes_canon <= nettoyees
+
+
+def _rencontre_canonique_esquivee(
+    etat: dict[str, Any],
+    tool_calls_trace: list,
+    texte_joueur: str,
+) -> list[str]:
+    """Liste des `ennemis` canoniques de la salle courante quand la
+    rencontre PRÉVUE PAR LE MODULE vient d'être esquivée en prose — []
+    sinon.
+
+    🛡️ 5bis-g (run 090ec0af) : face à « Rorreth Monforoth, rendez-vous ! »
+    le MJ a narré un REPOS dans le repaire du boss — le climax du module
+    sauté sans un seul dé. Conditions TOUTES requises :
+    - phase exploration (un combat engagé court le filet s'efface) ;
+    - hors tour d'ouverture (`ouverture_non_jouee`) ;
+    - salle à `ennemis` canoniques, espèces PAS déjà nettoyées (F3) ;
+    - AUCUN `engager_combat` ce tour ;
+    - ET signal de confrontation : mécanique hostile ce tour
+      (`_TOOLS_HOSTILES_5G`), intention du joueur (`_CONFRONTATION_RE`)
+      ou nom d'un ennemi canonique cité par le joueur."""
+    try:
+        if str(etat.get("phase") or "") != "exploration":
+            return []
+        if etat.get("game_over"):
+            return []
+        if ouverture_non_jouee(etat):
+            return []
+        from .tools.state import _ennemis_canoniques_salle
+        canon = _ennemis_canoniques_salle(etat)
+        if not canon:
+            return []
+        if _especes_nettoyees_salle(etat):
+            return []
+        if any(tc.get("name") == "engager_combat"
+               for tc in (tool_calls_trace or [])):
+            return []
+        hostile = any(
+            tc.get("name") in _TOOLS_HOSTILES_5G
+            for tc in (tool_calls_trace or [])
+        )
+        texte_norm = _norm_txt_5g(texte_joueur or "")
+        confronte = bool(_CONFRONTATION_RE.search(texte_joueur or ""))
+        if not confronte:
+            for e in canon:
+                esp = _norm_txt_5g(
+                    str(e or "").split("×")[0].split("x")[0].strip())
+                if len(esp) >= 4 and esp in texte_norm:
+                    confronte = True
+                    break
+        # 🛡️ P1-2 (correctifs 090ec0af) : la salle vient d'être ENTRÉE ce
+        # tour (déplacement) et ses ennemis canoniques ne sont pas encore
+        # rencontrés → la traversée en prose ne suffit plus — SAUF si la
+        # note du manifeste signale une approche discrète (endormis,
+        # infiltration, surprise possible…) : le joueur garde son option
+        # furtive, les signaux classiques restent actifs.
+        entree_5g = any(
+            tc.get("name") in ("carte_donjon_explorer", "carte_donjon_etage")
+            for tc in (tool_calls_trace or [])
+        )
+        note_furtive = False
+        if entree_5g:
+            from .tools.state import _note_salle_courante
+            note_furtive = bool(_re_mod.search(
+                r"endormi|discr|furtiv|infiltr|surprise possible",
+                _note_salle_courante(etat), _re_mod.IGNORECASE))
+        if not (hostile or confronte or (entree_5g and not note_furtive)):
+            return []
+        return canon
+    except Exception:                                        # noqa: BLE001
+        return []
+
+
 def _load_bestiaire_plain(data_dir: str) -> dict[str, Any]:
     """Charge le bestiaire JSON directement (sans ToolContext).
 
@@ -7933,6 +8289,35 @@ async def _handle_say(
                     return
     except Exception as e_go:                                   # noqa: BLE001
         print(f"[dnd35] Résurrection sur acceptation échouée (ignoré) : {e_go}")
+
+    # 🛡️ P1-3 (runs gobs/sea 090ec0af) : game_over SANS acceptation de
+    # résurrection → AUCUN tour MJ. Avant ce garde, les say post-défaite
+    # étaient acceptés et le MJ répondait par des narrations vides à
+    # l'infini (20+ tours zombies observés).
+    try:
+        _st_go2 = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id,
+        ).load()
+        if (str(_st_go2.get("phase") or "") == "game_over"
+                or _st_go2.get("game_over")):
+            await session.broadcast({
+                "type": "dm",
+                "text": (
+                    "💀 **La partie est terminée** — tous les héros sont "
+                    "tombés. Le MJ n'intervient plus. Options : **nouvelle "
+                    "partie**, ou acceptez la **résurrection négociée** "
+                    "proposée par le MJ (« nous acceptons la "
+                    "résurrection »)."),
+                "tool_events": [],
+                "state_patches": [],
+                "tool_calls_trace": [],
+            })
+            await session.broadcast({
+                "type": "status", "description": "", "done": True,
+            })
+            return
+    except Exception as e_go2:                                  # noqa: BLE001
+        print(f"[dnd35] Garde game_over échouée (ignoré) : {e_go2}")
 
     # 1bis. ⚔️ Garde de tour : DÉPLACÉE après le pre-run du moteur de combat
     # (voir dans le verrou de session) — la rotation doit d'abord être
@@ -9410,6 +9795,72 @@ async def _handle_say(
                               "outil — best effort accepté")
             except Exception as e:
                 print(f"[dnd35] 5bis-b rejeu invoquation failed: {e}")
+
+            # 5bis-g. ⚔️ Rencontre canonique NON ENGAGÉE (run 090ec0af) :
+            # le groupe affronte/somme les créatures prévues par le module
+            # mais le MJ a répondu en prose — voire par un REPOS dans le
+            # repaire du boss (climax du module sauté). Rejeu avec correctif
+            # exigeant l'engagement mécanique (cf. `_rencontre_canonique_
+            # esquivee` pour les conditions exactes).
+            try:
+                _etat_5g = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _canon_5g = _rencontre_canonique_esquivee(
+                    _etat_5g, result.tool_calls_trace, text)
+                if _canon_5g:
+                    _canon_txt_5g = ", ".join(_canon_5g)
+                    _dj_5g = _etat_5g.get("donjon") or {}
+                    _cour_5g = list(_dj_5g.get("courant") or [0, 0])
+                    _cle_5g = (f"{_dj_5g.get('id')}@"
+                               f"{_cour_5g[0]},{_cour_5g[1]}")
+                    print("[dnd35] 5bis-g : rencontre canonique non "
+                          f"engagée ({_canon_txt_5g}) — rejeu correctif")
+                    _corrective_5g = (
+                        "(Rappel système MJ — ⚠️ ERREUR : les créatures "
+                        "CANONIQUES de cette salle du module ("
+                        + _canon_txt_5g + ") sont présentes et le joueur "
+                        "les affronte ou les somme, mais tu n'as engagé "
+                        "AUCUN combat. Salle " + _cle_5g + ". Appelle "
+                        "IMMÉDIATEMENT engager_combat(monstres=\""
+                        + _canon_txt_5g + "\") — avec surprise= si elles "
+                        "surprennent le groupe — PUIS narre le combat "
+                        "d'après les résultats. INTERDIT : esquiver la "
+                        "rencontre en prose, faire reposer le groupe à "
+                        "leur insu, ou remplacer les créatures.)"
+                    )
+                    _messages_5g = list(messages) + [
+                        Message(role="assistant",
+                                content=result.narration),
+                        Message(role="user", content=_corrective_5g),
+                    ]
+                    _res_5g = await orch.run(
+                        _messages_5g, ctx,
+                        on_event=on_event, on_delta=None,
+                    )
+                    if any(tc.get("name") == "engager_combat"
+                           for tc in _res_5g.tool_calls_trace):
+                        result.tool_calls_trace.extend(
+                            _res_5g.tool_calls_trace)
+                        result.tool_events.extend(_res_5g.tool_events)
+                        result.state_patches.extend(_res_5g.state_patches)
+                        result.notes_mecaniques.extend(
+                            _res_5g.notes_mecaniques)
+                        result.narration = "\n\n".join(_assemble_narrations(
+                            result.narrations_intermediaires,
+                            _res_5g.narration,
+                        )).strip()
+                        result.iterations += _res_5g.iterations
+                        await reset_stream()
+                        print("[dnd35] 5bis-g : rencontre canonique "
+                              "engagée par le rejeu")
+                    else:
+                        print("[dnd35] 5bis-g : rejeu sans engagement — "
+                              "best effort accepté")
+            except Exception as e:
+                print(f"[dnd35] 5bis-g rejeu rencontre canonique "
+                      f"failed: {e}")
 
             # 5bis-c. 💥 Rattrapage dégâts non appliqués : tout lancer_degats
             # réussi du tour DOIT se traduire par une application effective

@@ -422,6 +422,63 @@ def _split_espece_quantite(txt: str) -> tuple[str, int]:
     return (esp, q)
 
 
+def _note_salle_courante(etat: dict) -> str:
+    """Note de la salle courante du manifeste (indices de discrétion :
+    « endormis », « infiltration », « surprise possible »…). Vide hors
+    donjon ou salle inconnue."""
+    try:
+        dj = etat.get("donjon") or {}
+        cur = list(dj.get("courant") or [])
+        if len(cur) < 2:
+            return ""
+        cx, cy = int(cur[0]), int(cur[1])
+        salle = next(
+            (s for s in (dj.get("grille") or [])
+             if isinstance(s, dict)
+             and (s.get("x"), s.get("y")) == (cx, cy)),
+            None,
+        )
+        return str((salle or {}).get("note") or "")
+    except Exception:                                        # noqa: BLE001
+        return ""
+
+
+def _salle_sans_rencontre_prevue(etat: dict) -> Optional[dict]:
+    """Salle de manifeste SANS rencontre prévue : clé `ennemis` absente ou
+    vide ET sans `ennemi_note` (les rencontres errantes restent autorisées
+    quand le manifeste les prévoit explicitement — zone 5 de Dues For The
+    Dead : « rencontres errantes possibles »). Dans une telle salle,
+    engager une créature est une INVENTION (run 09f9f8a6 : squelette
+    improvisé au pied des escaliers, salle canoniquement vide). None hors
+    donjon ou salle inconnue du manifeste."""
+    try:
+        dj = etat.get("donjon") or {}
+        if not dj.get("id"):
+            return None
+        cur = list(dj.get("courant") or [])
+        if len(cur) < 2:
+            return None
+        cx, cy = int(cur[0]), int(cur[1])
+    except (TypeError, ValueError):
+        return None
+    salle = next(
+        (s for s in (dj.get("grille") or [])
+         if isinstance(s, dict)
+         and (s.get("x"), s.get("y")) == (cx, cy)),
+        None,
+    )
+    if not salle:
+        return None
+    brut = salle.get("ennemis")
+    if isinstance(brut, str):
+        brut = [x for x in re.split(r"[;,]", brut) if x.strip()]
+    if isinstance(brut, list) and any(str(e).strip() for e in brut):
+        return None                      # des ennemis canoniques existent
+    if str(salle.get("ennemi_note") or "").strip():
+        return None                      # rencontres errantes prévues
+    return salle
+
+
 def _ennemis_canoniques_salle(etat: dict) -> list[str]:
     """Liste `ennemis` canonique de la salle courante du donjon (B25/M6).
 
@@ -574,6 +631,50 @@ async def engager_combat(
     state = _party(ctx)
     etat = state.load()
 
+    # ⚖️ AUTO-ÉQUILIBRAGE (runs gobs/sea 090ec0af : TPC systémiques à 3 PJ —
+    # les rencontres canoniques sont calibrées pour le groupe RECOMMANDÉ du
+    # module (`joueurs` du catalogue → `bible.joueurs_recommandes`) et le
+    # gouverneur manuel dépendait du MJ, qui ne le demandait jamais).
+    # Un groupe PLUS PETIT que le minimum recommandé reçoit un ajustement
+    # proportionnel automatique ; un ajustement FOURNI par le modèle reste
+    # prioritaire. DFTD « 3-4 » avec 3 PJ → aucun ajustement (dans la
+    # fourchette) ; gobs « 4 » avec 3 PJ → allègement.
+    _note_autobalance = ""
+    try:
+        if not aj["actif"]:
+            _bible_j = str((((etat.get("quete") or {}).get("bible") or {})
+                            .get("joueurs_recommandes")) or "")
+            _bornes = [int(x) for x in re.findall(r"\d+", _bible_j)]
+            if _bornes:
+                _min_rec = min(_bornes)
+                _nb_pj = max(1, len([
+                    p for p in (etat.get("pj") or [])
+                    if int(p.get("pv", 0) or 0) > -10
+                    and "mort" not in [str(c).lower() for c in
+                                       (p.get("conditions") or [])]
+                ]))
+                if _nb_pj < _min_rec:
+                    _ratio = _nb_pj / _min_rec
+                    if _ratio < 0.6:
+                        aj.update({"facteur_pv": 0.5, "attaque": -2,
+                                   "degats": -2, "ca": -1, "actif": True})
+                    else:
+                        aj.update({"facteur_pv": 0.75, "attaque": -1,
+                                   "degats": -1, "actif": True})
+                    _note_autobalance = (
+                        "⚖️ **Ajustement automatique** : groupe de "
+                        f"{_nb_pj} PJ pour un module prévu pour "
+                        f"{_bible_j.strip()} — rencontres allégées ("
+                        f"PV ×{aj['facteur_pv']:g}"
+                        + (f", attaque {aj['attaque']:+d}"
+                           if aj["attaque"] else "")
+                        + (f", dégâts {aj['degats']:+d}"
+                           if aj["degats"] else "")
+                        + (f", CA {aj['ca']:+d}" if aj["ca"] else "")
+                        + ").")
+    except Exception:                                        # noqa: BLE001
+        _note_autobalance = ""
+
     # 🔒 Chantier E2E (défaite zombie) : PAS de NOUVEL engagement pendant un
     # combat en cours — un 2ᵉ `engager_combat` réinitialisait l'initiative
     # (round 1) et figeait la partie dans un combat fantôme. Cas autorisés :
@@ -620,9 +721,22 @@ async def engager_combat(
     _notes_variante: list[str] = []
     try:
         from .monstres import _maj_variante_specifique  # noqa: E501 pylint: disable=import-outside-toplevel
+        # 🛡️ P2 (run shadows 090ec0af) : les montees de variante sont
+        # bornees au canon de la salle ("Loup terrible" canonique n'a pas
+        # a devenir "Loup-garou (humain)" 32 PV). Hors canon de salle ->
+        # None (comportement historique pour les rencontres libres).
+        _canon_var = _ennemis_canoniques_salle(etat)
+        _cles_canon_var = None
+        if _canon_var:
+            from .fiches import _espece_cle as _ec_var  # noqa: PLC0415
+            _cles_canon_var = {
+                _ec_var(str(e or "").split("×")[0].split("x")[0].strip())
+                for e in _canon_var if str(e or "").split("×")[0].strip()
+            }
         _notes_variante = _maj_variante_specifique(
             monstres_ok, _load_bestiaire(ctx),
             str(etat.get("derniere_narration") or ""),
+            cles_canon=_cles_canon_var,
         )
     except Exception:                                        # noqa: BLE001
         _notes_variante = []
@@ -760,19 +874,13 @@ async def engager_combat(
     # courante EXISTE dans le manifeste mais ne liste AUCUN ennemi,
     # AUCUN engagement n'est legitime ici.
     if not _salle_canon:
-        _dj_vide = etat.get("donjon") or {}
-        _cour_vide = list(_dj_vide.get("courant") or [0, 0])
-        _salle_vide = next(
-            (s for s in (_dj_vide.get("grille") or [])
-             if isinstance(s, dict)
-             and (s.get("x"), s.get("y")) == (_cour_vide[0], _cour_vide[1])),
-            None,
-        )
-        if (_salle_vide is not None
-                and _dj_vide.get("id")
-                and "ennemis" in _salle_vide
-                and not [e for e in (_salle_vide.get("ennemis") or [])
-                         if str(e).strip()]):
+        # 🔧 Run 09f9f8a6 : la garde couvre AUSSI les salles de manifeste
+        # SANS clé `ennemis` (ni `ennemi_note`) — l'absence de la clé ne
+        # doit plus être un trou (« squelette improvisé au pied des
+        # escaliers », salle canoniquement vide).
+        if _salle_sans_rencontre_prevue(etat):
+            _dj_vide = etat.get("donjon") or {}
+            _cour_vide = list(_dj_vide.get("courant") or [0, 0])
             return ToolResult(text=(
                 "⛔ **Rencontre hors module refusée** : la salle "
                 f"({_cour_vide[0]},{_cour_vide[1]}) de "
@@ -1222,6 +1330,8 @@ async def engager_combat(
             "combat :",
         ]
         lignes += [f"- {la}" for la in lignes_ajust]
+    if _note_autobalance:
+        lignes += ["", _note_autobalance]
 
     etat["phase"] = "combat"
     etat["tour"] = 1
@@ -1675,6 +1785,8 @@ async def combat_ajouter_combattant(
                 _esp_r, _q_r = _split_espece_quantite(_e)
                 if _esp_r:
                     _attendues_r.add(_ec_renfort(_esp_r))
+                    if _ec_renfort(_esp_r) == _ec_renfort(label_base):
+                        _qte_canon_r = max(1, int(_q_r or 1))
             if _attendues_r and _ec_renfort(label_base) not in _attendues_r:
                 return ToolResult(text=(
                     "⛔ **Renfort hors module refusé** : la salle courante "
@@ -1683,6 +1795,26 @@ async def combat_ajouter_combattant(
                     "n'y figure pas. Narre l'acharnement des défenseurs "
                     "existants, leur repli ou la fin du combat au lieu "
                     "d'inventer des renforts."
+                ))
+            # 🔧 Run gobs 74de6b94 : même ESPÈCE, trop d'EXEMPLAIRES — le
+            # canon « Voleur » (×1) est devenu une horde de voleurs via des
+            # renforts successifs et le groupe niveau 1 a péri. Le plafond
+            # de quantité du module s'applique aussi aux renforts.
+            import re as _re_q
+            _base_renfort = _re_q.sub(r"\s*\(\d+\)\s*$", "",
+                                      label_base).strip()
+            _deja_r = sum(
+                1 for _mo in (etat.get("monstres_combat") or [])
+                if _ec_renfort(_re_q.sub(r"\s*\(\d+\)\s*$", str(
+                    _mo.get("nom") or "")).strip())
+                == _ec_renfort(_base_renfort))
+            if _deja_r >= _qte_canon_r:
+                return ToolResult(text=(
+                    f"⛔ **Renfort refusé (plafond du module)** : la salle "
+                    f"prévoit {_qte_canon_r} × {label_base} et {_deja_r} "
+                    "sont déjà engagés. Narre l'acharnement de ceux qui "
+                    "restent, leur repli ou la fin du combat — pas de "
+                    "renfort supplémentaire."
                 ))
 
     # Désambiguïsation vs les combattants DÉJÀ sur le plateau (homonymes).

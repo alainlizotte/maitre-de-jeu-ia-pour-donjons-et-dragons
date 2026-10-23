@@ -33,12 +33,22 @@ _ENVOI_TIMEOUT_S = 5.0
 class PartySession:
     partie_id: str
     history: list[Message] = field(default_factory=list)
+    # 🧾 Run 090ec0af : TRANSCRIPTION COMPLÈTE pour l'affichage. `history`
+    # est plafonné à `max_history_events` (50) pour borner le CONTEXTE LLM —
+    # mais le payload `joined` rejouait cette liste tronquée à chaque
+    # remontée du client (F5, consultation de la fiche, reconnexion) :
+    # `setMessages` remplaçait le fil accumulé EN DIRECT et tout ce qui
+    # dépassait 50 événements disparaissait de l'écran (les actions de
+    # combat notamment). `transcript` porte la transcription INTÉGRALE
+    # (persistance + rejeu d'affichage), `history` reste la fenêtre LLM.
+    transcript: list[Message] = field(default_factory=list)
     connections: set[Any] = field(default_factory=set)
     authenticated: set[Any] = field(default_factory=set)
     participants: list[str] = field(default_factory=list)
     turn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     data_dir: Optional[str] = None
     max_history_events: int = 50
+    max_transcript_events: int = 400
     # Chat d'équipe (joueurs ↔ joueurs, sans le MJ).
     team_history: list[dict[str, str]] = field(default_factory=list)
     # Indique que le MJ est en cours de traitement (pensée/génération).
@@ -90,6 +100,12 @@ class PartySession:
     # ------------------------------------------------------------------ #
     #  Historique conversationnel
     # ------------------------------------------------------------------ #
+    def _archive(self, msg: Message) -> None:
+        """Ajoute le message à la transcription d'affichage (bornée)."""
+        self.transcript.append(msg)
+        if len(self.transcript) > self.max_transcript_events:
+            self.transcript = self.transcript[-self.max_transcript_events :]
+
     def remember_player_message(self, player: str, text: str) -> Message:
         """Préfixe du joueur + création du message user (ex. de la doc)."""
         # Supprime un éventuel double préfixe : `**[Alain]** : déjà-préfixé`.
@@ -100,6 +116,7 @@ class PartySession:
             wrapped = stripped
         msg = Message(role="user", content=wrapped)
         self.history.append(msg)
+        self._archive(msg)
         self._truncate_and_persist()
         return msg
 
@@ -113,10 +130,10 @@ class PartySession:
         5b4e2bbe), `mecanique` = blocs serveur (⚙️ initiative, ⚖️ dégâts…)
         destinés à l'AFFICHAGE au rechargement (2052e3ae) — jamais renvoyés
         au modèle."""
-        self.history.append(
-            Message(role="assistant", content=content, tool_calls=tool_calls,
-                    mecanique=mecanique)
-        )
+        msg = Message(role="assistant", content=content, tool_calls=tool_calls,
+                      mecanique=mecanique)
+        self.history.append(msg)
+        self._archive(msg)
         self._truncate_and_persist()
 
     def oublier_dernier_message_joueur(self) -> Optional[Message]:
@@ -126,25 +143,32 @@ class PartySession:
         Un message refusé (mauvais personnage, personnage mourant, tour déjà
         consommé) restait en historique : le MJ le rejouait plusieurs tours
         plus tard comme si le joueur venait de le dire. On l'ôte donc quand
-        l'action est refusée."""
+        l'action est refusée — de l'historique ET de la transcription (même
+        objet partagé, retrait par identité)."""
         for i in range(len(self.history) - 1, -1, -1):
             if self.history[i].role == "user":
-                return self.history.pop(i)
+                msg = self.history.pop(i)
+                try:
+                    self.transcript.remove(msg)
+                except ValueError:
+                    pass
+                return msg
         return None
 
     def remember_tool(self, name: str, tool_call_id: str, content: str) -> None:
-        self.history.append(
-            Message(
-                role="tool",
-                name=name,
-                tool_call_id=tool_call_id,
-                content=content,
-            )
+        msg = Message(
+            role="tool",
+            name=name,
+            tool_call_id=tool_call_id,
+            content=content,
         )
+        self.history.append(msg)
+        self._archive(msg)
         self._truncate_and_persist()
 
     def _truncate_and_persist(self) -> None:
-        """Tronque l'historique et persiste (appelé après chaque append)."""
+        """Tronque l'historique LLM et persiste la transcription (appelé
+        après chaque append)."""
         if len(self.history) > self.max_history_events:
             self.history = self.history[-self.max_history_events :]
         self._persist_history()
@@ -159,19 +183,23 @@ class PartySession:
         return Path(self.data_dir) / f"chat_{self.partie_id}.json"
 
     def _persist_history(self) -> None:
-        """Écrit l'historique en JSON atomiquement (best-effort, non bloquant).
+        """Écrit la TRANSCRIPTION (affichage) en JSON atomiquement
+        (best-effort, non bloquant).
 
         On sérialise une forme simplifiée (role/content + tool_calls réduit à
         leur `signature` stable) — pas la structure complète OpenAI (qui
-        contient des champs non round-trippables). Le rejeu au join s'appuie
-        sur role+content uniquement.
+        contient des champs non round-trippables). Le fichier porte la
+        transcription INTÉGRALE (borne `max_transcript_events`) : la fenêtre
+        `history` (50, contexte LLM) n'est qu'une tranche de celle-ci au
+        chargement — sinon les tours au-delà de 50 disparaissaient de l'écran
+        à chaque rechargement (run 090ec0af).
         """
         path = self._chat_path
         if path is None:
             return
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            data = [self._msg_to_dict(m) for m in self.history]
+            data = [self._msg_to_dict(m) for m in self.transcript]
             fd, tmp = tempfile.mkstemp(
                 dir=str(path.parent), prefix=".chat_", suffix=".tmp"
             )
@@ -184,7 +212,9 @@ class PartySession:
             pass
 
     def hydrate_history(self) -> None:
-        """Charge l'historique persistant au démarrage (au plus max_events)."""
+        """Charge la transcription persistante au démarrage : `transcript`
+        complet (affichage) et `history` = fenêtre LLM (max_history_events).
+        """
         path = self._chat_path
         if path is None or not path.is_file():
             return
@@ -200,7 +230,19 @@ class PartySession:
             except (KeyError, TypeError):
                 continue
         if msgs:
+            self.transcript = msgs[-self.max_transcript_events :]
             self.history = msgs[-self.max_history_events :]
+
+    def payload_historique(self) -> list[dict[str, Any]]:
+        """Payload « history » du `joined` : la TRANSCRIPTION complète
+        (affichage) — role/content + blocs `mecanique` éventuels. JAMAIS
+        envoyée au LLM (le contexte reste `history`)."""
+        return [
+            {"role": m.role, "content": m.content,
+             **({"mecanique": m.mecanique} if m.mecanique else {})}
+            for m in self.transcript
+            if m.role in ("user", "assistant") and m.content
+        ]
 
     @staticmethod
     def _msg_to_dict(m: Message) -> dict[str, Any]:

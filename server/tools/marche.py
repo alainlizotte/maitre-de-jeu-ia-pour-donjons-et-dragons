@@ -173,11 +173,11 @@ async def marche_consulter(
     for key in m:
         meta = phb.MARCHANDS.get(key, {})
         lignes.append(f"  🛒 **{key}** — {meta.get('description', '')}")
-    li = sorted(len(x) for x in m) or [0]
-    lignes.append(
-        f"\n💡 {len(m)} marchand(s) ici. Pour l'inventaire détaillé : "
-        "`marche_stock(ville=…)` ; pour acheter/vendre un objet, précise son "
-        "nom exact (`equipement_catalogue`).")
+    # 🛡️ 090ec0af : PAS de consigne d'outils ici (💡 « Pour l'inventaire
+    # détaillé : marche_stock(ville=…)… ») — le modèle la recopiait
+    # telle quelle dans sa narration et le bandeau fuyait à l'affichage
+    # du Marché. Le compte est déjà montré ci-dessus ; les consignes
+    # d'outils vivent dans le prompt, pas dans les résultats.
     return ToolResult(text="\n".join(lignes))
 
 

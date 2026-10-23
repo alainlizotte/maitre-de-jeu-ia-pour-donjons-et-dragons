@@ -238,6 +238,24 @@ export const api = {
   }) => post<CombatResult>(`${API}/parties/${partieId}/combat/boucle`, payload),
   combatRetraite: (partieId: string, payload?: { joueur?: string }) =>
     post<CombatResult>(`${API}/parties/${partieId}/combat/retraite`, payload),
+  // 💀 Game over — boutons déterministes (résurrection négociée serveur /
+  // réinitialisation de la partie), sans négociation en prose.
+  gameOverResurrection: (partieId: string, joueur?: string) =>
+    post<{ ok: boolean; note: string; phase?: string; game_over?: boolean }>(
+      `${API}/parties/${partieId}/game-over/resurrection`,
+      { joueur: joueur ?? "" },
+    ),
+  // 📖 Campagnes en chapitres : charger le chapitre suivant (bouton).
+  chapitreSuivant: (partieId: string, joueur?: string) =>
+    post<{ ok: boolean; chapitre?: number; chapitre_suivant?: string }>(
+      `${API}/parties/${partieId}/chapitre/suivant`,
+      { joueur: joueur ?? "" },
+    ),
+  gameOverNouvellePartie: (partieId: string) =>
+    post<{ ok: boolean }>(
+      `${API}/parties/${partieId}/game-over/nouvelle-partie`,
+      {},
+    ),
   // Invoque un tool determinant de la whitelist serveur (boutons UI).
   outil: (partieId: string, nom: string, args?: Record<string, unknown>, joueur?: string) =>
     post<CombatResult>(`${API}/parties/${partieId}/outil`, {

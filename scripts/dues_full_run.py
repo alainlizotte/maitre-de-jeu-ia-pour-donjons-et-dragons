@@ -74,7 +74,7 @@ BASE = "http://localhost:8123"
 PJS = {
     "Brandt": {"joueur": "bruno", "race": "Nain", "classe": "Guerrier",
                "carac": "FOR 16, DEX 12, CON 16, INT 10, SAG 12, CHA 8"},
-    "Aurora": {"joueur": "alys", "race": "Humain", "classe": "Prêtre",
+    "Aurora": {"joueur": "alys", "race": "Humain", "classe": "Clerc",
                "carac": "FOR 10, DEX 12, CON 14, INT 10, SAG 16, CHA 14"},
     "Flick":  {"joueur": "pip", "race": "Halfelin", "classe": "Roublard",
                "carac": "FOR 8, DEX 17, CON 12, INT 14, SAG 10, CHA 12"},
@@ -283,6 +283,11 @@ async def jour_combat(pid: str, socks: dict, bilan: Bilan, titre: str,
     detruits: set = set()
     vu = False
     tourne = {}
+    # 🏃 Retraite tactique (runs gobs/sea/hurl) : 3 rounds consecutifs sans
+    # AUCUN degat inflige aux ennemis = enlisement -> le groupe bat en
+    # retraite (retraite_combat serveur) au lieu de mourir sur place.
+    _pv_ennemis_avant = None
+    _rounds_sans_degats = 0
     for _ in range(max_rounds):
         snap = snapshot(pid)
         if snap["phase"] != "combat":
@@ -293,6 +298,34 @@ async def jour_combat(pid: str, socks: dict, bilan: Bilan, titre: str,
         vu = True
         detruits |= {m for m, st in snap["monstres"].items()
                      if "Détruit" in st["conds"]}
+        # 🏃 Suivi de progression : PV ennemis totaux vs round précédent.
+        _pv_tot = sum(
+            (st["pv"] or 0) for m, st in snap["monstres"].items()
+            if "Détruit" not in st["conds"])
+        if _pv_tot == _pv_ennemis_avant:
+            _rounds_sans_degats += 1
+        else:
+            _rounds_sans_degats = 0
+        _pv_ennemis_avant = _pv_tot
+        if _rounds_sans_degats >= 3:
+            print("  [retraite] aucun dégât infligé depuis 3 rounds — "
+                  "le groupe bat en retraite.")
+            noter_probleme(
+                "enlisement_retraite",
+                f"{titre} : 3 rounds sans dégât sur les ennemis — "
+                "retraite tactique du groupe.")
+            try:
+                from server.tools.base import ToolContext as _TC, invoke_tool
+                from server.tools.registry import discover_tools
+                _tools = discover_tools()
+                _ctx_r = _TC(partie_id=pid, joueur="e2e", data_dir=_c.DATA)
+                _r_ret = await invoke_tool(
+                    _tools["retraite_combat"], _ctx_r, {})
+                print(f"    [retraite] {_r_ret.text[:80]}")
+            except Exception as _e_ret:
+                print(f"    [retraite] échec : {_e_ret}")
+            bilan.event(f"{titre} : RETRAITE (enlisement)")
+            return detruits
         vivants = [m for m, st in snap["monstres"].items()
                    if "Détruit" not in st["conds"]]
         courant = snap["courant"]
@@ -453,8 +486,8 @@ async def phase_setup():
     r = await invoke_tool(tools["preparer_sorts"], ctx, {
         "nom_personnage": "Aurora",
         "preparations_json": json.dumps({
-            "Lumière": 1, "Sacrifice mineur": 1, "Résistance": 1,
-            "Soin léger": 2, "Bénédiction": 1, "Flamme sacrée": 1})})
+            "Lumière": 1, "Résistance": 1, "Soin mineur": 1,
+            "Soins légers": 2, "Bénédiction": 1})})
     bilan.check("[setup] sorts d'Aurora préparés", "✅" in r.text,
                 r.text[:140])
     # 🏹 Flick : carquois plein (le run 0aef5a12 est resté à court de
@@ -710,6 +743,124 @@ STEPS_P2D = [
     {"vers": [0, -5], "label": "repaire de Rorreth (0,-5)"},
 ]
 
+STEPS_RUN3 = [
+    # ── Ouverture (porche) ──────────────────────────────────────────────
+    {"pj": "Brandt", "label": "acceptation de la mission",
+     "texte": "Doomguide, nous acceptons la mission. Dites-nous tout : "
+              "quand les morts ont-ils commencé à rôder, et que savez-vous "
+              "de la profanation ?"},
+    {"pj": "Flick", "label": "descente dans les catacombes",
+     "texte": "Cassyt, guidez-nous. Nous descendons dans les catacombes "
+              "pour voir cela de nos propres yeux.",
+     "nudge": "(MJ : ouvre le donjon du scénario avec "
+              "carte_donjon_entrer.)"},
+    {"pj": "Aurora", "label": "enquête avec Cassyt (0,0)",
+     "texte": "Cassyt, racontez-nous : où les gardes ont-ils vu les "
+              "morts-vivants ? Qui fréquente le cimetière ces derniers "
+              "temps ?"},
+    # ── Galeries hautes (étage 0) ───────────────────────────────────────
+    {"vers": [-1, 0], "label": "fosse aux os (-1,0)"},
+    {"pj": "Flick", "label": "fouille de la fosse",
+     "texte": "Flick examine les ossements frais au bord de la fosse, "
+              "prudent (Détection).",
+     "nudge": "(MJ : jet officiel avec lancer_d20 "
+              "(compétence=Détection).)"},
+    {"vers": [0, 0], "label": "retour à l'entrée"},
+    {"vers": [0, -1], "label": "banquets funèbres (0,-1)"},
+    {"pj": "Flick", "label": "réserve : crochetage (0,-1)",
+     "texte": "Flick crochète la grille de la réserve au coin sud de la "
+              "salle des banquets (Crochetage DD 15).",
+     "nudge": "(MJ : jet officiel avec lancer_d20 "
+              "(compétence=Crochetage, difficulté=15).)"},
+    {"vers": [0, -2], "label": "premières familles (0,-2)"},
+    {"pj": "Aurora", "label": "bénédiction + fouille + nord",
+     "texte": "Aurora bénit les dépouilles profanées d'un signe de "
+              "Kelemvor. Nous fouillons la salle puis prenons le couloir "
+              "au nord.",
+     "nudge": "(MJ : déplace le groupe avec carte_donjon_explorer, "
+              "direction nord.)"},
+    {"vers": [0, -3], "label": "escaliers branlants (0,-3)"},
+    {"etage": "descendre", "pj": "Aurora",
+     "label": "descente vers les Bas Tombeaux",
+     "texte": "Ces escaliers de bois sont vermoulus — un à la fois, "
+              "prudence. Nous descendons vers les Bas Tombeaux.",
+     "nudge": "(MJ : carte_donjon_etage avec direction=\"descendre\".)"},
+    # ── Bas Tombeaux (étage -1) ─────────────────────────────────────────
+    {"vers": [0, -1], "label": "obélisque (0,-1)"},
+    {"pj": "Aurora", "label": "étude de l'obélisque",
+     "texte": "Aurora étudie les runes de l'obélisque — elle tente de "
+              "lire la langue céleste (Connaissances mystiques).",
+     "nudge": "(MJ : jet officiel avec lancer_d20 "
+              "(compétence=Connaissances mystiques).)"},
+    {"vers": [1, -1], "label": "Talking Dead (1,-1)"},
+    {"pj": "Flick", "label": "questionner les défunts",
+     "texte": "Flick s'incline respectueusement devant les défunts et "
+              "demande : « Qui vous a réveillé ? Qui profane vos "
+              "tombes ? »"},
+    {"vers": [0, -1], "label": "retour à l'obélisque"},
+    {"vers": [0, -2], "label": "plafond de squelettes (0,-2)"},
+    {"pj": "Aurora", "label": "après l'embuscade : sud vers Sedrair",
+     "texte": "Reposons les morts en paix, fouillons vite, puis prenons "
+              "le passage du sud.",
+     "nudge": "(MJ : déplace le groupe avec carte_donjon_explorer, "
+              "direction sud.)"},
+    {"vers": [0, -3], "label": "tombeau de Sedrair II (0,-3)"},
+    {"pj": "Brandt", "label": "couronne de Sedrair + poursuite au sud",
+     "texte": "Flick, désamorce ce glyphe avant qu'on touche à la "
+              "couronne. Ensuite nous prenons le passage du sud.",
+     "nudge": "(MJ : déplace le groupe avec carte_donjon_explorer, "
+              "direction sud.)"},
+    {"vers": [0, -4], "label": "poste de la sentinelle (0,-4)"},
+    {"pj": "Flick", "label": "infiltration de la sentinelle",
+     "texte": "Chut — un kobold dort là. Flick se faufile dans l'ombre "
+              "(Furtivité) pour l'abattre sans bruit, avant qu'il ne "
+              "donne l'alarme.",
+     "nudge": "(MJ : jet officiel avec lancer_d20 "
+              "(compétence=Déplacement silencieux).)"},
+    {"vers": [0, -5], "label": "repaire de Rorreth (0,-5)"},
+    {"pj": "Brandt", "label": "confrontation de Rorreth",
+     "texte": "Rorreth Monforoth ! Vos morts retourneront au sommeil. "
+              "Rendez-vous — ou nous vous arrêterons.",
+     "nudge": "(MJ : engage le combat canonique de la salle avec "
+              "engager_combat si le mage résiste.)"},
+    # ── Épilogue ────────────────────────────────────────────────────────
+    {"pj": "Brandt", "label": "fouille du repaire",
+     "texte": "Le repaire est à nous : emparons-nous du journal de "
+              "Rorreth, des ordres signés et de tout indice.",
+     "nudge": "(MJ : les objets de quête passent par "
+              "inventaire_ajouter / inventaire_ramasser.)"},
+    {"pj": "Aurora", "label": "remontée vers la surface",
+     "texte": "Nous en avons fini ici. Remontons rendre compte au "
+              "Doomguide.",
+     "nudge": "(MJ : plusieurs salles à remonter — un déplacement par "
+              "tour avec carte_donjon_explorer.)"},
+    {"vers": [0, -4], "label": "remontée (0,-4)"},
+    {"vers": [0, -3], "label": "remontée (0,-3)"},
+    {"vers": [0, -2], "label": "remontée (0,-2)"},
+    {"vers": [0, -1], "label": "remontée (0,-1)"},
+    {"vers": [0, 0], "label": "pied des escaliers (0,0)"},
+    {"etage": "monter", "pj": "Brandt",
+     "label": "remontée vers les galeries hautes",
+     "texte": "Nous remontons vers la lumière.",
+     "nudge": "(MJ : carte_donjon_etage avec direction=\"monter\".)"},
+    {"vers": [0, -2], "label": "galleries hautes : vers la sortie"},
+    {"vers": [0, -1], "label": "vers la sortie (0,-1)"},
+    {"vers": [0, 0], "label": "entrée des catacombes (0,0)"},
+    {"pj": "Brandt", "label": "sortie du donjon",
+     "texte": "Nous ressortons au grand air, vers le porche du "
+              "cimetière.",
+     "nudge": "(MJ : carte_donjon_sortir.)"},
+    {"pj": "Brandt", "label": "rapport au Doomguide (fin)",
+     "texte": "Doomguide Yovir, Cassyt — le repaire est détruit et le "
+              "cimetière purifié. Voici le journal de Rorreth Monforoth "
+              "et les ordres signés : un Mage Rouge de Thay au service "
+              "du Culte du Dragon levait vos morts pour payer une "
+              "dette. Nos blessés ont besoin de soins.",
+     "nudge": "(MJ : soigne les PJ avec fiche_perso_soigner, accorde "
+              "l'XP d'histoire via fiche_perso_gagner_xp, puis clôture "
+              "l'aventure.)"},
+]
+
 STEPS_P3 = [
     {"pj": "Brandt", "label": "fouille du repaire de Rorreth",
      "texte": "Le mage s'est échappé… Fouillons son repaire : emparons-"
@@ -828,6 +979,7 @@ PHASES = {
     "p2b": lambda: phase_named("p2b", STEPS_P2B),
     "p2c": lambda: phase_named("p2c", STEPS_P2C),
     "p2d": lambda: phase_named("p2d", STEPS_P2D),
+    "run3": lambda: phase_named("run3", STEPS_RUN3),
     "p1b": lambda: phase_named("p1b", STEPS_P1B),
     "p3": lambda: phase_named("p3", STEPS_P3),
     "go": phase_go,

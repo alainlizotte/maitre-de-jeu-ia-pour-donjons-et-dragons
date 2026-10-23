@@ -23,6 +23,7 @@ import json
 import logging
 import re
 import textwrap
+import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
@@ -237,6 +238,13 @@ _log = logging.getLogger("dnd35.orchestrator")
 # serveur) et pouvait durer 25 minutes. Budget GLOBAL par tour, partagé par
 # tous les sites : au-delà, on narre avec ce qu'on a.
 _CORRECTIONS_MAX_PAR_TOUR = 2
+
+# ⏱️ Budget TEMPS des appels LLM d'un tour (run 09f9f8a6 : deux tours
+# figés > 600 s — la boucle d'outils autorise jusqu'à 10 itérations × 240 s
+# de `chat()`, plus les rejeux correctifs). Au-delà, la boucle d'outils
+# sort avec la narration partielle et les tools déjà exécutés : la table
+# n'attend pas un quart d'heure de plus (les tours normaux durent 20-90 s).
+_BUDGET_LLM_TOUR_S = 420
 
 
 def _correction_autorisee(result: "OrchestratedResult") -> bool:
@@ -1602,7 +1610,8 @@ _BUTIN_VERBE_RE = re.compile(
     re.IGNORECASE,
 )
 _BUTIN_OBJET_RE = re.compile(
-    r"\b((?:une?|le|la|les|l')[a-zà-ÿ'’\-]+(?:\s+[a-zà-ÿ'’\-]+){0,3})",
+    r"\b((?:(?:une?|le|la|les|des)\s+|l')[a-zà-ÿ'’\-]+"
+    r"(?:\s+[a-zà-ÿ'’\-]+){0,4})",
     re.IGNORECASE,
 )
 
@@ -1751,9 +1760,14 @@ def _butin_salle_courante(narration: str, etat: dict[str, Any]) -> Optional[str]
         "huit", "neuf", "dix", "onze", "douze", "premier", "premiere",
         "second", "seconde", "dernier", "derniere",
     }
+    # 🔧 Run 090ec0af : normalisation PAR TOKEN des deux côtés — `_norm`
+    # singuliarise la FIN de la chaîne entière (« …des ordres » → « ordre »
+    # côté candidat, « ordres » intact côté trésor) : les ensembles ne
+    # se recoupaient jamais quand le mot pluriel n'était pas en fin de
+    # chaîne (« journal »/« ordres » du repaire jamais mécanisés).
     mots_tresor = {
-        w for w in _norm(tresor).split()
-        if len(w) >= 4 and w not in _MOTS_NOMBRES
+        t for t in (_norm(w) for w in tresor.split())
+        if len(t) >= 4 and t not in _MOTS_NOMBRES
     }
     meilleure: tuple[int, str] | None = None
     for m in _BUTIN_OBJET_RE.finditer(narration):
@@ -1761,13 +1775,32 @@ def _butin_salle_courante(narration: str, etat: dict[str, Any]) -> Optional[str]
         if len(nom_candidat) < 4:
             continue
         mots_cand = {
-            w for w in _norm(nom_candidat).split()
-            if len(w) >= 4 and w not in (
-                "sac", "coffre", "petit", "bois", "boite", "boîte")
-            and w not in _MOTS_NOMBRES
+            t for t in (_norm(w) for w in nom_candidat.split())
+            if len(t) >= 4 and t not in (
+                "sac", "coffre", "petit", "bois", "boite")
+            and t not in _MOTS_NOMBRES
         }
         communs = mots_cand & mots_tresor
-        if len(communs) < 2:
+        # 🔧 Run 090ec0af : mot fort DISTINCTIF = une TÊTE NOMINALE du
+        # trésor canonique (premier token de chaque item « ; »-séparé :
+        # « Journal », « ordres », « bourse », « cercle »…). La règle des
+        # ≥ 2 mots communs rejetait le butin de quête nommé avec un seul
+        # mot fort (le journal / les ordres du repaire de Rorreth n'ont
+        # jamais atteint l'inventaire — climax du module sans trace), et
+        # un simple seuil de longueur laissait passer « culte » (au
+        # milieu de « bourse du culte ») pour n'importe quelle narration.
+        tetes_tresor = {
+            t
+            for item in tresor.split(";")
+            if item.strip().split()
+            for t in [_norm(item.strip().split()[0])]
+            if len(t) >= 4 and t not in _MOTS_NOMBRES
+        }
+        distinctif = (
+            len(communs) == 1
+            and next(iter(communs)) in tetes_tresor
+        )
+        if len(communs) < 2 and not distinctif:
             continue
         score = len(communs)
         if meilleure is None or score > meilleure[0]:
@@ -3873,9 +3906,22 @@ class Orchestrator:
         # (avant le marqueur) est conservé intégralement.
         _SECTIONS_MARKER = "=== RÈGLES DU JEU (sections dynamiques) ==="
         elage_fait = False
+        _t0_boucle = time.monotonic()
 
         for _ in range(self.max_iterations):
             result.iterations += 1
+            # ⏱️ Budget temps du tour : au-delà de _BUDGET_LLM_TOUR_S, on
+            # sort de la boucle d'outils avec ce qui existe (narration
+            # partielle + tools déjà exécutés) — les tours figés ne
+            # monopolisent plus la table (run 09f9f8a6).
+            if (time.monotonic() - _t0_boucle) > _BUDGET_LLM_TOUR_S:
+                _log.warning(
+                    "budget LLM du tour dépassé (%.0f s > %d s après %d "
+                    "itération(s)) — sortie anticipée de la boucle d'outils",
+                    time.monotonic() - _t0_boucle, _BUDGET_LLM_TOUR_S,
+                    result.iterations - 1,
+                )
+                break
             if (False and not elage_fait and result.iterations >= 2 and work
                     and work[0].role == "system"
                     and _SECTIONS_MARKER in work[0].content):

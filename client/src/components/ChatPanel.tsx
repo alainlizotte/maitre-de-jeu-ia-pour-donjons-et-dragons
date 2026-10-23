@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
+import { api } from "../api/rest";
 import { renderMarkdown } from "../utils/markdown";
 import type { ChatMessage } from "../api/types";
 
@@ -67,6 +68,13 @@ export function ChatPanel({ sendSay, jetAttendu, sendRoll }: ChatPanelProps) {
   const wsStatus = useParty((s) => s.wsStatus);
   const player = useParty((s) => s.player);
   const state = useParty((s) => s.state);
+  const partieId = useParty((s) => s.partie_id);
+  const gameover = state?.game_over === true;
+  const [goActionEnCours, setGoActionEnCours] = useState(false);
+  const chapitreSuivant = ((state?.quete as { bible?: { chapitre_suivant?: string } }
+    | null)?.bible?.chapitre_suivant ?? "") as string;
+  const chapitreNum = ((state?.quete as { bible?: { chapitre?: number } }
+    | null)?.bible?.chapitre ?? 0) as number;
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -101,6 +109,75 @@ export function ChatPanel({ sendSay, jetAttendu, sendRoll }: ChatPanelProps) {
 
       {/* 🛡️ Bandeau hors-ligne : le joueur sait pourquoi ses messages ne
           reçoivent pas de réponse (avant : perte silencieuse, écran mort). */}
+      {/* 📖 Campagne en chapitres : le bouton charge le chapitre suivant
+          DANS la même partie (XP/fiches conservés) — le petit modèle
+          n'appelait jamais scenarios_laelith_charger lui-même. */}
+      {!gameover && chapitreSuivant && (
+        <div className="shrink-0 bg-indigo-950/70 border-b border-indigo-800 px-4 py-2 text-xs text-indigo-200 flex items-center justify-between gap-2">
+          <span>
+            📖 Chapitre {chapitreNum || "?"} terminé ? La suite de la
+            campagne est prête.
+          </span>
+          <button
+            disabled={goActionEnCours || !partieId}
+            className="px-3 py-1 rounded bg-indigo-700 hover:bg-indigo-600 text-white text-xs disabled:opacity-50 shrink-0"
+            onClick={async () => {
+              if (!partieId) return;
+              setGoActionEnCours(true);
+              try {
+                await api.chapitreSuivant(partieId, player ?? "");
+              } finally {
+                setGoActionEnCours(false);
+              }
+            }}
+          >
+            📖 Chapitre suivant
+          </button>
+        </div>
+      )}
+
+      {/* 💀 Game over : boutons déterministes (aucun tour MJ ne tourne
+          plus — le garde serveur refuse les tours hors résurrection). */}
+      {gameover && (
+        <div className="shrink-0 bg-stone-900/90 border-b border-stone-700 px-4 py-3 text-sm text-stone-200">
+          <div className="font-serif text-amber-300 mb-2">
+            💀 Tous les héros sont tombés.
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              disabled={goActionEnCours || !partieId}
+              className="px-3 py-1.5 rounded bg-amber-700 hover:bg-amber-600 text-white text-xs disabled:opacity-50"
+              onClick={async () => {
+                if (!partieId) return;
+                setGoActionEnCours(true);
+                try {
+                  await api.gameOverResurrection(partieId, player ?? "");
+                } finally {
+                  setGoActionEnCours(false);
+                }
+              }}
+            >
+              ✨ Résurrection négociée (−1 niveau)
+            </button>
+            <button
+              disabled={goActionEnCours || !partieId}
+              className="px-3 py-1.5 rounded bg-stone-700 hover:bg-stone-600 text-white text-xs disabled:opacity-50"
+              onClick={async () => {
+                if (!partieId) return;
+                setGoActionEnCours(true);
+                try {
+                  await api.gameOverNouvellePartie(partieId);
+                } finally {
+                  setGoActionEnCours(false);
+                }
+              }}
+            >
+              🔄 Nouvelle partie
+            </button>
+          </div>
+        </div>
+      )}
+
       {wsStatus === "reconnecting" && (
         <div className="shrink-0 bg-rose-900/60 border-b border-rose-800 px-4 py-2 text-xs text-rose-200">
           ⚠️ Connexion perdue — reconnexion en cours… Les messages envoyés

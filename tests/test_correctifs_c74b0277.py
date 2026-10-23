@@ -109,6 +109,15 @@ async def test_engager_refuse_pendant_combat_en_cours():
     d = _fresh_dir()
     try:
         await _creer_pj(d)
+        # 🛡️ Anti-flake (même cause que test_engager_autorise_apres_cloture) :
+        # le mannequin doit survivre au round auto-joue du gobelin.
+        await tool(d, "fiche_perso_mettre_a_jour", nom="Bargoum",
+                   champ="pv", valeur="60")
+        await tool(d, "fiche_perso_mettre_a_jour", nom="Bargoum",
+                   champ="pv_max", valeur="60")
+        await tool(d, "etat_partie_patch", chemin="pj.0.pv", valeur="60")
+        await tool(d, "etat_partie_patch", chemin="pj.0.pv_max",
+                   valeur="60")
         r = await tool(d, "engager_combat", monstres="Gobelin")
         assert not r.text.startswith("⛔"), r.text
         # Le gobelin est toujours vivant : re-engager = réécrire l'initiative.

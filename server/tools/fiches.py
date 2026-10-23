@@ -1415,6 +1415,19 @@ async def fiche_perso_mettre_a_jour(
             "(nom, race, classe, joueur, carac_texte), puis mets à jour ses "
             "champs."
         ))
+    # 🛡️ P1-3 (run gobs 74de6b94/86c3736e) : un personnage MORT ne se
+    # modifie PAS — le MJ avait « ressuscité » l'équipe en spammant
+    # fiche_perso_mettre_a_jour/soigner en pleine phase game_over. La
+    # résurrection légitime (5f3e31c9/_ressusciter_pj_oublie) lève « Mort »
+    # EN PREMIER via fiche_perso_condition, puis soigne et ajuste : elle
+    # passe.
+    _conds_maj = [str(c) for c in (fiche.get("conditions") or [])]
+    if "Mort" in _conds_maj:
+        return ToolResult(text=(
+            f"☠️ **{nom}** est MORT — aucune modification de fiche "
+            "possible. La résurrection négociée (acceptation de la table) "
+            "lève d'abord la condition « Mort » via "
+            "`fiche_perso_condition`, puis soigne et ajuste."))
     # 🛡️ F2 (audit eb46aeef) : le MJ écrasait `pv_max` via ce tool
     # (Elara 5→1, Groth 14→10) — corruption de fiche irréversible en jeu.
     # `pv_max` est un champ RÉSERVÉ (progression de niveau, gérée serveur).

@@ -403,6 +403,126 @@ def _confirm_critique(bonus_final: int, ca_cible: int) -> tuple[bool, int]:
 
 
 # --------------------------------------------------------------------------- #
+#  💥 AUTO-DÉGÂTS (correctif structural, run hurl 090ec0af) : sur un TOUCHÉ,
+#  `lancer_attaque` roule et applique LUI-MÊME les dégâts de l'arme. Le
+#  modèle oubliait `lancer_degats` après un hit — les créatures semblaient
+#  invulnérables et trois groupes niveau 1 ont péri (TPC). Les dégâts
+#  AUTONOMES (sorts, poisons, chutes) passent toujours par `lancer_degats`.
+# --------------------------------------------------------------------------- #
+_AUTO_DEGATS_TOUR: dict[tuple[str, str, str], dict[str, object]] = {}
+
+
+def _bonus_degats_attaquant(ctx: ToolContext, nom_attaquant: str,
+                            arme: str) -> int:
+    """Bonus de dégâts officiel de l'ATTAQUANT PJ (mod. FOR, ×1,5 à deux
+    mains, 0 à distance) lu sur sa fiche — 0 si fiche absente ou cas non
+    couvert. Pour un MONSTRE, le bonus du bestiaire est parsé séparément."""
+    try:
+        from .fiches import _load_fiche                # noqa: PLC0415
+        fiche = _load_fiche(ctx, nom_attaquant)
+        if fiche is None:
+            return 0
+        caracs = fiche.get("carac") or {}
+        if isinstance(carac, str):
+            import json as _json
+            try:
+                caracs = _json.loads(carac)
+            except ValueError:
+                caracs = {}
+        a_l = (arme or "").lower()
+        if any(m in a_l for m in ("arc", "arbalète", "arbalet", "fronde",
+                                  "javelot", "dard", "sarbacane")):
+            return 0
+        val = int((caracs or {}).get("FOR", 10) or 10)
+        mod = (val - 10) // 2
+        if any(m in a_l for m in ("deux mains", "2 mains")):
+            return mod * 3 // 2
+        return mod
+    except Exception:                                    # noqa: BLE001
+        return 0
+
+
+def _cible_degats_auto(ctx: ToolContext, nom_cible: str) -> str:
+    """Corrige la cible d'un auto-dégât : inconnue du plateau + UN SEUL
+    ennemi vivant suivi → c'est LUI (la fiction ne peut pas diverger sur un
+    combat à un ennemi — même règle que main._resoudre_cible_degats)."""
+    try:
+        from ..game.state import PartyState              # noqa: PLC0415
+        etat = PartyState(data_dir=ctx.data_dir,
+                          partie_id=ctx.partie_id).load()
+        n = _norm_arme(nom_cible)
+        if not n:
+            return nom_cible
+        for p in (etat.get("pj") or []):
+            if _norm_arme(p.get("nom")) == n:
+                return nom_cible
+        mons = etat.get("monstres_combat") or []
+        for mo in mons:
+            if _norm_arme(mo.get("nom")) == n:
+                return nom_cible
+        vivants = [
+            mo for mo in mons
+            if not mo.get("allie")
+            and int(mo.get("pv", 0) or 0) > 0
+            and "Détruit" not in (mo.get("conditions") or [])
+            and "Detruit" not in (mo.get("conditions") or [])
+        ]
+        if len(vivants) == 1:
+            corrige = str(vivants[0].get("nom") or "")
+            if corrige:
+                return corrige
+    except Exception:                                    # noqa: BLE001
+        pass
+    return nom_cible
+
+
+def _auto_degats_de_arme(ctx: ToolContext, nom_attaquant: str,
+                         arme: str,
+                         crit_confirme: bool) -> Optional[tuple[int, str]]:
+    """Dégâts de l'arme de l'attaquant (roulés serveur) : bestiaire pour un
+    MONSTRE (dés + bonus du champ `degs`), catalogue PHB + FOR pour un PJ.
+    Renvoie (dégâts, détail) ou None si l'arme est indéterminable."""
+    _nb, _faces, _bonus_d = None, None, 0
+    _detail_src = ""
+    _fiche_m = (_arme_fiche_monstre(ctx, nom_attaquant)
+                if str(nom_attaquant or "").strip() else None)
+    if _fiche_m is not None and (not arme or _arme_citee(arme, _fiche_m[0])):
+        _, _nb, _faces = _fiche_m
+        _detail_src = f"bestiaire ({_fiche_m[0]})"
+        try:
+            from .monstres import _find_monstre                # noqa: PLC0415
+            _m_b = _find_monstre(ctx, nom_attaquant) or {}
+            _degs_b = str(_m_b.get("degs") or "")
+            _seg = next(
+                (sg for sg in _degs_b.split(";")
+                 if _norm_arme(_fiche_m[0]) in _norm_arme(sg)),
+                _degs_b.split(";")[0] if _degs_b else "")
+            import re as _re_b
+            _md = _re_b.search(r"([+-]\s*\d+)\s*(?:\.|$)", _seg.strip())
+            if _md:
+                _bonus_d = int(_md.group(1).replace(" ", ""))
+        except Exception:                                # noqa: BLE001
+            _bonus_d = 0
+    else:
+        _cat = _de_arme_catalogue(arme)
+        if _cat is None:
+            return None
+        _nb, _faces, _nom_canon = _cat
+        _detail_src = f"catalogue ({_nom_canon})"
+        _bonus_d = _bonus_degats_attaquant(ctx, nom_attaquant, arme)
+    _mult = 2 if crit_confirme else 1
+    _deg = sum(random.randint(1, _faces)
+               for _ in range(_nb * _mult)) + _bonus_d * _mult
+    _deg = max(1, _deg)
+    detail = (f"{_nb * _mult}d{_faces}"
+              + (f"{_bonus_d * _mult:+d}" if _bonus_d else "")
+              + f" ({_detail_src}"
+              + (", critique ×2" if _mult == 2 else "")
+              + ")")
+    return _deg, detail
+
+
+# --------------------------------------------------------------------------- #
 #  Tools
 # --------------------------------------------------------------------------- #
 @tool
@@ -1193,6 +1313,37 @@ async def lancer_attaque(
                 f"- CA {ca_cible} → "
                 + ("✅ **Touché**." if ok else "❌ **Manqué**.")
             )
+
+    # 💥 AUTO-DÉGÂTS : sur un TOUCHÉ, le serveur ROULE les dégâts de
+    # l'arme (bestiaire/catalogue + FOR) et les MÉMORISE pour ce tour. Le
+    # filet 5bis-c les applique EN FIN DE TOUR seulement si le modèle n'a
+    # pas résolu lui-même (`lancer_degats` purge la mémo) — aucun double.
+    _touche_final = any("✅ **Touché**" in l for l in lignes)
+    if _touche_final:
+        try:
+            _res_ad = _auto_degats_de_arme(
+                ctx, nom_attaquant, arme,
+                crit_confirme=any("CRITIQUE CONFIRMÉ" in l for l in lignes))
+            if _res_ad is not None:
+                _deg_ad, _detail_ad = _res_ad
+                _cible_ad = _cible_degats_auto(ctx, nom_cible)
+                _cle_ad = (str(ctx.partie_id),
+                           str(getattr(ctx, "tour_id", "") or ""),
+                           _norm_arme(_cible_ad))
+                _memo_ad = _AUTO_DEGATS_TOUR.setdefault(
+                    _cle_ad, {"montants": [], "detail": _detail_ad})
+                _memo_ad["montants"].append(_deg_ad)
+                lignes.append(
+                    f"- 💥 Dégâts de l'arme (jet serveur, à appliquer) : "
+                    f"**{_deg_ad}** — {_detail_ad}.")
+            else:
+                lignes.append(
+                    "- ℹ️ Dégâts à résoudre via `lancer_degats` (arme "
+                    "indéterminable).")
+        except Exception as _e_ad:                       # noqa: BLE001
+            lignes.append(
+                "- ℹ️ Dégâts à résoudre via `lancer_degats` ("
+                + str(_e_ad)[:60] + ").")
     return ToolResult(text="\n".join(lignes))
 
 
@@ -1209,6 +1360,16 @@ async def lancer_degats(
     multiplicateur: int = 1,
     non_letal: bool = False,
 ) -> ToolResult:
+    # 💥 Auto-dégâts (090ec0af) : le modèle a résolu lui-même → purge la
+    # mémo serveur pour cette cible (son jet fait foi, pas de double).
+    try:
+        _cle_ad = (str(ctx.partie_id), str(getattr(ctx, "tour_id", "") or ""),
+                   _norm_arme(cible))
+        _AUTO_DEGATS_TOUR.pop(_cle_ad, None)
+    except Exception:                                    # noqa: BLE001
+        pass
+    except Exception:                                    # noqa: BLE001
+        pass
     """
     Effectue le jet de dégâts D&D 3.5 selon la formule NdF + bonus. Renvoie les
     jets bruts, le total, et un résumé lisible.

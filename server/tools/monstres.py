@@ -1665,7 +1665,8 @@ async def monstre_ajouter_bestiaire(
 
 def _maj_variante_specifique(monstres_ok: list[dict[str, Any]],
                              best: dict[str, Any],
-                             texte_contexte: str) -> list[str]:
+                             texte_contexte: str,
+                             cles_canon: Optional[set[str]] = None) -> list[str]:
     """Partie 0e615b81 : monte chaque créature résolue vers sa VARIANTE plus
     spécifique quand la NARRATION la mentionne.
 
@@ -1675,6 +1676,14 @@ def _maj_variante_specifique(monstres_ok: list[dict[str, Any]],
     « Loup ») et que le texte de contexte contient un MOT QUALIFICATIF
     (« garou », « humain ») ou un ALIAS (« lycanthrope »), la variante
     remplace la créature simple. Le gouverneur d'équilibre arbitre ensuite.
+
+    🛡️ Run shadows 090ec0af : « Loup terrible » (canon de l'entrée) a été
+    monté en « Loup-garou (humain) » (32 PV) par la seule mention de
+    « loup » — remplacement HORS MODULE mortel pour un groupe niveau 1.
+    Quand `cles_canon` est fourni (espèces canoniques de la salle
+    courante), une montée n'est tolérée que si la VARIANTE elle-même y
+    figure ; hors salle (monde, rencontres libres), `cles_canon=None`
+    laisse le comportement historique.
 
     Renvoie les notes des montées appliquées (pour le texte du tool)."""
     if not monstres_ok or not (texte_contexte or "").strip():
@@ -1711,6 +1720,13 @@ def _maj_variante_specifique(monstres_ok: list[dict[str, Any]],
                 meilleure = (score, cle2, m2)
         if meilleure is not None:
             _, cle2, m2 = meilleure
+            # 🛡️ Run shadows : la VARIANTE doit être dans le canon de la
+            # salle — sinon c'est un remplacement hors module (l'upgrade
+            # « Loup terrible » → Loup-garou 32 PV a tué un groupe niv 1).
+            if cles_canon is not None:
+                from .fiches import _espece_cle as _ec_var  # noqa: PLC0415
+                if _ec_var(str(m2.get("nom") or cle2)) not in cles_canon:
+                    continue
             monstres_ok[i] = dict(m2)
             notes.append(
                 "⚡ Variante du scénario appliquée : « "

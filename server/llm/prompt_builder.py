@@ -1573,6 +1573,44 @@ class PromptBuilder:
                     "une fois par tour, et seulement si le joueur renonce "
                     "explicitement à agir — ne le spamme jamais."
                 )
+            # ⚜️ Réprouver (option B, run 09f9f8a6) : morts-vivants engagés +
+            # clerc/paladin 3 dans le groupe → rappel du tool DÉTERMINISTE
+            # (la répulsion était roulée en prose avec le Charisme du
+            # mauvais personnage — partie 09f9f8a6).
+            try:
+                _mv_noms = [
+                    str(m.get("nom") or "")
+                    for m in (etat.get("monstres_combat") or [])
+                    if not m.get("allie")
+                    and "Détruit" not in (m.get("conditions") or [])
+                    and int(m.get("pv", 0) or 0) > 0
+                ]
+                _mv_kws = ("squelette", "zombie", "goule", "mort-vivant",
+                           "spectre", "vampi", "momie", "liche", "wight",
+                           "wraith", "osseux", "zomb")
+                _mv_pres = [n for n in _mv_noms if any(
+                    k in n.lower() for k in _mv_kws)]
+                _clerc_rep = ""
+                for _p_rep in (etat.get("pj") or []):
+                    _cl_rep = str(_p_rep.get("classe") or "").lower()
+                    if _cl_rep == "clerc" or (
+                        _cl_rep == "paladin"
+                        and int(_p_rep.get("niveau", 1) or 1) >= 3
+                    ):
+                        _clerc_rep = str(_p_rep.get("nom") or "")
+                        break
+                if _mv_pres and _clerc_rep:
+                    lignes.append(
+                        "⚜️ MORTS-VIVANTS ENGAGÉS ("
+                        + ", ".join(_mv_pres) + ") : un Clerc du groupe ("
+                        + _clerc_rep + ") peut les réprouver — appelle "
+                        "reprouver_morts_vivants(nom_personnage=\""
+                        + _clerc_rep + "\") : le serveur jette la "
+                        "répulsion (1d20+CHA vs DD 10+DV du plus fort) et "
+                        "applique la table 3.5. NE ROULE JAMAIS ce jet en "
+                        "prose, et JAMAIS avec une autre caractéristique.")
+            except Exception:
+                pass
             # ⚔️ Ennemis engagés : SANS ce bloc, le MJ ne connaissait pas les
             # combattants réels (PV/conditions) et en INVENTAIT (« squelette
             # géant » inexistant, partie fa4e7366) ou attaquait des cadavres —

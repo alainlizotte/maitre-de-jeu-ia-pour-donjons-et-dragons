@@ -440,9 +440,9 @@ async def test_necromancien_rouge_engageable():
         necro = next(m for m in etat["monstres_combat"]
                      if m["nom"] == "Nécromancien rouge")
         # 🛡️ (run shadows #4) : FP 3 vs 3 PJ niveau 1 → allégement de
-        # difficulté TEMPORAIRE (PV ×0.75, attaque -2, dégâts -1) — les
-        # stats canoniques du bestiaire restent intactes.
-        assert necro["pv"] < 17 and necro["ca"] == 13, necro
+        # difficulté TEMPORAIRE (PV ×0.5, attaque -2, dégâts -2, CA -1) —
+        # les stats canoniques du bestiaire restent intactes.
+        assert necro["pv"] < 17 and necro["ca"] <= 13, necro
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

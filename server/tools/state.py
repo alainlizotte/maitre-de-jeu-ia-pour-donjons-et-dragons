@@ -690,10 +690,12 @@ async def engager_combat(
                     _ratio = _nb_pj / _min_rec
                     if _ratio < 0.6:
                         aj.update({"facteur_pv": 0.5, "attaque": -2,
-                                   "degats": -2, "ca": -1, "actif": True})
+                                   "degats": -2, "ca": -1, "actif": True,
+                                   "auto": True})
                     else:
                         aj.update({"facteur_pv": 0.75, "attaque": -1,
-                                   "degats": -1, "actif": True})
+                                   "degats": -1, "actif": True,
+                                   "auto": True})
                     _note_autobalance = (
                         "⚖️ **Ajustement automatique** : groupe de "
                         f"{_nb_pj} PJ pour un module prévu pour "
@@ -735,11 +737,13 @@ async def engager_combat(
                 _seuil_d = 3 if _nb_pj_d >= 5 else 2
                 if _fp_max_d >= _apl_d + _seuil_d:
                     if int(_fp_max_d) - _apl_d >= 3:
-                        aj.update({"facteur_pv": 0.6, "attaque": -3,
-                                   "degats": -2, "ca": -1, "actif": True})
+                        aj.update({"facteur_pv": 0.4, "attaque": -3,
+                                   "degats": -3, "ca": -1, "actif": True,
+                                   "auto": True})
                     else:
-                        aj.update({"facteur_pv": 0.75, "attaque": -2,
-                                   "degats": -1, "actif": True})
+                        aj.update({"facteur_pv": 0.5, "attaque": -2,
+                                   "degats": -2, "ca": -1, "actif": True,
+                                   "auto": True})
                     _note_autobalance = (
                         "⚖️ **Ajustement de difficulté** : rencontre FP "
                         f"{int(_fp_max_d)} face à un groupe de niveau "
@@ -1299,9 +1303,20 @@ async def engager_combat(
             pv_i = max(0, int(str(m.get("pv", "0")).strip().split("(")[0]))
         except (ValueError, TypeError):
             continue
-        # PV ajustés (équilibrage temporaire) : le gouverneur évalue la
-        # rencontre sur la valeur adaptée, pas sur la fiche d'origine.
-        somme_pv += max(1, int(pv_i * aj["facteur_pv"])) if pv_i else 0
+        # PV CANONIQUES (run shadows #4) : le garde « écrasante » empêche
+        # l'INVENTION d'une vague invincible — un problème de FICTION (le
+        # modèle gonfle la rencontre), pas seulement de maths. L'auto-
+        # équilibrage de difficulté (aj) ne doit pas faire passer une
+        # vague que le garde aurait refusée : on évalue le PV du
+        # bestiaire/scénario, avant tout ajustement.
+        # 🛡️ (run shadows #4) : le garde écrasante évalue le PV CANONIQUE
+        # quand l'ajustement vient du SERVEUR (auto — équilibrage joueurs/
+        # difficulté) : l'allègement auto ne doit pas faire passer une
+        # vague que le garde aurait refusée (invention du modèle =
+        # problème de FICTION). Un ajustement EXPLICITE du modèle reste,
+        # lui, accepté (c74b0277 : le gouverneur PV passe avec ajustement).
+        _fact_ecr = 1.0 if aj.get("auto") else aj["facteur_pv"]
+        somme_pv += max(1, int(pv_i * _fact_ecr)) if pv_i else 0
     if somme_pv > plafond_pv:
         from .monstres import _load_bestiaire
         best = _load_bestiaire(ctx)

@@ -195,15 +195,43 @@ async def _fermer(socks: dict) -> None:
             pass
 
 
+class PartieTerminee(Exception):
+    """🛡️ (run shadows #3) : levée dès que la partie passe en game_over —
+    la run s'arrête PROPREMENT (bilan sauvé) au lieu de balancer 8 étapes
+    zombies contre un garde qui répond 212 caractères en 0 s."""
+
+
 async def _tour(socks: dict, joueur: str, texte: str, bilan: Bilan,
                 label: str = "") -> dict | None:
     autres = [w for n, w in socks.items() if n != joueur]
-    rep = await tour_dm(socks[joueur], autres, joueur, texte, bilan)
+    rep = None
+    try:
+        rep = await tour_dm(socks[joueur], autres, joueur, texte, bilan)
+    except Exception as e_ws:
+        # 🛡️ (runs longues) : les tours LLM de 2+ min tuent parfois la
+        # connexion (keepalive 1011) — le crash remontait jusqu'au pilote
+        # et avortait la run entière. Reconnexion + UN retry ; si le retry
+        # échoue, le tour est journalisé « tour_perdu » (comme un timeout).
+        print(f"  [ws] {joueur} : connexion morte pendant le tour "
+              f"({type(e_ws).__name__}) — reconnexion + retry")
+        import tests.e2e_combats_reels as _e2e
+        socks[joueur] = await _e2e.connecter(lire_pid(), joueur)
+        autres = [w for n, w in socks.items() if n != joueur]
+        try:
+            rep = await tour_dm(socks[joueur], autres, joueur, texte, bilan)
+        except Exception as e_ws2:
+            print(f"  [ws] retry échoué : {e_ws2}")
+            rep = None
+    snap = snapshot(lire_pid()) if os.path.isfile(PID_FILE) else {}
+    # 🛡️ (run shadows #3) : game_over → on ne poursuit PAS la run.
+    if snap.get("phase") == "game_over" or snap.get("game_over"):
+        raise PartieTerminee(
+            f"partie en game_over (détection sur « {label} »)")
     outils = [tc.get("name", "?") for tc in (rep or {}).get("trace", [])]
     append_transcript({
         "phase": label, "joueur": joueur, "input": texte,
         "dm_text": (rep or {}).get("text", ""), "outils": outils,
-        "snap": snapshot(lire_pid()) if os.path.isfile(PID_FILE) else {},
+        "snap": snap,
     })
     return rep
 

@@ -466,8 +466,17 @@ async def phase_run(key: str) -> None:
     dfu.jour_combat = _jour_soigne
 
     socks = await dfu._ouvrir(pid)
-    await dfu.jouer_phase(pid, socks, bilan, f"{key}", cfg["steps"])
-    await dfu._fermer(socks)
+    try:
+        await dfu.jouer_phase(pid, socks, bilan, f"{key}", cfg["steps"])
+    except dfu.PartieTerminee as e_go:
+        # 🛡️ (run shadows #3) : TPK/game_over → arrêt PROPRE de la run
+        # (bilan sauvé) au lieu d'enchaîner des étapes zombies contre un
+        # garde qui répond en 0 s.
+        print(f"\n⚑ PARTIE TERMINÉE — {e_go}")
+        print("   (résurrection négociée possible via le bouton 🕯️ / "
+              "l'acceptation chat, ou nouvelle partie)")
+    finally:
+        await dfu._fermer(socks)
     bilan.sauver()
 
 

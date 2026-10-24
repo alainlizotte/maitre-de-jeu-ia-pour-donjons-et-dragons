@@ -8195,7 +8195,10 @@ async def _handle_say(
             _deja = []
         if (_etat_b8.get("phase") == "combat" and personnage
                 and personnage in _deja):
-            await session.broadcast({
+            # 🛡️ (run shadows #3) : refus PRIVÉ au locuteur — broadcasté à
+            # toute la table, le pilote E2E (et tout client) lisait le
+            # refus d'AUTRUI sur son propre socket et abandonnait à tort.
+            await _ws_envoi(initiator, {
                 "type": "sys",
                 "event": "action_refusee",
                 "detail": (
@@ -8692,15 +8695,16 @@ async def _handle_say(
                                 "state_patches": patches_pre,
                                 "tool_calls_trace": [],
                             })
-                        await session.broadcast({
+                        # 🛡️ (run shadows #3) : refus PRIVÉ au locuteur
+                        # (initiator), JAMAIS broadcasté — le refus de bruno
+                        # (« c'est le tour de Flick ») arrivait sur le socket
+                        # de pip, qui abandonnait SON tour : personne
+                        # n'attaquait et le monstre jouait seul (TPK
+                        # shadows étape 7). `terminal` (P10) garde son sens :
+                        # la réponse FINALE à CE socket.
+                        await _ws_envoi(initiator, {
                             "type": "sys",
                             "event": "turn_blocked",
-                            # 🛡️ gruumsh4pj (P10) : `terminal` signale au
-                            # demandeur (et aux clients) que ce refus est la
-                            # réponse FINALE à son envoi — aucun `dm` ne
-                            # suivra. En partie réelle, l'émetteur restait
-                            # en attente indéfiniment (son message n'était
-                            # jamais traité, rien ne clore son tour client).
                             "terminal": True,
                             "detail": (
                                 f"⏳ {player}"

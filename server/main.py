@@ -4531,6 +4531,104 @@ async def combat_boucle(partie_id: str, payload: dict[str, Any] | None = None) -
     }
 
 
+# ⚔️ Correctif #1 (demande joueur — runs hurl/shadows) : combat 100 %
+# déterministe au CHAT. Un message d'ATTAQUE du joueur actif est résolu par
+# le même cœur que le bouton ⚔️ (`combat_action` : jet officiel, dégâts de
+# l'arme, application des PV, rotation/monstres/clôture) — le LLM n'est
+# PAS invoqué. Toute autre action (sort, dialogue, fouille…) suit le
+# chemin LLM habituel.
+
+
+def _norm_nom_cible_chat(s: str) -> str:
+    """Normalise un nom pour l'appariement chat ↔ plateau : minuscules,
+    accents retirés, espaces réduits."""
+    import unicodedata as _un_chat
+    n = _un_chat.normalize("NFKD", str(s or "").lower())
+    return " ".join(
+        "".join(c for c in n if not _un_chat.combining(c)).split())
+
+
+_INTENTION_ATTAQUE_CHAT_RE = _re_mod.compile(
+    r"\b(?:j'\s*|je\s+|on\s+)?(?:attaqu\w*|frapp\w*|tapp\w*|"
+    r"charg\w*|tir\w*|ripost\w*|pourfend\w*)\b", _re_mod.IGNORECASE)
+
+# Faux positifs refusés : préparation d'action (« je me prépare à
+# attaquer »), esquive/parade, subi/encaissé, FUTUR (« je frapperai au
+# prochain tour ») — ce ne sont pas des attaques à résoudre MAINTENANT.
+_INTENTION_ATTAQUE_CHAT_NEG_RE = _re_mod.compile(
+    r"(?:me\s+|se\s+)?pr[ée]par\w*\s+(?:à|a)\s+"
+    r"(?:attaqu|frapp|tapp|tir|charg)"
+    r"|\besquive|\bévit|\bevit|\bsubis?\b|\bencaiss|\bparade\b"
+    r"|\b(?:attaqu|frapp|tapp|tir|charg)\w*rai?\b"
+    r"|au\s+prochain\s+tour|prochain\s+round|plus\s+tar?d",
+    _re_mod.IGNORECASE)
+
+
+def _intention_attaque_chat(
+    texte: str, monstres_combat: list[dict[str, Any]] | None,
+) -> str:
+    """⚔️ Correctif #1 : renvoie le nom canonique de la cible si `texte`
+    exprime une ATTAQUE (verbe d'attaque, hors préparation/esquive/futur)
+    contre un ennemi ENGAGÉ VIVANT — nom cité (le plus long appariement
+    gagne : « Kobold archer » > « Kobold »), ou ennemi unique si le
+    message ne cite personne. '' sinon (sorts, dialogue, fouille → LLM)."""
+    t = str(texte or "")
+    if not t.strip():
+        return ""
+    if not _INTENTION_ATTAQUE_CHAT_RE.search(t):
+        return ""
+    if _INTENTION_ATTAQUE_CHAT_NEG_RE.search(t):
+        return ""
+    tn = _norm_nom_cible_chat(t)
+    vivants = [
+        m for m in (monstres_combat or [])
+        if not m.get("allie")
+        and int(m.get("pv", 0) or 0) > 0
+        and "Détruit" not in (m.get("conditions") or [])
+        and "Detruit" not in (m.get("conditions") or [])
+    ]
+    meilleure = ""
+    _score = 0
+    for m in vivants:
+        nom = str(m.get("nom") or "").strip()
+        nn = _norm_nom_cible_chat(nom)
+        if len(nn) >= 3 and nn in tn and len(nn) > _score:
+            meilleure, _score = nom, len(nn)
+    if meilleure:
+        return meilleure
+    # Pas de nom cité (« j'attaque ! ») : cible unique vivante uniquement
+    # (ambiguïté = on laisse le chemin LLM habituel préciser).
+    if len(vivants) == 1:
+        return str((vivants[0] or {}).get("nom") or "")
+    return ""
+
+
+def _arme_du_texte_chat(
+    texte: str, partie_id: str, attaquant: str, joueur: str,
+) -> str:
+    """⚔️ Correctif #1 : si le message nomme une ARME du catalogue portée
+    par l'attaquant, la renvoie (dés officiels de CETTE arme dans
+    `/combat/action`) — sinon '' (le cœur prend la première arme portée)."""
+    try:
+        from . import catalogue as _cat_arm
+        from .tools.fiches import _load_fiche as _lf_arm
+        _porte = [
+            str(e.get("nom") or "").strip()
+            for e in (_lf_arm(_ctx(partie_id, joueur), attaquant)
+                      or {}).get("equipement") or []
+        ]
+        tn = _norm_nom_cible_chat(texte)
+        for a in _cat_arm.ARMES:
+            nom = str(a.get("nom") or "").strip()
+            if nom in _porte:
+                nn = _norm_nom_cible_chat(nom)
+                if len(nn) >= 4 and nn in tn:
+                    return nom
+    except Exception:                                            # noqa: BLE001
+        pass
+    return ""
+
+
 @app.post("/api/parties/{partie_id}/combat/action")
 async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Résout DÉTERMINISTEMENT l'attaque du personnage courant contre un
@@ -8319,6 +8417,87 @@ async def _handle_say(
     except Exception as e_go2:                                  # noqa: BLE001
         print(f"[dnd35] Garde game_over échouée (ignoré) : {e_go2}")
 
+    # ⚔️ Correctif #1 (demande joueur) : combat DÉTERMINISTE au chat. Si la
+    # phase est combat, que le locuteur est le joueur du PJ ACTIF (capable)
+    # et que son message est une ATTAQUE contre un ennemi engagé, l'action
+    # est résolue par le SERVEUR (même cœur que le bouton ⚔️
+    # `/combat/action` : jet officiel, dégâts, rotation, monstres,
+    # clôture — diffusion aux clients comprise) SANS appeler le LLM.
+    # Fini les attaques narrées mais jamais roulées (drought de dégâts)
+    # et les actions divergentes du petit modèle en combat (runs
+    # hurl/shadows). Point d'entrée SÛR : aucun verrou n'est tenu ici
+    # (le turn_lock est acquis plus bas), et `combat_action` le prend
+    # lui-même ; toute erreur retombe sur le chemin LLM habituel.
+    try:
+        _etat_att = PartyState(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id,
+        ).load()
+        if str(_etat_att.get("phase") or "") == "combat":
+            _actif_att = str(_etat_att.get("courant_tour_pour") or "")
+            _pj_actif_att = next(
+                (p for p in (_etat_att.get("pj") or [])
+                 if str(p.get("nom") or "") == _actif_att), None)
+            _joueur_actif_att = str(
+                (_pj_actif_att or {}).get("joueur") or "")
+            try:
+                _pv_actif_att = int(
+                    (_pj_actif_att or {}).get("pv", 1) or 0)
+            except (TypeError, ValueError):
+                _pv_actif_att = 1
+            _conds_actif_att = {
+                str(c).strip().lower()
+                for c in ((_pj_actif_att or {}).get("conditions") or [])}
+            _ok_locuteur_att = (
+                bool(_actif_att)
+                and _joueur_actif_att.lower() == str(player or "").lower()
+                and (not personnage or str(personnage) == _actif_att)
+                and _pv_actif_att > 0
+                and not (_conds_actif_att
+                         & {"mourant", "inconscient", "mort"}))
+            if _ok_locuteur_att:
+                _cible_att = _intention_attaque_chat(
+                    text, _etat_att.get("monstres_combat") or [])
+                if _cible_att:
+                    _arme_att = _arme_du_texte_chat(
+                        text, partie_id, _actif_att, _joueur_actif_att)
+                    _payload_att: dict[str, Any] = {
+                        "attaquant": _actif_att, "cible": _cible_att,
+                        "joueur": _joueur_actif_att,
+                    }
+                    if _arme_att:
+                        _payload_att["arme"] = _arme_att
+                    print(
+                        "[dnd35] ⚔️ Attaque chat DÉTERMINISTE : "
+                        f"{_actif_att} → {_cible_att}"
+                        + (f" ({_arme_att})" if _arme_att else "")
+                        + " (aucun LLM).")
+                    _res_att = await combat_action(partie_id, _payload_att)
+                    # 💾 Transcript : le bloc mécanique voyage dans
+                    # `mecanique` (affichage après F5 — 2052e3ae), une
+                    # ligne factuelle sobre dans `content` (contexte LLM —
+                    # les dés ne polluent pas la prose du tour suivant).
+                    _ev_joueur = [
+                        _assainir_texte_joueur(e or "")
+                        for e in (_res_att.get("events") or [])]
+                    _ev_joueur = [e for e in _ev_joueur if e.strip()]
+                    _bloc_mec = "\n".join(_ev_joueur)
+                    session.remember_assistant(
+                        f"⚔️ {_actif_att} attaque {_cible_att} — action "
+                        "résolue par le serveur.",
+                        mecanique=(
+                            f"{chr(0x1f3b2)} **Combat - {_actif_att}**\n"
+                            + _bloc_mec) if _bloc_mec else "",
+                    )
+                    await session.broadcast({
+                        "type": "status", "description": "", "done": True,
+                    })
+                    return
+    except Exception as e_att_chat:                             # noqa: BLE001
+        # Dégradation sûre : toute erreur ici retombe sur le chemin LLM
+        # habituel (qui possède ses propres gardes de tour).
+        print(f"[dnd35] Interception attaque chat échouée (chemin LLM) : "
+              f"{e_att_chat}")
+
     # 1bis. ⚔️ Garde de tour : DÉPLACÉE après le pre-run du moteur de combat
     # (voir dans le verrou de session) — la rotation doit d'abord être
     # corrigée par le serveur (skip des incapables, tours de monstres)
@@ -8704,6 +8883,14 @@ async def _handle_say(
             # les schémas de tools consomment déjà ~6 k tokens, un historique
             # non borné saturerait le contexte sur les longues campagnes.
             budget_hist = cfg.game.max_history_chars
+            # ⚔️ Correctif #3 (demande joueur) : en COMBAT, l'historique est
+            # réduit (~12 k caractères) — le MJ n'a besoin que du récap
+            # mécanique (bannière ⚔️, initiative, PV/CA) et des derniers
+            # échanges pour narrer l'action du joueur actif. Un long
+            # historique noie le petit modèle et nourrit les actions
+            # divergentes observées en combat long (run shadows).
+            if str(etat.get("phase") or "") == "combat":
+                budget_hist = min(int(budget_hist or 0), 12_000)
             hist = list(session.history)
             total = 0
             debut = len(hist)

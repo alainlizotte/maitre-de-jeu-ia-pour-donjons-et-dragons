@@ -384,10 +384,20 @@ async def phase_setup(key: str) -> None:
     tools = discover_tools()
     ctx = ToolContext(partie_id=pid, joueur="e2e", data_dir=_c.DATA)
     for i, (nom, pcfg) in enumerate(dfu.PJS.items()):
+        # 🔧 Équipement de départ (post-correctif #1) : sans arme du
+        # catalogue portée, l'attaque déterministe retombait sur
+        # « arme improvisée 1d6 » — Brandt perdait 1d8 → 1d6.
+        _eq = {
+            "Brandt": [{"nom": "Hache d'arme", "qte": 1}],
+            "Aurora": [{"nom": "Masse d'armes lourde", "qte": 1}],
+            "Flick": [{"nom": "Épée courte", "qte": 1},
+                      {"nom": "Arc court", "qte": 1}],
+        }.get(nom, [])
         r = await invoke_tool(tools["fiche_perso_creer_rapide"], ctx, {
             "nom": nom, "race": pcfg["race"], "classe": pcfg["classe"],
             "niveau": 1, "joueur": pcfg["joueur"],
-            "carac_texte": pcfg["carac"]})
+            "carac_texte": pcfg["carac"],
+            **({"equipement": _eq} if _eq else {})})
         bilan.check(f"[setup] fiche {nom}", r.text.startswith("✅"),
                     r.text[:120])
         await invoke_tool(tools["etat_partie_patch"], ctx,

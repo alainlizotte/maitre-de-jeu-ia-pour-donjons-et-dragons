@@ -726,7 +726,16 @@ def _scenario_bible_bloc(
                if bible.get("joueurs_recommandes") else "")
         )
     if bible.get("resume"):
-        lignes.append(f"Résumé du scénario : {bible['resume'][:2000]}")
+        # ⚔️ Correctif #3 : en COMBAT le résumé est resserré (600 car.) —
+        # la trame longue sert en exploration ; en combat, elle noie le
+        # petit modèle (le bloc ⚔️ + la liste d'ennemis suffisent à
+        # l'ancrage module).
+        _phase_bb = (
+            str((etat or {}).get("phase") or "")
+            if etat is not None else "")
+        _lim_resume = 600 if _phase_bb == "combat" else 2000
+        lignes.append(
+            f"Résumé du scénario : {bible['resume'][:_lim_resume]}")
     ennemis = list(bible.get("ennemis") or [])
     if etat is not None:
         # Fusion (sans doublon) avec les ennemis du donjon — annotés de LEUR

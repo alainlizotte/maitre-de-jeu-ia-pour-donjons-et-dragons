@@ -733,6 +733,24 @@ async def engager_combat(
                 _ec_var(str(e or "").split("×")[0].split("x")[0].strip())
                 for e in _canon_var if str(e or "").split("×")[0].strip()
             }
+        elif _canon_var is not None or not (etat.get("donjon") or {}).get("id"):
+            # 🛡️ HORS DONJON (run shadows : Loup terrible engage EN VILLE et
+            # monte en Loup-garou 32 PV) : la borne devient les ennemis
+            # DÉCLARÉS du scénario (`bible.ennemis`) quand le manifeste les
+            # liste — une variante hors liste est un remplacement hors
+            # module. Sans liste déclarée : comportement historique.
+            _ennemis_bible = [
+                str(x).strip() for x in
+                (((etat.get("quete") or {}).get("bible") or {})
+                 .get("ennemis") or [])
+                if str(x).strip()
+            ]
+            if _ennemis_bible:
+                from .fiches import _espece_cle as _ec_var  # noqa: PLC0415
+                _cles_canon_var = {
+                    _ec_var(re.sub(r"\s*[×x]\s*\d+\s*$", "", e).strip())
+                    for e in _ennemis_bible
+                }
         _notes_variante = _maj_variante_specifique(
             monstres_ok, _load_bestiaire(ctx),
             str(etat.get("derniere_narration") or ""),

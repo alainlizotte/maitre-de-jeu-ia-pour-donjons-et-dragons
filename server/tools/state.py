@@ -737,12 +737,12 @@ async def engager_combat(
                 _seuil_d = 3 if _nb_pj_d >= 5 else 2
                 if _fp_max_d >= _apl_d + _seuil_d:
                     if int(_fp_max_d) - _apl_d >= 3:
-                        aj.update({"facteur_pv": 0.4, "attaque": -3,
-                                   "degats": -3, "ca": -1, "actif": True,
+                        aj.update({"facteur_pv": 0.3, "attaque": -4,
+                                   "degats": -4, "ca": -2, "actif": True,
                                    "auto": True})
                     else:
-                        aj.update({"facteur_pv": 0.5, "attaque": -2,
-                                   "degats": -2, "ca": -1, "actif": True,
+                        aj.update({"facteur_pv": 0.4, "attaque": -3,
+                                   "degats": -3, "ca": -1, "actif": True,
                                    "auto": True})
                     _note_autobalance = (
                         "⚖️ **Ajustement de difficulté** : rencontre FP "

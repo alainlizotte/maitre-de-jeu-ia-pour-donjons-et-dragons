@@ -69,7 +69,7 @@ def test_rencontre_mortelle_allegee():
     mcb = etat.get("monstres_combat") or []
     assert mcb, "le combat doit s'engager"
     assert int(mcb[0].get("pv", 0)) < 45, mcb[0]
-    assert int(mcb[0].get("pv", 0)) >= 20, mcb[0]  # allégé, pas anéanti
+    assert int(mcb[0].get("pv", 0)) >= 15, mcb[0]  # allégé, pas anéanti
 
 
 def test_table_niveau_suffisant_pas_d_ajustement():

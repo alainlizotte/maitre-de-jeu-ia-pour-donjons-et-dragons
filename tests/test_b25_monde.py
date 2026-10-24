@@ -101,7 +101,7 @@ def test_monde_accepte_espece_du_manifeste():
     mcb = [(str(m.get("nom")), int(m.get("pv", 0)))
            for m in (etat.get("monstres_combat") or [])]
     assert len(mcb) == 1 and mcb[0][0] == "Loup terrible", mcb
-    assert 20 <= mcb[0][1] < 45, mcb  # allégé (×0.75), pas anéanti
+    assert 15 <= mcb[0][1] < 45, mcb  # allégé (×0.4), pas anéanti
 
 
 def test_monde_bible_complete_le_manifeste():

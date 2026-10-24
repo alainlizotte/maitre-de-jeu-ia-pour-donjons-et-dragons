@@ -115,7 +115,10 @@ def test_engager_combat_autorise_gabarit_referencé_par_scénario():
 
 
 def test_engager_combat_accepte_une_creature_reelle():
-    ctx = _ctx(quete_ennemis=["Nécromancien rouge"])
+    """Une créature RÉELLE du bestiaire passe le garde placeholder — quand
+    le scénario ne déclare aucun ennemi (monde libre ; avec ennemis
+    déclarés, la borne B25 monde s'applique : tests/test_b25_monde.py)."""
+    ctx = _ctx()
     r = asyncio.run(engager_combat(ctx, monstres="Zombie"))
     assert "PLACEHOLDER" not in r.text
     assert not r.text.startswith("⛔")

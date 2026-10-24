@@ -1189,6 +1189,61 @@ async def fiche_perso_creer_rapide(
     alignement = _pick("alignement", alignement, etat_pj.get("alignement", ""))
     equip = equipement_texte or etat_pj.get("equipement", "")
 
+    # 🔧 (suivi correctif #1) : `equipement_texte` était calculé puis
+    # JAMAIS utilisé — la fiche naissait avec `equipement: []` en dur,
+    # alors que la docstring du tool (lue par le LLM) documente le
+    # paramètre et que l'attaque déterministe (#1) lit CE champ pour
+    # choisir l'arme et ses dés officiels. On parse la liste libre :
+    # chaque item est apparié au catalogue (armes puis armures, sans
+    # accents/casse) ; un item non reconnu reste en entrée générique.
+    def _norm_cat(s: str) -> str:
+        import unicodedata as _u
+        n = _u.normalize("NFKD", str(s or "").lower())
+        return " ".join("".join(
+            c for c in n if not _u.combining(c)).split())
+
+    equip_entries: list[dict[str, Any]] = []
+    if isinstance(equip, list):
+        # Re-création depuis l'état : entrées structurées déjà prêtes.
+        for _e in equip:
+            _n = str((_e or {}).get("nom") if isinstance(_e, dict) else _e)
+            if _n.strip():
+                _q = int((_e or {}).get("qte", 1) or 1) if isinstance(
+                    _e, dict) else 1
+                equip_entries.append({"nom": _n.strip(), "qte": _q})
+    else:
+        try:
+            from .. import catalogue as _cat_eq
+            _cat_noms = [
+                str(a.get("nom") or "")
+                for a in (list(_cat_eq.ARMES) + list(_cat_eq.ARMURES)
+                          + list(_cat_eq.EQUIPEMENT))
+                if a.get("nom")
+            ]
+        except Exception:                                    # noqa: BLE001
+            _cat_noms = []
+        _cat_norm = [_norm_cat(n) for n in _cat_noms]
+        for _it in str(equip or "").split(","):
+            _lab = _it.strip()
+            if not _lab:
+                continue
+            _nl = _norm_cat(_lab)
+            _canon = ""
+            if _nl and _nl in _cat_norm:
+                _canon = _cat_noms[_cat_norm.index(_nl)]
+            elif len(_nl) >= 3:
+                # Variante (singulier/pluriel, qualificatif omis) :
+                # canoniser SEULEMENT si UN SEUL item du catalogue contient
+                # le texte (« cotte de maille » → « Cotte de mailles ») —
+                # une ambiguïté (« arc » → court/long, dés différents)
+                # reste en entrée générique.
+                _candidats = [n for n, nn in zip(_cat_noms, _cat_norm)
+                              if _nl in nn]
+                if len(_candidats) == 1:
+                    _canon = _candidats[0]
+            equip_entries.append({"nom": _canon or _lab, "qte": 1})
+
+
     # Dons : liste éventuellement fournie en texte (ex. "Dur à cuire, Vigilance").
     dons_rapide: list[Any] = []
     if dons_texte:
@@ -1225,7 +1280,7 @@ async def fiche_perso_creer_rapide(
         "bab": int(bab),
         "competences": {},
         "dons": dons_rapide,
-        "equipement": [],
+        "equipement": equip_entries,
         "or": 0,
         "xp": 0,
         "niveaux_negatifs": 0,

@@ -517,6 +517,39 @@ def _ennemis_canoniques_salle(etat: dict) -> list[str]:
     return sortie
 
 
+def _ennemis_manifeste(etat: dict) -> list[str]:
+    """🛡️ (run shadows #2) Ennemis canoniques de TOUTES les salles du
+    manifeste (avec quantités, sans doublon d'espèce) — source PLUS
+    fidèle que `bible.ennemis`, qui dérive d'un extrait PDF plafonné
+    (la bible de Shadows ignore « Loup terrible » que le manifeste
+    liste en (0,0)). Sert de canon d'ESPÈCE aux engagements HORS
+    DONJON (avant `carte_donjon_entrer`)."""
+    vus: set[str] = set()
+    sortie: list[str] = []
+    for s in ((etat.get("donjon") or {}).get("grille") or []):
+        if not isinstance(s, dict):
+            continue
+        for e in (s.get("ennemis") or []):
+            brut = str(e or "").strip()
+            if not brut:
+                continue
+            m_q = re.match(r"^(.*?)(\s*[×xX*]\s*\d+\s*)$", brut)
+            nom = (m_q.group(1) if m_q else brut).strip()
+            # 🔧 Convention manifeste : les gabarits s'écrivent avec des
+            # underscores (« Mort-vivant_de_taille_M ×1 ») — l'engagement
+            # vient avec des espaces : on unifie pour la clé d'espèce.
+            nom = nom.replace("_", " ").strip()
+            if not nom:
+                continue
+            cle = nom.lower()
+            if cle in vus:
+                continue
+            vus.add(cle)
+            # Quantité conservée (« Loup terrible ×1 ») pour le canon.
+            sortie.append(nom + (m_q.group(2) if m_q else ""))
+    return sortie
+
+
 # 🛡️ B25 : le décorateur manquait — l'outil n'était JAMAIS dans le registre,
 # donc ni exposé au modèle ni appelable par le rattrapage de combat prose
 # (« registre engager_combat absent »).
@@ -734,17 +767,23 @@ async def engager_combat(
                 for e in _canon_var if str(e or "").split("×")[0].strip()
             }
         elif _canon_var is not None or not (etat.get("donjon") or {}).get("id"):
-            # 🛡️ HORS DONJON (run shadows : Loup terrible engage EN VILLE et
-            # monte en Loup-garou 32 PV) : la borne devient les ennemis
-            # DÉCLARÉS du scénario (`bible.ennemis`) quand le manifeste les
-            # liste — une variante hors liste est un remplacement hors
-            # module. Sans liste déclarée : comportement historique.
+            # 🛡️ HORS CANON DE SALLE (run shadows : Loup terrible engage EN
+            # VILLE et monte en Loup-garou 32 PV) : la borne devient le
+            # SCÉNARIO — ennemis déclarés (`bible.ennemis`) ∪ ennemis du
+            # manifeste (plus fidèle : la bible de Shadows ignore le Loup
+            # terrible). Une variante hors liste = remplacement hors module.
+            # Sans aucune liste : comportement historique.
             _ennemis_bible = [
                 str(x).strip() for x in
                 (((etat.get("quete") or {}).get("bible") or {})
                  .get("ennemis") or [])
                 if str(x).strip()
             ]
+            _vus_borne = {e.lower() for e in _ennemis_bible}
+            for _e in _ennemis_manifeste(etat):
+                if _e.lower() not in _vus_borne:
+                    _vus_borne.add(_e.lower())
+                    _ennemis_bible.append(_e)
             if _ennemis_bible:
                 from .fiches import _espece_cle as _ec_var  # noqa: PLC0415
                 _cles_canon_var = {
@@ -884,6 +923,34 @@ async def engager_combat(
     # Si elle est renseignée, on n'engage QUE ces créatures (espèce et
     # quantité) ; une autre espèce est refusée avec la liste officielle.
     _salle_canon = _ennemis_canoniques_salle(etat)
+    # 🛡️ (run shadows #2) : HORS DONJON, le garde B25 était aveugle — le
+    # modèle a ENGAGÉ directement « Loup-garou (humain) » (32 PV, DR
+    # 10/argent) à la place du « Loup terrible » du manifeste, AVANT même
+    # d'entrer dans le donjon : injouable pour un groupe niveau 1 sans
+    # arme en argent (3 retraites « aucun dégât » enchaînées). Canon du
+    # MONDE = ennemis du manifeste (toutes salles) ∪ bible.ennemis.
+    # ⚠️ Borne l'ESPÈCE seulement : M6/P9 (quantité de SALLE, auto-add
+    # des espèces manquantes) n'a AUCUN sens hors donjon — avec le
+    # manifeste complet en canon, un engagement monde aurait invoqué le
+    # bestiaire ENTIER du module (Dracolich compris).
+    _canon_monde = False
+    if not _salle_canon and not list(
+            (etat.get("donjon") or {}).get("courant") or []):
+        _canon_monde = _ennemis_manifeste(etat)
+        _vus_monde = {
+            re.sub(r"\s*[×xX*]\s*\d+\s*$", "", e).lower()
+            for e in _canon_monde}
+        for _e in [str(x).strip() for x in
+                   ((etat.get("quete") or {}).get("bible") or {})
+                   .get("ennemis") or [] if str(x).strip()]:
+            _e_base = re.sub(r"\s*[×xX*]\s*\d+\s*$", "", _e).strip()
+            if _e_base and _e_base.lower() not in _vus_monde:
+                _vus_monde.add(_e_base.lower())
+                _canon_monde.append(_e)
+        if _canon_monde:
+            _salle_canon = _canon_monde  # garde d'ESPÈCE B25 ci-dessous
+            print("[dnd35] B25 monde : engagement borné au scénario ("
+                  + ", ".join(_canon_monde) + ")")
     # 🔧 Fix partie ead406b2 : le garde B25 ne protegeait que les salles
     # AVEC une liste canonique. Une salle canonique SANS ennemis (le canon
     # du manifeste : 'ennemis: None' - une salle-piege, un couloir...)
@@ -959,15 +1026,22 @@ async def engager_combat(
             _legitimes = ", ".join(
                 f"{esp} ×{q}" for esp, q in _attendues.values()
             ) or "aucune"
-            return ToolResult(text=(
-                "⛔ **Rencontre hors module refusée** : la salle contient "
-                "canoniquement [" + _legitimes + "], pas "
-                + ", ".join(_inconnues) + ".\n"
+            _ou_canon = ("le SCÉNARIO (hors donjon)" if _canon_monde
+                         else "la salle")
+            _conseil = (
+                "_Engage UNIQUEMENT les créatures listées ci-dessus. Si la "
+                "fiction réclame autre chose, narre la rencontre SANS "
+                "combat (fuite, échange, ruse), ou entre d'abord dans le "
+                "donjon du module._" if _canon_monde else
                 "_Engage UNIQUEMENT les créatures listées ci-dessus, avec la "
                 "quantité indiquée. Si la fiction réclame autre chose, fais "
                 "d'abord sortir le groupe de la salle (déplacement), ou "
                 "adapte temporairement la créature canonique via "
-                "`ajustement`._"
+                "`ajustement`._")
+            return ToolResult(text=(
+                "⛔ **Rencontre hors module refusée** : " + _ou_canon
+                + " contient canoniquement [" + _legitimes + "], pas "
+                + ", ".join(_inconnues) + ".\n" + _conseil
             ))
 
     # ── GARDE DE DIFFICULTÉ (conformité DMG 3.5) ────────────────────────
@@ -1039,7 +1113,7 @@ async def engager_combat(
     # créatures, le combat n'en comptait qu'une, et l'équilibrage de la
     # rencontre était faux dans un sens ou l'autre. Les noms demandés sont
     # développés au compte canonique de la salle courante.
-    if _salle_canon:
+    if _salle_canon and not _canon_monde:
         from .fiches import _espece_cle as _ec_m6
         _quantites = {}
         for _e in _salle_canon:

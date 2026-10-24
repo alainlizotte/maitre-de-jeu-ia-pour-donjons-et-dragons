@@ -705,6 +705,54 @@ async def engager_combat(
                            if aj["degats"] else "")
                         + (f", CA {aj['ca']:+d}" if aj["ca"] else "")
                         + ").")
+        if not aj["actif"]:
+            # 🛡️ (run shadows #4) : ÉQUILIBRAGE DE DIFFICULTÉ. Le ratio de
+            # joueurs ne détecte pas une rencontre MORTELLE pour la table
+            # réelle : le Loup terrible du manifeste (Loup affreux, FP 3,
+            # Mordre +8, 1d8+6 + renversement, 45 PV) face à 3 PJ niveau 1
+            # — DANS la fourchette « 3-4 » du module, donc sans
+            # ajustement joueur — a tué les trois personnages en ~4
+            # rounds, attaques déterministes comprises. DMG 3.5 : une
+            # rencontre +2 au-dessus de l'APL est « très difficile », +3
+            # mortelle. Un petit groupe (≤4 PJ) est allégé dès +2 ; un
+            # gros groupe (5+) encaisse mieux (seuil +3). Ajustement
+            # TEMPORAIRE (bestiaire/module intacts), annoncé à la table.
+            _niveaux_d = []
+            for _p in (etat.get("pj") or []):
+                try:
+                    _niveaux_d.append(int(_p.get("niveau", 1) or 1))
+                except (TypeError, ValueError):
+                    _niveaux_d.append(1)
+            if _niveaux_d:
+                _apl_d = max(1, round(
+                    sum(_niveaux_d) / len(_niveaux_d)))
+                _fp_max_d = 0.0
+                for _m in monstres_ok:
+                    _cr_d = _cr_numerique((_m or {}).get("fp"))
+                    if _cr_d is not None:
+                        _fp_max_d = max(_fp_max_d, _cr_d)
+                _nb_pj_d = max(1, len(_niveaux_d))
+                _seuil_d = 3 if _nb_pj_d >= 5 else 2
+                if _fp_max_d >= _apl_d + _seuil_d:
+                    if int(_fp_max_d) - _apl_d >= 3:
+                        aj.update({"facteur_pv": 0.6, "attaque": -3,
+                                   "degats": -2, "ca": -1, "actif": True})
+                    else:
+                        aj.update({"facteur_pv": 0.75, "attaque": -2,
+                                   "degats": -1, "actif": True})
+                    _note_autobalance = (
+                        "⚖️ **Ajustement de difficulté** : rencontre FP "
+                        f"{int(_fp_max_d)} face à un groupe de niveau "
+                        f"{_apl_d} ({_nb_pj_d} PJ) — allégée "
+                        "TEMPORAIREMENT pour CE combat (le bestiaire et "
+                        "le module ne sont PAS modifiés) : PV ×"
+                        f"{aj['facteur_pv']:g}"
+                        + (f", attaque {aj['attaque']:+d}"
+                           if aj["attaque"] else "")
+                        + (f", dégâts {aj['degats']:+d}"
+                           if aj["degats"] else "")
+                        + (f", CA {aj['ca']:+d}" if aj["ca"] else "")
+                        + ".")
     except Exception:                                        # noqa: BLE001
         _note_autobalance = ""
 

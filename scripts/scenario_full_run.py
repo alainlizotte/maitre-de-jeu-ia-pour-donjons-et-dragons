@@ -384,10 +384,20 @@ async def phase_setup(key: str) -> None:
     tools = discover_tools()
     ctx = ToolContext(partie_id=pid, joueur="e2e", data_dir=_c.DATA)
     for i, (nom, pcfg) in enumerate(dfu.PJS.items()):
+        # 🔧 Dons de départ (run shadows #5) : sans « Arme en finesse », le
+        # roublard FOR 8/DEX 17 attaquait à -1 (la règle 3.5 est correcte
+        # — c'est la fiche qui n'avait pas le don) ; Brandt gagne son
+        # Arme de prédilection (+1 hache), Aurora Encaissement (+3 PV).
+        _dons = {
+            "Brandt": "Arme de prédilection (hache d'arme)",
+            "Aurora": "Encaissement",
+            "Flick": "Arme en finesse",
+        }.get(nom, "")
         r = await invoke_tool(tools["fiche_perso_creer_rapide"], ctx, {
             "nom": nom, "race": pcfg["race"], "classe": pcfg["classe"],
             "niveau": 1, "joueur": pcfg["joueur"],
-            "carac_texte": pcfg["carac"]})
+            "carac_texte": pcfg["carac"],
+            **({"dons_texte": _dons} if _dons else {})})
         bilan.check(f"[setup] fiche {nom}", r.text.startswith("✅"),
                     r.text[:120])
         # 🔧 Équipement de départ (post-correctif #1) : sans arme du

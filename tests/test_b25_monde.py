@@ -89,16 +89,19 @@ def test_monde_refuse_variante_hors_module():
 def test_monde_accepte_espece_du_manifeste():
     """Hors donjon, le « Loup terrible » du manifeste s'engage — et SEUL :
     M6/P9 (auto-add des autres espèces du manifeste) ne doit PAS invoquer
-    Kobold/Bandit/Pirate/Dracolich."""
+    Kobold/Bandit/Pirate/Dracolich. 🛡️ (run shadows #4) : FP 3 vs APL 1 →
+    l'équilibrage de difficulté allège TEMPORAIREMENT les PV (le canon du
+    bestiaire reste 45)."""
     d = _monte({"grille": _MANIFESTE, "quete": _BIBLE})
     r = _engager(d, "Loup terrible")
-    assert not r.text.startswith(("⛔", "❌")), r.text[:200]
+    assert "Ajustement de difficulté" in r.text, r.text[:300]
     st = PartyState(data_dir=d, partie_id="b25monde")
     etat = st.load()
     assert etat.get("phase") == "combat"
     mcb = [(str(m.get("nom")), int(m.get("pv", 0)))
            for m in (etat.get("monstres_combat") or [])]
-    assert mcb == [("Loup terrible", 45)], mcb
+    assert len(mcb) == 1 and mcb[0][0] == "Loup terrible", mcb
+    assert 20 <= mcb[0][1] < 45, mcb  # allégé (×0.75), pas anéanti
 
 
 def test_monde_bible_complete_le_manifeste():

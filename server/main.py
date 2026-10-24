@@ -4564,6 +4564,11 @@ _INTENTION_ATTAQUE_CHAT_NEG_RE = _re_mod.compile(
     _re_mod.IGNORECASE)
 
 
+_INTENTION_FLANC_RE = _re_mod.compile(
+    r"\bflanc|\bflanqu|dans le dos|par derri[eè]re|\bembuscade|"
+    r"\bsurprend|en tra(i|î)t", _re_mod.IGNORECASE)
+
+
 def _intention_attaque_chat(
     texte: str, monstres_combat: list[dict[str, Any]] | None,
 ) -> str:
@@ -4746,6 +4751,28 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
             events.append(_epure_pour_table(tr.text))
             return tr
 
+        # ⚡ Attaque sournoise (règle 3.5) : le roublard inflige +Nd6
+        # (N = (niveau+1)//2) quand la cible est privée de son bonus de
+        # DEX — prise au dépourvu au round 1 (`surpris`) ou attaque de
+        # FLANC déclarée (payload `flanc`, mots-clés du chat). Les dés de
+        # sournoise ne sont JAMAIS multipliés par un critique.
+        _sour = 0
+        try:
+            from .tools.fiches import _load_fiche as _lf_s
+            _f_s = _lf_s(ctx, attaquant) or {}
+            if "roublard" in str(_f_s.get("classe") or "").lower():
+                _niv_s = int(_f_s.get("niveau", 1) or 1)
+                _des_rouge = max(0, (_niv_s + 1) // 2)
+                if _des_rouge:
+                    _cible_nn = _norm_nom_cible_chat(cible)
+                    _cible_surprise = any(
+                        _norm_nom_cible_chat(str(s or "")) == _cible_nn
+                        for s in (etat_avant.get("surpris") or []))
+                    if _cible_surprise or payload.get("flanc"):
+                        _sour = _des_rouge
+        except Exception:                                    # noqa: BLE001
+            _sour = 0
+
         tr_atk = await _run("lancer_attaque", {
             "nom_attaquant": attaquant, "arme": arme,
             "bonus_attaque": int(bonus_attaque), "nom_cible": cible,
@@ -4758,6 +4785,7 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
             tr_dm = await _run("lancer_degats", {
                 "nb_des": nb_des, "faces": faces, "bonus": bonus_degats,
                 "arme_ou_sort": arme, "cible": cible,
+                "sournoise_des": _sour,
             })
             m_total = _re_mod.search(r"[Dd]égâts infligés\s*:\s*(\d+)", tr_dm.text)
             if m_total:
@@ -8468,7 +8496,10 @@ async def _handle_say(
                         "joueur": _joueur_actif_att,
                     }
                     if _arme_att:
-                        _payload_att["arme"] = _arme_att
+                        _payload_att["flanc"] = bool(
+                            _INTENTION_FLANC_RE.search(text))
+                    elif _INTENTION_FLANC_RE.search(text):
+                        _payload_att["flanc"] = True
                     print(
                         "[dnd35] ⚔️ Attaque chat DÉTERMINISTE : "
                         f"{_actif_att} → {_cible_att}"

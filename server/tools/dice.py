@@ -1359,6 +1359,7 @@ async def lancer_degats(
     distance_m: Any = None,
     multiplicateur: int = 1,
     non_letal: bool = False,
+    sournoise_des: int = 0,
 ) -> ToolResult:
     # 💥 Auto-dégâts (090ec0af) : le modèle a résolu lui-même → purge la
     # mémo serveur pour cette cible (son jet fait foi, pas de double).
@@ -1511,11 +1512,17 @@ async def lancer_degats(
     if multiplicateur > 1:
         jets_crit = [random.randint(1, faces)
                      for _ in range(nb_des * (multiplicateur - 1))]
+    # ⚡ Attaque sournoise (règle 3.5) : d6 supplémentaires — JAMAIS
+    # multipliés par un critique (« extra damage dice are not multiplied »).
+    jets_sour: list[int] = []
+    sournoise_des = max(0, _as_int(sournoise_des, 0))
+    if sournoise_des:
+        jets_sour = [random.randint(1, 6) for _ in range(sournoise_des)]
     # 🛡️ B46 (audit parties complètes) : un coup qui touche inflige au minimum
     # 1 point de dégâts en D&D 3.5. Un `lancer_degats` à 0 (le modèle confond
     # bonus et total) produisait « ✅ Touché … subit 0 dégâts », et le MJ
     # inventait une règle pour le justifier.
-    brut = sum(jets) + sum(jets_crit) + bonus
+    brut = sum(jets) + sum(jets_crit) + sum(jets_sour) + bonus
     if brut <= 0 and not _est_nom_de_sort(arme_ou_sort):
         note_min = (
             "\n- ℹ️ Total nul ou négatif porté au minimum de 1 "
@@ -1533,6 +1540,8 @@ async def lancer_degats(
         f"- Jets bruts : {jets}"
         + (f" + critique {jets_crit}" if jets_crit else ""),
         f"- Total jets : {sum(jets) + sum(jets_crit)}",
+        *([f"- ⚡ **Attaque sournoise** : +{sournoise_des}d6 → "
+           f"{sum(jets_sour)}"] if jets_sour else []),
         f"- Bonus dégâts : {bonus:+d}" + note_bonus_dm,
         f"- **Dégâts infligés : {total}**"
         + (" (NON LÉTAUX)" if non_letal else ""),

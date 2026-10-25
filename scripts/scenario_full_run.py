@@ -233,6 +233,85 @@ SCENARIOS = {
                       "fiche_perso_gagner_xp si l'objectif est accompli.)"},
         ],
     },
+    "shadows3": {
+        "titre": "Shadows Over The Moonsea 3/7 (E2E 3 PJ)",
+        "quete": {
+            "titre": "Shadows Over The Moonsea 3/7 - Partie",
+            "pitch": "L'ile après les cultistes : les liens avec les "
+                     "infernaux se précisent (Warsh, les sorcières, le "
+                     "lémure) — la piste de l'Audacity.",
+            "source": ("[divers_shadows_over_the_moonsea_ch03] /data/"
+                       "scenarios/Divers/Shadows Over The Moonsea/"
+                       "shadows over the moonsea-03-partie partie 3 7.pdf"),
+        },
+        "steps": [
+            {"pj": "Brandt", "label": "reprise sur l'ile (2,2)",
+             "texte": "Le chapitre 3 commence - nous fouillons ce que "
+                      "les cultistes ont laisse sur l'ile.",
+             "nudge": "(MJ : le groupe est sur la carte de l'ile - "
+                      "poursuis le scénario du chapitre 3.)"},
+            {"vers": [1, 2], "label": "les quartiers d'Ixas (1,2)"},
+            {"vers": [0, 2], "label": "l'équipage (0,2)"},
+            {"vers": [0, 1], "label": "la brume de l'Audacity (0,1)"},
+            {"pj": "Aurora", "label": "l'Audacity (0,1)",
+             "texte": "Aurora examine l'épave fantôme dans la brume "
+                      "(Connaissances religion).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Connaissances religion).)"},
+            {"vers": [1, 1], "label": "le tome (1,1)"},
+            {"pj": "Flick", "label": "étude du tome (1,1)",
+             "texte": "Flick étudie le tome trouvé chez les cultistes - "
+                      "que révèle-t-il ?",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Décryptage).)"},
+            {"vers": [2, 1], "label": "le parchemin (2,1)"},
+            {"vers": [3, 1], "label": "le fétiche (3,1)"},
+            {"pj": "Aurora", "label": "le fétiche (3,1)",
+             "texte": "Aurora examine le fétiche de la masure ("
+                      "Connaissances plans).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Connaissances plans).)"},
+            {"vers": [4, 1], "label": "la masure du lémure (4,1)"},
+            {"pj": "Brandt", "label": "le lémure (4,1)",
+             "texte": "Une masse de chair liquide rôde ici - Brandt se "
+                      "tient prêt.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat si le lémure attaque.)"},
+            {"vers": [5, 1], "label": "l'acte du fou (5,1)"},
+            {"vers": [5, 0], "label": "la grange (5,0)"},
+            {"vers": [4, 0], "label": "le fumoir d'Ulburto (4,0)"},
+            {"pj": "Brandt", "label": "Ulburto (4,0)",
+             "texte": "Brandt cherche l'aide d'Ulburto sur les tunnels - "
+                      "avec précaution.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 si une "
+                      "négociation est nécessaire.)"},
+            {"vers": [3, 0], "label": "les sorcières (3,0)"},
+            {"pj": "Aurora", "label": "les sorcières (3,0)",
+             "texte": "Aurora interpelle les sorcières sur le feu et le "
+                      "pacte - diplomatie d'abord.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Diplomatie) si nécessaire.)"},
+            {"vers": [2, 0], "label": "les insulaires (2,0)"},
+            {"vers": [1, 0], "label": "le péage de Warsh (1,0)"},
+            {"pj": "Brandt", "label": "Warsh (1,0)",
+             "texte": "Brandt confronte Warsh sur ses liens avec les "
+                      "infernaux.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Intimidation) si nécessaire.)"},
+            {"vers": [0, 0], "label": "la Route de Fer (0,0)"},
+            {"pj": "Brandt", "label": "la mère louve (0,0)",
+             "texte": "La mère louve protège ses petits - Brandt tente "
+                      "de la calmer d'une voix douce.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Dressage), difficulte 10 - réussite : "
+                      "elle se calme, PAS de combat.)"},
+            {"pj": "Brandt", "label": "cloture",
+             "texte": "Le chapitre est accompli - nous campons et "
+                      "tirons les conclusions.",
+             "nudge": "(MJ : accorde l'XP d'histoire via "
+                      "fiche_perso_gagner_xp si l'objectif est accompli.)"},
+        ],
+    },
     "gobs": {
         "titre": "À la chasse aux gobs (E2E 3 PJ)",
         "quete": {

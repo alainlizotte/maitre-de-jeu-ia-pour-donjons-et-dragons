@@ -103,7 +103,7 @@ class ScriptedClient:
         self.replies = list(replies)
         self.system_recus: list[str] = []
 
-    async def chat(self, messages, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, messages, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         for m in messages:
             if m.role == "system" and "CORRECTION" in (m.content or ""):
                 self.system_recus.append(m.content)

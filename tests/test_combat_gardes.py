@@ -153,7 +153,7 @@ class _ClientCorrige:
     def __init__(self):
         self.appels = 0
 
-    async def chat(self, messages, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, messages, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         self.appels += 1
         content = SCENE_INVALIDE if self.appels == 1 else SCENE_CORRIGEE
         return ChatResult(content=content, tool_calls=[],
@@ -198,7 +198,7 @@ def test_echo_d_un_ancien_tour_reste_detecte():
             self.appels = 0
 
         async def chat(self, messages, tools=None, tool_choice=None,
-                       temperature=None):
+                       temperature=None, timeout_s=None):
             self.appels += 1
             content = ancienne if self.appels == 1 else (
                 "Le squelette s'effondre en un cliquetis d'os, la hache "

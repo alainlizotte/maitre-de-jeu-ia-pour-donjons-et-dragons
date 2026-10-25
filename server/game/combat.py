@@ -438,6 +438,22 @@ async def _attaque_auto(
     # à CHAQUE attaque de la série.
     mult_crit = _multiplicateur_crit_bestiaire(m or {})
     nb_attaques_jouees = 0
+    # 🦵 Correctif #7 (run shadows : « Renversement (mordre) » du Loup
+    # terrible jamais déclenché) : les monstres du bestiaire dont les
+    # capacités mentionnent le RENVERSEMENT tentent le trip (3.5 :
+    # opposition de FOR) après UNE morsure réussie par tour. La CA/
+    # malus d'une cible Renversée sont DÉJÀ gérés par
+    # `modificateurs_conditions_attaque` (−4 mêlée / +4 distance).
+    _peut_renverser = any(
+        "renversement" in str((m or {}).get(k) or "").lower()
+        for k in ("capacites", "degs", "attaques"))
+    _for_mod_mon = 0
+    if _peut_renverser:
+        _m_for = re.search(r"for\D{0,3}(\d{1,2})",
+                           str((m or {}).get("carac") or "").lower())
+        if _m_for:
+            _for_mod_mon = (int(_m_for.group(1)) - 10) // 2
+    _trip_joue = False
     for arme_l, bonus_chain, nb_d, fa, bonus_dm in _attaques_du_bestiaire(
             m or {}):
         for bonus_atk in bonus_chain:
@@ -525,6 +541,48 @@ async def _attaque_auto(
                         if "subit" in ligne:
                             res.events.append(f"   ↳ {ligne.strip()}")
                             break
+            # 🦵 Renversement (fix #7) : une morsure réussie d'un monstre
+            # à capacité « renversement » tente le trip UNE fois par tour.
+            if (_peut_renverser and not _trip_joue and "mord" in (
+                    arme_l or "").lower() and not coup_de_grace):
+                _trip_joue = True
+                _pj_trip = _pj_depuis_etat(_party(ctx).load(), cible)
+                _vivant_t = _pj_trip is not None and int(
+                    _pj_trip.get("pv", 0) or 0) > 0
+                if _vivant_t:
+                    _car_t = _pj_trip.get("carac") or {}
+                    _for_p = int(_car_t.get("FOR", 10) or 10)
+                    _dex_p = int(_car_t.get("DEX", 10) or 10)
+                    _mod_cible = (max(_for_p, _dex_p) - 10) // 2
+                    _j_m = random.randint(1, 20)
+                    _j_c = random.randint(1, 20)
+                    res.events.append(
+                        f"   🦵 Renversement ({attaquant}) : {_j_m}"
+                        f"{_for_mod_mon:+d} vs {_j_c}{_mod_cible:+d}")
+                    if _j_m != 1 and (_j_m == 20 or (
+                            _j_m + _for_mod_mon) > (_j_c + _mod_cible)):
+                        _tr_c = await _tool(
+                            ctx, "fiche_perso_condition",
+                            {"nom": cible, "condition": "Renversé"}, res)
+                        res.events.append(
+                            f"   ✅ **{cible} est Renversé** — −4 CA au "
+                            "corps à corps, Dex perdue.")
+                    elif _j_m + _for_mod_mon <= _j_c + _mod_cible - 10:
+                        # Échec de 10+ : l'assaillant chute à son tour.
+                        _st_trip = _party(ctx).load()
+                        _mo_t = next(
+                            (mo for mo in (_st_trip.get(
+                                "monstres_combat") or [])
+                             if _norm(mo.get("nom")) == _norm(attaquant)),
+                            None)
+                        if _mo_t is not None:
+                            conds_m = _mo_t.setdefault("conditions", [])
+                            if "Renversé" not in conds_m:
+                                conds_m.append("Renversé")
+                        _party(ctx).save(_st_trip)
+                        res.events.append(
+                            f"   ❌ Échec de 10+ → **{attaquant} chute** "
+                            "(Renversé).")
         if nb_attaques_jouees >= 6:
             break
 

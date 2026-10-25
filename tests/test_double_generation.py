@@ -39,7 +39,7 @@ class _ClientCompte:
         self.streams = 0
 
     async def chat(self, messages, tools=None, tool_choice=None,
-                   temperature=None):
+                   temperature=None, timeout_s=None):
         self.chats += 1
         return ChatResult(content=NARRATION, tool_calls=[],
                           finish_reason="stop", raw={})

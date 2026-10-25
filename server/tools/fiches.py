@@ -208,9 +208,12 @@ def _bonus_dons_pv(dons: Any, niveau: int = 1) -> int:
         if not nom:
             continue
         # Dur à cuire / Toughness  → +3 PV (une seule fois par occurrence)
+        # 🛡️ (fix #6) : « Encaissement » est le nom FR 3.5 de Toughness —
+        # il était absent de la table : les +3 PV d'Aurora n'ont JAMAIS
+        # été appliqués à la création (partie shadows).
         if any(k in nom for k in (
             "dur a cuire", "dur a cuire (+3", "toughness", "resilient",
-            "endurci", "coriace",
+            "endurci", "coriace", "encaissement",
         )):
             bonus += 3
         # Vigueur surhumaine / Improved Toughness → +1 PV par niveau

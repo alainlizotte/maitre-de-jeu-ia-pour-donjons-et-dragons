@@ -526,27 +526,41 @@ def _ennemis_manifeste(etat: dict) -> list[str]:
     DONJON (avant `carte_donjon_entrer`)."""
     vus: set[str] = set()
     sortie: list[str] = []
-    for s in ((etat.get("donjon") or {}).get("grille") or []):
-        if not isinstance(s, dict):
-            continue
-        for e in (s.get("ennemis") or []):
-            brut = str(e or "").strip()
-            if not brut:
+
+    def _absorbe(grille: Any) -> None:
+        for s in (grille or []):
+            if not isinstance(s, dict):
                 continue
-            m_q = re.match(r"^(.*?)(\s*[×xX*]\s*\d+\s*)$", brut)
-            nom = (m_q.group(1) if m_q else brut).strip()
-            # 🔧 Convention manifeste : les gabarits s'écrivent avec des
-            # underscores (« Mort-vivant_de_taille_M ×1 ») — l'engagement
-            # vient avec des espaces : on unifie pour la clé d'espèce.
-            nom = nom.replace("_", " ").strip()
-            if not nom:
-                continue
-            cle = nom.lower()
-            if cle in vus:
-                continue
-            vus.add(cle)
-            # Quantité conservée (« Loup terrible ×1 ») pour le canon.
-            sortie.append(nom + (m_q.group(2) if m_q else ""))
+            for e in (s.get("ennemis") or []):
+                brut = str(e or "").strip()
+                if not brut:
+                    continue
+                m_q = re.match(r"^(.*?)(\s*[×xX*]\s*\d+\s*)$", brut)
+                nom = (m_q.group(1) if m_q else brut).strip()
+                # 🔧 Convention manifeste : les gabarits s'écrivent avec des
+                # underscores (« Mort-vivant_de_taille_M ×1 ») — l'engagement
+                # vient avec des espaces : on unifie pour la clé d'espèce.
+                nom = nom.replace("_", " ").strip()
+                if not nom:
+                    continue
+                cle = nom.lower()
+                if cle in vus:
+                    continue
+                vus.add(cle)
+                # Quantité conservée (« Loup terrible ×1 ») pour le canon.
+                sortie.append(nom + (m_q.group(2) if m_q else ""))
+
+    _absorbe((etat.get("donjon") or {}).get("grille"))
+    if not sortie:
+        # 🛡️ (fix #2, run shadows ch02) : APRÈS `carte_donjon_sortir`, la
+        # grille courante est VIDEE (archivée dans `donjons_exploreres`) —
+        # le garde B25 monde ne voyait plus que `bible.ennemis` et
+        # refusait les rencontres canoniques du manifeste (les Kobolds/
+        # Bandits du ch02, engagés « hors module » à tort). On agrège les
+        # grilles ARCHIVÉES du même scénario.
+        for _dj in (etat.get("donjons_exploreres") or {}).values():
+            if isinstance(_dj, dict):
+                _absorbe(_dj.get("grille"))
     return sortie
 
 

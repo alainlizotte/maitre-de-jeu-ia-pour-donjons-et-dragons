@@ -53,7 +53,7 @@ class _ClientFaux:
         self.tools_vus: list[set] = []
         self.appels = 0
 
-    async def chat(self, work, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, work, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         self.tools_vus.append(_noms_tools(tools))
         reponse = self.script[min(self.appels, len(self.script) - 1)]
         self.appels += 1

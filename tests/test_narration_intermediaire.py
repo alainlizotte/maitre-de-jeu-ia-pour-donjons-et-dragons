@@ -64,7 +64,7 @@ class _ClientOutillage:
         self.premiere_prose = premiere_prose
         self.appels_chat = 0
 
-    async def chat(self, messages, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, messages, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         self.appels_chat += 1
         if self.appels_chat == 1:
             if self.mode == "natif":
@@ -176,7 +176,7 @@ def test_pas_de_doublon_si_intro_répétée():
     balise = ("<tool name=\"memoire_personnage\" nom=\"Thalric\" "
               "notes=\"Clerc de Kelemvor.\">\n")
 
-    async def chat(messages, tools=None, tool_choice=None, temperature=None):
+    async def chat(messages, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         client.appels_chat += 1
         if client.appels_chat == 1:
             return ChatResult(

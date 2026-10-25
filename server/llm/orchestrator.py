@@ -4071,11 +4071,19 @@ class Orchestrator:
                         )
                 except Exception:                            # noqa: BLE001
                     pass
+            # 🛡️ (fix #3) : chaque appel LLM est borné au budget RESTANT
+            # du tour — 2-3 itérations ne peuvent plus cumuler 500-600 s
+            # (la vérification du budget ne préempte pas un appel en cours).
+            _restant_b3 = max(
+                15.0, min(240.0,
+                          _BUDGET_LLM_TOUR_S
+                          - (time.monotonic() - _t0_boucle)))
             try:
                 chat = await self.client.chat(
                     work, tools=tools_arg,
                     tool_choice=tool_choice_effectif,
                     temperature=temp_effet,
+                    timeout_s=_restant_b3,
                 )
             except Exception as exc:                        # noqa: BLE001
                 if tool_choice_effectif != "required":
@@ -4089,6 +4097,7 @@ class Orchestrator:
                     work, tools=tools_arg,
                     tool_choice="auto" if use_native else None,
                     temperature=temp_effet,
+                    timeout_s=_restant_b3,
                 )
 
             # --- Bter2. Troncature de dégénérescence intra-réponse -------

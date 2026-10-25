@@ -43,7 +43,7 @@ class _ClientFaux:
         self.contenu1 = contenu1
         self.appels = 0
 
-    async def chat(self, work, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, work, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         self.appels += 1
         if self.appels == 1:
             return ChatResult(

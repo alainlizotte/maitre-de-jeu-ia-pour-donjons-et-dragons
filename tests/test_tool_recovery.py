@@ -46,7 +46,7 @@ class ScriptedClient:
         self.replies = list(replies)
         self.calls = 0
 
-    async def chat(self, messages, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, messages, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         content = self.replies.pop(0) if self.replies else "(fin)"
         self.calls += 1
         return ChatResult(

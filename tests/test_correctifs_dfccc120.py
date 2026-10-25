@@ -408,7 +408,7 @@ def _fake_client_qwen_think():
         appels = 0
 
         async def chat(self, work, tools=None, tool_choice=None,
-                       temperature=None):
+                       temperature=None, timeout_s=None):
             _Client.appels += 1
             if _Client.appels == 1:
                 return ChatResult(

@@ -42,7 +42,7 @@ class ScriptedClient:
     def __init__(self, replies: list[str]):
         self.replies = list(replies)
 
-    async def chat(self, messages, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, messages, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         content = self.replies.pop(0) if self.replies else "(fin)"
         return ChatResult(content=content, tool_calls=[], finish_reason="stop", raw={})
 

@@ -4539,14 +4539,33 @@ async def combat_boucle(partie_id: str, payload: dict[str, Any] | None = None) -
 # chemin LLM habituel.
 
 
+_SOURNOISE_IMMUNITE_TYPES = (
+    "mort-vivant", "mort vivant", "non-vivant", "non vivant",
+    "animation", "construct", "vase", "plante",
+)
+_ARME_A_DISTANCE_MOTS = (
+    "arc", "arbalète", "arbalet", "fronde", "javelot", "dard",
+    "sarbacane", "shuriken")
+
+
 def _des_sournoise_det(fiche_attaquant: dict[str, Any] | None,
-                       cible: str, etat: dict, flanc: bool) -> int:
+                       cible: str, etat: dict, flanc: bool,
+                       arme: str = "", ctx: Any = None) -> int:
     """⚡ Dés d'ATTAQUE SOURNOISE (règle 3.5) d'un attaquant déterministe :
     roublard → (niveau+1)//2 d6 ; 0 pour tout autre. Appliqués quand la
     cible est privée de son bonus de DEX — attaque de FLANC déclarée
     (payload `flanc`, mots-clés du chat) ou prise au dépourvu au round 1
     (`etat['surpris']`). Les dés de sournoise ne sont JAMAIS multipliés
-    par un critique (le multiplicateur ne touche que les dés d'arme)."""
+    par un critique (le multiplicateur ne touche que les dés d'arme).
+
+    🛡️ (fix #4) : IMMUNITÉS — un mort-vivant, une plante, un vase (ooze),
+    une animation (construct) n'a pas de zone vitale : pas de sournoise
+    (le `type` du bestiaire fait foi).
+
+    🛡️ (fix #5) : le FLANC est une règle de MÊLÉE — impossible avec une
+    arme à distance (« you can't flank with a ranged weapon »). La
+    sournoise SUR cible prise au dépourvu reste valable à distance (≤ 9 m
+    supposé — la distance réelle n'est pas suivie en combat déterministe)."""
     if not fiche_attaquant:
         return 0
     if "roublard" not in str(fiche_attaquant.get("classe") or "").lower():
@@ -4558,9 +4577,27 @@ def _des_sournoise_det(fiche_attaquant: dict[str, Any] | None,
     des = max(0, (niv + 1) // 2)
     if not des:
         return 0
-    if flanc:
-        return des
     _nn = _norm_nom_cible_chat(cible)
+    # 🛡️ (fix #4) : immunités par TYPE du bestiaire — un mort-vivant, une
+    # plante, un vase (ooze) ou une animation (construct) n'a pas de zone
+    # vitale : PAS de sournoise, flanc OU surprise.
+    if ctx is not None and _nn:
+        try:
+            from .tools.monstres import (
+                _find_monstre_strict as _fms_sour)  # noqa: PLC0415
+            _mo_sour = _fms_sour(ctx, cible)
+            _type_sour = str((_mo_sour or {}).get("type") or "").lower()
+            if any(t in _type_sour for t in _SOURNOISE_IMMUNITE_TYPES):
+                return 0
+        except Exception:                                    # noqa: BLE001
+            pass
+    # 🛡️ (fix #5) : pas de FLANC à distance.
+    _arme_l = str(arme or "").lower()
+    _a_distance = any(m in _arme_l for m in _ARME_A_DISTANCE_MOTS)
+    if flanc:
+        if _a_distance:
+            return 0
+        return des
     if _nn and any(
             _norm_nom_cible_chat(str(s or "")) == _nn
             for s in (etat.get("surpris") or [])):
@@ -4591,6 +4628,79 @@ _INTENTION_ATTAQUE_CHAT_NEG_RE = _re_mod.compile(
     r"|\b(?:attaqu|frapp|tapp|tir|charg)\w*rai?\b"
     r"|au\s+prochain\s+tour|prochain\s+round|plus\s+tar?d",
     _re_mod.IGNORECASE)
+
+
+_INTENTION_SOIN_CHAT_RE = _re_mod.compile(
+    r"\bsoign\w*|\binvoque\s+un\s+soin\b|\bgu[eè]ri\w*",
+    _re_mod.IGNORECASE)
+
+_INTENTION_SOIN_NEG_RE = _re_mod.compile(
+    r"\bpotion|\bbaguette|\bde\s+groupe|\bmesse\b|"
+    r"\bgu[eè]rison\s+des\s+blessures|\bnon\s+magique",
+    _re_mod.IGNORECASE)
+
+_SORTS_SOIN_CHAT = (
+    ("soin mineur", "Soin mineur"),
+    ("soins l[eé]gers", "Soins légers"),
+    ("soin l[eé]ger", "Soins légers"),
+)
+
+
+def _intention_soin_chat(
+    texte: str, actif: str, pjs: list[dict[str, Any]] | None,
+) -> tuple[str, str] | None:
+    """✨ Correctif #1 (demande joueur) : si le message du joueur ACTIF en
+    combat est un SOIN MAGIQUE (d'un compagnon ou de lui-même), renvoie
+    (cible, sort) — l'incantation sera résolue par `incanter_sort`
+    (emplacements, dés officiels, application) SANS LLM. None sinon.
+
+    - sort explicite (« soin léger », « soin mineur ») → ce sort ;
+    - « soigne X » sans sort → sort = '' (l'appelant choisit le PREMIER
+      sort de soin PRÉPARÉ sur la fiche du lanceur) ;
+    - cible : un PJ nommé dans le message (le plus long appariement
+      gagne), sinon le lanceur lui-même (« je me soigne »)."""
+    t = str(texte or "")
+    if not _INTENTION_SOIN_CHAT_RE.search(t):
+        return None
+    if _INTENTION_SOIN_NEG_RE.search(t):
+        return None
+    # Cible : un PJ cité — un AUTRE PJ prime sur le lanceur (« Aurora
+    # soigne Brandt » : les deux noms sont dans le texte, la cible est
+    # Brandt) ; sinon le lanceur lui-même (« je me soigne »).
+    _c_act = _norm_nom_cible_chat(actif)
+    cible, _autre = "", ""
+    _score, _score_a = 0, 0
+    for p in (pjs or []):
+        nom = str(p.get("nom") or "").strip()
+        nn = _norm_nom_cible_chat(nom)
+        if len(nn) < 3 or nn not in _norm_nom_cible_chat(t):
+            continue
+        if nn == _c_act:
+            continue
+        if len(nn) > _score_a:
+            _autre, _score_a = nom, len(nn)
+        elif len(nn) > _score:
+            cible, _score = nom, len(nn)
+    if _autre:
+        cible = _autre
+    if not cible:
+        cible = actif
+    for motif, sort in _SORTS_SOIN_CHAT:
+        if _re_mod.search(motif, t, _re_mod.IGNORECASE):
+            return (cible, sort)
+    return (cible, "")
+
+
+def _sort_de_soin_prepare(fiche: dict[str, Any] | None) -> str:
+    """✨ Le PREMIER sort de soin PRÉPARÉ sur la fiche (Soins légers avant
+    Soin mineur) — '' si aucun (l'incantation retombe sur le chemin LLM)."""
+    if not fiche:
+        return ""
+    _prepares = (((fiche.get("sorts") or {}).get("prepares")) or {})
+    for sort in ("Soins légers", "Soin mineur"):
+        if int(_prepares.get(sort, 0) or 0) > 0:
+            return sort
+    return ""
 
 
 _INTENTION_FLANC_RE = _re_mod.compile(
@@ -4790,7 +4900,7 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
             from .tools.fiches import _load_fiche as _lf_s
             _sour = _des_sournoise_det(
                 _lf_s(ctx, attaquant), cible, etat_avant,
-                bool(payload.get("flanc")))
+                bool(payload.get("flanc")), arme=arme, ctx=ctx)
         except Exception:                                    # noqa: BLE001
             _sour = 0
 
@@ -8547,6 +8657,83 @@ async def _handle_say(
                         "type": "status", "description": "", "done": True,
                     })
                     return
+                # ✨ Correctif #1 (demande joueur) : SOIN déterministe au
+                # chat — « Aurora invoque un soin léger sur Brandt » est
+                # résolu par `incanter_sort` (emplacements, dés officiels,
+                # application PV/conditions) SANS appeler le LLM. Fini les
+                # tours de soin à 60-90 s pendant lesquels le monstre
+                # frappe (runs 6-7 : l'équipe soignait plus qu'elle ne
+                # frappait). Refus (emplacement épuisé, sort non préparé)
+                # = vérité affichée à la table, tour clos.
+                _soin = _intention_soin_chat(
+                    text, _actif_att, _etat_att.get("pj") or [])
+                if _soin:
+                    _cible_soin, _sort_soin = _soin
+                    if not _sort_soin:
+                        try:
+                            from .tools.fiches import _load_fiche as _lf_so
+                            _sort_soin = _sort_de_soin_prepare(_lf_so(
+                                _ctx(partie_id, _joueur_actif_att),
+                                _actif_att))
+                        except Exception:                    # noqa: BLE001
+                            _sort_soin = ""
+                    if _sort_soin:
+                        from .tools.base import (
+                            _TOOL_REGISTRY as _REG_SOIN,
+                            invoke_tool as _inv_soin,
+                        )
+                        _spec_soin = _REG_SOIN.get("incanter_sort")
+                        _tr_soin = await _inv_soin(_spec_soin, _ctx(
+                            partie_id, _joueur_actif_att), {
+                                "nom_personnage": _actif_att,
+                                "nom_sort": _sort_soin,
+                                "cible": _cible_soin,
+                            })
+                        print(
+                            f"[dnd35] ✨ Soin chat DÉTERMINISTE : "
+                            f"{_actif_att} → {_cible_soin} ({_sort_soin}) "
+                            f"(aucun LLM).")
+                        # 🔄 Le soin EST l'action du tour : rotation +
+                        # tour de monstre par la boucle moteur (comme pour
+                        # l'attaque) — sinon un même PJ pourrait se soigner
+                        # plusieurs fois par round. Un refus (emplacement
+                        # épuisé) NE consomme PAS le tour.
+                        _cast_ok = not _tr_soin.text.startswith(("❌", "⛔"))
+                        _ev_so = ""
+                        _patches_so = []
+                        if _cast_ok:
+                            _res_so = await _boucle_combat(
+                                _ctx(partie_id, _joueur_actif_att),
+                                force_avance=True)
+                            _ev_so = "\n".join(
+                                _assainir_texte_joueur(e or "")
+                                for e in (_res_so.events or []) if e.strip())
+                            _patches_so = list(_res_so.patches or [])
+                        _txt_soin = _assainir_texte_joueur(
+                            _tr_soin.text or "")
+                        _bloc_soin = "\n".join(
+                            x for x in (_txt_soin, _ev_so) if x)
+                        await session.broadcast({
+                            "type": "dm",
+                            "text": (
+                                f"✨ **Soin - {_actif_att}**\n{_bloc_soin}"),
+                            "action": True,
+                            "tool_events": [], "tool_calls_trace": [],
+                            "state_patches": (
+                                [_tr_soin.state_patch]
+                                if _tr_soin.state_patch else [])
+                            + _patches_so,
+                        })
+                        session.remember_assistant(
+                            f"✨ {_actif_att} soigne {_cible_soin} — "
+                            "action résolue par le serveur.",
+                            mecanique=_bloc_soin,
+                        )
+                        await session.broadcast({
+                            "type": "status", "description": "",
+                            "done": True,
+                        })
+                        return
     except Exception as e_att_chat:                             # noqa: BLE001
         # Dégradation sûre : toute erreur ici retombe sur le chemin LLM
         # habituel (qui possède ses propres gardes de tour).

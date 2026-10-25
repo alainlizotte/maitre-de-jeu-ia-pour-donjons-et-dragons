@@ -192,7 +192,7 @@ PID_SOIN = "test_6xxxx_soins"
 class _ClientNeutre:
     """Client factice : aucun appel d'outil (execute_tool_direct suffit)."""
 
-    async def chat(self, work, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, work, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         return ChatResult(
             content="La scène se poursuit.",
             tool_calls=[], finish_reason="stop", raw={},
@@ -381,7 +381,7 @@ class _ClientEcho:
     def __init__(self) -> None:
         self.appels = 0
 
-    async def chat(self, work, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, work, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         self.appels += 1
         return ChatResult(
             content=NARRATION_ECHO,

@@ -62,7 +62,7 @@ class _ClientFaux:
         self.appels = []
 
     async def chat(self, messages, tools=None, tool_choice=None,
-                   temperature=None, response_format=None):
+                   temperature=None, response_format=None, timeout_s=None):
         self.appels.append({
             "messages": messages,
             "response_format": response_format,

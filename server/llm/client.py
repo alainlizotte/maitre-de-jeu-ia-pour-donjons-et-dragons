@@ -325,6 +325,7 @@ class OllamaClient:
         tool_choice: Optional[str] = None,
         temperature: Optional[float] = None,
         response_format: Optional[dict[str, Any]] = None,
+        timeout_s: Optional[float] = None,
     ) -> ChatResult:
         """Appel non-streaming. `tools` est le schéma JSON des fonctions.
 
@@ -356,7 +357,14 @@ class OllamaClient:
                 await asyncio.sleep(delay)
                 await self.ensure_model_loaded()
             try:
-                resp = await self._client.post("/chat/completions", json=payload)
+                # 🛡️ (fix #3) : timeout par REQUÊTE (httpx override) — le
+                # budget restant du tour borne chaque appel, au lieu du
+                # 240 s fixe par itération. None → timeout par défaut.
+                _kw_post = (
+                    {"timeout": max(5.0, float(timeout_s))}
+                    if timeout_s is not None else {})
+                resp = await self._client.post(
+                    "/chat/completions", json=payload, **_kw_post)
                 if resp.status_code != 500:
                     break
                 _log.warning("chat 500 (tentative %d/%d)", attempt, len(delays))

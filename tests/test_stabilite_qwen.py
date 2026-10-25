@@ -146,7 +146,7 @@ class _ClientObstine:
     def __init__(self):
         self.appels: list[tuple[list, object]] = []
 
-    async def chat(self, work, tools=None, tool_choice=None, temperature=None):
+    async def chat(self, work, tools=None, tool_choice=None, temperature=None, timeout_s=None):
         self.appels.append((list(work), tools))
         if tools is None:
             content = (

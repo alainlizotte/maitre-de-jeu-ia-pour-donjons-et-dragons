@@ -4539,6 +4539,35 @@ async def combat_boucle(partie_id: str, payload: dict[str, Any] | None = None) -
 # chemin LLM habituel.
 
 
+def _des_sournoise_det(fiche_attaquant: dict[str, Any] | None,
+                       cible: str, etat: dict, flanc: bool) -> int:
+    """⚡ Dés d'ATTAQUE SOURNOISE (règle 3.5) d'un attaquant déterministe :
+    roublard → (niveau+1)//2 d6 ; 0 pour tout autre. Appliqués quand la
+    cible est privée de son bonus de DEX — attaque de FLANC déclarée
+    (payload `flanc`, mots-clés du chat) ou prise au dépourvu au round 1
+    (`etat['surpris']`). Les dés de sournoise ne sont JAMAIS multipliés
+    par un critique (le multiplicateur ne touche que les dés d'arme)."""
+    if not fiche_attaquant:
+        return 0
+    if "roublard" not in str(fiche_attaquant.get("classe") or "").lower():
+        return 0
+    try:
+        niv = int(fiche_attaquant.get("niveau", 1) or 1)
+    except (TypeError, ValueError):
+        return 0
+    des = max(0, (niv + 1) // 2)
+    if not des:
+        return 0
+    if flanc:
+        return des
+    _nn = _norm_nom_cible_chat(cible)
+    if _nn and any(
+            _norm_nom_cible_chat(str(s or "")) == _nn
+            for s in (etat.get("surpris") or [])):
+        return des
+    return 0
+
+
 def _norm_nom_cible_chat(s: str) -> str:
     """Normalise un nom pour l'appariement chat ↔ plateau : minuscules,
     accents retirés, espaces réduits."""
@@ -4759,17 +4788,9 @@ async def combat_action(partie_id: str, payload: dict[str, Any]) -> dict[str, An
         _sour = 0
         try:
             from .tools.fiches import _load_fiche as _lf_s
-            _f_s = _lf_s(ctx, attaquant) or {}
-            if "roublard" in str(_f_s.get("classe") or "").lower():
-                _niv_s = int(_f_s.get("niveau", 1) or 1)
-                _des_rouge = max(0, (_niv_s + 1) // 2)
-                if _des_rouge:
-                    _cible_nn = _norm_nom_cible_chat(cible)
-                    _cible_surprise = any(
-                        _norm_nom_cible_chat(str(s or "")) == _cible_nn
-                        for s in (etat_avant.get("surpris") or []))
-                    if _cible_surprise or payload.get("flanc"):
-                        _sour = _des_rouge
+            _sour = _des_sournoise_det(
+                _lf_s(ctx, attaquant), cible, etat_avant,
+                bool(payload.get("flanc")))
         except Exception:                                    # noqa: BLE001
             _sour = 0
 

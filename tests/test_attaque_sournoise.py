@@ -91,3 +91,44 @@ def test_mots_cles_de_flanc():
         assert _INTENTION_FLANC_RE.search(t), t
     for t in non:
         assert not _INTENTION_FLANC_RE.search(t), t
+
+
+# ------------------------------------------------------------------ #
+#  Helper déterministe : _des_sournoise_det
+# ------------------------------------------------------------------ #
+
+from server.main import _des_sournoise_det  # noqa: E402
+
+
+def _fiche(classe="Roublard", niveau=1):
+    return {"classe": classe, "niveau": niveau}
+
+
+def test_roublard_flanc_obtient_ses_des():
+    assert _des_sournoise_det(_fiche("Roublard", 1), "Kobold",
+                              {}, flanc=True) == 1
+    assert _des_sournoise_det(_fiche("Roublard", 3), "Kobold",
+                              {}, flanc=True) == 2
+    assert _des_sournoise_det(_fiche("Roublard", 5), "Kobold",
+                              {}, flanc=True) == 3
+
+
+def test_roublard_surprise_obtient_ses_des():
+    etat = {"surpris": ["Kobold"]}
+    assert _des_sournoise_det(_fiche("Roublard", 1), "Kobold",
+                              etat, flanc=False) == 1
+
+
+def test_sans_flanc_ni_surprise_rien():
+    assert _des_sournoise_det(_fiche("Roublard", 1), "Kobold",
+                              {}, flanc=False) == 0
+    # Cible surprise ≠ cible attaquée.
+    etat = {"surpris": ["Gobelin"]}
+    assert _des_sournoise_det(_fiche("Roublard", 1), "Kobold",
+                              etat, flanc=False) == 0
+
+
+def test_non_roublard_jamais():
+    assert _des_sournoise_det(_fiche("Guerrier", 5), "Kobold",
+                              {}, flanc=True) == 0
+    assert _des_sournoise_det(None, "Kobold", {}, flanc=True) == 0

@@ -84,6 +84,10 @@ def test_extrait_arme_bonus():
 
 
 def test_tour_monstre_est_joue_automatiquement():
+    # 🛡️ (fix #11) : RNG amorcé — le flux ne dépend plus des tests
+    # précédents (dégâts/initiative aléatoires changeaient la rotation).
+    import random as _rnd11
+    _rnd11.seed(1102)
     d = _fresh_dir()
     try:
         _setup(d)

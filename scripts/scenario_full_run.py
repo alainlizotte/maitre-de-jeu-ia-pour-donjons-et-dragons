@@ -170,6 +170,69 @@ SCENARIOS = {
                       "fiche_perso_gagner_xp si l'objectif est accompli.)"},
         ],
     },
+    "shadows2": {
+        "titre": "Shadows Over The Moonsea 2/7 (E2E 3 PJ)",
+        "quete": {
+            "titre": "Shadows Over The Moonsea 2/7 - Partie",
+            "pitch": "La Route de Fer vers l'île : Warsh et sa péage, "
+                     "les sorcières, la mère louve — puis Ixas et son "
+                     "équipage.",
+            "source": ("[divers_shadows_over_the_moonsea_ch02] /data/"
+                       "scenarios/Divers/Shadows Over The Moonsea/"
+                       "shadows over the moonsea-02-partie partie 2 7.pdf"),
+        },
+        "steps": [
+            {"pj": "Brandt", "label": "Route de Fer (0,0)",
+             "texte": "Le chapitre 2 commence - nous reprenons la route "
+                      "vers l'ile depuis Phlan.",
+             "nudge": "(MJ : si le groupe n'est pas sur la carte du "
+                      "chapitre, carte_donjon_entrer. La mere louve peut "
+                      "etre calmee (DD 10) - le combat est EVITABLE.)"},
+            {"vers": [1, 0], "label": "peage de Warsh (1,0)"},
+            {"pj": "Brandt", "label": "le peage",
+             "texte": "Warsh exige un peage - Brandt regle le passage "
+                      "pour le groupe, sans histoire.",
+             "nudge": "(MJ : la scene passe par la narration - le canon "
+                      "de la salle ne prevoit pas de combat.)"},
+            {"vers": [2, 0], "label": "les insulaires (2,0)"},
+            {"vers": [3, 0], "label": "les sorcieres (3,0)"},
+            {"vers": [4, 0], "label": "le fumoir d'Ulburto (4,0)"},
+            {"vers": [5, 0], "label": "la grange (5,0)"},
+            {"vers": [5, 1], "label": "l'acte du fou (5,1)"},
+            {"pj": "Aurora", "label": "examen de l'acte",
+             "texte": "Aurora ecoute le fou et tente de percer son "
+                      "delire (Psychologie).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Psychologie), difficulte 20.)"},
+            {"vers": [4, 1], "label": "la masure du lemure (4,1)"},
+            {"vers": [3, 1], "label": "le fetiche (3,1)"},
+            {"vers": [2, 1], "label": "le parchemin (2,1)"},
+            {"vers": [1, 1], "label": "le tome (1,1)"},
+            {"vers": [0, 1], "label": "la brume de l'Audacity (0,1)"},
+            {"vers": [0, 2], "label": "l'equipage (0,2)"},
+            {"pj": "Brandt", "label": "l'equipage du culte (0,2)",
+             "texte": "Kobolds du culte et pirates s'entretuent - "
+                      "nous intervenons, Brandt bloque la route.",
+             "nudge": "(MJ : engage la rencontre canonique de la salle "
+                      "avec engager_combat.)"},
+            {"vers": [1, 2], "label": "les quartiers d'Ixas (1,2)"},
+            {"pj": "Aurora", "label": "Ixas (1,2)",
+             "texte": "Ixas et sa garde - Aurora somme le culte de se "
+                      "rendre, Brandt est pret a frapper.",
+             "nudge": "(MJ : engage la rencontre canonique de la salle "
+                      "avec engager_combat.)"},
+            {"vers": [2, 2], "label": "les navires (2,2)"},
+            {"pj": "Flick", "label": "butin final",
+             "texte": "Flick fouille les quartiers d'Ixas et empoche le "
+                      "butin.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"pj": "Brandt", "label": "cloture",
+             "texte": "L'ile est securisee. Nous rapportons la nouvelle "
+                      "a Phlan.",
+             "nudge": "(MJ : accorde l'XP d'histoire via "
+                      "fiche_perso_gagner_xp si l'objectif est accompli.)"},
+        ],
+    },
     "gobs": {
         "titre": "À la chasse aux gobs (E2E 3 PJ)",
         "quete": {

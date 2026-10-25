@@ -276,5 +276,6 @@ def test_recap_renforce_au_seuil_dinertie():
 
 
 def test_recap_normal_sans_inertie():
-    recap = _recap(_etat_exploration(2))
+    # 🛡️ (fix #8) : seuil exploration = 2 tours → à 1 tour, pas de bloc.
+    recap = _recap(_etat_exploration(1))
     assert "INERTIE" not in recap

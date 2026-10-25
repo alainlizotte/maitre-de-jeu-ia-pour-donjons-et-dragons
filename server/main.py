@@ -4630,6 +4630,39 @@ _INTENTION_ATTAQUE_CHAT_NEG_RE = _re_mod.compile(
     _re_mod.IGNORECASE)
 
 
+_INTENTION_REPROUVER_RE = _re_mod.compile(
+    r"\br[eèé]prouv|repouss\w*\s+(?:les\s+)?morts|"
+    r"rejett?e\w*\s+(?:les\s+)?morts|turn\s+undead|"
+    r"invoqu\w*\s+(?:son|mon|le|la|leur|notre)\s+"
+    r"(?:dieu|symbole|divinit[eé])", _re_mod.IGNORECASE)
+
+_MV_MOTS_CHAT = ("squelette", "zombie", "goule", "mort-vivant", "spectre",
+                 "vampi", "momie", "liche", "wight", "wraith", "osseux",
+                 "blême", "crâne", "naga osseux")
+
+
+def _morts_vivants_engages(monstres_combat: list[dict[str, Any]] | None,
+                           ) -> bool:
+    """⚜️ Vrai si au moins UN ennemi mort-vivant vivant est engagé."""
+    for mo in (monstres_combat or []):
+        if mo.get("allie"):
+            continue
+        try:
+            if int(mo.get("pv", 0) or 0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        nom_l = str(mo.get("nom") or "").lower()
+        if any(k in nom_l for k in _MV_MOTS_CHAT):
+            return True
+    return False
+
+
+def _intention_reprouver_chat(texte: str) -> bool:
+    """⚜️ Le message exprime une RÉPULSION des morts-vivants."""
+    return bool(_INTENTION_REPROUVER_RE.search(str(texte or "")))
+
+
 _INTENTION_SOIN_CHAT_RE = _re_mod.compile(
     r"\bsoign\w*|\binvoque\s+un\s+soin\b|\bgu[eè]ri\w*",
     _re_mod.IGNORECASE)
@@ -8734,6 +8767,55 @@ async def _handle_say(
                             "done": True,
                         })
                         return
+                # ⚜️ Correctif #9 (demande joueur) : RÉPROUVER déterministe
+                # — « Aurora repousse les morts-vivants » appelle le tool
+                # serveur (1d20+CHA vs DD 10+DV, table de répulsion,
+                # destruction si niveau ≥ 2×DV) SANS LLM. Le petit modèle
+                # n'a JAMAIS appelé la consigne ⚜️ en partie réelle.
+                if (_intention_reprouver_chat(text)
+                        and _morts_vivants_engages(
+                            _etat_att.get("monstres_combat") or [])):
+                    from .tools.base import (
+                        _TOOL_REGISTRY as _REG_REP,
+                        invoke_tool as _inv_rep,
+                    )
+                    _spec_rep = _REG_REP.get("reprouver_morts_vivants")
+                    _tr_rep = await _inv_rep(
+                        _spec_rep, _ctx(partie_id, _joueur_actif_att),
+                        {"nom_personnage": _actif_att})
+                    print(f"[dnd35] ⚜️ Réprouver chat DÉTERMINISTE : "
+                          f"{_actif_att} (aucun LLM).")
+                    # Tour consommé SAUF refus du tool (pas clerc/
+                    # paladin, limite quotidienne) — vérité affichée.
+                    _cast_rep = not _tr_rep.text.startswith(("❌", "⛔"))
+                    _ev_rep = ""
+                    if _cast_rep:
+                        _res_rep = await _boucle_combat(
+                            _ctx(partie_id, _joueur_actif_att),
+                            force_avance=True)
+                        _ev_rep = "\n".join(
+                            _assainir_texte_joueur(e or "")
+                            for e in (_res_rep.events or []) if e.strip())
+                    _txt_rep = _assainir_texte_joueur(_tr_rep.text or "")
+                    _bloc_rep = "\n".join(
+                        x for x in (_txt_rep, _ev_rep) if x)
+                    await session.broadcast({
+                        "type": "dm",
+                        "text": (f"⚜️ **Réprouver - {_actif_att}**\n"
+                                 f"{_bloc_rep}"),
+                        "action": True,
+                        "tool_events": [], "tool_calls_trace": [],
+                        "state_patches": [],
+                    })
+                    session.remember_assistant(
+                        f"⚜️ {_actif_att} réprouve les morts-vivants — "
+                        "action résolue par le serveur.",
+                        mecanique=_bloc_rep,
+                    )
+                    await session.broadcast({
+                        "type": "status", "description": "", "done": True,
+                    })
+                    return
     except Exception as e_att_chat:                             # noqa: BLE001
         # Dégradation sûre : toute erreur ici retombe sur le chemin LLM
         # habituel (qui possède ses propres gardes de tour).

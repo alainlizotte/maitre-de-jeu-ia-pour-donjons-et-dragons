@@ -90,7 +90,13 @@ def _bloc_inertie(etat: dict) -> str:
         inert = int(etat.get("inertie_mj") or 0)
     except (TypeError, ValueError):
         return ""
-    if inert < 3:
+    # 🛡️ (fix #8, runs 5-8 : 22 « nudge_requis »/run) : le seuil dépend de
+    # la phase — en COMBAT, un seul tour sans tool gaspille le round (les
+    # monstres frappent quand même) → ré-ancrage IMMÉDIAT ; en exploration,
+    # 2 tours de prose sont tolérés (le nudge du MJ rattrape) puis ancrage.
+    _phase_i = str(etat.get("phase") or "")
+    _seuil = 1 if _phase_i == "combat" else 2
+    if inert < _seuil:
         return ""
     cour = list((etat.get("donjon") or {}).get("courant") or [])
     try:
@@ -101,13 +107,19 @@ def _bloc_inertie(etat: dict) -> str:
     objectif = str(
         ((etat.get("quete") or {}).get("bible") or {}).get("objectif")
         or (etat.get("memoire") or {}).get("objectif_courant") or "")
+    _qui = ""
+    if _phase_i == "combat":
+        _qui = (" C'est le tour de " + str(etat.get("courant_tour_pour")
+                or "?") + " — résous SON action avec les tools.")
     return (
-        "⚖️ INERTIE — les " + str(inert) + " derniers tours n'ont appelé "
-        "AUCUN tool. Toute action au résultat incertain (déplacement, "
-        "attaque, jet de compétence, fouille, réparation) DOIT être "
-        "résolue MAINTENANT par un tool officiel (carte_donjon_explorer, "
-        "lancer_attaque, lancer_d20, fiche_perso_infliger_degats…), "
-        "JAMAIS en prose seule. Salle courante : " + salle + "."
+        "⚖️ INERTIE — les " + str(inert) + " dernier(s) tour(s) n'ont "
+        "appelé AUCUN tool. Toute action au résultat incertain "
+        "(déplacement, attaque, jet de compétence, fouille, réparation) "
+        "DOIT être résolue MAINTENANT par un tool officiel "
+        "(carte_donjon_explorer, lancer_attaque, lancer_d20, "
+        "fiche_perso_infliger_degats…), JAMAIS en prose seule."
+        + _qui
+        + " Salle courante : " + salle + "."
         + (" Objectif courant : " + objectif[:160] if objectif else ""))
 
 

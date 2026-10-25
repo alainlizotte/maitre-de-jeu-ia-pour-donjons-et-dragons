@@ -229,6 +229,9 @@ async def test_attaque_auto_applique_les_deltas():
 
 
 async def test_renfort_avec_ajustement():
+    # 🛡️ (fix #11) : RNG amorcé — flux déterministe en suite complète.
+    import random as _rnd11
+    _rnd11.seed(1101)
     d = _fresh_dir()
     try:
         await _creer_pj(d)

@@ -158,3 +158,73 @@ def _load_fiche_dir(d: str):
     return _json.load(_io.open(
         os.path.join(d, "fiches", "fiche_aurotest.json"),
         encoding="utf-8"))
+
+
+def _load_fiche_dir(d: str):
+    import io as _io
+    import json as _json
+    return _json.load(_io.open(
+        os.path.join(d, "fiches", "fiche_aurotest.json"),
+        encoding="utf-8"))
+
+
+# ------------------------------------------------------------------ #
+# #8 — seuil d'inertie selon la phase
+# ------------------------------------------------------------------ #
+
+from server.llm.prompt_builder import _bloc_inertie  # noqa: E402
+
+
+def test_inertie_combat_ancrage_immediat():
+    """En combat, UN SEUL tour sans tool → ré-ancrage (les monstres
+    frappent quand même : chaque round perdu est un round subi)."""
+    etat = {"phase": "combat", "inertie_mj": 1,
+            "courant_tour_pour": "Brandt"}
+    bloc = _bloc_inertie(etat)
+    assert "INERTIE" in bloc
+    assert "Brandt" in bloc
+
+
+def test_inertie_exploration_seuil_2():
+    assert _bloc_inertie({"phase": "exploration", "inertie_mj": 1}) == ""
+    assert "INERTIE" in _bloc_inertie(
+        {"phase": "exploration", "inertie_mj": 2})
+
+
+# ------------------------------------------------------------------ #
+# #9 — Réprouver déterministe (parseurs)
+# ------------------------------------------------------------------ #
+
+from server.main import (  # noqa: E402
+    _intention_reprouver_chat,
+    _morts_vivants_engages,
+)
+
+
+def test_intention_reprouver():
+    oui = ("Aurora réprouve les morts-vivants !",
+           "Brandt repousse les morts-vivants de son symbole",
+           "Aurora invoque son dieu contre les morts",
+           "je turn undead")
+    for t in oui:
+        assert _intention_reprouver_chat(t), t
+    non = ("Aurora frappe le squelette de sa masse",
+           "Brandt repousse la porte",
+           "Aurora soigne Brandt")
+    for t in non:
+        assert not _intention_reprouver_chat(t), t
+
+
+def test_morts_vivants_engages():
+    assert _morts_vivants_engages([
+        {"nom": "Squelette", "pv": 4, "conditions": []}])
+    assert _morts_vivants_engages([
+        {"nom": "Gobelin", "pv": 5, "conditions": []},
+        {"nom": "Zombie", "pv": 9, "conditions": []}])
+    # Mort OU allié : pas déclencheur.
+    assert not _morts_vivants_engages([
+        {"nom": "Squelette", "pv": 0, "conditions": ["Détruit"]}])
+    assert not _morts_vivants_engages([
+        {"nom": "Squelette", "pv": 4, "allie": True}])
+    assert not _morts_vivants_engages([
+        {"nom": "Gobelin", "pv": 5, "conditions": []}])

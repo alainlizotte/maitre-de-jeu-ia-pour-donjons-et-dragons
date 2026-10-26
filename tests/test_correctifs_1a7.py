@@ -17,6 +17,7 @@ Usage : py -m pytest tests/test_correctifs_1a7.py -q
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
 import sys
@@ -155,6 +156,54 @@ def test_ca_armure_pluriel_et_cuir():
 def test_ca_armure_ambigu_sans_armure():
     """« cuir » seul correspond à 3 armures : aucune supposition."""
     assert calculer_ca_armure(0, ["cuir"]) == 10
+
+
+# ------------------------------------------------------------------ #
+# Run shadows4 — garde anti-phrase dans inventaire_ajouter
+# ------------------------------------------------------------------ #
+
+from server.tools.inventaire import inventaire_ajouter  # noqa: E402
+
+
+def test_inventaire_refuse_les_fragments_narratifs():
+    """Les phrases composées/longues ne sont PAS des objets (run shadows4 :
+    12 déchets sur 14 objets — « les marchandises en vrac sont en »…)."""
+    async def _run():
+        d = tempfile.mkdtemp(prefix="inv_garde_")
+        try:
+            ctx = ToolContext(partie_id="inv", joueur="e2e", data_dir=d)
+            import io as _io
+            os.makedirs(os.path.join(d, "fiches"), exist_ok=True)
+            with _io.open(os.path.join(d, "fiches", "fiche_testinv.json"),
+                          "w", encoding="utf-8") as _f:
+                _f.write(json.dumps({
+                    "nom": "TestInv", "classe": "Guerrier", "niveau": 1,
+                    "pv": 10, "pv_max": 10, "ca": 14, "bab": 1,
+                    "carac": {"FOR": 14, "DEX": 10}, "conditions": [],
+                    "sauvegardes": {"Vigueur": 2, "Reflexes": 0,
+                                    "Volonte": 0},
+                    "inventaire": [], "equipement": []},
+                    ensure_ascii=False))
+            refuses = [
+                "les étapes du pacte ou l'emplacement",
+                "les marchandises en vrac sont en",
+                "la statue de dracoliche de taille G aux ailes déployées",
+                "un couteau rituel plaqué argent et",
+            ]
+            for o in refuses:
+                r = await invoke_tool(_TOOLS["inventaire_ajouter"], ctx,
+                                      {"nom": "TestInv", "objet": o,
+                                       "quantite": 1})
+                assert "narration" in r.text, (o, r.text[:120])
+            # Un objet au nom COURT reste accepté.
+            r2 = await invoke_tool(_TOOLS["inventaire_ajouter"], ctx,
+                                   {"nom": "TestInv",
+                                    "objet": "couteau rituel plaqué "
+                                             "argent", "quantite": 1})
+            assert "narration" not in r2.text, r2.text[:120]
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    asyncio.run(_run())
 
 
 def test_fiche_roublard_encaissement_pv():

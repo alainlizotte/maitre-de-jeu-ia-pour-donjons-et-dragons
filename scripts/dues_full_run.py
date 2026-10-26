@@ -271,8 +271,15 @@ async def action_pj(pid: str, socks: dict, bilan: Bilan, pj: str,
 #  Boucle de combat (rotation réaliste par PJ)
 # --------------------------------------------------------------------------- #
 def _action_combat(pj: str, snap: dict, cible: str | None,
-                   tourne: dict) -> tuple[str, str]:
-    """(texte, nudge) réaliste selon la situation."""
+                   tourne: dict, soin_rate: set | None = None
+                   ) -> tuple[str, str]:
+    """(texte, nudge) réaliste selon la situation.
+
+    `soin_rate` : soigneurs dont les emplacements sont épuisés (le soin a
+    été REFUSÉ par le serveur une fois) — ils passent en attaque au lieu
+    de re-tenter un soin refusé à chaque round (run shadows5 : 4 tours
+    perdus pendant que le bandit à 3 PV survivait)."""
+    soin_rate = soin_rate if soin_rate is not None else set()
     if cible is None:
         return ("Tous les ennemis sont détruits — nous nous rassurons.",
                 "(MJ : clôture le combat avec finir_combat si nécessaire.)")
@@ -291,7 +298,7 @@ def _action_combat(pj: str, snap: dict, cible: str | None,
                 "(MJ : lancer_attaque, lancer_degats, "
                 "fiche_perso_infliger_degats puis tour_suivant_combat)")
     # Aurora — prêtresse de Kelemvor
-    if blesses:
+    if blesses and pj not in soin_rate:
         n, _ = blesses[0]
         return (f"Aurora invoque un soin léger sur {n} !",
                 f"(MJ : lancer_des 1d8+1 puis fiche_perso_soigner nom={n}, "
@@ -320,6 +327,7 @@ async def jour_combat(pid: str, socks: dict, bilan: Bilan, titre: str,
     # retraite (retraite_combat serveur) au lieu de mourir sur place.
     _pv_ennemis_avant = None
     _rounds_sans_degats = 0
+    soin_rate: set = set()
     for _ in range(max_rounds):
         snap = snapshot(pid)
         if snap["phase"] != "combat":
@@ -398,9 +406,21 @@ async def jour_combat(pid: str, socks: dict, bilan: Bilan, titre: str,
             (m for m, st in snap["monstres"].items()
              if "Détruit" not in st["conds"]),
             key=lambda m: snap["monstres"][m]["pv"] or 0, default=None)
-        texte, nudge = _action_combat(pj_courant, snap, cible, tourne)
-        await action_pj(pid, socks, bilan, pj_courant, texte, titre, nudge)
+        texte, nudge = _action_combat(pj_courant, snap, cible, tourne,
+                                      soin_rate)
+        _rep_soin = await action_pj(pid, socks, bilan, pj_courant, texte,
+                                    titre, nudge)
         await sante_sockets(pid, socks)
+        # (run shadows5) : soin REFUSE (emplacements epuises, sort non
+        # prepare) -> le soigneur passe en attaque pour le reste du
+        # combat au lieu de re-tenter un soin impossible a chaque round.
+        if texte.startswith("Aurora invoque un soin") and _rep_soin and (
+                (_rep_soin.get("text") or "").startswith(('❌', '⛔'))):
+            soin_rate.add(pj_courant)
+            noter_probleme(
+                "soin_epuise",
+                f"{titre} : emplacements de soin epuises - {pj_courant} "
+                "passe en attaque.")
     return detruits
 
 

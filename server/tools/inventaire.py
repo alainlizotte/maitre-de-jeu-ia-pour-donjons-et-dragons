@@ -832,6 +832,27 @@ async def inventaire_ajouter(
         return err
     if not objet or not _norm(objet):
         return ToolResult(text="❌ Donne un nom d'objet valide.")
+    # 🛡️ (run shadows4) : garde ANTI-PHRASE — le 9B rangeait des
+    # fragments de narration comme objets (« les étapes du pacte ou
+    # l'emplacement », « les marchandises en vrac sont en », « la statue
+    # de dracoliche de taille »… 12 déchets sur 14 objets). Un objet est
+    # un NOM COURT : pas de verbe conjugué, pas de conjonction
+    # composée, pas de phrase de 45+ caractères. L'ambiance passe par
+    # `memoire_evenement` / `ajouter_evenement_histoire`.
+    _o = str(objet or "").strip()
+    _mots = _o.split()
+    _verbe = re.search(
+        r"\b(?:sont|est|était|étaient|seront|a\s+été|peut|doit|se\s+"
+        r"trouve\w*)\b", _o, re.IGNORECASE)
+    _compose = re.search(r"\b(?:et|ou)\b", _o, re.IGNORECASE) and (
+        len(_mots) >= 5)
+    if _verbe or _compose or len(_o) > 48:
+        return ToolResult(text=(
+            f"⚠️ Objet invalide : « {_o} » ressemble à un passage de "
+            "narration (phrase composée ou trop longue), pas à un objet "
+            "inventoriable. Range un OBJET au nom COURT (ex. « couteau "
+            "rituel », « fiole ») ; le texte d'ambiance va dans "
+            "`memoire_evenement` ou `ajouter_evenement_histoire`."))
     # 🔧 Partie ead406b2 : la VALEUR CANONIQUE du tresor de la salle
     # prime sur une bourse inventee par le modele (le canon de (2,0) disait
     # "32 po" : le modele a ajoute "bourse de 25 pc" inventee). Si l'objet

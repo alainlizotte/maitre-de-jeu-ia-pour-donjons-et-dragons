@@ -312,6 +312,139 @@ SCENARIOS = {
                       "fiche_perso_gagner_xp si l'objectif est accompli.)"},
         ],
     },
+    "shadows4": {
+        "titre": "Shadows Over The Moonsea 4/7 (E2E 3 PJ)",
+        "quete": {
+            "titre": "Shadows Over The Moonsea 4/7 - Partie",
+            "pitch": "Chapitre 4 : l'escalade infernale sur l'ile — le "
+                     "lémure, Warsh, les sorcières, la piste de l'Audacity "
+                     "avant la contre-attaque du culte.",
+            "source": ("[divers_shadows_over_the_moonsea_ch04] /data/"
+                       "scenarios/Divers/Shadows Over The Moonsea/"
+                       "shadows over the moonsea-04-partie partie 4 7.pdf"),
+        },
+        "steps": [
+            {"pj": "Brandt", "label": "reprise niveau 2 (0,0)",
+             "texte": "Le chapitre 4 commence - l'equipe a grandi, la "
+                      "menace aussi. Nous repartons de la Route de Fer.",
+             "nudge": "(MJ : le groupe est sur la carte de l'ile - "
+                      "poursuis le scénario du chapitre 4.)"},
+            {"vers": [1, 0], "label": "Warsh (1,0)"},
+            {"pj": "Brandt", "label": "confrontation Warsh (1,0)",
+             "texte": "Brandt exige des comptes de Warsh sur les "
+                      "infernaux - le peage ne suffira plus.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Intimidation) si nécessaire.)"},
+            {"vers": [2, 0], "label": "les insulaires (2,0)"},
+            {"pj": "Aurora", "label": "enquete insulaires (2,0)",
+             "texte": "Aurora questionne les insulaires sur les "
+                      "disparitions récentes.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Diplomatie) si nécessaire.)"},
+            {"vers": [3, 0], "label": "les sorcières (3,0)"},
+            {"pj": "Aurora", "label": "les sorcières (3,0)",
+             "texte": "Aurora revient voir les sorcières - le pacte du "
+                      "feu inquiète le village.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Diplomatie) si nécessaire.)"},
+            {"vers": [4, 0], "label": "le fumoir (4,0)"},
+            {"vers": [5, 0], "label": "la grange (5,0)"},
+            {"vers": [5, 1], "label": "l'acte du fou (5,1)"},
+            {"pj": "Aurora", "label": "retour au fou (5,1)",
+             "texte": "Aurora recroise le fou - son delire a peut-etre "
+                      "evolue (Psychologie).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Psychologie), difficulte 20.)"},
+            {"vers": [4, 1], "label": "le lémure (4,1)"},
+            {"pj": "Brandt", "label": "le lémure (4,1)",
+             "texte": "Le lémure des Neuf Enfers barre la masure - "
+                      "nous le confrontons, armes hautes.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat - le lémure est un diable : "
+                      "Brandt niveau 2 se tient pret.)"},
+            {"vers": [3, 1], "label": "le fétiche (3,1)"},
+            {"vers": [2, 1], "label": "le parchemin (2,1)"},
+            {"vers": [1, 1], "label": "le tome (1,1)"},
+            {"vers": [0, 1], "label": "l'Audacity (0,1)"},
+            {"pj": "Aurora", "label": "l'Audacity (0,1)",
+             "texte": "Aurora scrute la brume vers l'épave - les "
+                      "signes d'une contre-attaque ?",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Perception).)"},
+            {"vers": [0, 2], "label": "l'équipage (0,2)"},
+            {"pj": "Brandt", "label": "l'équipage (0,2)",
+             "texte": "Les survivants du culte se regroupent - nous "
+                      "intervenons, niveau 2 cette fois.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [1, 2], "label": "les quartiers d'Ixas (1,2)"},
+            {"pj": "Flick", "label": "les journaux d'Ixas (1,2)",
+             "texte": "Flick fouille les journaux draconiques d'Ixas - "
+                      "la mission du culte y est détaillée.",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Décryptage).)"},
+            {"pj": "Brandt", "label": "cloture",
+             "texte": "Le chapitre est accompli - nous consolidons nos "
+                      "positions pour la suite.",
+             "nudge": "(MJ : accorde l'XP d'histoire via "
+                      "fiche_perso_gagner_xp si l'objectif est accompli.)"},
+        ],
+    },
+    "shadows5": {
+        "titre": "Shadows Over The Moonsea 5/7 (E2E 3 PJ)",
+        "quete": {
+            "titre": "Shadows Over The Moonsea 5/7 - Partie",
+            "pitch": "Chapitre 5 : l'Audacity surgit des flots - l'epave "
+                     "fantome, l'assaut des morts et la fin du pacte.",
+            "source": ("[divers_shadows_over_the_moonsea_ch05] /data/"
+                       "scenarios/Divers/Shadows Over The Moonsea/"
+                       "shadows over the moonsea-05-partie partie 5 7.pdf"),
+        },
+        "steps": [
+            {"pj": "Brandt", "label": "reprise (0,0)",
+             "texte": "Le chapitre 5 commence - la brume s'epaissit sur "
+                      "l'ile.",
+             "nudge": "(MJ : poursuis le scenario du chapitre 5.)"},
+            {"vers": [0, 1], "label": "l'Audacity (0,1)"},
+            {"pj": "Aurora", "label": "l'Audacity surgit (0,1)",
+             "texte": "La brume s'entrouvre : l'Audacity, epave fantome, "
+                      "apparait. Aurora scrute l'equipage (Perception).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Perception).)"},
+            {"pj": "Aurora", "label": "reprouver l'equipage (0,1)",
+             "texte": "Aurora leve son symbole et repousse les morts-"
+                      "vivants de l'Audacity !",
+             "nudge": "(MJ : Reprouver est deterministe au chat - "
+                      "declenche automatiquement par cette declaration.)"},
+            {"vers": [0, 2], "label": "l'equipage du culte (0,2)"},
+            {"pj": "Brandt", "label": "l'assaut (0,2)",
+             "texte": "Les survivants du culte se joignent aux morts - "
+                      "nous les affrontons de front.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [1, 2], "label": "les quartiers (1,2)"},
+            {"pj": "Flick", "label": "la fin du pacte (1,2)",
+             "texte": "Flick cherche dans les journaux d'Ixas comment "
+                      "rompre le pacte (Decryptage).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Decryptage).)"},
+            {"vers": [2, 2], "label": "les navires (2,2)"},
+            {"vers": [2, 1], "label": "le parchemin (2,1)"},
+            {"pj": "Aurora", "label": "le pacte rompu (2,1)",
+             "texte": "Aurora ouvre le parchemin pour rompre le pacte - "
+                      "les chandelles s'enflamment (Connaissances "
+                      "arcanes).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Connaissances arcane).)"},
+            {"vers": [1, 1], "label": "le tome (1,1)"},
+            {"vers": [0, 1], "label": "retour a l'Audacity (0,1)"},
+            {"pj": "Brandt", "label": "cloture",
+             "texte": "Le chapitre est accompli - l'ile est liberee, "
+                      "nous rapportons tout a Phlan.",
+             "nudge": "(MJ : accorde l'XP d'histoire via "
+                      "fiche_perso_gagner_xp si l'objectif est accompli.)"},
+        ],
+    },
     "gobs": {
         "titre": "À la chasse aux gobs (E2E 3 PJ)",
         "quete": {
@@ -623,9 +756,11 @@ async def phase_run(key: str) -> None:
     # soins du chapitre sont refusés 4 fois d'affilée (shadows3.3).
     from server.tools.base import (
         ToolContext as _TC_s3, invoke_tool as _inv_s3)
-    _tools_s3 = discover_tools()
-    _ctx_s3 = ToolContext(partie_id=pid, joueur="e2e", data_dir=_c.DATA)
-    _r_s3 = await invoke_tool(_tools_s3["preparer_sorts"], _ctx_s3, {
+    from server.tools.registry import (
+        discover_tools as _disc_s3)  # noqa: PLC0415
+    _tools_s3 = _disc_s3()
+    _ctx_s3 = _TC_s3(partie_id=pid, joueur="e2e", data_dir=_c.DATA)
+    _r_s3 = await _inv_s3(_tools_s3["preparer_sorts"], _ctx_s3, {
         "nom_personnage": "Aurora",
         "preparations_json": json.dumps({
             "Soins légers": 2, "Soin mineur": 1, "Bénédiction": 1,

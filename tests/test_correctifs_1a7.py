@@ -131,6 +131,32 @@ def test_encaissement_don_pv():
     assert _bonus_dons_pv(["Alerte"], 1) == 0
 
 
+# ------------------------------------------------------------------ #
+# Run shadows4 — CA recalculée avec l'armure (variante singulier/pluriel)
+# ------------------------------------------------------------------ #
+
+from server.persos import calculer_ca_armure  # noqa: E402
+
+
+def test_ca_armure_cotte_de_maille_singulier():
+    """« Cotte de maille » (inventaire, singulier) → CA +5 (la montée de
+    niveau avait PERDU le bonus : CA 16 → 11)."""
+    ca = calculer_ca_armure(0, ["Cotte de maille"])
+    assert ca == 15, ca
+
+
+def test_ca_armure_pluriel_et_cuir():
+    assert calculer_ca_armure(0, ["Cotte de mailles"]) == 15
+    assert calculer_ca_armure(0, ["Armure de cuir"]) == 12
+    # Flick (DEX +3, cuir dex_max 6) : 10 + 2 + 3 = 15.
+    assert calculer_ca_armure(3, ["Armure de cuir"]) == 15
+
+
+def test_ca_armure_ambigu_sans_armure():
+    """« cuir » seul correspond à 3 armures : aucune supposition."""
+    assert calculer_ca_armure(0, ["cuir"]) == 10
+
+
 def test_fiche_roublard_encaissement_pv():
     """Création complète : don Encaissement → PV_max inclut +3."""
     async def _run():

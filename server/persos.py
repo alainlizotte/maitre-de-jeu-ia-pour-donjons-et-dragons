@@ -1109,14 +1109,29 @@ def calculer_ca_armure(
     est stockée une fois pour toutes sur la fiche ; même logique que le
     bonus de PV des dons (« Dur à cuire »), appliqué à la création.
     """
+    import unicodedata as _u_ca
     from . import catalogue as _catalogue
     from .tools.fiches import a_don_esquive
 
-    par_nom = {a["nom"]: a for a in _catalogue.ARMURES}
+    def _norm_ca(x: str) -> str:
+        n = _u_ca.normalize("NFKD", str(x or "").strip().lower())
+        n = "".join(c for c in n if not _u_ca.combining(c))
+        return n.replace("_", " ").strip()
+
+    par_nom = {_norm_ca(a["nom"]): a for a in _catalogue.ARMURES}
     corps: list[tuple[int, int]] = []
     boucliers: list[int] = []
     for nom in armures or []:
-        a = par_nom.get(str(nom or "").strip())
+        _nn = _norm_ca(nom)
+        a = par_nom.get(_nn)
+        if not a and _nn:
+            # 🛡️ (run shadows4) : variante singulier/pluriel (« Cotte de
+            # maille » vs « Cotte de mailles ») — canonisé SEULEMENT si UN
+            # SEUL candidat du catalogue contient le nom (une ambiguïté
+            # reste sans armure, jamais une supposition).
+            _cand = [k for k in par_nom if _nn in k]
+            if len(_cand) == 1:
+                a = par_nom[_cand[0]]
         if not a:
             continue
         if a["categorie"] == "Bouclier":

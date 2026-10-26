@@ -441,7 +441,11 @@ async def tour_dm(sender, autres, joueur: str, texte: str, bilan: Bilan,
             print(f"    outils: {outils}")
             for w in autres:
                 await vider(w)
-            return {"text": texte_dm, "trace": trace}
+            # 🛡️ (runs ch02/ch03) : `action=True` = action DÉTERMINISTE
+            # (attaque/soin/Réprouver au chat, 0 tool LLM) — le pilote
+            # doit la compter comme mécanique au lieu de re-nudger.
+            return {"text": texte_dm, "trace": trace,
+                    "action": bool(msg.get("action"))}
     return None
 
 

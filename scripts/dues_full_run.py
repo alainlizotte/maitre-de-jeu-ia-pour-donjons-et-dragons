@@ -247,7 +247,11 @@ async def action_pj(pid: str, socks: dict, bilan: Bilan, pj: str,
         return None
     outils = [tc.get("name", "?") for tc in rep.get("trace", [])]
     apres = snapshot(pid)
-    mecanique = bool(outils) and not all(
+    # 🛡️ (runs ch02/ch03) : `action=True` = action DÉTERMINISTE du
+    # serveur (soin au chat en 1 s, etc.) — SANS elle, le pilote
+    # re-nudgait 4 fois le même soin (emplacements gaspillés, rounds
+    # perdus pendant que le monstre frappait).
+    mecanique = (bool(outils) or bool(rep.get("action"))) and not all(
         o in ("etat_partie_get", "ajouter_evenement_histoire",
               "set_derniere_narration", "memoire_evenement")
         for o in outils)

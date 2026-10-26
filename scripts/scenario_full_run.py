@@ -617,6 +617,21 @@ async def phase_run(key: str) -> None:
 
     dfu.jour_combat = _jour_soigne
 
+    # ✨ (runs ch02/ch03) : préparation des sorts de soin au démarrage —
+    # les emplacements d'un chapitre précédent sont épuisés (le soin
+    # déterministe les dépense pour de vrai) ; sans re-préparation, les
+    # soins du chapitre sont refusés 4 fois d'affilée (shadows3.3).
+    from server.tools.base import (
+        ToolContext as _TC_s3, invoke_tool as _inv_s3)
+    _tools_s3 = discover_tools()
+    _ctx_s3 = ToolContext(partie_id=pid, joueur="e2e", data_dir=_c.DATA)
+    _r_s3 = await invoke_tool(_tools_s3["preparer_sorts"], _ctx_s3, {
+        "nom_personnage": "Aurora",
+        "preparations_json": json.dumps({
+            "Soins légers": 2, "Soin mineur": 1, "Bénédiction": 1,
+            "Résistance": 1, "Lumière": 1})})
+    print("[setup] sorts d'Aurora (run):", _r_s3.text[:90])
+
     socks = await dfu._ouvrir(pid)
     try:
         await dfu.jouer_phase(pid, socks, bilan, f"{key}", cfg["steps"])

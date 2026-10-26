@@ -158,6 +158,10 @@ async def test_gouverneur_pv_passe_avec_ajustement():
 #  Mécanique : CA imposée et attaques auto suivent l'ajustement
 # --------------------------------------------------------------------------- #
 async def test_ca_officielle_prefere_entree_combat_ajustee():
+    # 🛡️ (fix #11bis) : RNG amorcé — échec intermittent en suite complète
+    # (l'état du RNG global dépendait des tests précédents).
+    import random as _rnd11b
+    _rnd11b.seed(1103)
     d = _fresh_dir()
     try:
         await _creer_pj(d)

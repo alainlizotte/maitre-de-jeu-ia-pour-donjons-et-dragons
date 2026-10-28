@@ -445,6 +445,162 @@ SCENARIOS = {
                       "fiche_perso_gagner_xp si l'objectif est accompli.)"},
         ],
     },
+    "shadows6": {
+        "titre": "Shadows Over The Moonsea 6/7 (E2E 3 PJ)",
+        "quete": {
+            "titre": "Shadows Over The Moonsea 6/7 - Partie",
+            "pitch": "Chapitre 6 : la confrontation ouverte avec le culte "
+                     "et les pirates infernaux sur l'ile.",
+            "source": ("[divers_shadows_over_the_moonsea_ch06] /data/"
+                       "scenarios/Divers/Shadows Over The Moonsea/"
+                       "shadows over the moonsea-06-partie partie 6 7.pdf"),
+        },
+        "steps": [
+            {"pj": "Brandt", "label": "retour sur l'ile (0,0)",
+             "texte": "Le chapitre 6 commence - nous retrouvons l'ile et "
+                      "les forces du culte.",
+             "nudge": "(MJ : ouvre la carte du scenario avec "
+                      "carte_donjon_entrer si le groupe n'y est pas.)"},
+            {"vers": [1, 0], "label": "Warsh (1,0)"},
+            {"pj": "Brandt", "label": "Warsh (1,0)",
+             "texte": "Warsh est au coeur du trafic - Brandt le defie.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat si Warsh et ses hommes passent a "
+                      "l'attaque.)"},
+            {"vers": [2, 0], "label": "les insulaires (2,0)"},
+            {"vers": [3, 0], "label": "les sorcieres (3,0)"},
+            {"pj": "Aurora", "label": "les sorcieres (3,0)",
+             "texte": "Aurora demande aux sorcieres de rompre leur pacte "
+                      "avec les infernaux (Diplomatie).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Diplomatie) si necessaire.)"},
+            {"vers": [4, 0], "label": "le fumoir (4,0)"},
+            {"vers": [5, 0], "label": "la grange (5,0)"},
+            {"vers": [5, 1], "label": "l'acte du fou (5,1)"},
+            {"pj": "Aurora", "label": "l'acte du fou (5,1)",
+             "texte": "Aurora relit l'acte du fou a la lumiere du "
+                      "chapitre (Connaissances religion).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Connaissances religion).)"},
+            {"vers": [4, 1], "label": "le lemure (4,1)"},
+            {"pj": "Brandt", "label": "le lemure (4,1)",
+             "texte": "Le lemure rode encore - Brandt l'affronte pour "
+                      "couper le lien infernal.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [3, 1], "label": "le fetiche (3,1)"},
+            {"vers": [2, 1], "label": "le parchemin (2,1)"},
+            {"vers": [1, 1], "label": "le tome (1,1)"},
+            {"vers": [0, 1], "label": "l'Audacity (0,1)"},
+            {"pj": "Aurora", "label": "l'Audacity (0,1)",
+             "texte": "Aurora surveille l'epave fantome - la contre-"
+                      "attaque vient-elle des flots ?",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Perception).)"},
+            {"vers": [0, 2], "label": "l'equipage (0,2)"},
+            {"pj": "Brandt", "label": "l'equipage (0,2)",
+             "texte": "Le culte et les pirates en viennent aux mains - "
+                      "nous frappons le groupe affaibli.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [1, 2], "label": "les quartiers d'Ixas (1,2)"},
+            {"pj": "Aurora", "label": "les gardes (1,2)",
+             "texte": "Les gardes d'Ixas tiennent encore les quartiers - "
+                      "Aurora somme le poste de se rendre.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [2, 2], "label": "les navires (2,2)"},
+            {"pj": "Flick", "label": "butin final",
+             "texte": "Flick fouille les navires et les quartiers pour "
+                      "tout ce qui a de la valeur.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"pj": "Brandt", "label": "cloture",
+             "texte": "Le chapitre est accompli - l'ile est a nous, "
+                      "direction Phlan pour la suite.",
+             "nudge": "(MJ : accorde l'XP d'histoire via "
+                      "fiche_perso_gagner_xp si l'objectif est accompli.)"},
+        ],
+    },
+    "shadows7": {
+        "titre": "Shadows Over The Moonsea 7/7 - FINAL (E2E 3 PJ)",
+        "quete": {
+            "titre": "Shadows Over The Moonsea 7/7 - Partie",
+            "pitch": "Chapitre 7 - FINAL : la confrontation ultime de "
+                     "l'ile - le dracolich et le coeur du pacte.",
+            "source": ("[divers_shadows_over_the_moonsea_ch07] /data/"
+                       "scenarios/Divers/Shadows Over The Moonsea/"
+                       "shadows over the moonsea-07-partie partie 7 7.pdf"),
+        },
+        "steps": [
+            {"pj": "Brandt", "label": "le final commence (0,0)",
+             "texte": "Le chapitre final commence - l'ile tremble, la "
+                      "confrontation ultime nous attend.",
+             "nudge": "(MJ : ouvre la carte du scenario avec "
+                      "carte_donjon_entrer si le groupe n'y est pas.)"},
+            {"vers": [1, 0], "label": "Warsh (1,0)"},
+            {"pj": "Brandt", "label": "Warsh final (1,0)",
+             "texte": "Warsh : la fin du pacte passe par toi - Brandt le "
+                      "provoque.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat si le combat est inevitable.)"},
+            {"vers": [2, 0], "label": "les insulaires (2,0)"},
+            {"vers": [3, 0], "label": "les sorcieres (3,0)"},
+            {"pj": "Aurora", "label": "les sorcieres (3,0)",
+             "texte": "Aurora somme les sorcieres de choisir leur camp - "
+                      "le final approche (Diplomatie).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Diplomatie) si necessaire.)"},
+            {"vers": [4, 0], "label": "le fumoir (4,0)"},
+            {"vers": [5, 0], "label": "la grange (5,0)"},
+            {"vers": [5, 1], "label": "l'acte du fou (5,1)"},
+            {"pj": "Aurora", "label": "l'acte du fou final (5,1)",
+             "texte": "Aurora tente une derniere lecture de l'acte ("
+                      "Connaissances religion).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Connaissances religion).)"},
+            {"vers": [4, 1], "label": "le lemure (4,1)"},
+            {"pj": "Brandt", "label": "le lemure final (4,1)",
+             "texte": "Le lemure bloque le chemin du final - Brandt "
+                      "l'abat.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [3, 1], "label": "le fetiche (3,1)"},
+            {"vers": [2, 1], "label": "le parchemin (2,1)"},
+            {"pj": "Aurora", "label": "le parchemin final (2,1)",
+             "texte": "Aurora ouvre le parchemin - rompre le pacte "
+                      "maintenant (Connaissances arcanes).",
+             "nudge": "(MJ : jet officiel avec lancer_d20 "
+                      "(competence=Connaissances arcane).)"},
+            {"vers": [1, 1], "label": "le tome (1,1)"},
+            {"vers": [0, 1], "label": "l'Audacity (0,1)"},
+            {"pj": "Aurora", "label": "l'Audacity finale (0,1)",
+             "texte": "L'epave fantome emerge une derniere fois - "
+                      "Aurora repousse son equipage !",
+             "nudge": "(MJ : Reprouver est deterministe au chat si des "
+                      "morts-vivants sont engages.)"},
+            {"vers": [0, 2], "label": "l'equipage (0,2)"},
+            {"pj": "Brandt", "label": "l'assaut final (0,2)",
+             "texte": "L'equipage du culte et les pirates - l'assaut "
+                      "final commence !",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [1, 2], "label": "les quartiers (1,2)"},
+            {"vers": [2, 2], "label": "le coeur du pacte (2,2)"},
+            {"pj": "Brandt", "label": "la confrontation ultime (2,2)",
+             "texte": "Voici le coeur du pacte - la confrontation "
+                      "ultime, Brandt en tete.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat - c'est le FINAL du module.)"},
+            {"pj": "Flick", "label": "butin final",
+             "texte": "Flick fouille le theatre du combat final.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"pj": "Brandt", "label": "cloture de la campagne",
+             "texte": "La campagne est accomplie - Shadows Over The "
+                      "Moonsea se termine, heros victorieux.",
+             "nudge": "(MJ : accorde l'XP d'histoire via "
+                      "fiche_perso_gagner_xp - la campagne se termine.)"},
+        ],
+    },
     "gobs": {
         "titre": "À la chasse aux gobs (E2E 3 PJ)",
         "quete": {

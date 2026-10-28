@@ -6728,8 +6728,23 @@ async def _resurrection_sur_acceptation(
         etat = st.load()
     except Exception:                                            # noqa: BLE001
         return ""
-    if str(etat.get("phase") or "") != "game_over" and not etat.get("game_over"):
-        return ""
+    if str(etat.get("phase") or "") != "game_over" and not etat.get(
+            "game_over"):
+        # (fix, partie shadows ch06) : RESURRECTION PARTIELLE - la
+        # premiere application remet phase=exploration ; si des heros
+        # restent MORTS (crash au milieu de la boucle, ou morts
+        # successifs), le bouton refusait tout re-run ("hors game_over")
+        # et les morts etaient coinces pour toujours. On autorise le
+        # re-run tant qu'un heros mort traine dans l'etat.
+        _morts_restants = [
+            p for p in (etat.get("pj") or [])
+            if "mort" in {str(c).strip().lower()
+                          for c in (p.get("conditions") or [])}
+            or (_to_int_fiable(p.get("pv")) is not None
+                and _to_int_fiable(p.get("pv")) <= -10)
+        ]
+        if not _morts_restants:
+            return ""
     import unicodedata as _uni5
 
     def _nn5(s: Any) -> str:
@@ -6753,6 +6768,12 @@ async def _resurrection_sur_acceptation(
                      "tombés sont ressuscités et récupèrent 4 points de "
                      "vie.")
         state_patches: list = []
+        # 🛡️ (fix) : `execute_tool_direct` → `_run_one_tool_corps` écrit
+        # dans `tool_calls_trace` et `events` — sans ces attributs, la
+        # résurrection négociée CRASHAIT (AttributeError) et la table
+        # restait coincée en game_over (partie shadows ch06).
+        tool_calls_trace: list = []
+        events: list = []
 
     _result_f = _ResultAcceptation()
     note = await _ressusciter_pj_oublie(

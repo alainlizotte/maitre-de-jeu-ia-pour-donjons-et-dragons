@@ -206,6 +206,69 @@ def test_inventaire_refuse_les_fragments_narratifs():
     asyncio.run(_run())
 
 
+# ------------------------------------------------------------------ #
+# Verrou de mode : voyage refuse pendant l'exploration d'un donjon
+# ------------------------------------------------------------------ #
+
+from server.tools.voyage import voyage_demarrer  # noqa: E402
+
+
+def test_voyage_depuis_donjon_sortie_auto():
+    """Verrou de mode v2 (campagne shadows) : demarrer un voyage
+    depuis un donjon le QUITTE formellement - courant vide,
+    progres archive."""
+    async def _run():
+        d = tempfile.mkdtemp(prefix='voy_lock_')
+        try:
+            ctx = ToolContext(partie_id='voylock', joueur='e2e',
+                              data_dir=d)
+            st = PartyState(data_dir=d, partie_id='voylock')
+            etat = st.load()
+            etat['pj'] = [{'nom': 'Brandt', 'pv': 13, 'pv_max': 13,
+                           'conditions': []}]
+            etat['donjon'] = {
+                'id': 'divers_test', 'courant': [0, 0],
+                'grille': [{'x': 0, 'y': 0, 'ennemis': []}],
+            }
+            st.save(etat)
+            r = await invoke_tool(_TOOLS['voyage_demarrer'], ctx, {
+                'destination': 'Phlan', 'distance_km': 30,
+                'mode': 'marche'})
+            assert 'refus' not in r.text.lower(), r.text[:200]
+            etat2 = PartyState(data_dir=d,
+                               partie_id='voylock').load()
+            courant = list((etat2.get('donjon') or {}).get(
+                'courant') or [])
+            assert not courant, etat2.get('donjon')
+            arch = (etat2.get('donjons_exploreres') or {}).get(
+                'divers_test')
+            assert arch is not None, etat2.get('donjons_exploreres')
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    asyncio.run(_run())
+
+
+def test_voyage_autorise_hors_donjon():
+    """Hors donjon (courant vide), le voyage demarre normalement."""
+    async def _run():
+        d = tempfile.mkdtemp(prefix="voy_ok_")
+        try:
+            ctx = ToolContext(partie_id="voyok", joueur="e2e", data_dir=d)
+            st = PartyState(data_dir=d, partie_id="voyok")
+            etat = st.load()
+            etat["pj"] = [{"nom": "Brandt", "pv": 13, "pv_max": 13,
+                           "conditions": []}]
+            etat["donjon"] = {"id": None, "grille": [], "courant": []}
+            st.save(etat)
+            r = await invoke_tool(_TOOLS["voyage_demarrer"], ctx, {
+                "destination": "Phlan", "distance_km": 30,
+                "mode": "marche"})
+            assert "Voyage refusé" not in r.text, r.text[:200]
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    asyncio.run(_run())
+
+
 def test_fiche_roublard_encaissement_pv():
     """Création complète : don Encaissement → PV_max inclut +3."""
     async def _run():

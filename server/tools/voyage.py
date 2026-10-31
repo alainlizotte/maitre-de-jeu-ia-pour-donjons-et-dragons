@@ -590,6 +590,24 @@ async def voyage_demarrer(
         "marche_forcee": bool(forcee and a_pied),
         "resume": resume,
     }
+    # VERROU DE MODE v2 (campagne shadows : la derive des modes a brule
+    # 60+ tours et coute la campagne ch06). Demarrer un voyage depuis un
+    # donjon = le QUITTER formellement : sortie automatique (progres
+    # archive, courant vide) - le voyage part d'une position monde propre
+    # et la derive donjon/voyage ne peut plus s'auto-entretenir.
+    try:
+        from ..game.state import PartyState as _PS_lock
+        _etat_l = _PS_lock(
+            data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+        _dj_l = _etat_l.get("donjon") or {}
+        _cour_l = list(_dj_l.get("courant") or [])
+        if _dj_l.get("id") and len(_cour_l) >= 2:
+            from .cartes import carte_donjon_sortir as _sortir_lock
+            _tr_s = await _sortir_lock(ctx)
+            print("[dnd35] Sortie auto du donjon (voyage demarre)")
+    except Exception:
+        pass
+
     # Persistance côté serveur (state_patch seul = miroir front uniquement).
     try:
         from ..game.state import PartyState   # lazy : évite tout cycle d'import

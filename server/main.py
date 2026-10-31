@@ -4478,9 +4478,35 @@ async def chapitre_suivant(partie_id: str, payload: dict[str, Any]) -> dict[str,
     if tr.text.startswith("❌"):
         raise HTTPException(status_code=500, detail=tr.text[:200])
     session = sessions.get(partie_id)
+    # 🏆 XP d'HISTOIRE du chapitre accompli (fix campagne shadows : le
+    # nudge de clôture n'était JAMAIS appliqué par le petit modèle — les
+    # PJ plafonnaient au XP des combats). Prix fixe par chapitre ; la
+    # montée de niveau s'applique automatiquement via
+    # fiche_perso_gagner_xp (dé de vie + CON, BAB, sauvegardes).
+    _xp_hist = 100
+    _lignes_xp: list[str] = []
+    try:
+        from .game.state import PartyState as _PS_xp
+        _etat_xp = _PS_xp(
+            data_dir=str(cfg.abs(cfg.paths.data_dir)), partie_id=partie_id
+        ).load()
+        for _pj in (_etat_xp.get("pj") or []):
+            _nom_xp = str(_pj.get("nom") or "")
+            if not _nom_xp:
+                continue
+            _tr_xp = await invoke_tool(
+                _TOOL_REGISTRY.get("fiche_perso_gagner_xp"), ctx,
+                {"nom": _nom_xp, "montant": _xp_hist})
+            _l_xp = str(_tr_xp.text or "").strip().splitlines()
+            _lignes_xp.append(
+                f"- {_nom_xp} : +" + str(_xp_hist) + " XP — "
+                + (_l_xp[0] if _l_xp else ""))
+    except Exception as _e_xp:                              # noqa: BLE001
+        _lignes_xp.append(f"- (XP d'histoire non distribuée : {_e_xp})")
     note = (f"📖 **Chapitre {(_num_actuel or 0) + 1 if isinstance(_num_actuel, int) else '?'}"
             f"/{_total}** : « {_titre_suiv} » — la campagne continue (XP et "
-            "équipement conservés).")
+            "équipement conservés).\n\n🏆 **XP d'histoire du chapitre "
+            f"accompli (+{_xp_hist} chacun)** :\n" + "\n".join(_lignes_xp))
     session.remember_assistant(note)
     await session.broadcast({
         "type": "dm", "text": note,

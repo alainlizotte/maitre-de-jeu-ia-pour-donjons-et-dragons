@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""R6 : test de NON-FUITE - le filtre joueur neutralise les textes MJ.
+"""R6+R4 : test de NON-FUITE - le filtre joueur neutralise les textes MJ.
 
 Les blocs reels observes en campagne (shadows ch02-ch07) qui fuyaient
 vers le chat : plomberie de rattrapage, refus de gardes avec listes
-canoniques, consignes de narration. Le filtre `_assainir_texte_joueur`
-doit les neutraliser (version joueur neutre).
+canoniques, consignes de narration, en-tetes 'Salle NOUVELLE' recopies
+par le modele. Le filtre `_assainir_texte_joueur` doit les neutraliser.
 
 Usage : py -m pytest tests/test_non_fuite_chat.py -q
 """
@@ -20,7 +20,10 @@ sys.path.insert(0, os.path.dirname(
 from server.main import _assainir_texte_joueur  # noqa: E402
 from server.main import _REFUS_MJ_PREFIXES  # noqa: E402
 
-# Les refus REELS (formes accentuees telles que diffusees par les gardes)
+# ------------------------------------------------------------------ #
+# R6 : les refus REELS des gardes (formes accentuees diffusees)
+# ------------------------------------------------------------------ #
+
 _REFUS_REELS = [
     ("salle videe",
      "⛔ **Salle déjà vidée** : Kobold ont DÉJÀ été éliminés dans CETTE "
@@ -73,3 +76,35 @@ def test_filtre_conserve_le_contenu_joueur():
     apres = _assainir_texte_joueur(avant)
     assert "initiative 15" in apres
     assert "subit 6 dégâts" in apres
+
+
+# ------------------------------------------------------------------ #
+# R4 : l'en-tete 'Salle NOUVELLE' recopie par le modele
+# ------------------------------------------------------------------ #
+
+_FUITE_SALLE_NOUVELLE = (
+    "…entre dans le donjon, où une brume glaciale s'élève d'un autel "
+    "infernal. Un Kobold surgit des ténèbres.\n\n"
+    "**📌 Salle NOUVELLE — Donjon des Marais (salle 0,1)**\n\n"
+    "Le Kobold, vêtu de robes noires, lance un cri rauque."
+)
+
+
+def test_salle_nouvelle_stripped():
+    apres = _assainir_texte_joueur(_FUITE_SALLE_NOUVELLE)
+    assert "Salle NOUVELLE" not in apres, apres[:300]
+    # La narration du modele autour reste.
+    assert "brume glaciale" in apres, apres[:200]
+    assert "cri rauque" in apres, apres[:200]
+
+
+def test_salle_nouvelle_brut_stripped():
+    """La forme brute du tool ('📌 Salle NOUVELLE : narre-la, puis FIGE
+    sa description via…') est aussi strip."""
+    brut = ("🚶 Vous avancez au est → salle (1,0).\n"
+            "📌 Salle NOUVELLE : narre-la, puis FIGE sa description via "
+            "carte_donjon_decrire_salle(description=…).\n"
+            "Le reste du texte.")
+    apres = _assainir_texte_joueur(brut)
+    assert "Salle NOUVELLE" not in apres, apres[:300]
+    assert "Le reste du texte." in apres, apres[:200]

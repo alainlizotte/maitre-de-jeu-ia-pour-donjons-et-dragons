@@ -358,6 +358,12 @@ _DM_LIGNE_RE = _re_mod.compile(
     r"⚠️ NE RÉINVENTE PAS|📌 Salle NOUVELLE|🪜 ESCALIER dans cette "
     r"salle|🪤|ℹ️ \*\*Rattrapage serveur\*\*|Entrée\s*:)",
 )
+# 🛡️ (fix R4, campagne shadows) : le 9B RECOPIAIT la consigne MJ du
+# tool dans sa prose (« **📌 Salle NOUVELLE — Donjon des Marais (salle
+# 0,1)** » affichée 3 fois aux joueurs) — la ligne d'en-tête est
+# MJ-seul, qu'elle soit brute, en gras ou suivie de sa parenthèse.
+_DM_LIGNE_RE2 = _re_mod.compile(
+    r"^\*{0,2}📌 Salle NOUVELLE[^\n]*$", _re_mod.IGNORECASE)
 
 
 def _assainir_texte_joueur(texte: str) -> str:
@@ -382,7 +388,7 @@ def _assainir_texte_joueur(texte: str) -> str:
                 en_section = False
                 lignes_out.append(ligne)
             continue
-        if _DM_LIGNE_RE.match(nu):
+        if _DM_LIGNE_RE.match(nu) or _DM_LIGNE_RE2.match(nu):
             continue
         # (fix fuites) : les refus de gardes = canal MJ - le joueur voit
         # une ligne neutre ; les consignes/listes canoniques qui suivent

@@ -336,6 +336,23 @@ _DM_SECTIONS = (
     "📜 **Salle DU SCÉNARIO**",
     "🚪 Portes de cette salle",
 )
+# (fix fuites, campagne shadows) : les REFUS des gardes serveur
+# (B25, salle videe, ecrasante, trame...) = canal MJ - ils contiennent
+# la liste canonique de la salle (spoilers de structure) et des
+# consignes de narration. Version joueur : une ligne neutre.
+_REFUS_MJ_PREFIXES = (
+    "⛔ **Salle déjà vidée**",
+    "⛔ **Rencontre hors module refusée**",
+    "⛔ **Rencontre écrasante refusée**",
+    "⛔ **Monstres refusés",
+    "⛔ **Monstres trop puissants",
+    "⛔ **Combat DÉJÀ en cours**",
+    "⛔ **Voyage refusé",
+    "⛔ **Formule de dégâts non conforme",
+    "🚫 **Rencontre écrasante refusée**",
+    "🚫 **Trop de monstres d'un coup**",
+)
+
 _DM_LIGNE_RE = _re_mod.compile(
     r"^(?:Description enregistrée\s*:|État tel que laissé\s*:|"
     r"⚠️ NE RÉINVENTE PAS|📌 Salle NOUVELLE|🪜 ESCALIER dans cette "
@@ -353,6 +370,7 @@ def _assainir_texte_joueur(texte: str) -> str:
         return texte
     lignes_out: list[str] = []
     en_section = False
+    en_refus = False
     for ligne in str(texte).split("\n"):
         nu = ligne.strip()
         if not en_section and any(nu.startswith(sp) for sp in _DM_SECTIONS):
@@ -366,9 +384,29 @@ def _assainir_texte_joueur(texte: str) -> str:
             continue
         if _DM_LIGNE_RE.match(nu):
             continue
+        # (fix fuites) : les refus de gardes = canal MJ - le joueur voit
+        # une ligne neutre ; les consignes/listes canoniques qui suivent
+        # (italiques, listes, vides) sont consommees.
+        if nu.startswith(_REFUS_MJ_PREFIXES):
+            en_refus = True
+            lignes_out.append(
+                "⛔ _L'action ne peut pas se dérouler ainsi - le MJ "
+                "ajuste la suite._")
+            continue
+        if en_refus:
+            if not nu or nu.startswith(("_", "- ", "•")) or nu.startswith(
+                    "  "):
+                continue
+            en_refus = False
+            lignes_out.append(ligne)
+            continue
         lignes_out.append(ligne)
     t = "\n".join(lignes_out)
     # Segments inline d'instructions au MJ (dans les lignes conservées).
+    # (fix fuites) : la plomberie du rattrapage combat-prose = MJ.
+    t = _re_mod.sub(
+        r"\s*⚙️ _Le serveur n'a pas pu engager ce combat narré en "
+        r"prose\._", "", t)
     t = _re_mod.sub(r"\s*— n'invente AUCUNE autre sortie\.", "", t)
     t = _re_mod.sub(r"\s*Le groupe poursuit son exploration du donjon\.", "", t)
     t = _re_mod.sub(r"\s*⚠️ Ce sont les SEULES sorties[^.]*\.", "", t)
@@ -9244,10 +9282,13 @@ async def _handle_say(
                 if events_pre:
                     system_text += (
                         "\n\n⚙️ **ÉVÉNEMENTS MÉCANIQUES RÉSOLUS PAR LE "
-                        "SERVEUR DEPUIS LE DERNIER MESSAGE** (déjà affichés "
-                        "aux joueurs — intègre-les à ta narration sans les "
-                        "répéter mot à mot, et tire-en les conséquences "
-                        "dramatiques) :\n"
+                        "SERVEUR DEPUIS LE DERNIER MESSAGE** (la version "
+                        "affichée aux joueurs est ÉPURÉE — intègre-les à "
+                        "ta narration sans les répéter mot à mot, tire-en "
+                        "les conséquences dramatiques, et ne révèle JAMAIS "
+                        "dans ta prose les éléments MJ qu'ils contiennent : "
+                        "canon de salle, quantités, notes du module, "
+                        "consignes de narration) :\n"
                         + "\n\n".join(events_pre)
                     )
             # On re-construit la conversation à partir de l'historique (système

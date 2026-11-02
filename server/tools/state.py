@@ -594,6 +594,7 @@ async def engager_combat(
     """
     import random
 
+    from .fiches import _espece_cle as _ec_bless_entry
     from .monstres import (
         _find_monstre_strict, _load_bestiaire, _suggestions,
         _est_monstre_generique, _refus_generique_texte,
@@ -817,6 +818,9 @@ async def engager_combat(
     # du bestiaire est un sur-ensemble de mots de la créature résolue et que
     # la dernière narration mentionne le qualificatif ou un alias, on monte
     # vers la variante (le gouverneur d'équilibre arbitre ensuite).
+    # BLEEDE (fix boucle infinie) : les blessures persistees d une
+    # RETRAITE precedente s appliqueront aux creatures engagees.
+    _blessures_encours = dict(etat.get("blessures_en_cours") or {})
     _notes_variante: list[str] = []
     try:
         from .monstres import _maj_variante_specifique  # noqa: E501 pylint: disable=import-outside-toplevel
@@ -1420,10 +1424,25 @@ async def engager_combat(
             "fp": str(m.get("fp", "?")), "conditions": [],
             "degats_recus": 0,
         }
+        # BLEEDE (fix boucle infinie) : les BLESSURES persistees d une
+        # retraite precedente s appliquent - la creature re-engagee
+        # repart de ses PV restants (l entree est consommee).
         # ⚖️ Ajustement TEMPORAIRE (équilibre) : modifie l'entrée de CE
         # combat uniquement — le bestiaire reste inchangé.
         if aj["actif"]:
             _appliquer_ajustement_entry(entry_mc, aj)
+        # BLEEDE (fix boucle infinie) : les BLESSURES persistees d une
+        # retraite precedente s appliquent APRES l ajustement (sinon
+        # l equilibrage ecrase la blessure) - la creature re-engagee
+        # repart de ses PV restants (l entree est consommee).
+        _cle_bless2 = _ec_bless_entry(str(m.get("nom") or noms[i]))
+        _pv_bless2 = _blessures_encours.pop(_cle_bless2, None)
+        if _pv_bless2 is not None:
+            entry_mc["pv"] = max(1, min(int(_pv_bless2),
+                                        int(entry_mc.get("pv_max", 1) or 1)))
+            lignes.append(
+                f"- {label} est deja blesse (retraite precedente) : "
+                f"PV {entry_mc['pv']}/{entry_mc['pv_max']}.")
         monstres_combat.append(entry_mc)
         if aj["actif"]:
             lignes_ajust.append(_decris_ajustement(
@@ -1507,6 +1526,7 @@ async def engager_combat(
     etat["initiative"] = participants
     etat["courant_tour_pour"] = participants[0]["nom"]
     etat["monstres_combat"] = monstres_combat
+    etat["blessures_en_cours"] = _blessures_encours
     from datetime import datetime as _dt
     etat["tour_depuis"] = _dt.now().isoformat()
     # 🔧 Bêta (séquencement) : nouveau combat → marques « déjà agi » à zéro.
@@ -1773,6 +1793,27 @@ def _clore_combat_etat(state: PartyState, raison: str) -> Optional[str]:
         return f"❌ État illisible : {etat}"
     if etat.get("phase") != "combat" or not etat.get("initiative"):
         return "❌ Aucun combat en cours."
+    # BLEEDE (fix boucle infinie, campagne shadows) : les ennemis
+    # SURVIVANTS d une RETRAITE gardent leurs blessures - le re-engagement
+    # de la meme espece repart de leurs PV restants. Sinon chaque
+    # re-engagement remettait le bestiaire a PLEIN (le loup 18 PV
+    # re-plein apres chaque retraite alors que l equipe avait inflige
+    # 12 degats) : la rencontre etait INVINCIBLE.
+    if raison == "retraite":
+        from .fiches import _espece_cle as _ec_bless
+        blessures = etat.setdefault("blessures_en_cours", {})
+        for mo in (etat.get("monstres_combat") or []):
+            try:
+                _pv_mo = int(mo.get("pv", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if _pv_mo <= 0 or "Détruit" in (mo.get("conditions") or []):
+                continue
+            cle = _ec_bless(str(mo.get("nom") or ""))
+            if not cle:
+                continue
+            _prec = int(blessures.get(cle, 999) or 999)
+            blessures[cle] = min(_prec, _pv_mo)
     etat["phase"] = "exploration"
     etat["initiative"] = []
     etat["courant_tour_pour"] = None

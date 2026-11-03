@@ -774,7 +774,7 @@ _RE_MONNAIE = re.compile(
 
 
 
-def _recalc_ca_fiche(fiche: dict) -> None:
+def _recalc_ca_fiche(fiche: dict, ctx=None) -> None:
     """Recalcule la CA de la fiche depuis l equipement PORTE.
 
     Fix (campagne Crown of Mystra) : la CA etait calculee A LA CREATION
@@ -796,6 +796,14 @@ def _recalc_ca_fiche(fiche: dict) -> None:
         dons = fiche.get("dons")
         fiche["ca"] = _persos_ca.calculer_ca_armure(
             (dex - 10) // 2, armures, dons=dons)
+        # (fix) : la CA nouvelle est repercutee sur l ETAT de partie
+        # (l entree pj est celle lue par les gardes ennemies).
+        if ctx is not None and fiche.get("nom"):
+            try:
+                from .fiches import _maj_etat_pj as _mep
+                _mep(ctx, str(fiche.get("nom")), {"ca": fiche["ca"]})
+            except Exception:                                # noqa: BLE001
+                pass
     except Exception:                                        # noqa: BLE001
         pass
 
@@ -1187,7 +1195,7 @@ async def inventaire_ajouter(
     # Aligne le champ d'affichage legacy `equipement` sur l'inventaire.
     fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                            for i in inv if i.get("nom")]
-    _recalc_ca_fiche(fiche)
+    _recalc_ca_fiche(fiche, ctx)
     fiche = _normaliser_fiche(fiche)
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:
@@ -1264,7 +1272,7 @@ async def inventaire_retirer(
     fiche["inventaire"] = inv
     fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                            for i in inv if i.get("nom")]
-    _recalc_ca_fiche(fiche)
+    _recalc_ca_fiche(fiche, ctx)
     fiche = _normaliser_fiche(fiche)
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:
@@ -1336,7 +1344,7 @@ async def inventaire_consommer_munition(
     fiche["inventaire"] = inv
     fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                            for i in inv if i.get("nom")]
-    _recalc_ca_fiche(fiche)
+    _recalc_ca_fiche(fiche, ctx)
     fiche = _normaliser_fiche(fiche)
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:

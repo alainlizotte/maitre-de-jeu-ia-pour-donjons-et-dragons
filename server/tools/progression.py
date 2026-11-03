@@ -67,6 +67,10 @@ async def fiche_perso_gagner_xp(
         "pv": fiche.get("pv"), "pv_max": fiche.get("pv_max"),
         "bab": fiche.get("bab"), "sauvegardes": fiche.get("sauvegardes"),
         "charge_max": fiche.get("charge_max"),
+        # 🛡️ (fix) : la CA voyageait PAS - l'etat gardait la CA de la
+        # creation (10+DEX sans armure) et les ennemis frappaient des
+        # CA 11 alors que la fiche en avait 16 (campagne Crown).
+        "ca": fiche.get("ca"),
     })
     return ToolResult(
         text="\n".join(logs) or f"ℹ️ Aucun changement ({m:+d} XP).",
@@ -197,6 +201,10 @@ async def fiche_perso_perte_niveau(
         "pv": fiche.get("pv"), "pv_max": fiche.get("pv_max"),
         "bab": fiche.get("bab"), "sauvegardes": fiche.get("sauvegardes"),
         "charge_max": fiche.get("charge_max"),
+        # 🛡️ (fix) : la CA voyageait PAS - l'etat gardait la CA de la
+        # creation (10+DEX sans armure) et les ennemis frappaient des
+        # CA 11 alors que la fiche en avait 16 (campagne Crown).
+        "ca": fiche.get("ca"),
     })
     return ToolResult(
         text="\n".join(logs),

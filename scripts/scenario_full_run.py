@@ -601,6 +601,136 @@ SCENARIOS = {
                       "fiche_perso_gagner_xp - la campagne se termine.)"},
         ],
     },
+    "crown": {
+        "titre": "The Crown of Mystra (E2E 3 PJ - module complet)",
+        "quete": {
+            "titre": "The Crown of Mystra - la quete des huit gemmes",
+            "pitch": "Silverymoon : recuperer la Couronne de Mystra chez "
+                     "Zendar Nulentok, reunir les huit gemmes dispersees "
+                     "sur Faerun, restaurer la Couronne.",
+            "source": ("[ro_the_crown_of_mystra] /data/scenarios/"
+                       "Les Royaumes Oublies/The Crown of Mystra.donjon.json"),
+        },
+        "steps": [
+            {"pj": "Brandt", "label": "depart Silverymoon (0,0)",
+             "texte": "Teleshann nous confie la quete : recuperer la "
+                      "Couronne de Mystra chez Zendar Nulentok. Nous "
+                      "partons, equipement verifie.",
+             "nudge": "(MJ : ouvre la carte du scenario avec "
+                      "carte_donjon_entrer si le groupe n'y est pas.)"},
+            {"vers": [1, 0], "label": "la grotte (1,0)"},
+            {"vers": [2, 0], "label": "le couloir aux perceurs (2,0)"},
+            {"pj": "Brandt", "label": "les perceurs (2,0)",
+             "texte": "Des perceurs pendent du plafond - Brandt charge "
+                      "le premier, l'oeil aux angles.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [3, 0], "label": "le puits (3,0)"},
+            {"pj": "Aurora", "label": "les crawlers (3,0)",
+             "texte": "Des crawlers charognards dans le puits - Aurora "
+                      "couvre, Brandt descend en garde.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat - ajuste si trop fort pour le "
+                      "groupe.)"},
+            {"vers": [4, 0], "label": "le groove de Nulentok (4,0)"},
+            {"pj": "Brandt", "label": "Nulentok et la Couronne (4,0)",
+             "texte": "Zendar Nulentok ! La Couronne de Mystra est a lui "
+                      "- nous le defions.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat - Nulentok fuit s'il est domine. "
+                      "Apres victoire : la Couronne passe par "
+                      "inventaire_ramasser.)"},
+            {"pj": "Flick", "label": "la Couronne ramassee",
+             "texte": "Flick ramasse la Couronne de Mystra.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"vers": [4, 1], "label": "Ruines de Sarr (4,1)"},
+            {"pj": "Brandt", "label": "les squelettes de Sarr (4,1)",
+             "texte": "Des squelettes gardent le Beljuril - Brandt "
+                      "ouvre la voie.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"pj": "Flick", "label": "le Beljuril (4,1)",
+             "texte": "Flick empoche le Beljuril.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"vers": [3, 1], "label": "l'echoppe d'Aluarim (3,1)"},
+            {"pj": "Flick", "label": "le Diamant (3,1)",
+             "texte": "Flick negocie le Diamant a l'echoppe d'Aluarim.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser ou "
+                      "inventaire_ajouter.)"},
+            {"vers": [2, 1], "label": "le QG zhentarim (2,1)"},
+            {"vers": [1, 1], "label": "l'autel de Cyric (1,1)"},
+            {"vers": [0, 1], "label": "l'antichambre (0,1)"},
+            {"pj": "Flick", "label": "la Jacinthe (0,1)",
+             "texte": "Flick empoche la Jacinthe.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"vers": [0, 2], "label": "la bibliotheque (0,2)"},
+            {"pj": "Aurora", "label": "l'assassin (0,2)",
+             "texte": "Un assassin rôde dans la bibliotheque - Aurora "
+                      "le denonce, Brandt est pret.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"pj": "Flick", "label": "la Rogue Stone (0,2)",
+             "texte": "Flick empoche la Rogue Stone.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"vers": [1, 2], "label": "le tresor (1,2)"},
+            {"pj": "Flick", "label": "le voleur (1,2)",
+             "texte": "Un voleur dans le tresor - Flick le confronte, "
+                      "lame au fourreau a moitie sorti.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [2, 2], "label": "la jungle (2,2)"},
+            {"pj": "Brandt", "label": "les gobelins (2,2)",
+             "texte": "Des gobelins sur la piste - Brandt les charge.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [3, 2], "label": "la crypte (3,2)"},
+            {"pj": "Aurora", "label": "les goules (3,2)",
+             "texte": "Des goules dans la crypte - Aurora leve son "
+                      "symbole, prete a les repousser.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat - Reprouver est deterministe au "
+                      "chat si Aurora les repousse.)"},
+            {"vers": [4, 2], "label": "le temple (4,2)"},
+            {"pj": "Brandt", "label": "le gorille (4,2)",
+             "texte": "Un gorille garde l'Emeraude - Brandt l'affronte.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"pj": "Flick", "label": "l'Emeraude (4,2)",
+             "texte": "Flick empoche l'Emeraude de Shou Lung.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"vers": [4, 3], "label": "le glacier (4,3)"},
+            {"pj": "Flick", "label": "le Saphir etoile (4,3)",
+             "texte": "Flick empoche le Saphir etoile dans la crevasse.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"vers": [3, 3], "label": "les cellules (3,3)"},
+            {"vers": [2, 3], "label": "la garde (2,3)"},
+            {"pj": "Aurora", "label": "le necromancien (2,3)",
+             "texte": "Le necromancien rouge garde la salle - Aurora "
+                      "le defie, symbole leve.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"vers": [1, 3], "label": "les grimoires (1,3)"},
+            {"pj": "Flick", "label": "les grimoires (1,3)",
+             "texte": "Flick empoche les cinq grimoires de Meredoth.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"vers": [0, 3], "label": "la salle du trone (0,3)"},
+            {"pj": "Aurora", "label": "les ombres (0,3)",
+             "texte": "Deux ombres gardent l'Etoile de rubis - Aurora "
+                      "leve son symbole, Brandt la charge.",
+             "nudge": "(MJ : engage la rencontre canonique avec "
+                      "engager_combat.)"},
+            {"pj": "Flick", "label": "l'Etoile de rubis (0,3)",
+             "texte": "Flick empoche l'Etoile de rubis.",
+             "nudge": "(MJ : le butin passe par inventaire_ramasser.)"},
+            {"pj": "Brandt", "label": "cloture de la campagne",
+             "texte": "Les huit gemmes sont reunies et la Couronne "
+                      "recuperee - nous restaurons la Couronne et la "
+                      "rendons a Mystra.",
+             "nudge": "(MJ : la restauration passe par l'etape 3 du "
+                      "scenario - accorde l'XP d'histoire via "
+                      "fiche_perso_gagner_xp.)"},
+        ],
+    },
     "gobs": {
         "titre": "À la chasse aux gobs (E2E 3 PJ)",
         "quete": {

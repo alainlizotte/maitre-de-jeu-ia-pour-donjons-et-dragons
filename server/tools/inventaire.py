@@ -773,6 +773,33 @@ _RE_MONNAIE = re.compile(
 )
 
 
+
+def _recalc_ca_fiche(fiche: dict) -> None:
+    """Recalcule la CA de la fiche depuis l equipement PORTE.
+
+    Fix (campagne Crown of Mystra) : la CA etait calculee A LA CREATION
+    (10 + DEX, sans armure) et JAMAIS recalculee quand l armure etait
+    ajoutee via inventaire_ajouter - les PJ combattaient a CA 11 avec
+    une cotte de mailles (+5) dans l inventaire.
+    """
+    try:
+        from .. import persos as _persos_ca
+        armures = [
+            str(e.get("nom")) for e in (fiche.get("equipement") or [])
+            if isinstance(e, dict) and e.get("nom")
+        ]
+        carac = fiche.get("carac") or {}
+        try:
+            dex = int(carac.get("DEX", 10) or 10)
+        except (TypeError, ValueError):
+            dex = 10
+        dons = fiche.get("dons")
+        fiche["ca"] = _persos_ca.calculer_ca_armure(
+            (dex - 10) // 2, armures, dons=dons)
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
 def _router_monnaie(fiche: dict, objet: str, quantite: int):
     """Si l'objet est de la MONNAIE, crédite l'or de la fiche et renvoie la
     note ; sinon None (l'objet rejoint l'inventaire normalement)."""
@@ -1160,6 +1187,7 @@ async def inventaire_ajouter(
     # Aligne le champ d'affichage legacy `equipement` sur l'inventaire.
     fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                            for i in inv if i.get("nom")]
+    _recalc_ca_fiche(fiche)
     fiche = _normaliser_fiche(fiche)
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:
@@ -1236,6 +1264,7 @@ async def inventaire_retirer(
     fiche["inventaire"] = inv
     fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                            for i in inv if i.get("nom")]
+    _recalc_ca_fiche(fiche)
     fiche = _normaliser_fiche(fiche)
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:
@@ -1307,6 +1336,7 @@ async def inventaire_consommer_munition(
     fiche["inventaire"] = inv
     fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                            for i in inv if i.get("nom")]
+    _recalc_ca_fiche(fiche)
     fiche = _normaliser_fiche(fiche)
     poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
     if err:
@@ -1397,6 +1427,7 @@ def _consommer_fragment(
     fiche["inventaire"] = inv
     fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                            for i in inv if i.get("nom")]
+    _recalc_ca_fiche(fiche)
     _normaliser_fiche(fiche)
     return str(trouve.get("nom") or fragment)
 
@@ -1431,12 +1462,14 @@ def _consommer_charge_kit(fiche: dict[str, Any]) -> tuple[bool, int]:
             fiche["inventaire"] = inv
             fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                                    for i in inv if i.get("nom")]
+            _recalc_ca_fiche(fiche)
             _normaliser_fiche(fiche)
             return False, 0
         e["charges"] = charges - 1
         fiche["inventaire"] = inv
         fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
                                for i in inv if i.get("nom")]
+        _recalc_ca_fiche(fiche)
         _normaliser_fiche(fiche)
         return True, charges - 1
     return False, 0

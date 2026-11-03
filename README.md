@@ -13,11 +13,11 @@ connectent depuis leur navigateur sur le réseau local.
 
 | | |
 |---|---|
-| **Backend** | FastAPI + WebSocket, **86 tools Python** (function-calling) |
+| **Backend** | FastAPI + WebSocket, **87 tools Python** (function-calling) |
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD ; **critiques confirmés, RD/résistances, attaques multiples, conditions à effets, dangers d'environnement, climat par région, trésors par ND** |
-| **Qualité** | **970 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) |
+| **Qualité** | **1148 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) — **campagnes complètes jouées** (*Dues for the Dead*, *Shadows Over the Moonsea* 7 chapitres, *The Crown of Mystra*) |
 | **Images** | ComfyUI — tout modèle de votre choix (**recommandé : Qwen-Image 1.0 ou FLUX.1-schnell**, Apache 2.0) — optionnel |
 | **Cartes** | Carte du monde par univers/scénario avec épingles, **chemin parcouru et lieux visités persistants**, plein écran projeté |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
@@ -295,6 +295,53 @@ Trois conteneurs : `llamacpp` (chat, GPU), `llamaembed` (embeddings RAG, port 80
 Port modifiable : `set DND35_PORT=9000` (ou `.env`). Accès hors réseau local : redirection de
 port sur votre box ou reverse proxy HTTPS devant le port 8123.
 
+### 🗡️ Passe « campagne E2E complète » (10-11/2026)
+
+Banc d'essai : **la campagne *Shadows Over the Moonsea* jouée de bout en
+bout** (7 chapitres, 3 game-over assumés et relancés via la Résurrection
+négociée) puis **le module *The Crown of Mystra* en entier**. Chaque
+défaillance observée en partie réelle a produit un correctif testé :
+
+- **Combat chat 100 % déterministe** : une attaque, un soin ou un
+  Réprouver déclaré **dans le chat** par le joueur actif est résolu par
+  le serveur (jet officiel, dégâts de l'arme, emplacements de sorts,
+  table de répulsion) **sans appeler le LLM** — en 0,1-0,2 s au lieu de
+  25-60 s. Les faux positifs (préparation d'action, esquive, futur,
+  sorts, dialogue) restent sur le chemin narratif.
+- **Boucle de rencontre invincible fermée** : les blessures d'une
+  RETRAITE persistent — le re-engagement de la même créature repart de
+  ses PV restants (avant : chaque `engager_combat` remettait le
+  bestiaire à plein, la rencontre ne pouvait jamais être gagnée).
+- **CA toujours juste** : recalculée à **chaque mutation d'inventaire**
+  (l'achat de l'armure monte la CA de 11 à 16), à la **montée de
+  niveau** (le matcher d'armure tolère les variantes) et synchronisée
+  **fiche ↔ état de partie** (les ennemis frappaient des CA obsolètes).
+- **Équilibrage de difficulté** : une rencontre dont le FP dépasse
+  l'APL de la table réelle est allégée TEMPORAIREMENT (PV ×0.4,
+  attaque/dégâts −3) — le ratio de joueurs seul ne détectait pas les
+  rencontres mortelles (le Loup terrible FP 3 vs niveau 1).
+- **XP d'histoire automatique** à l'enchaînement de chapitre (+100/PJ)
+  — le petit modèle n'appliquait jamais le nudge de clôture.
+- **Résurrection négociée fiable** : le bouton game-over ne crashait
+  plus (bookkeeping manquant) et accepte le **re-run** quand des héros
+  restent morts après une résurrection partielle.
+- **Chat sans fuite MJ** : plomberie serveur, refus de gardes (avec
+  listes canoniques = spoilers) et en-têtes d'outils recopiés par le
+  modèle ne sortent plus — le joueur voit la narration et les
+  résultats, le MJ garde le texte intégral dans son contexte.
+- **Verrou de mode déplacement** : démarrer un voyage depuis un donjon
+  **quitte formellement** le donjon (progrès archivé) — la dérive
+  donjon/voyage (60+ tours brûlés par chapitre) est fermée.
+- **Inventaire sain** : les fragments de narration ne sont plus
+  « rangés » comme objets (garde anti-phrase), l'inventaire projeté
+  reste sain.
+- **Fiches complètes dès le départ** : l'équipement de départ (armes du
+  catalogue = dés officiels) et les dons (Arme en finesse…) sont
+  appliqués à la création ; les attaques sournoise (+1d6/2 niveaux de
+  roublard, jamais multipliées par un critique) sont résolues
+  serveur.
+
+
 ### Sans Docker
 
 ```bash
@@ -349,7 +396,7 @@ chapitres), `scripts/generer_donjon_scenario.py` (brouillon de manifeste).
 
 ## 🧪 Tests
 
-**958 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
+**1148 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
 refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, le
 crédit du trésor canonique et le partage de l'or, les scénarios et le pipeline
@@ -392,7 +439,7 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 3. Le **PromptBuilder** assemble le system prompt : instructions MJ + état de partie
    (phase, combat, quête/bible de scénario, **carte du donjon**, mémoire de campagne) +
    sections dynamiques par phase + extraits RAG si actif.
-4. L'**Orchestrator** boucle en function-calling : le LLM choisit parmi **76 tools Python**
+4. L'**Orchestrator** boucle en function-calling : le LLM choisit parmi **87 tools Python**
    (`lancer_attaque`, `engager_combat`, `fiche_perso_*`, `carte_donjon_*`, `incanter_sort`,
    `inventaire_*`, `memoire_*`, …) **filtrés par phase de jeu** ; toute « simulation » de jet
    est détectée et rejetée.
@@ -428,7 +475,7 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 ├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées,
 │                             génération de manifestes de donjons par scénario,
 │                             simulation)
-└── tests/                  ← 958 tests pytest déterministes (combat, carte,
+└── tests/                  ← 1148 tests pytest déterministes (combat, carte,
                               manifestes de scénario, fiches, trésors/or,
                               E2E)
 ```

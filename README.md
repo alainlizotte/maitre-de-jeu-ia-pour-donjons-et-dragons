@@ -17,7 +17,7 @@ connectent depuis leur navigateur sur le réseau local.
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD ; **critiques confirmés, RD/résistances, attaques multiples, conditions à effets, dangers d'environnement, climat par région, trésors par ND** |
-| **Qualité** | **1148 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) — **campagnes complètes jouées** (*Dues for the Dead*, *Shadows Over the Moonsea* 7 chapitres, *The Crown of Mystra*) |
+| **Qualité** | **1151 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) — **campagnes complètes jouées** (*Dues for the Dead*, *Shadows Over the Moonsea* 7 chapitres, *The Crown of Mystra*) |
 | **Images** | ComfyUI — tout modèle de votre choix (**recommandé : Qwen-Image 1.0 ou FLUX.1-schnell**, Apache 2.0) — optionnel |
 | **Cartes** | Carte du monde par univers/scénario avec épingles, **chemin parcouru et lieux visités persistants**, plein écran projeté |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
@@ -396,7 +396,7 @@ chapitres), `scripts/generer_donjon_scenario.py` (brouillon de manifeste).
 
 ## 🧪 Tests
 
-**1148 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
+**1151 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
 refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, le
 crédit du trésor canonique et le partage de l'or, les scénarios et le pipeline
@@ -426,7 +426,7 @@ py -m pytest tests -q
 | `rag.embedding_model` | `embeddinggemma` | Modèle d'embeddings dédié (llama.cpp, conteneur `llamaembed`) |
 | `image.enabled` | `false` | Génération d'images ComfyUI (monstres, portraits, donjons) |
 | `image.scenes_enabled` | `true` | Illustrations de scènes (désactivable à chaud dans la galerie) |
-| `paths.data_dir` | `./server/data` | Parties, fiches, caches d'images, ChromaDB |
+| `paths.data_dir` | `./server/data` | Parties (`parties/`), fiches, caches d'images, ChromaDB |
 
 Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port hôte),
 `COMFYUI_BASE_URL` (`http://host.docker.internal:8188` par défaut).
@@ -468,14 +468,16 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 │   ├── rag/                ← chunker, embeddings, ChromaDB store, CLI ingestion
 │   ├── image/              ← workflows ComfyUI + helpers génération
 │   ├── prompts/            ← SystemPrompt MJ (par phase) + sections dynamiques
-│   └── data/               ← parties, fiches, bestiaire (400 monstres), caches, ChromaDB
+│   └── data/               ← fiches, bestiaire (400 monstres), caches, ChromaDB ;
+│                             parties enregistrées dans `data/parties/`
+│                             (partie_*.json, chat_*.json, team_chat_*.json)
 ├── cartes/                 ← cartes de référence servies aux joueurs
 ├── config/                 ← config.example.yaml (+ config.yaml gitignored)
 ├── knowledge_import/       ← corpus RAG local (gitignored, apportez vos textes)
 ├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées,
 │                             génération de manifestes de donjons par scénario,
 │                             simulation)
-└── tests/                  ← 1148 tests pytest déterministes (combat, carte,
+└── tests/                  ← 1151 tests pytest déterministes (combat, carte,
                               manifestes de scénario, fiches, trésors/or,
                               E2E)
 ```

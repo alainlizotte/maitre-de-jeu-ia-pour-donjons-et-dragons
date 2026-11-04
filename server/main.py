@@ -2797,10 +2797,12 @@ async def list_parties() -> dict[str, Any]:
     ids = sessions.all_ids()
     # On inclut aussi les parties persistées sur disque (sans session active).
     data_dir = cfg.abs(cfg.paths.data_dir)
-    on_disk = [
-        p.stem[len("partie_") :]
-        for p in data_dir.glob("partie_*.json")
-    ]
+    # Parties persistées : sous-dossier dédié (parties/) + legacy racine.
+    on_disk: list[str] = []
+    for dossier in (data_dir, data_dir / "parties"):
+        on_disk.extend(
+            p.stem[len("partie_") :] for p in dossier.glob("partie_*.json")
+        )
     all_ids = list(set(ids + on_disk))
     details: dict[str, dict[str, Any]] = {}
     for pid in all_ids:
@@ -3026,7 +3028,12 @@ async def delete_party(
         sess.connections.clear()
 
     # Fichiers sur disque (best-effort, on liste ce qui est réellement effacé).
+    # Sous-dossier dédié + emplacements legacy (avant le dossier parties/).
+    parties_dir = data_dir / "parties"
     cibles = [
+        parties_dir / f"partie_{partie_id}.json",
+        parties_dir / f"chat_{partie_id}.json",
+        parties_dir / f"team_chat_{partie_id}.json",
         data_dir / f"partie_{partie_id}.json",
         data_dir / f"chat_{partie_id}.json",
         data_dir / f"team_chat_{partie_id}.json",
@@ -3251,7 +3258,11 @@ async def auth_supprimer_compte(
     # 1) Parties créées par le compte.
     parties_supprimees: list[str] = []
     ids = set(sessions.all_ids())
-    ids |= {p.stem[len("partie_"):] for p in data_dir.glob("partie_*.json")}
+    ids |= {
+        p.stem[len("partie_"):]
+        for dossier in (data_dir, data_dir / "parties")
+        for p in dossier.glob("partie_*.json")
+    }
     for pid in sorted(ids):
         etat = PartyState(data_dir=str(data_dir), partie_id=pid).load()
         if "_erreur" in etat:

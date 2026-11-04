@@ -419,7 +419,8 @@ def _data_dir_ouv(tmp_path, histoire: list) -> str:
     donjon + son manifeste sous scenarios/."""
     data = tmp_path / "data"
     (data / "scenarios" / "test").mkdir(parents=True)
-    (data / "partie_ouv_t.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / "partie_ouv_t.json").write_text(json.dumps({
         "phase": "opening_complete",
         "pj": [{"nom": "Throk"}],
         "quete": {"titre": "Test Ouv", "pitch": "Test.",
@@ -475,7 +476,8 @@ def test_scenarios_ouverture_en_donjon_non_bloques(tmp_path):
     donjon dès le départ) ne sont PAS affectés par le verrou."""
     data = tmp_path / "data"
     (data / "scenarios" / "test").mkdir(parents=True)
-    (data / "partie_ouv_t.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / "partie_ouv_t.json").write_text(json.dumps({
         "phase": "opening_complete",
         "pj": [{"nom": "Throk"}],
         "quete": {"titre": "Test Dj", "pitch": "Test.",

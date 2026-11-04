@@ -121,7 +121,8 @@ class _Ctx:
 def test_attaque_sans_nom_perceur_engage_salle(tmp_path):
     """Narration d'attaque SANS le mot « perceur » dans la salle qui déclare
     Perceur ×6 → l'engagement forcé utilise les ennemis du manifeste."""
-    (tmp_path / f"partie_{PID}.json").write_text(
+    (tmp_path / "parties").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "parties" / f"partie_{PID}.json").write_text(
         json.dumps(_etat_b59b4a9a(), ensure_ascii=False), encoding="utf-8")
     narration = (
         "Soudain, une présence menaçante au-dessus. Des pierres tombent du "
@@ -138,7 +139,8 @@ def test_attaque_salle_sans_ennemis_rien(tmp_path):
     """Salle SANS `ennemis` déclarés : pas d'engagement fabriqué."""
     etat = _etat_b59b4a9a()
     etat["donjon"]["grille"][0].pop("ennemis")
-    (tmp_path / f"partie_{PID}.json").write_text(
+    (tmp_path / "parties").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "parties" / f"partie_{PID}.json").write_text(
         json.dumps(etat, ensure_ascii=False), encoding="utf-8")
     assert _ennemis_salle_courante(
         "Des pierres tombent du plafond, frappant Margoth avec violence.",
@@ -148,7 +150,8 @@ def test_attaque_salle_sans_ennemis_rien(tmp_path):
 def test_ennemis_deja_vaincus_pas_de_re_engagement(tmp_path):
     """Perceurs déjà vaincus (mémoire de campagne) → pas de re-engagement."""
     etat = _etat_b59b4a9a(memoire_battus=[{"noms": ["Perceur"]}])
-    (tmp_path / f"partie_{PID}.json").write_text(
+    (tmp_path / "parties").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "parties" / f"partie_{PID}.json").write_text(
         json.dumps(etat, ensure_ascii=False), encoding="utf-8")
     assert _ennemis_salle_courante(
         "Des pierres tombent du plafond, frappant Margoth avec violence.",
@@ -170,7 +173,8 @@ def test_motifs_attaque_etendus():
 def test_narration_pacifique_pas_d_engagement(tmp_path):
     """Une narration SANS attaque (fouille, dialogue) n'engage rien, même
     dans une salle à ennemis."""
-    (tmp_path / f"partie_{PID}.json").write_text(
+    (tmp_path / "parties").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "parties" / f"partie_{PID}.json").write_text(
         json.dumps(_etat_b59b4a9a(), ensure_ascii=False), encoding="utf-8")
     assert _ennemis_salle_courante(
         "Margoth fouille les champignons luminescents et écoute les "
@@ -293,7 +297,8 @@ def _ctx_anti_triche(tmp_path, courant=(3, 0)):
     (data / "scenarios" / "T" / "anti_triche.donjon.json").write_text(
         json.dumps(MANIFEST_COURONNE, ensure_ascii=False, indent=1),
         encoding="utf-8")
-    (data / "partie_test_b59b4a9a.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / "partie_test_b59b4a9a.json").write_text(json.dumps({
         "phase": "exploration",
         "quete": {"source": "[test_anti_triche] /data/x.pdf",
                   "titre": "Test anti-triche"},
@@ -406,10 +411,11 @@ def test_objet_requis_refuse_pendant_combat(tmp_path):
     data = _ctx_anti_triche(tmp_path, courant=(4, 0))
     # un combat est en cours dans la salle du boss
     partie = json.loads(
-        (data / "partie_test_b59b4a9a.json").read_text(encoding="utf-8"))
+        (data / "parties" / "partie_test_b59b4a9a.json").read_text(
+            encoding="utf-8"))
     partie["monstres_combat"] = [
         {"nom": "Boss du test", "pv": 24, "pv_max": 24}]
-    (data / "partie_test_b59b4a9a.json").write_text(
+    (data / "parties" / "partie_test_b59b4a9a.json").write_text(
         json.dumps(partie, ensure_ascii=False), encoding="utf-8")
     ctx = ToolContext(partie_id="test_b59b4a9a", joueur="Alain",
                       data_dir=str(data))

@@ -69,7 +69,8 @@ def _setup(tmp_path, inventaire_quete=None) -> ToolContext:
     (data / "fiches").mkdir(parents=True, exist_ok=True)
     (data / "scenarios" / "T" / "test_82a.donjon.json").write_text(
         json.dumps(_MANIFEST, ensure_ascii=False, indent=1), encoding="utf-8")
-    (data / "partie_test_82a.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / "partie_test_82a.json").write_text(json.dumps({
         "phase": "exploration",
         "quete": {"source": "[test_82a] /data/x.pdf", "titre": "Test 82a"},
         "lieu": {"nom": "Silverymoon", "type": "ville"},

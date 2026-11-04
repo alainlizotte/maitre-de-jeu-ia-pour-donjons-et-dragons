@@ -138,7 +138,8 @@ def test_verrou_entree_ouverture_hors_donjon(tmp_path):
     from server.tools.base import ToolContext
 
     dd = _data_dir_48b(tmp_path, MANIFEST_HORS_DJ)
-    (dd / f"partie_{PID}.json").write_text(json.dumps(
+    (dd / "parties").mkdir(parents=True, exist_ok=True)
+    (dd / "parties" / f"partie_{PID}.json").write_text(json.dumps(
         _etat_48b(), ensure_ascii=False), encoding="utf-8")
     ctx = ToolContext(partie_id=PID, joueur="Alain", data_dir=str(dd))
 
@@ -179,7 +180,8 @@ def test_verrou_inactif_apres_ouverture_ou_hors_flag(tmp_path):
     dd = _data_dir_48b(tmp_path, MANIFEST_HORS_DJ)
     etat_joue = _etat_48b(
         histoire=[{"evenement": "Début de l'aventure : …"}])
-    (dd / f"partie_{PID}.json").write_text(
+    (dd / "parties").mkdir(parents=True, exist_ok=True)
+    (dd / "parties" / f"partie_{PID}.json").write_text(
         json.dumps(etat_joue, ensure_ascii=False), encoding="utf-8")
     ctx = ToolContext(partie_id=PID, joueur="Alain", data_dir=str(dd))
     assert asyncio.run(_refus_entree_ouverture_hors_donjon(
@@ -189,7 +191,8 @@ def test_verrou_inactif_apres_ouverture_ou_hors_flag(tmp_path):
     man2 = json.loads(json.dumps(MANIFEST_HORS_DJ))
     man2.pop("ouverture_hors_donjon")
     dd2 = _data_dir_48b(tmp_path / "b", man2)
-    (dd2 / f"partie_{PID}.json").write_text(
+    (dd2 / "parties").mkdir(parents=True, exist_ok=True)
+    (dd2 / "parties" / f"partie_{PID}.json").write_text(
         json.dumps(_etat_48b(), ensure_ascii=False), encoding="utf-8")
     ctx2 = ToolContext(partie_id=PID, joueur="Alain", data_dir=str(dd2))
     assert asyncio.run(_refus_entree_ouverture_hors_donjon(

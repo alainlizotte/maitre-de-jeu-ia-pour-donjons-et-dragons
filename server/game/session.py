@@ -180,7 +180,9 @@ class PartySession:
     def _chat_path(self) -> Optional[Path]:
         if not self.data_dir:
             return None
-        return Path(self.data_dir) / f"chat_{self.partie_id}.json"
+        # Sous-dossier dédié aux fichiers de partie (partie_/chat_/
+        # team_chat_*) — le dossier de données reste propre.
+        return Path(self.data_dir) / "parties" / f"chat_{self.partie_id}.json"
 
     def _persist_history(self) -> None:
         """Écrit la TRANSCRIPTION (affichage) en JSON atomiquement
@@ -306,7 +308,10 @@ class PartySession:
     def _team_chat_path(self) -> Optional[Path]:
         if not self.data_dir:
             return None
-        return Path(self.data_dir) / f"team_chat_{self.partie_id}.json"
+        return (
+            Path(self.data_dir) / "parties"
+            / f"team_chat_{self.partie_id}.json"
+        )
 
     def remember_team_message(self, player: str, text: str) -> None:
         self.team_history.append({"player": player, "text": text})

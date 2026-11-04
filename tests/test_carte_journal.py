@@ -40,7 +40,7 @@ def _ctx(d: str) -> ToolContext:
 
 def _etat(d: str) -> dict:
     import json
-    p = os.path.join(d, f"partie_{PID}.json")
+    p = os.path.join(d, "parties", f"partie_{PID}.json")
     if not os.path.isfile(p):
         return {}
     with open(p, encoding="utf-8") as f:
@@ -111,7 +111,8 @@ def _etat_avec_source(d: str, source: str) -> ToolContext:
     ctx = _ctx(d)
     etat = {"quete": {"titre": "t", "pitch": "", "source": source}, "pj": []}
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, f"partie_{PID}.json"), "w", encoding="utf-8") as f:
+    os.makedirs(os.path.join(d, "parties"), exist_ok=True)
+    with open(os.path.join(d, "parties", f"partie_{PID}.json"), "w", encoding="utf-8") as f:
         json.dump(etat, f, ensure_ascii=False)
     return ctx
 

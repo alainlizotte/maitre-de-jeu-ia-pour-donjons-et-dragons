@@ -40,7 +40,7 @@ def _post(path: str, body: dict) -> dict:
 
 async def main() -> None:
     pid = _post("/api/parties", {"titre": "E2E Persist"})["partie_id"]
-    spath = os.path.join(DATA, f"partie_{pid}.json")
+    spath = os.path.join(DATA, "parties", f"partie_{pid}.json")
     now = datetime.now().isoformat()
     etat = {
         "meta": {"titre": "E2E Persist", "cadre": "Côte des Épées (Faerûn)",
@@ -111,7 +111,7 @@ async def main() -> None:
           vue.get("monstres_combat", [{}])[0].get("image_url")
           and vue.get("rencontres_images"))
 
-    for p in (spath, os.path.join(DATA, f"chat_{pid}.json")):
+    for p in (spath, os.path.join(DATA, "parties", f"chat_{pid}.json")):
         if os.path.isfile(p):
             os.unlink(p)
     print(f"\n{'✅ PERSIST IMAGES OK' if fails == 0 else f'❌ {fails} ÉCHEC(S)'}")

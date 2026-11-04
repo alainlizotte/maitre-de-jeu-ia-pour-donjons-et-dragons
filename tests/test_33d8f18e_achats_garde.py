@@ -34,7 +34,8 @@ def _data_dir_ville(tmp_path) -> str:
     """data_dir minimal : partie à Silverymoon (ville), fiche Morgoth."""
     data = tmp_path / "data"
     (data / "fiches").mkdir(parents=True)
-    (data / "partie_test_33d8f18e.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / "partie_test_33d8f18e.json").write_text(json.dumps({
         "phase": "exploration",
         "lieu": {"nom": "Silverymoon", "type": "ville"},
         "pj": [{"nom": "Morgoth"}],

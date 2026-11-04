@@ -57,7 +57,8 @@ def _env_equilibre(tmp_path, nb_pj: int = 3, joueurs_rec: str = "4"):
         json.dumps(_BESTIAIRE, ensure_ascii=False), encoding="utf-8")
     pjs = [{"nom": f"PJ{i}", "classe": "Guerrier", "niveau": 1,
             "pv": 10, "pv_max": 10} for i in range(nb_pj)]
-    (data / f"partie_eq_t.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / f"partie_eq_t.json").write_text(json.dumps({
         "phase": "exploration",
         "pj": pjs,
         "quete": {"titre": "T", "pitch": "T.",

@@ -153,7 +153,7 @@ def test_intro_b401206f_plus_aucun_combat_invente():
     from server.main import _detecter_combat_prose
 
     data_dir = str(load_config().abs(load_config().paths.data_dir))
-    chat_path = os.path.join(data_dir, "chat_b401206f.json")
+    chat_path = os.path.join(data_dir, "parties", "chat_b401206f.json")
     if not os.path.exists(chat_path):
         import pytest
         pytest.skip("partie b401206f absente de ce data_dir")

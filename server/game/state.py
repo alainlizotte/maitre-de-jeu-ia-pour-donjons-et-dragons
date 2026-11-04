@@ -127,7 +127,10 @@ class PartyState:
 
     @property
     def path(self) -> Path:
-        return self.data_dir / f"partie_{self.partie_id}.json"
+        # Les parties vivent dans un sous-dossier dédié : le dossier de
+        # données ne contient que des dossiers thématiques (parties/,
+        # fiches/, cartes/, scenarios/…), pas de fichiers de partie en vrac.
+        return self.data_dir / "parties" / f"partie_{self.partie_id}.json"
 
     # ------------------------------------------------------------------ #
     def load(self) -> dict[str, Any]:
@@ -149,8 +152,9 @@ class PartyState:
         except OSError:
             pass
         etat.setdefault("meta", {})["date_maj"] = datetime.now().isoformat()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(
-            dir=str(self.data_dir), prefix=".partie_", suffix=".tmp"
+            dir=str(self.path.parent), prefix=".partie_", suffix=".tmp"
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:

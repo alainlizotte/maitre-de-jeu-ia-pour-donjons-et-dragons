@@ -119,7 +119,7 @@ def donjon_etat(pid: str) -> dict:
 
 
 def chat_log(pid: str) -> list[dict]:
-    p = os.path.join(DATA_DIR, f"chat_{pid}.json")
+    p = os.path.join(DATA_DIR, "parties", f"chat_{pid}.json")
     try:
         return json.load(open(p, encoding="utf-8"))
     except Exception:                                        # noqa: BLE001

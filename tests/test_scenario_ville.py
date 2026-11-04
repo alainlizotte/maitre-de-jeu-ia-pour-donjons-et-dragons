@@ -68,7 +68,7 @@ async def _tool(d: str, nom_outil: str, **args):
 
 
 def _etat(d: str) -> dict:
-    with open(os.path.join(d, f"partie_{PID}.json"), encoding="utf-8") as f:
+    with open(os.path.join(d, "parties", f"partie_{PID}.json"), encoding="utf-8") as f:
         return json.load(f)
 
 

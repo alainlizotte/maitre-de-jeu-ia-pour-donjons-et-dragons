@@ -48,7 +48,8 @@ def fiche_lire(nom):
 
 
 def etat_ecrire(etat):
-    with open(os.path.join(DATA, "partie_audit.json"), "w",
+    os.makedirs(os.path.join(DATA, "parties"), exist_ok=True)
+    with open(os.path.join(DATA, "parties", "partie_audit.json"), "w",
               encoding="utf-8") as f:
         json.dump(etat, f, ensure_ascii=False, indent=1)
 
@@ -65,7 +66,7 @@ async def t(nom_tool, **args):
     # Applique le state_patch au fichier de partie (le flux production le
     # fait via l'orchestrateur) — sinon la chaîne de combat est invisible.
     patch = getattr(r, "state_patch", None)
-    p = os.path.join(DATA, "partie_audit.json")
+    p = os.path.join(DATA, "parties", "partie_audit.json")
     if patch and os.path.exists(p):
         etat = json.load(open(p, encoding="utf-8"))
         for k, v in patch.items():
@@ -211,7 +212,7 @@ async def main() -> None:
     r = await t("engager_combat", monstres="Gobelin, Gobelin")
     note("combat/engager 2 gobelins", "initiative" in r.text.lower()
          or "🎯" in r.text, r.text[:120])
-    etat_lu = json.load(open(os.path.join(DATA, "partie_audit.json"),
+    etat_lu = json.load(open(os.path.join(DATA, "parties", "partie_audit.json"),
                              encoding="utf-8"))
     mc = etat_lu.get("monstres_combat") or []
     note("combat/état monstres", len(mc) == 2,
@@ -220,7 +221,7 @@ async def main() -> None:
                 nom_cible="Gobelin", arme="Bâton")
     note("combat/attaque officielle", "touché" in r.text.lower()
          or "raté" in r.text.lower() or "🎲" in r.text, r.text[:140])
-    etat_lu = json.load(open(os.path.join(DATA, "partie_audit.json"),
+    etat_lu = json.load(open(os.path.join(DATA, "parties", "partie_audit.json"),
                              encoding="utf-8"))
     r = await t("tour_suivant_combat")
     note("combat/tour suivant", "tour" in r.text.lower() or "✅" in r.text,
@@ -228,7 +229,7 @@ async def main() -> None:
     r = await t("retraite_combat")
     note("combat/retraite", "✅" in r.text or "retraite" in r.text.lower()
          or "fuite" in r.text.lower(), r.text[:120])
-    etat_lu = json.load(open(os.path.join(DATA, "partie_audit.json"),
+    etat_lu = json.load(open(os.path.join(DATA, "parties", "partie_audit.json"),
                              encoding="utf-8"))
     note("combat/retraite sort du combat",
          not (etat_lu.get("monstres_combat")
@@ -238,14 +239,14 @@ async def main() -> None:
     # ── 11. MÉMOIRE manuelle ───────────────────────────────────────────
     r = await t("memoire_intrigue", resume="Audit de l'intrigue.",
                 objectif="Tester la mémoire.")
-    etat_lu = json.load(open(os.path.join(DATA, "partie_audit.json"),
+    etat_lu = json.load(open(os.path.join(DATA, "parties", "partie_audit.json"),
                              encoding="utf-8"))
     mem = etat_lu.get("memoire") or {}
     note("mémoire/intrigue manuelle",
          "Audit de l'intrigue" in str(mem.get("intrigue_resume") or ""),
          str(mem.get("intrigue_resume"))[:80])
     r = await t("memoire_lieu", nom="Phandalin", description="Village de départ.")
-    etat_lu = json.load(open(os.path.join(DATA, "partie_audit.json"),
+    etat_lu = json.load(open(os.path.join(DATA, "parties", "partie_audit.json"),
                              encoding="utf-8"))
     note("mémoire/lieu manuel",
          "Phandalin" in json.dumps(etat_lu.get("memoire") or {},

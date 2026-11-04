@@ -361,7 +361,7 @@ def test_c1_suppression_autorisee_pour_le_proprietaire(tmp_path, monkeypatch):
 
     rep = asyncio.run(srv.delete_party(pid, utilisateur="alain"))  # casse ≠
     assert rep["ok"] is True
-    assert not (tmp_path / f"partie_{pid}.json").exists()  # fichier supprimé
+    assert not (tmp_path / "parties" / f"partie_{pid}.json").exists()  # fichier supprimé
 
 
 def test_c1_partie_ancienne_sans_createur_protegee(tmp_path, monkeypatch):
@@ -851,7 +851,7 @@ def test_r4_suppression_de_compte(tmp_path, monkeypatch):
     # Compte supprimé → token invalide.
     assert auth_mod.verifier_token(str(tmp_path), token) is None
     assert not (tmp_path / "fiches" / "fiche_persovictime.json").exists()
-    assert not (tmp_path / f"partie_{pid}.json").exists()
+    assert not (tmp_path / "parties" / f"partie_{pid}.json").exists()
 
     # Compte inexistant → 404.
     with pytest.raises(HTTPException) as ei:

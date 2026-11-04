@@ -76,7 +76,7 @@ def _fresh_dir() -> str:
 
 
 def _etat(data_dir: str) -> dict:
-    path = os.path.join(data_dir, f"partie_{PID}.json")
+    path = os.path.join(data_dir, "parties", f"partie_{PID}.json")
     if os.path.isfile(path):
         with open(path, encoding="utf-8") as f:
             return json.load(f)

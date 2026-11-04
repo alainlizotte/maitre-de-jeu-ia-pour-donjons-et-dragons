@@ -85,7 +85,7 @@ def _norm(s: str) -> str:
 
 
 def etat_partie(pid: str) -> dict | None:
-    path = os.path.join(DATA, f"partie_{pid}.json")
+    path = os.path.join(DATA, "parties", f"partie_{pid}.json")
     if not os.path.isfile(path):
         return None
     with open(path, encoding="utf-8") as f:
@@ -621,8 +621,8 @@ async def assurer_engagement(pid, sockets, bilan, joueur, intro,
 
 def nettoyer(pid: str):
     try:
-        for p in (os.path.join(DATA, f"partie_{pid}.json"),
-                  os.path.join(DATA, f"chat_{pid}.json")):
+        for p in (os.path.join(DATA, "parties", f"partie_{pid}.json"),
+                  os.path.join(DATA, "parties", f"chat_{pid}.json")):
             if os.path.isfile(p):
                 os.unlink(p)
         for j in JOUEURS:

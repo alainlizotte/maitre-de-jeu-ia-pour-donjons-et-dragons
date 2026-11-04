@@ -253,7 +253,7 @@ def test_loop_recovers_donjon_enter(tmp_path=None):
         # Le donjon a VRAIMENT été ouvert dans l'état persistant.
         import json
         etat = json.load(open(
-            os.path.join(data_dir, "partie_test_recup.json"), encoding="utf-8",
+            os.path.join(data_dir, "parties", "partie_test_recup.json"), encoding="utf-8",
         ))
         assert etat["donjon"]["id"] == "Grotte du Gobelin"
         assert any(

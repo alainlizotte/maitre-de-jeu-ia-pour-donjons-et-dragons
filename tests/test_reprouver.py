@@ -63,7 +63,8 @@ def _env(tmp_path, monstres=None, classe="Clerc", niveau=1, cha=16):
         mons.append({"nom": m + (f" ({i + 1})" if i else ""), "pv": base["pv"],
                      "pv_max": base["pv"], "ca": base["ca"],
                      "fp": base["fp"], "conditions": [], "degats_recus": 1})
-    (data / f"partie_{PID}.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / f"partie_{PID}.json").write_text(json.dumps({
         "phase": "combat", "tour": 1,
         "initiative": [{"nom": "Aurora", "init": 5}] + [
             {"nom": m["nom"], "init": 2} for m in mons],

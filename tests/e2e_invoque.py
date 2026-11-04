@@ -60,7 +60,7 @@ async def main() -> None:
     # --- Setup déterministe de l'état (combat en cours, tour de Mireille) --- #
     # NB : PartyState écrit à la RACINE de data_dir (partie_<id>.json),
     # pas dans le sous-dossier parties/.
-    spath = os.path.join(DATA, f"partie_{pid}.json")
+    spath = os.path.join(DATA, "parties", f"partie_{pid}.json")
     from datetime import datetime as _dt
     now = _dt.now().isoformat()
     etat = {
@@ -166,7 +166,7 @@ async def main() -> None:
     await ws.close()
 
     # --- Nettoyage ---------------------------------------------------------- #
-    for p in (spath, fpath, os.path.join(DATA, f"chat_{pid}.json")):
+    for p in (spath, fpath, os.path.join(DATA, "parties", f"chat_{pid}.json")):
         if os.path.isfile(p):
             os.unlink(p)
 

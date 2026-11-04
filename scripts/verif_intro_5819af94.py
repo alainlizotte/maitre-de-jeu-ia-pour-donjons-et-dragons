@@ -56,7 +56,7 @@ def recap_pour_etat(etat: dict) -> str:
 
 
 def main() -> int:
-    with open(os.path.join(DATA_DIR, f"partie_{PID}.json"), encoding="utf-8") as fh:
+    with open(os.path.join(DATA_DIR, "parties", f"partie_{PID}.json"), encoding="utf-8") as fh:
         etat_actuel = json.load(fh)
 
     # État au tour d'INTRO : pas encore de donjon (entrée à 19:40:41,

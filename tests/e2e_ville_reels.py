@@ -169,7 +169,7 @@ async def _post_partie():
 # --------------------------------------------------------------------------- #
 async def phase_setup():
     pid = lire_pid()
-    if pid and os.path.isfile(os.path.join(DATA_DIR, f"partie_{pid}.json")):
+    if pid and os.path.isfile(os.path.join(DATA_DIR, "parties", f"partie_{pid}.json")):
         bilan = Bilan.charger()
         print(f"=== Partie reprise : {pid} ===")
         bilan.event(f"Partie reprise {pid}")

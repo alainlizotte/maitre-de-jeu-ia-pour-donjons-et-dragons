@@ -52,7 +52,7 @@ def test_transcript_persistee_et_rechargee(tmp_path):
     _remplir(s, 60)
     # Le FICHIER porte la transcription intégrale (120 entrées).
     fichier = json.load(open(
-        tmp_path / "chat_tr_t.json", encoding="utf-8"))
+        tmp_path / "parties" / "chat_tr_t.json", encoding="utf-8"))
     assert len(fichier) == 120
 
     # Nouvelle session (rechargement) : transcript complet, fenêtre LLM.

@@ -162,7 +162,8 @@ def _data_dir_renfort(tmp_path, avec_canon: bool = True) -> str:
         json.dumps(_BESTIAIRE_TEST, ensure_ascii=False), encoding="utf-8")
     grille_salle = {"x": 0, "y": -4,
                     "ennemis": ["Kobold", "Zombie"] if avec_canon else []}
-    (data / "partie_renfort_t.json").write_text(json.dumps({
+    (data / "parties").mkdir(parents=True, exist_ok=True)
+    (data / "parties" / "partie_renfort_t.json").write_text(json.dumps({
         "phase": "combat",
         "tour": 2,
         "initiative": [{"nom": "Brandt", "init": 5},

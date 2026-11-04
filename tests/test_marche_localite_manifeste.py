@@ -25,7 +25,8 @@ from server.tools.base import ToolContext  # noqa: E402
 def _ctx(tmp_path, etat) -> ToolContext:
     (tmp_path / "fiches").mkdir(parents=True, exist_ok=True)
     import json
-    (tmp_path / "partie_test_marche.json").write_text(
+    (tmp_path / "parties").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "parties" / "partie_test_marche.json").write_text(
         json.dumps(etat, ensure_ascii=False), encoding="utf-8")
     return ToolContext(partie_id="test_marche", joueur="Alain",
                        data_dir=str(tmp_path))

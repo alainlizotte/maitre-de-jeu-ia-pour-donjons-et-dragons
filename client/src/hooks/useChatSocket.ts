@@ -404,6 +404,26 @@ export function useChatSocket(partie_id: string | null) {
           setTimeout(() => beep(1100, 80), 100);
           break;
         }
+        case "jet_demande": {
+          // 🎲 (fix 04/11) : le serveur demande un jet au joueur — le
+          // bandeau ET le dé du champ de saisie s'activent. Ce message
+          // n'était JAMAIS routé (clé "type" dupliquée côté serveur +
+          // aucun case client) : le bouton de jet était invisible, surtout
+          // en mobile.
+          setJetAttendu({
+            categorie: String(msg.categorie || ""),
+            type: String(msg.type_jet || ""),
+            personnage: String(msg.personnage || ""),
+          });
+          break;
+        }
+        case "jet_resultat": {
+          // Jet résolu (par son auteur ou automatiquement) : l'attente
+          // retombe sur TOUS les clients (avant : bandeau fantôme chez les
+          // autres joueurs jusqu'au rechargement).
+          setJetAttendu(null);
+          break;
+        }
         case "audio_signal": {
           // Signaux WebRTC relayés via le WS serveur (relay simple).
           const audioHandlers = (window as unknown as Record<string, unknown>).__audioHandlers as

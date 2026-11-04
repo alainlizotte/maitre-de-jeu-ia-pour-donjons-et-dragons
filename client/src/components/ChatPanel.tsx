@@ -78,6 +78,32 @@ export function ChatPanel({ sendSay, jetAttendu, sendRoll }: ChatPanelProps) {
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // 🎲 (fix 04/11) : signal sonore quand un jet est attendu — le bouton dé
+  // à gauche du champ de saisie s'illumine en même temps (il était invisible
+  // en mobile : le bandeau seul passait inaperçu et le message WS
+  // jet_demande n'était jamais routé).
+  useEffect(() => {
+    if (!jetAttendu) return;
+    try {
+      const ctx = new AudioContext();
+      const bip = (freq: number, delai: number, duree: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.value = 0.2;
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + delai);
+        gain.gain.exponentialRampToValueAtTime(
+          0.001, ctx.currentTime + delai + duree / 1000);
+        osc.stop(ctx.currentTime + delai + duree / 1000);
+      };
+      bip(880, 0, 120);
+      bip(1175, 0.15, 160);
+      setTimeout(() => ctx.close(), 500);
+    } catch { /* audio non disponible */ }
+  }, [jetAttendu]);
+
   // En combat, pendant le tour d'un ennemi (pas un PJ), le champ indique au
   // joueur que c'est l'ennemi qui agit.
   const courant = state?.courant_tour_pour;
@@ -201,20 +227,32 @@ export function ChatPanel({ sendSay, jetAttendu, sendRoll }: ChatPanelProps) {
           importe le panneau affiche (chat ou outils). */}
       {jetAttendu && (
         <div className="shrink-0 bg-amber-900/60 border-t border-amber-500 px-4 py-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-amber-200">
-              Jet de {jetAttendu.type} attendu ({jetAttendu.personnage})
-            </div>
-            <button
-              onClick={sendRoll}
-              className="shrink-0 px-4 py-1.5 rounded bg-amber-600 font-bold text-stone-900 hover:bg-amber-500"
-            >
-              Lancer
-            </button>
+          <div className="text-sm text-amber-200">
+            🎲 Jet de {jetAttendu.type} attendu ({jetAttendu.personnage}) —
+            appuyez sur le dé à gauche du champ.
           </div>
         </div>
       )}
-      <form onSubmit={submit} className="shrink-0 border-t border-stone-800 p-3 flex gap-2">
+      <form onSubmit={submit} className="shrink-0 border-t border-stone-800 p-3 flex gap-2 items-center">
+        <button
+          type="button"
+          onClick={sendRoll}
+          disabled={!jetAttendu || !player}
+          title={
+            jetAttendu
+              ? `Lancer le dé : ${jetAttendu.type} (${jetAttendu.personnage})`
+              : "Aucun jet attendu"
+          }
+          aria-label="Lancer le dé demandé"
+          className={
+            "shrink-0 w-11 h-11 rounded-full text-xl flex items-center justify-center transition-all duration-200 " +
+            (jetAttendu
+              ? "bg-amber-500 text-stone-900 shadow-lg shadow-amber-500/50 ring-4 ring-amber-300/70 animate-pulse hover:bg-amber-400 scale-105"
+              : "bg-stone-800 text-stone-600 border border-stone-700 cursor-not-allowed")
+          }
+        >
+          🎲
+        </button>
         <input
           className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 focus:outline-none focus:border-amber-400 disabled:opacity-40"
           value={text}

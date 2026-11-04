@@ -229,6 +229,8 @@ export type WsMessage =
   | { type: "stream_reset" }
   | { type: "dm"; text: string; tool_events?: ToolEvent[]; state_patches?: unknown[] }
   | { type: "team_msg"; player: string; text: string }
+  | { type: "jet_demande"; joueur?: string; personnage: string; categorie: string; type_jet: string; detail?: string }
+  | { type: "jet_resultat"; joueur?: string; personnage?: string; total?: number; texte?: string }
   | { type: "audio_signal"; player: string; signal: Record<string, unknown> }
   // Heartbeat : réponse du serveur au ping du client (consommé par ws.ts,
   // jamais routé vers l'UI).

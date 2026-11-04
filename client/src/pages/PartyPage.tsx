@@ -173,10 +173,10 @@ const hydratedFor = useRef<string | null>(null);
   const [ressourcesOuvertes, setRessourcesOuvertes] = useState(false);
   const teamUnread = useParty((s) => s.teamUnread);
 
-  // R7 : un jet demande bascule auto le mobile vers le panneau outils
-  useEffect(() => {
-    if (jetAttendu && isMobile) setMobileView("outils");
-  }, [jetAttendu, isMobile]);
+  // 🎲 (fix 04/11) : un jet demande n'envoie PLUS le mobile vers le panneau
+  // outils — le bouton dé est désormais DANS le champ de saisie du chat
+  // (actif, sonore, pulsant). L'ancien basculement masquait le chat pile
+  // quand la narration arrivait.
   const touch = useRef<{ x: number; y: number } | null>(null);
 
   const goToMobileView = (v: MobileView) => {

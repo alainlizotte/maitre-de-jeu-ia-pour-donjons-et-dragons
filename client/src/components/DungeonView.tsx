@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useParty } from "../store";
-import { api } from "../api/rest";
 
 interface DonjonCellule {
   id?: string;
@@ -122,37 +121,27 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
 
   // Portes disponibles de la salle courante
   const portes = listePortes(salleCourante?.portes);
+
+  // (fix 04/11) : les boutons de déplacement insèrent simplement la phrase
+  // dans le CHAT — le serveur résout l'action et le MJ NARRE le résultat.
+  // Avant : appel direct de l'API outil → texte serveur brut affiché sans
+  // narration (plomberie visible du joueur).
+  const PHRASES_DIR: Record<string, string> = {
+    nord: "Je vais au nord",
+    sud: "Je vais au sud",
+    est: "Je vais à l'est",
+    ouest: "Je vais à l'ouest",
+  };
   const goDir = (dir: string) => {
-    // 48b239fa : navigation DETERMINISTE via la route /outil (le tool
-    // refuse proprement les directions sans porte). Repli chat si erreur.
-    if (!partieId) {
-      if (sendSay) sendSay(`Je vais au ${dir}`);
-      return;
-    }
-    api
-      .outil(partieId, "carte_donjon_explorer", { direction: dir })
-      .then((r) => {
-        if (!r.ok && sendSay) sendSay(`Je vais au ${dir}`);
-      })
-      .catch(() => {
-        if (sendSay) sendSay(`Je vais au ${dir}`);
-      });
+    sendSay?.(PHRASES_DIR[dir] ?? `Je vais au ${dir}`);
   };
 
-  const etage = (dir: "monter" | "descendre", phrase: string) => {
-    // 48b239fa : changement d'etage DETERMINISTE via la route /outil.
-    if (!partieId) {
-      if (sendSay) sendSay(phrase);
-      return;
-    }
-    api
-      .outil(partieId, "carte_donjon_etage", { direction: dir })
-      .then((r) => {
-        if (!r.ok && sendSay) sendSay(phrase);
-      })
-      .catch(() => {
-        if (sendSay) sendSay(phrase);
-      });
+  const etage = (dir: "monter" | "descendre") => {
+    sendSay?.(
+      dir === "monter"
+        ? "Je monte les escaliers vers l'étage supérieur"
+        : "Je descends les escaliers vers l'étage inférieur",
+    );
   };
 
   // Escalier : monter/descendre ne sont possibles que depuis une salle
@@ -201,7 +190,7 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
                 className={peutMonter ? btnZoom : btnZoomOff}
                 title={titreMonter}
                 disabled={!peutMonter}
-                onClick={() => etage("monter", "Nous montons l'escalier vers l'étage supérieur")}
+                onClick={() => etage("monter")}
               >
                 ↑
               </button>
@@ -209,7 +198,7 @@ export function DungeonView({ sendSay }: DungeonViewProps) {
                 className={peutDescendre ? btnZoom : btnZoomOff}
                 title={titreDescendre}
                 disabled={!peutDescendre}
-                onClick={() => etage("descendre", "Nous descendons l'escalier vers l'étage inférieur")}
+                onClick={() => etage("descendre")}
               >
                 ↓
               </button>

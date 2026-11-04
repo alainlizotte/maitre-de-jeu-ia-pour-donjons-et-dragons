@@ -416,11 +416,18 @@ def _assainir_texte_joueur(texte: str) -> str:
     t = _re_mod.sub(r"\s*— n'invente AUCUNE autre sortie\.", "", t)
     t = _re_mod.sub(r"\s*Le groupe poursuit son exploration du donjon\.", "", t)
     t = _re_mod.sub(r"\s*⚠️ Ce sont les SEULES sorties[^.]*\.", "", t)
-    t = _re_mod.sub(r"Portes EXISTANTES (?:dans la salle d'entrée )?ici\s*:",
-               "Portes visibles ici :", t)
+    # (fix fuites R7) : les listes de portes des notes d'outils = plomberie
+    # serveur - le MJ liste les portes dans sa prose (le tool result reste
+    # dans SON contexte). Les deux formulations (ancienne + renommée) disparaissent.
+    t = _re_mod.sub(r"[ \t]*Portes (?:EXISTANTES (?:dans la salle d'entrée )?|visibles)[^\n]*",
+               "", t)
     # Méta des filets serveur : notes techniques → versions courtes neutres.
-    t = _re_mod.sub(r"\n*⚙️ _Le serveur a (?:fait|DÉJÀ fait) changer d'étage[^_]*_",
-               "\n🪜 _Le groupe change d'étage._", t)
+    # (fix fuites R7) : la consigne d'étage du pre-run (émoji ⚙️ OU 🪜) est
+    # suivie du résultat tool COLLÉ sur la même ligne (piège, note de
+    # déplacement) - on avale la ligne entière.
+    t = _re_mod.sub(
+        r"\n*[⚙🪜]\ufe0f?\s*_Le serveur a (?:déjà |DÉJÀ )?fait changer d'étage[^\n]*",
+        "\n🪜 _Le groupe change d'étage._", t)
     t = _re_mod.sub(
         r"🗺️ _Retour vers « ([^»]+) »[^_]*_",
         r"🗺️ _Le groupe retourne vers « \1 »._", t)
@@ -444,6 +451,27 @@ def _assainir_texte_joueur(texte: str) -> str:
         r"[ \t]*—\s*appelle `lancer_sauvegarde` pour chaque PJ par heure\.",
         "", t)
     t = _re_mod.sub(r"[ \t]*⚙️ _Répulsion résolue par le serveur[^_]*_", "", t)
+    # (fix fuites R7) : le rattrapage mécanique post-tour = canal MJ. Les
+    # en-têtes disparaissent ; le piège devient une ligne neutre ; les
+    # consignes de narration ("narre-les fidèlement", "intègre-le à ta
+    # narration") sont consommées. Les RESULTATS de sauvegardes (- ✅/- ❌
+    # total vs DD) restent : ce sont de vrais jets, comme les blocs 🎲 combat.
+    t = _re_mod.sub(r"\s*⚔️ _Résolution automatique du round\s*:[_\s]*", "\n", t)
+    t = _re_mod.sub(r"\s*⚙️ _Mécanique serveur\s*:[_\s]*", "\n", t)
+    t = _re_mod.sub(
+        r"🪤 \*\*PIÈGE RÉSOLU PAR LE SERVEUR\*\*[^\n]*",
+        "🪤 _Un piège se déclenche._", t)
+    t = _re_mod.sub(
+        r"[ \t]*🛡️ Sauvegarde \([^)]*\) DD \d+ par personnage\s*:[^\n]*",
+        "", t)
+    t = _re_mod.sub(r"[ \t]*ℹ️ Jets RÉSOLUS par le serveur[^\n]*", "", t)
+    t = _re_mod.sub(r"[ \t]*🔊 \*\*VACARME\*\*[^\n]*", "", t)
+    t = _re_mod.sub(
+        r"[ \t]*\(aucune formule de dégâts dans le piège[^\n]*", "", t)
+    # Note de déplacement tool : "Salle actuelle (x, y)." = plomberie.
+    t = _re_mod.sub(r"[ \t]*Salle actuelle \([0-9]+, ?[0-9]+\)\.?[ \t]*", " ", t)
+    t = _re_mod.sub(r"[ \t]*🪜 Vous empruntez l'escalier[^\n]*", "", t)
+    t = _re_mod.sub(r"[ \t]*→ Si la salle contient un escalier[^\n]*", "", t)
     t = _re_mod.sub(r"[ \t]*NE PAS narre le jet vous-même[^\n]*", "", t)
     t = t.replace("📦 **Rattrapage serveur**", "📦 Butin")
     t = _re_mod.sub(r"\n{3,}", "\n\n", t)
@@ -2058,12 +2086,16 @@ async def _jet_poser_attente(
             "ts": _dt_jp.now().isoformat(),
         }
         st.save(etat)
+        # (fix R7) : la clé "type" était EN DOUBLE (discriminant WS écrasé
+        # par le type de jet) - le message arrivait au client avec
+        # type="sauvegarde"/"competence", aucun case ne le routait, le
+        # bandeau/bouton de jet ne s'affichaient JAMAIS.
         await session.broadcast({
             "type": "jet_demande",
             "joueur": joueur_c,
             "personnage": nom_pj,
             "categorie": det[0],
-            "type": det[1],
+            "type_jet": det[1],
             "detail": (
                 f"🎲 {nom_pj} : lance un jet de "
                 f"{'sauvegarde ' if det[0] == 'sauvegarde' else ''}"
@@ -9111,6 +9143,11 @@ async def _handle_say(
                                     "⚙️ _Mécanique serveur :_\n\n"
                                     + "\n\n".join(events_pre)
                                 )
+                            # (fix fuites R7) : le repli brut contient des
+                            # consignes au MJ ("narre l'ARRIVÉE...") - il
+                            # passe par le filtre anti-fuite comme le chemin
+                            # principal.
+                            _nar_bloc = _assainir_texte_joueur(_nar_bloc)
                             await session.broadcast({
                                 "type": "dm",
                                 "text": _nar_bloc,

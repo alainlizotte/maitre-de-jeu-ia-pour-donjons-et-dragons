@@ -91,7 +91,10 @@ def test_texte_exploration_nouvelle_salle():
     assert "n'invente AUCUNE autre sortie" not in t
     assert "Le groupe poursuit son exploration" not in t
     assert "antichambre" in t  # le type reste (info de navigation)
-    assert "Portes visibles ici : sud" in t  # portes utiles conservées
+    # (R7 04/11) : les listes de portes des notes d'outils sont de la
+    # plomberie serveur — le MJ les liste dans sa prose (le joueur
+    # ne doit plus lire « Portes visibles ici : … »).
+    assert "Portes" not in t
 
 
 def test_jets_et_carte_conserves():

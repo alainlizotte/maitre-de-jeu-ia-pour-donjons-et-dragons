@@ -2012,6 +2012,15 @@ def _jet_detecte(narration: str) -> Optional[tuple[str, str]]:
                       r"(?:sa\s+|son\s+)?(?:jet|sauvegarde)", t,
                       _re_mod.IGNORECASE):
         return None
+    # (fix 09/11) : un bloc DÉJÀ résolu par le serveur (piège du pre-run :
+    # "✅ Throk'mar : total 21 vs DD 10 → réussite", en-têtes de piège) n'est
+    # PAS une demande de jet — sans ce garde, jet_attendu était posé APRÈS la
+    # résolution et le dé clignotait pour un jet sans effet.
+    if _re_mod.search(r"total\s+\d+\s+vs\s+DD\s+\d+", t,
+                      _re_mod.IGNORECASE):
+        return None
+    if "RÉSOLU PAR LE SERVEUR" in t or "Jets RÉSOLUS par le serveur" in t:
+        return None
     m_sv = _RE_JET_SAUVEGARDE.search(t)
     if m_sv:
         sv = m_sv.group(1)
@@ -2042,12 +2051,48 @@ async def _jet_poser_attente(
     """Détecte une demande de jet dans la narration MJ, pose `jet_attendu`
     et diffuse `jet_demande` au joueur visé. Silencieux si rien à faire."""
     try:
+        # (fix 09/11) : l'attente posée PAR L'INTERCEPTION du tool (mid-tour,
+        # orchestrator) est diffusée ICI — une seule fois (flag `diffuse`).
+        # Le message porte la DD stockée : le verdict sera calculé au jet.
+        st = PartyState(
+            data_dir=data_dir or str(cfg.abs(cfg.paths.data_dir)),
+            partie_id=partie_id)
+        etat = st.load()
+        if "_erreur" in etat:
+            return
+        _att = etat.get("jet_attendu") or {}
+        if _att:
+            if not _att.get("diffuse"):
+                _att["diffuse"] = True
+                st.save(etat)
+                _dd_b = int(_att.get("difficulte") or 0)
+                await session.broadcast({
+                    "type": "jet_demande",
+                    "joueur": str(_att.get("joueur") or ""),
+                    "personnage": str(_att.get("personnage") or ""),
+                    "categorie": str(_att.get("categorie") or ""),
+                    "type_jet": str(_att.get("type") or ""),
+                    "detail": (
+                        "🎲 " + str(_att.get("personnage") or "")
+                        + " : lance un jet de "
+                        + ("sauvegarde "
+                           if _att.get("categorie") == "sauvegarde" else "")
+                        + str(_att.get("type") or "")
+                        + (f" (DD {_dd_b})" if _dd_b else "")
+                        + " — appuie sur le dé 🎲 à gauche du champ."
+                    ),
+                })
+            return
         det = _jet_detecte(narration)
         # R7-interception : le MJ a lance un jet POUR UN PJ ?
         # (lancer_sauvegarde/lancer_d20 avec nom = un PJ) ->
         # le resultat serveur est JETE, le joueur relance son
         # propre de (total non declaratif, arbitrage MJ).
-        if not det and tool_calls_trace:
+        # (fix 09/11) : HORS COMBAT uniquement — en combat les sauvegardes
+        # sont résolues par le serveur et AFFICHÉES ; redemander le même jet
+        # après coup n'a pas de sens (le dé clignotait pour rien).
+        if (not det and tool_calls_trace
+                and etat.get("phase") != "combat"):
             from .tools.fiches import _load_fiche as _lf_jd
             from .tools.base import ToolContext as _tc_jd
             _ctx_jd = _tc_jd(
@@ -2068,22 +2113,25 @@ async def _jet_poser_attente(
                     break
         if not det:
             return
-        st = PartyState(
-            data_dir=data_dir or str(cfg.abs(cfg.paths.data_dir)),
-            partie_id=partie_id)
-        etat = st.load()
-        if "_erreur" in etat or etat.get("jet_attendu"):
-            return
         nom_pj, joueur_c = _jet_cible_pj(narration, etat)
         if not nom_pj:
             return
         from datetime import datetime as _dt_jp
+        # (fix) : la DD citée dans la narration (« DD 15 ») voyage avec
+        # l'attente — le verdict réussite/échec sera calculé au jet.
+        _dd_jp = 0
+        _m_dd = _re_mod.search(r"DD\s*(\d{1,3})", narration or "",
+                               _re_mod.IGNORECASE)
+        if _m_dd:
+            _dd_jp = int(_m_dd.group(1))
         etat["jet_attendu"] = {
             "personnage": nom_pj,
             "joueur": joueur_c,
             "categorie": det[0],
             "type": det[1],
+            "difficulte": _dd_jp,
             "ts": _dt_jp.now().isoformat(),
+            "diffuse": True,
         }
         st.save(etat)
         # (fix R7) : la clé "type" était EN DOUBLE (discriminant WS écrasé
@@ -2099,7 +2147,9 @@ async def _jet_poser_attente(
             "detail": (
                 f"🎲 {nom_pj} : lance un jet de "
                 f"{'sauvegarde ' if det[0] == 'sauvegarde' else ''}"
-                f"{det[1]} — clique Lancer (ou tape « je lance »)."
+                f"{det[1]}"
+                + (f" (DD {_dd_jp})" if _dd_jp else "")
+                + " — appuie sur le dé 🎲 à gauche du champ."
             ),
         })
         _log_tour("jet demandé au joueur : %s (%s/%s) — partie %s",
@@ -2174,9 +2224,23 @@ async def _jet_resoudre(
                   else "")
         label_type = ("sauvegarde de " if categorie == "sauvegarde"
                       else "test de ")
+        # (fix 09/11) : la DD stockée avec l'attente donne le VERDICT —
+        # le jet du joueur décide du sort de l'action (avant : un total
+        # sans conséquence, la mécanique étant déjà résolue par le tool).
+        _dd_jr = 0
+        try:
+            _dd_jr = int(attente.get("difficulte") or 0)
+        except (TypeError, ValueError):
+            _dd_jr = 0
+        _verdict = ""
+        if _dd_jr > 0:
+            if total >= _dd_jr:
+                _verdict = f" → ✅ **réussite** (DD {_dd_jr})"
+            else:
+                _verdict = f" → ❌ **échec** (DD {_dd_jr})"
         texte = (
             f"🎲 [{nom_pj}]{marque} {label_type}{type_jet} : "
-            f"**{total}** (1d20={_d20} + {bonus_txt})."
+            f"**{total}** (1d20={_d20} + {bonus_txt}).{_verdict}"
         )
         etat.pop("jet_attendu", None)
         st.save(etat)
@@ -8665,8 +8729,8 @@ async def _handle_say(
                     "event": "jet_rappel",
                     "detail": (
                         "🎲 Ton jet est attendu : "
-                        f"{_attente_ja.get('type')} — clique Lancer ou "
-                        "tape « je lance »."
+                        f"{_attente_ja.get('type')} — appuie sur le dé 🎲 "
+                        "à gauche du champ (ou tape « je lance »)."
                     ),
                 })
                 return

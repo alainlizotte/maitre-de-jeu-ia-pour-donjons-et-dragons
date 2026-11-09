@@ -422,6 +422,18 @@ export function useChatSocket(partie_id: string | null) {
           // retombe sur TOUS les clients (avant : bandeau fantôme chez les
           // autres joueurs jusqu'au rechargement).
           setJetAttendu(null);
+          // 🎲 (fix 09/11) : le résultat s'AFFICHE en direct dans le fil
+          // (total + verdict DD) — avant, il n'était visible qu'après un
+          // rechargement (l'impression « mon jet n'a aucun effet »).
+          if (msg.texte) {
+            addMessage({
+              id: (msg as { client_id?: string }).client_id || uid(),
+              role: "user",
+              player: String(msg.personnage || msg.joueur || "Dé"),
+              content: String(msg.texte),
+              ts: Date.now(),
+            });
+          }
           break;
         }
         case "audio_signal": {

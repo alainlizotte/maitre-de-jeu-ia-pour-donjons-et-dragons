@@ -6286,6 +6286,103 @@ class Orchestrator:
         finally:
             ctx._hors_budget = _hb_prev
 
+    async def _intercepter_jet_pj(
+        self,
+        spec: ToolSpec,
+        ctx: ToolContext,
+        args: dict,
+        result,
+    ) -> Optional[ToolResult]:
+        """Dévie un lancer_d20/lancer_sauvegarde ciblant un PJ vers le
+        JOUEUR (hors combat) : pose `jet_attendu` (avec la DD) et renvoie
+        un résultat NON exécuté. Renvoie None = exécuter normalement
+        (PNJ/monstre, combat, fiche absente, jet déjà en attente)."""
+        a = args or {}
+        nom = str(a.get("nom_personnage") or "").strip()
+        if not nom:
+            return None
+        try:
+            from ..tools.fiches import _load_fiche as _lf_ij  # noqa: PLC0415
+            fiche = _lf_ij(ctx, nom) or {}
+        except Exception:                                    # noqa: BLE001
+            return None
+        if not fiche.get("proprietaire"):
+            return None            # PNJ / monstre : le serveur peut jeter
+        try:
+            _st_ij = PartyState(
+                data_dir=ctx.data_dir, partie_id=ctx.partie_id).load()
+            if "_erreur" in _st_ij:
+                return None
+            if _st_ij.get("phase") == "combat":
+                # En combat les sauvegardes sont résolues par le serveur et
+                # AFFICHÉES (design déterministe) : pas de déviation.
+                return None
+            if _st_ij.get("jet_attendu"):
+                # (durcissement 09/11) : un jet est DÉJÀ attendu du joueur —
+                # le tool NE S'EXÉCUTE PAS non plus (sinon un 2e appel du
+                # LLM dans le même tour résolvait le jet côté serveur, ce
+                # qui réintroduisait exactement le bug "dé clignotant sans
+                # effet"). Refus clair : le LLM doit terminer son tour.
+                result.tool_calls_trace.append({
+                    "name": spec.name,
+                    "args": args,
+                    "ok": False,
+                    "text": "🎲 jet déjà attendu du joueur (refus)",
+                })
+                return ToolResult(text=(
+                    "🎲 **UN JET EST DÉJÀ ATTENDU** : "
+                    + str(_st_ij["jet_attendu"].get("personnage") or "?")
+                    + " doit lancer son dé depuis le chat. N'appelle PLUS "
+                    "cet outil — invite le joueur à lancer le dé et "
+                    "TERMINE ton tour ; la conséquence se narrera au tour "
+                    "suivant d'après SON total."
+                ))
+        except Exception:                                    # noqa: BLE001
+            return None
+        categorie = ("sauvegarde" if spec.name == "lancer_sauvegarde"
+                     else "competence")
+        if spec.name == "lancer_sauvegarde":
+            type_jet = str(a.get("type_sauvegarde") or "")
+        else:
+            type_jet = str(a.get("competence") or "")
+        if not type_jet:
+            type_jet = str(a.get("raison") or "") or "d20"
+        try:
+            dd = int(a.get("difficulte") or 0)
+        except (TypeError, ValueError):
+            dd = 0
+        from datetime import datetime as _dt_ij          # noqa: PLC0415
+        _st_ij["jet_attendu"] = {
+            "personnage": nom,
+            "joueur": str(fiche.get("proprietaire") or ""),
+            "categorie": categorie,
+            "type": type_jet,
+            "difficulte": dd,
+            "ts": _dt_ij.now().isoformat(),
+            "source": "tool_pj",
+        }
+        PartyState(data_dir=ctx.data_dir,
+                   partie_id=ctx.partie_id).save(_st_ij)
+        label = ("une sauvegarde de " if categorie == "sauvegarde"
+                 else "un test de ")
+        dd_txt = f" (DD {dd})" if dd else ""
+        result.tool_calls_trace.append({
+            "name": spec.name,
+            "args": args,
+            "ok": True,
+            "text": f"🎲 jet demandé au joueur : {nom}{dd_txt}",
+        })
+        _log.info("jet PJ dévié vers le joueur : %s (%s%s)",
+                  nom, categorie, dd_txt)
+        return ToolResult(text=(
+            "🎲 **Jet demandé AU JOUEUR** : " + nom + " doit lancer "
+            + label + "« " + type_jet + " »" + dd_txt + ". Le dé est "
+            "lancé PAR LE JOUEUR depuis le bouton 🎲 du chat — son jet "
+            "décidera du sort de l'action. N'INVENTE PAS le total ni le "
+            "verdict : invite-le à lancer le dé et TERMINE ton tour SANS "
+            "conséquence ; la narrera au tour suivant d'après SON total."
+        ))
+
     async def _run_one_tool_corps(
         self,
         spec: ToolSpec,
@@ -6346,6 +6443,17 @@ class Orchestrator:
                                        f"Applique {spec.name}…"))
             except Exception:                                # noqa: BLE001
                 pass
+        # 🎲 (fix 09/11) : INTERCEPTION d'un jet demandé À UN PJ. Le tool
+        # ne s'exécute PAS : c'est le JOUEUR qui lance son dé (bouton 🎲 du
+        # chat). Avant : le tool résolvait le jet (total + verdict affichés,
+        # conséquences narrées) et _jet_poser_attente faisait clignoter le
+        # dé APRÈS coup — le jet du joueur n'avait plus aucun effet
+        # (partie réelle 08/11 : le MJ appelait lancer_d20 POUR le PJ).
+        if spec.name in ("lancer_d20", "lancer_sauvegarde"):
+            _inter_jet = await self._intercepter_jet_pj(spec, ctx, args,
+                                                        result)
+            if _inter_jet is not None:
+                return _inter_jet
         tr = await invoke_tool(spec, ctx, args)
         # ok = succès : ni message d'erreur ❌, ni REFUS de verrou ⛔ (les refus
         # ⛔ du verrou d'incarnation déclenchent une RETENTATIVE du LLM — on ne

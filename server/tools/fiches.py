@@ -1661,7 +1661,18 @@ async def fiche_perso_mettre_a_jour(
     # Si le champ touche l'entrée PJ affichée (pv, pv_max, ca…), on synchronise
     # l'état de partie pour que le front voie la fiche évoluer en direct.
     if keys[0] in ("pv", "pv_max", "ca", "conditions") and len(keys) == 1:
-        idx = _sync_pj(ctx, nom, {keys[0]: v})
+        # 🛡️ (fix 10/11, partie b1152b10) : les conditions vitales DÉRIVÉES
+        # de la barre de PV (Mort/Mourant/Invalide posées plus haut) voyagent
+        # avec la sync — avant : `pv=-10` posait « Mort » sur la FICHE
+        # seulement, l'état gardait un perso vivant aux barres pleines (le
+        # joueur continuait à jouer un personnage décédé).
+        _sync_champs: dict[str, Any] = {keys[0]: v}
+        if keys[0] == "pv":
+            _sync_champs["conditions"] = [
+                str(c) for c in (fiche.get("conditions") or [])
+                if str(c).strip()
+            ]
+        idx = _sync_pj(ctx, nom, _sync_champs)
         mention = (
             f" (borné à PV max {pv_borne} — règle 3.5)" if pv_borne is not None else ""
         )
@@ -1670,7 +1681,7 @@ async def fiche_perso_mettre_a_jour(
                 f"✅ Fiche de {nom} mise à jour : {champ} = "
                 f"{json.dumps(v, ensure_ascii=False)}{mention}"
             ),
-            state_patch=_patch_pj(nom, idx, {keys[0]: v}),
+            state_patch=_patch_pj(nom, idx, _sync_champs),
         )
     return ToolResult(
         text=(

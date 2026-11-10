@@ -448,6 +448,20 @@ def _poids_unitaire(nom: str, explicite: Optional[float]) -> Optional[float]:
     if info:
         lot = int(info.get("lot") or 1)
         return round(float(info["poids_kg"]) / lot, 4)
+    # 🛡️ (fix 10/11, partie b1152b10) : l'article EXISTE dans le catalogue
+    # PHB (« Âne ou mulet », kg 0.0 — une monture vous porte, elle n'est pas
+    # portée) mais son poids n'était pas dans `_POIDS_OFFICIELS` → l'ajout
+    # était refusé « inconnu du catalogue ». On consulte l'article lui-même.
+    try:
+        from .. import equipement_phb as _eq_pu
+        _art_pu = _eq_pu.article(nom)
+        if isinstance(_art_pu, dict):
+            try:
+                return max(0.0, float(_art_pu.get("poids_kg") or 0.0))
+            except (TypeError, ValueError):
+                return 0.0
+    except Exception:                                        # noqa: BLE001
+        pass
     # Objet inconnu du catalogue → poids inconnu (None) ; le MJ doit fournir
     # un poids explicite pour ne pas fausser l'encombrement.
     return None
@@ -888,6 +902,25 @@ async def inventaire_ajouter(
             "inventoriable. Range un OBJET au nom COURT (ex. « couteau "
             "rituel », « fiole ») ; le texte d'ambiance va dans "
             "`memoire_evenement` ou `ajouter_evenement_histoire`."))
+    # 🧹 (fix 10/11, partie b1152b10) : ANTI-ARTICLE — « un parchemin »,
+    # « la carte », « la sacoche du mulet » : l'article narratif part avant
+    # le rangement. Sans lui, l'équipement du PJ collectait des déchets de
+    # prose ('un parchemin', 'la carte') au lieu d'objets propres, et la
+    # fusion (`_cle_objet`) marchait au hasard selon la forme narrée.
+    # (Le nom n'est PAS re-casé ni remplacé au-delà du catalogue : un objet
+    # légitime garde sa forme — seule l'article narratif disparaît.)
+    _o = re.sub(
+        r"^(?:un|une|le|la|les|l'|du|de\s+la|des)\s+", "", _o,
+        flags=re.IGNORECASE).strip(" \t,.;:!")
+    if _o:
+        try:
+            from .. import equipement_phb as _eq_art
+            _art_canon = _eq_art.article(_o)
+            if isinstance(_art_canon, dict) and _art_canon.get("nom"):
+                _o = str(_art_canon["nom"])
+        except Exception:                                    # noqa: BLE001
+            pass
+    objet = _o
     # 🔧 Partie ead406b2 : la VALEUR CANONIQUE du tresor de la salle
     # prime sur une bourse inventee par le modele (le canon de (2,0) disait
     # "32 po" : le modele a ajoute "bourse de 25 pc" inventee). Si l'objet
@@ -1066,6 +1099,29 @@ async def inventaire_ajouter(
             pass
 
     inv = _inventaire(fiche)
+    # 🐴 (fix 10/11, partie b1152b10) : une MONTURE ne s'empile pas — le
+    # mulet acheté (portée permanent) PUIS re-ajouté par le MJ (portée
+    # quête) faisait « Âne ou mulet x2 » : la fusion classique exige la
+    # MÊME portée, une monture non. Si une monture du même nom (clé
+    # équivalente) est déjà possédée, l'ajout est refusé poliment.
+    try:
+        from .. import equipement_phb as _eq_mnt
+        _art_mnt = _eq_mnt.article(objet)
+        if isinstance(_art_mnt, dict) and \
+                str(_art_mnt.get("categorie") or "").lower() == "monture":
+            _cle_mnt = _cle_objet(objet)
+            _deja_mnt = next(
+                (e for e in inv if _cle_objet(e.get("nom")) == _cle_mnt),
+                None)
+            if _deja_mnt is not None and \
+                    int(_deja_mnt.get("qte", 1) or 1) >= 1:
+                return ToolResult(text=(
+                    f"ℹ️ **{objet}** est déjà dans l'inventaire de "
+                    f"{fiche.get('nom', nom)} — une monture ne s'empile pas "
+                    "(elle vous suit, elle n'est pas portée sur le dos). "
+                    "Narre son usage sans nouvel achat."))
+    except Exception:                                        # noqa: BLE001
+        pass
     cible = _cle_objet(objet)
     # 🔒 Partie 82a77cbe : un objet requis d'une étape À VENIR ne se gagne
     # pas — la baguette de téléportation (requis de l'étape 2) était remise

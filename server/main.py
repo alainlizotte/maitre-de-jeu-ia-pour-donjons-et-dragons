@@ -2243,6 +2243,18 @@ async def _jet_resoudre(
             f"**{total}** (1d20={_d20} + {bonus_txt}).{_verdict}"
         )
         etat.pop("jet_attendu", None)
+        # 🎲 (fix 10/11, partie b1152b10) : le verdict est MEMORISE — le
+        # prochain tour le recevra en consigne IMPERATIVE (le 9B re-narrait
+        # un echec en ignorant la reussite du joueur : le jet n'avait aucun
+        # effet sur la fiction).
+        etat["dernier_jet"] = {
+            "personnage": nom_pj,
+            "texte": texte,
+            "verdict": ("reussite"
+                        if _dd_jr > 0 and total >= _dd_jr
+                        else "echec" if _dd_jr > 0 else ""),
+            "ts": _dt_jr.now().isoformat(),
+        }
         st.save(etat)
         await session.broadcast({
             "type": "jet_resultat",
@@ -6863,6 +6875,138 @@ def _aligner_verite_terrain(narration: str, etat: dict) -> str:
     return _re_mod.sub(r"\n{3,}", "\n\n", texte).strip()
 
 
+def _reconcilier_fiches_etat(
+    etat: dict[str, Any], data_dir: str,
+) -> list[str]:
+    """🛡️ (fix 10/11, partie b1152b10) : la FICHE fait foi pour les PV et
+    les conditions de chaque PJ — l'entrée de l'état de partie est
+    réalignée. Avant : la mort posée via `fiche_perso_mettre_a_jour(pv=…)`
+    (ou toute divergence fiche/état) laissait un personnage DÉCÉDÉ jouer
+    avec des barres pleines. Si TOUS les PJ sont Mort → game_over.
+
+    Renvoie les lignes de mise en cohérence (à ajouter à la narration)."""
+    try:
+        from .tools.fiches import _slug as _slug_rc          # noqa: PLC0415
+    except Exception:                                        # noqa: BLE001
+        return []
+    pjs = etat.get("pj") or []
+    if not pjs:
+        return []
+    fiches_dir = os.path.join(data_dir, "fiches")
+    lignes: list[str] = []
+    morts = vivants = 0
+    for p in pjs:
+        if not isinstance(p, dict):
+            continue
+        nom = str(p.get("nom") or "").strip()
+        if not nom:
+            continue
+        fp = os.path.join(fiches_dir, f"fiche_{_slug_rc(nom)}.json")
+        if not os.path.isfile(fp):
+            vivants += 1
+            continue
+        try:
+            with open(fp, "r", encoding="utf-8") as _f_rc:
+                fiche = json.load(_f_rc)
+        except Exception:                                    # noqa: BLE001
+            vivants += 1
+            continue
+        f_pv = fiche.get("pv")
+        f_conds = [str(c) for c in (fiche.get("conditions") or [])
+                   if str(c).strip()]
+        try:
+            pv_f = int(f_pv) if f_pv is not None else None
+        except (TypeError, ValueError):
+            pv_f = None
+        if "Mort" in f_conds or (pv_f is not None and pv_f <= -10):
+            morts += 1
+        else:
+            vivants += 1
+        diverge = (
+            (pv_f is not None and p.get("pv") != pv_f)
+            or sorted(f_conds) != sorted(
+                str(c) for c in (p.get("conditions") or []))
+        )
+        if diverge:
+            if pv_f is not None:
+                p["pv"] = pv_f
+            p["conditions"] = f_conds
+            lignes.append(
+                f"⚙️ _Réconciliation : {nom} → PV "
+                f"{pv_f if pv_f is not None else p.get('pv')}"
+                f"/{fiche.get('pv_max', '?')}"
+                + (f" [{', '.join(f_conds)}]" if f_conds else "")
+                + " — aligné sur la fiche officielle._"
+            )
+    if morts > 0 and vivants == 0:
+        if (str(etat.get("phase") or "") != "game_over"
+                and not etat.get("game_over")):
+            etat["phase"] = "game_over"
+            etat["game_over"] = True
+            lignes.append("💀 _Tous les héros sont tombés — game over._")
+    return lignes
+
+
+_RE_MORT_PROSE = _re_mod.compile(
+    r"(?:inanim\w+|inconscient\w*|dernier\s+souffle|corps\s+g[îi]t"
+    r"|g[îi]t\s+au\s+sol|☠|PV\s*(?:à|:)\s*0\b|à\s+0\s+PV\b)",
+    _re_mod.IGNORECASE,
+)
+
+
+def _morts_hallucinees(
+    narration: str, etat: dict[str, Any], trace: list,
+) -> list[str]:
+    """🛡️ (fix 10/11, partie b1152b10) : la prose déclare un PJ mort/
+    évanoui (« s'effondre, inconscient… PV à 0/16 ») alors qu'AUCUN tool
+    de dégâts ne l'a touché ce tour et que l'état le voit vivant — le
+    petit modèle anticipait une mort sans la mécanique (et en contredisant
+    le jet réussi du joueur). Une ligne de mise en cohérence rétablit la
+    vérité officielle (la prose n'est pas surgeryée : trop fragile)."""
+    if not narration:
+        return []
+    touches: set[str] = set()
+    for tc in trace or []:
+        if not tc.get("ok"):
+            continue
+        _n_tc = tc.get("name")
+        _a_tc = tc.get("args") or {}
+        if _n_tc == "fiche_perso_infliger_degats":
+            touches.add(_norm_nom_objet(str(_a_tc.get("nom") or "")))
+        elif (_n_tc == "fiche_perso_mettre_a_jour"
+                and str(_a_tc.get("champ") or "") == "pv"):
+            touches.add(_norm_nom_objet(str(_a_tc.get("nom") or "")))
+    lignes: list[str] = []
+    for p in etat.get("pj") or []:
+        if not isinstance(p, dict):
+            continue
+        nom = str(p.get("nom") or "").strip()
+        if not nom:
+            continue
+        try:
+            pv = int(p.get("pv", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if pv <= 0:
+            continue
+        if _norm_nom_objet(nom) in touches:
+            continue          # des dégâts ont réellement tourné : la prose
+                              # a le droit de narrer une chute
+        for _m_mh in _re_mod.finditer(_re_mod.escape(nom), narration,
+                                      _re_mod.IGNORECASE):
+            fen = narration[max(0, _m_mh.start() - 130):_m_mh.end() + 130]
+            if _RE_MORT_PROSE.search(fen):
+                lignes.append(
+                    f"⚙️ _Mise en cohérence : aucun dégât n'a été enregistré "
+                    f"par le serveur pour {nom} (PV {pv}/"
+                    f"{p.get('pv_max', '?')}) — la prose a anticipé une "
+                    "chute qui n'a pas eu lieu ; la suite tient compte de "
+                    "l'état officiel (personnage debout)._"
+                )
+                break
+    return lignes
+
+
 def _noms_armures_catalogue() -> set[str]:
     """Noms d'armures/boucliers du catalogue (pour recalculer la CA)."""
     try:
@@ -9480,6 +9624,47 @@ async def _handle_say(
             messages = [__import__("server.llm.client", fromlist=["Message"]).Message(
                 role="system", content=system_text
             )] + fenetre
+
+            # 🎲 (fix 10/11, partie b1152b10) : VERDICT DE JET FAIT FOI — le
+            # jet du joueur (bouton dé) décide du sort de l'action ; le 9B
+            # re-narrait un échec en ignorant la réussite mémorisée. La
+            # consigne IMPÉRATIVE est injectée AU TOUR SUIVANT puis consommée.
+            try:
+                _et_dj = PartyState(
+                    data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                    partie_id=partie_id,
+                ).load()
+                _dj_note = _et_dj.pop("dernier_jet", None)
+                if _dj_note:
+                    PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).save(_et_dj)
+                    _dj_txt = str(_dj_note.get("texte") or "").replace(
+                        "🎲 ", "")
+                    _dj_v = str(_dj_note.get("verdict") or "")
+                    _dj_suite = (
+                        "Le verdict (RÉUSSITE) est DÉFINITIF : narre la "
+                        "conséquence du SUCCÈS."
+                        if _dj_v == "reussite" else
+                        "Le verdict (ÉCHEC) est DÉFINITIF : narre la "
+                        "conséquence de l'ÉCHEC."
+                        if _dj_v == "echec" else
+                        "Le total obtenu est DÉFINITIF : narre la scène en "
+                        "le respectant.")
+                    messages = messages + [
+                        __import__("server.llm.client",
+                                   fromlist=["Message"]).Message(
+                            role="system",
+                            content=(
+                                "🎲 **JET ARBITRÉ PAR LE JOUEUR — FAIT FOI** "
+                                ": " + _dj_txt + " " + _dj_suite
+                                + " Ne le contredis JAMAIS, ne re-lance PAS "
+                                "le jet, n'invente AUCUN autre résultat.")
+                        ),
+                    ]
+            except Exception as e_dj:
+                print(f"[dnd35] Injection verdict jet échouée (ignoré) : {e_dj}")
 
             # 4. Boucle d'orchestration : LLM ↔ tools → narration + events + patches.
             ctx = _ctx(partie_id, player)
@@ -12650,6 +12835,28 @@ on_status=on_status)
                 ).load()
                 result.narration = _aligner_verite_terrain(
                     result.narration or "", _etat_final)
+                # 🛡️ (fix 10/11, partie b1152b10) : la FICHE fait foi —
+                # réconciliation des PV/conditions + game_over si tout le
+                # groupe est Mort ; puis détection des morts DÉCLARÉES en
+                # prose sans dégâts réels (mise en cohérence honnête).
+                _lignes_rec = _reconcilier_fiches_etat(
+                    _etat_final, str(cfg.abs(cfg.paths.data_dir)))
+                _lignes_mort = _morts_hallucinees(
+                    result.narration or "", _etat_final,
+                    result.tool_calls_trace)
+                if _lignes_rec:
+                    _err_rec = PartyState(
+                        data_dir=str(cfg.abs(cfg.paths.data_dir)),
+                        partie_id=partie_id,
+                    ).save(_etat_final)
+                    if _err_rec:
+                        print(f"[dnd35] Sauvegarde réconciliation : {_err_rec}")
+                _lignes_coh = _lignes_rec + _lignes_mort
+                if _lignes_coh:
+                    result.narration = (
+                        (result.narration or "").rstrip()
+                        + "\n\n" + "\n\n".join(_lignes_coh)
+                    )
             except Exception as _e_align:                    # noqa: BLE001
                 print(f"[dnd35] Alignement narration/état échoué (ignoré) : "
                       f"{_e_align}")

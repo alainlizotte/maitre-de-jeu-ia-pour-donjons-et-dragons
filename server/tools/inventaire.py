@@ -723,6 +723,48 @@ def _charger_fiche(ctx: ToolContext, nom: str) -> tuple[Optional[dict], Optional
 
 
 # --------------------------------------------------------------------------- #
+#  Montures (bât / sacoche de selle) et objets au sol
+# --------------------------------------------------------------------------- #
+# 🐴 (fix 12/11) : capacités PHB 3.5 des montures en kg — (légère,
+# moyenne, lourde). Le cavalier et son équipement porté s'ajoutent en
+# voyage (le MJ arbitre) ; ici on borne le CARGO de selle.
+_CAPACITE_MONTURES = {
+    "ane ou mulet": (104, 209, 313),     # 230 / 460 / 690 lb
+    "cheval leger": (68, 136, 204),      # 150 / 300 / 450 lb
+    "cheval lourd": (91, 181, 272),      # 200 / 400 / 600 lb
+    "destrier leger": (68, 136, 204),
+    "destrier lourd": (91, 181, 272),
+    "poney": (34, 68, 102),              # 75 / 150 / 225 lb
+    "chien de selle": (45, 91, 136),     # 100 / 200 / 300 lb
+    "chien de garde": (45, 91, 136),
+}
+_CAPACITE_MONTURE_DEFAUT = (104, 209, 313)
+
+
+def _cle_lieu_sol(etat: dict[str, Any]) -> str:
+    """Clé du lieu courant (objets jetés au sol dans l'état de partie)."""
+    dj = etat.get("donjon") or {}
+    if dj.get("id"):
+        cour = list(dj.get("courant") or [0, 0])
+        return f"donjon:{dj.get('id')}:{cour[0]},{cour[1]}"
+    return "monde:" + str((etat.get("lieu") or {}).get("nom") or "inconnu")
+
+
+def _charge_monture(monture: dict[str, Any]) -> float:
+    """Poids (kg) du cargo de selle d'une monture."""
+    total = 0.0
+    for e in (monture.get("inventaire") or []):
+        try:
+            qte = int(e.get("qte", 1) or 1)
+        except (TypeError, ValueError):
+            qte = 1
+        pu = _poids_unitaire(e.get("nom"), e.get("poids"))
+        if pu is not None:
+            total += pu * qte
+    return round(total, 2)
+
+
+# --------------------------------------------------------------------------- #
 #  Tools
 # --------------------------------------------------------------------------- #
 @tool
@@ -745,13 +787,32 @@ async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     # 🛠️ Nudge : les modèles n'utilisent JAMAIS spontanément les outils
     # d'écriture (observé en e2e : « je ramasse la clé » → 4× consulter,
     # inventaire jamais rempli). On rappelle leur existence et la syntaxe.
+    # 🐴 (fix 12/11) : le CARGO DE SELLE de chaque monture possédée.
+    for _m_c in (fiche.get("montures") or []):
+        _cargo_c = _charge_monture(_m_c)
+        _cap_c = _CAPACITE_MONTURES.get(
+            _norm(_m_c.get("nom")), _CAPACITE_MONTURE_DEFAUT)
+        _niv_c = ("légère" if _cargo_c <= _cap_c[0]
+                  else "moyenne" if _cargo_c <= _cap_c[1] else "lourde")
+        texte += (
+            f"\n\n🐴 **{_m_c.get('nom')}** — cargo de selle : "
+            f"{_cargo_c} kg / {_cap_c[2]} kg max (charge {_niv_c}) :")
+        for _e_c in (_m_c.get("inventaire") or []):
+            texte += f"\n   - {_e_c.get('nom')} x{_e_c.get('qte', 1)}"
+        if not (_m_c.get("inventaire") or []):
+            texte += "\n   (bât vide)"
     texte += (
         "\n\n🛠️ POUR MODIFIER cet inventaire, appelle l'un de ces outils "
         "(une consultation ne suffit pas) : `inventaire_ramasser(nom, "
         "objet, quantite?, poids?, source?)` pour ramasser · "
         "`inventaire_ajouter(nom, objet, quantite?, poids?, portee?)` · "
         "`inventaire_retirer(nom, objet, quantite?, portee?)` · "
-        "`inventaire_consommer_munition(nom, munition, quantite?)`. "
+        "`inventaire_consommer_munition(nom, munition, quantite?)` · "
+        "`inventaire_transferrer(nom, objet, quantite?, destination?)` "
+        "pour ALLÉGER le dos : destination='monture' (bât/sacoche de "
+        "selle), 'sol' (jeter au sol), le nom d'un autre PJ (don) ou "
+        "d'un PNJ — et pour la monnaie objet='or' (lourde : 50 pc = "
+        "0,45 kg). "
         "PORTÉE : don de PNJ / objet d'aventure (potion, fiole, or donné, "
         "carte, clé, parchemin) → portee=\"quete\" (perdus à la fin de la "
         "partie) ; achat en marchand, arme, armure, trésor → "
@@ -1439,8 +1500,341 @@ async def inventaire_ramasser(
     :param portee (str): "quete" | "permanent" | "auto" (cf.
         `inventaire_ajouter` ; butin de donjon = trésor → permanent).
     """
+    # 🛍️ (fix 12/11) : un objet JETÉ AU SOL dans CE lieu est ramassable
+    # en priorité (le transfert au sol l'a déposé ici).
+    try:
+        from ..game.state import PartyState as _PS_rp
+        _et_rp = _PS_rp(data_dir=ctx.data_dir,
+                        partie_id=ctx.partie_id).load()
+        _cle_rp = _cle_lieu_sol(_et_rp)
+        _sol_rp = (_et_rp.get("objets_au_sol") or {}).get(_cle_rp) or []
+        _frag_rp = _cle_objet(objet)
+        _idx_rp = next(
+            (k for k, _e in enumerate(_sol_rp)
+             if (_nc := _cle_objet(_e.get("nom")))
+             and (_nc == _frag_rp or _frag_rp in _nc or _nc in _frag_rp)),
+            None)
+        if _idx_rp is not None:
+            _e_rp = _sol_rp[_idx_rp]
+            _qte_rp = min(int(_e_rp.get("qte", 1) or 1),
+                          max(1, int(quantite or 1)))
+            _reste_rp = int(_e_rp.get("qte", 1) or 1) - _qte_rp
+            if _reste_rp > 0:
+                _e_rp["qte"] = _reste_rp
+            else:
+                _sol_rp.pop(_idx_rp)
+            if not _sol_rp:
+                (_et_rp.get("objets_au_sol") or {}).pop(_cle_rp, None)
+            _PS_rp(data_dir=ctx.data_dir,
+                   partie_id=ctx.partie_id).save(_et_rp)
+            _portee_rp = str(_e_rp.get("portee") or "quete")
+            _r = await inventaire_ajouter(
+                ctx, nom, str(_e_rp.get("nom")), quantite=_qte_rp,
+                poids=_e_rp.get("poids"),
+                portee=_portee_rp if _portee_rp in ("quete", "permanent")
+                else "auto")
+            if not _r.text.startswith(("❌", "⚠️")):
+                _r = ToolResult(
+                    text="🛍️ (ramassé du sol) " + _r.text,
+                    events=_r.events, state_patch=_r.state_patch)
+            return _r
+    except Exception:                                        # noqa: BLE001
+        pass
     return await inventaire_ajouter(
         ctx, nom, objet, quantite=quantite, poids=poids, portee=portee
+    )
+
+
+def _assurer_monture(fiche: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """La première monture possédée (champ `montures`), enregistrée
+    automatiquement depuis l'inventaire (article catalogue catégorie
+    « monture ») si absent. None = aucune monture possédée."""
+    montures = fiche.setdefault("montures", [])
+    if montures:
+        return montures[0]
+    try:
+        from .. import equipement_phb as _eq_am
+        for e in _inventaire(fiche):
+            _a_am = _eq_am.article(e.get("nom"))
+            if (isinstance(_a_am, dict)
+                    and str(_a_am.get("categorie") or "").lower()
+                    == "monture"):
+                montures.append({"nom": str(_a_am["nom"]), "inventaire": []})
+                return montures[0]
+    except Exception:                                        # noqa: BLE001
+        pass
+    return None
+
+
+@tool
+async def inventaire_transferrer(
+    ctx: ToolContext,
+    nom: str,
+    objet: str,
+    quantite: int = 1,
+    destination: str = "",
+) -> ToolResult:
+    """
+    Déplace des objets HORS du dos du personnage : vers la MONTURE (bât /
+    sacoche de selle — la charge du PJ s'allège RÉELLEMENT), vers un AUTRE
+    PJ de la table (don), vers un PNJ, ou AU SOL (jeté — ramassable plus
+    tard dans le même lieu avec `inventaire_ramasser`).
+
+    :param nom (str): nom du personnage qui donne / dépose.
+    :param objet (str): nom de l'objet (ex. "Tente", "Ration de voyage").
+        Pour de la MONNAIE : objet="or" (ou "po"/"pc") et `quantite` =
+        le MONTANT EN PO (1 po = 10 pc) — les pièces sont lourdes
+        (50 pc = 0,45 kg), le bât de selle est fait pour elles.
+    :param quantite (int): nombre d'unités (défaut 1) ; pour la monnaie,
+        le montant.
+    :param destination (str): "monture" — la monture possédée (enregistrée
+        automatiquement depuis l'inventaire si besoin) · "sol" — jeté au
+        sol du lieu courant · le NOM d'un autre PJ de la table (don) · le
+        NOM d'un PNJ (l'objet quitte la table, ex. "Cassyt").
+
+    Règles 3.5 : tendre/donner un objet = action libre (le destinataire
+    doit avoir une main libre — en combat, le MJ arbitre) ; jeter un objet
+    au sol = action libre ; ramasser = action de mouvement (attaque
+    d'opportunité). La monture a sa propre capacité PHB (un mulet porte
+    ~104 kg en charge légère) : au-delà de sa charge lourde, refusé.
+    """
+    fiche, err = _charger_fiche(ctx, nom)
+    if err:
+        return err
+    if not objet or not _norm(objet):
+        return ToolResult(text="❌ Donne un nom d'objet valide.")
+    dest = str(destination or "").strip()
+    if not dest:
+        return ToolResult(text=(
+            '❌ Donne une DESTINATION : "monture" (bât/sacoche de selle), '
+            '"sol" (jeter au sol), le nom d\'un AUTRE PJ de la table '
+            "(don), ou le nom d'un PNJ."))
+    try:
+        qte = max(1, int(quantite or 1))
+    except (TypeError, ValueError):
+        qte = 1
+    if _norm(dest) == _norm(str(fiche.get("nom") or nom)):
+        return ToolResult(
+            text="❌ Le destinataire est le personnage lui-même — rien à "
+                 "transférer.")
+
+    _dest_monture = _norm(dest) in ("monture", "bat", "mulet", "cheval")
+    _dest_sol = _norm(dest) == "sol"
+
+    # ── Monnaie : objet="or"/"po"/"pc" + quantite (en po ; 1 po = 10 pc) ──
+    _m_unite = re.search(r"\b(pc|po|or)\b", objet, re.IGNORECASE)
+    if _m_unite:
+        unite = _m_unite.group(1).lower()
+        pc_dep = int(qte) * (1 if unite == "pc" else 10)
+        or_actuel = int(fiche.get("or", 0) or 0)
+        if pc_dep <= 0 or pc_dep > or_actuel:
+            return ToolResult(text=(
+                f"❌ {fiche.get('nom', nom)} n'a que {or_actuel} pc — "
+                f"impossible de transférer {pc_dep} pc."))
+        fiche["or"] = or_actuel - pc_dep
+        fiche = _normaliser_fiche(fiche)
+        poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
+        if err:
+            return err
+        _msg_pc = (f"🪙 **{pc_dep} pc** quittent la bourse de "
+                   f"{fiche.get('nom', nom)} (reste : {fiche['or']} pc).")
+        if _dest_monture:
+            _m0 = _assurer_monture(fiche)
+            if _m0 is None:
+                return ToolResult(text=(
+                    "❌ Aucune monture possédée — achète-en d'abord au "
+                    "marché (`marche_acheter`)."))
+            _m0.setdefault("inventaire", []).append({
+                "nom": "Bourse de pièces", "qte": 1, "poids": 0.0,
+                "pc": pc_dep})
+            from .fiches import _save_fiche as _sf_mnt  # noqa: PLC0415
+            _sf_mnt(ctx, nom, fiche)
+            return ToolResult(text=(
+                _msg_pc + " Elles sont rangées dans le bât de **"
+                + str(_m0.get("nom")) + "** (hors du dos du cavalier)."),
+                state_patch=patch)
+        _cible_pc = None
+        try:
+            from ..game.state import PartyState as _PS_pc
+            _etat_pc = _PS_pc(data_dir=ctx.data_dir,
+                              partie_id=ctx.partie_id).load()
+            for p in (_etat_pc.get("pj") or []):
+                if (isinstance(p, dict) and _norm(str(p.get("nom") or ""))
+                        == _norm(dest)):
+                    _cible_pc = str(p.get("nom"))
+                    break
+        except Exception:                                # noqa: BLE001
+            _cible_pc = None
+        if _cible_pc is not None:
+            _f_dest, _err_pc = _charger_fiche(ctx, _cible_pc)
+            if _err_pc:
+                return _err_pc
+            _f_dest["or"] = int(_f_dest.get("or", 0) or 0) + pc_dep
+            _f_dest = _normaliser_fiche(_f_dest)
+            _finaliser(ctx, _cible_pc, _f_dest)
+            return ToolResult(text=(
+                _msg_pc + f" **{_cible_pc}** les reçoit (total : "
+                f"{_f_dest['or']} pc)."), state_patch=patch)
+        return ToolResult(text=(
+            _msg_pc + f" Données à **{dest}** (PNJ — l'argent quitte la "
+            "table)."), state_patch=patch)
+
+    # ── Objet classique ──
+    inv = _inventaire(fiche)
+    frag = _norm(objet)
+    trouve = next(
+        (e for e in inv
+         if (ne := _norm(e.get("nom")))
+         and (ne == frag or frag in ne or ne in frag)),
+        None)
+    if trouve is None:
+        return ToolResult(text=(
+            f"❌ « {objet} » n'est pas dans l'inventaire de "
+            f"{fiche.get('nom', nom)} — `inventaire_consulter` liste ce "
+            "qui est réellement porté."))
+    qte_dep = min(qte, int(trouve.get("qte", 1) or 1))
+    nom_obj = str(trouve.get("nom"))
+    pu = _poids_unitaire(nom_obj, trouve.get("poids"))
+    if pu is None:
+        pu = 0.1
+
+    _cible: Optional[str] = None
+    # ── Destination : la MONTURE ──
+    if _dest_monture:
+        _m0 = _assurer_monture(fiche)
+        if _m0 is None:
+            return ToolResult(text=(
+                "❌ Aucune monture possédée — achète-en d'abord au marché "
+                "(`marche_acheter`), puis re-tente le transfert."))
+        cap = _CAPACITE_MONTURES.get(
+            _norm(_m0.get("nom")), _CAPACITE_MONTURE_DEFAUT)
+        cargo = _charge_monture(_m0)
+        ajout = pu * qte_dep
+        if cargo + ajout > cap[2]:
+            return ToolResult(text=(
+                f"❌ **{_m0.get('nom')}** porterait "
+                f"{round(cargo + ajout, 1)} kg (max {cap[2]} kg en charge "
+                "lourde) — la bête s'effondrerait. Allège le bât "
+                "(`inventaire_transferrer` depuis la monture) ou laisse "
+                "au sol."))
+        _e_cargo = next(
+            (c for c in (_m0.get("inventaire") or [])
+             if _cle_objet(c.get("nom")) == _cle_objet(nom_obj)), None)
+        if _e_cargo is not None:
+            _e_cargo["qte"] = int(_e_cargo.get("qte", 1) or 1) + qte_dep
+        else:
+            _m0.setdefault("inventaire", []).append(
+                {"nom": nom_obj, "qte": qte_dep, "poids": pu})
+    else:
+        # ── Destination : un AUTRE PJ de la table ──
+        try:
+            from ..game.state import PartyState as _PS_tr
+            _etat_tr = _PS_tr(data_dir=ctx.data_dir,
+                              partie_id=ctx.partie_id).load()
+            for p in (_etat_tr.get("pj") or []):
+                if (isinstance(p, dict) and _norm(str(p.get("nom") or ""))
+                        == _norm(dest)
+                        and _norm(str(p.get("nom") or ""))
+                        != _norm(str(fiche.get("nom") or nom))):
+                    _cible = str(p.get("nom"))
+                    break
+        except Exception:                                # noqa: BLE001
+            _cible = None
+        if _cible is not None:
+            _f_dest, _err_d = _charger_fiche(ctx, _cible)
+            if _err_d:
+                return _err_d
+            _inv_d = _inventaire(_f_dest)
+            _e_d = next(
+                (c for c in _inv_d
+                 if _cle_objet(c.get("nom")) == _cle_objet(nom_obj)), None)
+            if _e_d is not None:
+                _e_d["qte"] = int(_e_d.get("qte", 1) or 1) + qte_dep
+                if _e_d.get("poids") is None:
+                    _e_d["poids"] = pu
+            else:
+                _n_d = {"nom": nom_obj, "qte": qte_dep, "poids": pu}
+                if _portee_de(trouve) == "quete":
+                    _n_d["portee"] = "quete"
+                    _n_d["partie"] = ctx.partie_id
+                _inv_d.append(_n_d)
+            _f_dest["inventaire"] = _inv_d
+            _f_dest["equipement"] = [
+                {"nom": i["nom"], "qte": i["qte"]} for i in _inv_d
+                if i.get("nom")]
+            _recalc_ca_fiche(_f_dest, ctx)
+            _f_dest = _normaliser_fiche(_f_dest)
+            _finaliser(ctx, _cible, _f_dest)
+        elif _dest_sol:
+            # ── Destination : le SOL du lieu courant ──
+            try:
+                from ..game.state import PartyState as _PS_sol
+                _et_sol = _PS_sol(data_dir=ctx.data_dir,
+                                  partie_id=ctx.partie_id).load()
+                _cle_sol = _cle_lieu_sol(_et_sol)
+                _sol_liste = (_et_sol.setdefault("objets_au_sol", {})
+                              .setdefault(_cle_sol, []))
+                _e_sol = next(
+                    (c for c in _sol_liste
+                     if _cle_objet(c.get("nom")) == _cle_objet(nom_obj)),
+                    None)
+                if _e_sol is not None:
+                    _e_sol["qte"] = (int(_e_sol.get("qte", 1) or 1)
+                                     + qte_dep)
+                else:
+                    _n_sol = {"nom": nom_obj, "qte": qte_dep, "poids": pu}
+                    if _portee_de(trouve) == "quete":
+                        _n_sol["portee"] = "quete"
+                        _n_sol["partie"] = ctx.partie_id
+                    _sol_liste.append(_n_sol)
+                _PS_sol(data_dir=ctx.data_dir,
+                        partie_id=ctx.partie_id).save(_et_sol)
+            except Exception as e_sol:                   # noqa: BLE001
+                return ToolResult(
+                    text=f"❌ Dépôt au sol impossible : {e_sol}")
+        # (sinon : PNJ — l'objet quitte simplement la table)
+
+    # ── Décrémente le donneur (commun à toutes les destinations) ──
+    reste = int(trouve.get("qte", 1) or 1) - qte_dep
+    if reste > 0:
+        trouve["qte"] = reste
+    else:
+        inv.remove(trouve)
+    fiche["inventaire"] = inv
+    fiche["equipement"] = [{"nom": i["nom"], "qte": i["qte"]}
+                           for i in inv if i.get("nom")]
+    _recalc_ca_fiche(fiche, ctx)
+    fiche = _normaliser_fiche(fiche)
+    poids, cat, max_kg, patch, err = _finaliser(ctx, nom, fiche)
+    if err:
+        return err
+
+    _charge_txt = (
+        "\n\n📦 Charge de " + str(fiche.get("nom", nom)) + " : "
+        f"{poids} kg / {max_kg} kg ({_LIBELLE_ENCUMBRANCE.get(cat, cat)}).")
+    if _dest_monture:
+        _m0 = (fiche.get("montures") or [{}])[0]
+        _cargo = _charge_monture(_m0)
+        _cap = _CAPACITE_MONTURES.get(
+            _norm(_m0.get("nom")), _CAPACITE_MONTURE_DEFAUT)
+        _niveau = ("légère" if _cargo <= _cap[0]
+                   else "moyenne" if _cargo <= _cap[1] else "lourde")
+        _dest_txt = (
+            f"🐴 **{qte_dep} × {nom_obj}** sur le bât de "
+            f"**{_m0.get('nom')}** (cargo : {_cargo} kg / {_cap[2]} kg "
+            f"max — charge {_niveau}).")
+    elif _cible is not None:
+        _dest_txt = (f"🤝 **{qte_dep} × {nom_obj}** donné(s) à "
+                     f"**{_cible}**.")
+    elif _dest_sol:
+        _dest_txt = (f"🛍️ **{qte_dep} × {nom_obj}** jeté(s) au sol — "
+                     "ramassable ici plus tard avec `inventaire_ramasser`.")
+    else:
+        _dest_txt = (f"🤝 **{qte_dep} × {nom_obj}** donné(s) à "
+                     f"**{dest}** (PNJ).")
+    return ToolResult(
+        text=_dest_txt + _charge_txt,
+        state_patch=patch,
     )
 
 

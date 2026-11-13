@@ -767,6 +767,48 @@ def _charge_monture(monture: dict[str, Any]) -> float:
 # --------------------------------------------------------------------------- #
 #  Tools
 # --------------------------------------------------------------------------- #
+# 🏃 (fix 13/11) : vitesse de déplacement PHB 3.5 (m par round) — base par
+# race, réduite par l'armure moyenne/lourde (30 ft → 20 ft) et par la
+# charge moyenne/lourde (20 ft → 15 ft). Le nain ne perd rien à l'armure.
+_VITESSES_RACES = {
+    "humain": 9.0, "demi-elfe": 9.0, "demi-orc": 9.0, "elfe": 9.0,
+    "halfelin": 6.0, "halfling": 6.0, "nain": 6.0, "gnome": 6.0,
+}
+
+
+def _vitesse_deplacement(fiche: dict[str, Any]) -> float:
+    """Vitesse (m par round) d'un PJ : race − armure − charge (PHB 3.5)."""
+    race = _norm(fiche.get("race"))
+    v = 9.0
+    for _r, _vit in _VITESSES_RACES.items():
+        if _r in race:
+            v = _vit
+            break
+    base_haute = abs(v - 9.0) < 0.01      # 30 ft (humain et assimilés)
+    # armure portée moyenne/lourde (le nom canonique vient du catalogue)
+    _armure_lourde = False
+    try:
+        from .. import catalogue as _cat_v
+        _par_nom = {
+            _norm(a.get("nom")): a for a in _cat_v.ARMURES
+        }
+        for e in (fiche.get("equipement") or []):
+            _a = _par_nom.get(_norm(e.get("nom")))
+            if isinstance(_a, dict) and str(_a.get("categorie") or "") in (
+                    "Moyenne", "Lourde"):
+                _armure_lourde = True
+                break
+    except Exception:                                        # noqa: BLE001
+        pass
+    _, _cat_enc, _ = _recalculer_charge(fiche)
+    _charge_peni = _cat_enc in ("Moyenne", "Lourde", "Depassee")
+    if base_haute and (_armure_lourde or _charge_peni):
+        v = 6.0
+    elif (not base_haute) and _cat_enc in ("Lourde", "Depassee"):
+        v = 4.5
+    return v
+
+
 @tool
 async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     """
@@ -787,6 +829,15 @@ async def inventaire_consulter(ctx: ToolContext, nom: str) -> ToolResult:
     # 🛠️ Nudge : les modèles n'utilisent JAMAIS spontanément les outils
     # d'écriture (observé en e2e : « je ramasse la clé » → 4× consulter,
     # inventaire jamais rempli). On rappelle leur existence et la syntaxe.
+    # 🏃 (fix 13/11) : la vitesse de déplacement effective.
+    try:
+        _v_eff = _vitesse_deplacement(fiche)
+        texte = (texte.rstrip() + "\n\n🏃 Vitesse de déplacement : "
+                 f"{_v_eff} m par round"
+                 + (" (réduite par l'armure ou la charge)" if _v_eff < 9.0
+                    else "") + ".")
+    except Exception:                                        # noqa: BLE001
+        pass
     # 🐴 (fix 12/11) : le CARGO DE SELLE de chaque monture possédée.
     for _m_c in (fiche.get("montures") or []):
         _cargo_c = _charge_monture(_m_c)
@@ -1845,6 +1896,25 @@ def _normaliser_fiche(fiche: dict[str, Any]) -> dict[str, Any]:
     fiche["poids_transporte"] = round(poids, 2)
     fiche["etat_encumbrance"] = cat
     fiche["charge_max"] = int(max_kg)
+    # ☠️ (fix 13/11) : les dégâts de CON réduisent les PV max (PHB 3.5 :
+    # -1 PV par niveau et par point de CON endommagée). La base est
+    # conservée (`pv_max_base`) pour restaurer quand la CON guérit.
+    _dmg_con = int((fiche.get("degats_carac") or {}).get("CON", 0) or 0)
+    if _dmg_con > 0:
+        _base = int(fiche.get("pv_max_base") or fiche.get("pv_max") or 0)
+        if _base > 0:
+            fiche["pv_max_base"] = _base
+            _niv = max(1, int(fiche.get("niveau") or 1))
+            fiche["pv_max"] = max(1, _base - _niv * _dmg_con)
+            try:
+                if int(fiche.get("pv") or 0) > fiche["pv_max"]:
+                    fiche["pv"] = fiche["pv_max"]
+            except (TypeError, ValueError):
+                pass
+    elif fiche.get("pv_max_base"):
+        fiche["pv_max"] = int(fiche.get("pv_max_base")
+                              or fiche.get("pv_max") or 0)
+        fiche.pop("pv_max_base", None)
     return fiche
 
 

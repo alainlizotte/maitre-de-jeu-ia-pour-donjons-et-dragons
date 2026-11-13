@@ -552,7 +552,8 @@ async def preparer_sorts(
 
 @tool
 async def repos_long(
-    ctx: ToolContext, nom_personnage: str = "", forcer: bool = False
+    ctx: ToolContext, nom_personnage: str = "", forcer: bool = False,
+    veille: str = "",
 ) -> ToolResult:
     """
     Applique un repos long de 8 heures : restaure TOUS les emplacements de
@@ -568,7 +569,11 @@ async def repos_long(
     :param nom_personnage (str): nom du PJ (vide = toute l'équipe).
     :param forcer (bool): True pour passer outre la garde anti-répétition
         (à réserver aux cas où le temps passe réellement : plusieurs jours
-        de voyage, week-end de repos à l'auberge…).
+        de voyage, week-end de repos à l'auberge…). Une nuit à l'auberge
+        (marqueur présent) ou `forcer=True` dispensent de la veille.
+    :param veille (str): nom du PJ qui MONT LA GARDE pendant que les
+        autres dorment (terrain inconnu/donjon). SANS veilleur : d20, 1 à
+        5 (25 %) = nuit agitée → tout le camp démarre la journée **Fatigué**.
     """
     from .. import sorts as cat
     from .fiches import _load_fiche, _save_fiche, _sync_pj, _patch_pj
@@ -630,6 +635,7 @@ async def repos_long(
 
     lignes: list[str] = ["🛏️ **Repos long (8 h)**"]
     patches: dict[str, Any] = {}
+    _nuit_auberge = False
     for nom in cibles:
         f = _fiche_pj(ctx, nom)
         if f is None:
@@ -641,6 +647,7 @@ async def repos_long(
         #    et retire « fatigue »/« épuisé ». Le marqueur est CONSOMMÉ ici
         #    (une nuitée n'opère qu'AU PROCHAIN repos long, pas en boucle).
         bonus_auberge, _ville_nuit = consommer_marqueur_auberge(f)
+        _nuit_auberge = _nuit_auberge or bool(bonus_auberge)
         conds = [c for c in (f.get("conditions") or [])]
         if bonus_auberge:
             conds = [c for c in conds
@@ -673,6 +680,26 @@ async def repos_long(
             detail += " — emplacements de sorts restaurés" + (
                 " (re-mémorise via preparer_sorts)"
                 if cat.type_lancement(classe) == "préparé" else "")
+        # 🧪 (fix 13/11) : le repos AU LIT soigne les dégâts de
+        # caractéristique (2 points par caractéristique — PHB 3.5).
+        _dc_rl = f.get("degats_carac") or {}
+        if _dc_rl:
+            _gueris = []
+            for _k in list(_dc_rl.keys()):
+                try:
+                    _reste = max(0, int(_dc_rl[_k] or 0) - 2)
+                except (TypeError, ValueError):
+                    _reste = 0
+                _gueris.append(f"{_k} -2")
+                if _reste > 0:
+                    _dc_rl[_k] = _reste
+                else:
+                    _dc_rl.pop(_k)
+            f["degats_carac"] = dict(_dc_rl)
+            if not _dc_rl:
+                f.pop("degats_carac", None)
+            detail += (" — dégâts de caractéristique soignés au lit ("
+                       + ", ".join(_gueris) + ")")
         lignes.append(f"- {detail}")
         idx = _sync_pj(ctx, nom, {"pv": f["pv"], "conditions": conds})
         if idx is not None:
@@ -687,6 +714,53 @@ async def repos_long(
         patches["repos_dernier"] = etat_r["repos_dernier"]
     except Exception:                                        # noqa: BLE001
         pass
+
+    # 🌙 (fix 13/11) : VEILLE DE NUIT — un camp sans sentinelle en terrain
+    # inconnu risque une nuit agitée (d20 1-5 = 25 % → tout le camp
+    # **Fatigué** le matin). Dispensé : veilleur désigné, nuit d'auberge
+    # (le personnel veille), ou forcer=True (repos sûr de plusieurs jours).
+    try:
+        _veille_txt = str(veille or "").strip()
+        _nom_veilleur = ""
+        try:
+            _etat_ve = state_repos.load()
+            _pjs_veille = [
+                str(p.get("nom") or "") for p in (_etat_ve.get("pj") or [])
+                if isinstance(p, dict) and p.get("nom")]
+        except Exception:                                # noqa: BLE001
+            _pjs_veille = []
+        for _n_v in _pjs_veille:
+            if _veille_txt and (_n_v or "").strip().lower() ==                     _veille_txt.lower():
+                _nom_veilleur = _n_v
+                break
+        _dispense = _nuit_auberge
+        if _veille_txt and not _nom_veilleur:
+            lignes.append(
+                "🌙 Veille : « " + _veille_txt + " » n'est pas un PJ de la "
+                "table — personne ne garde le camp cette nuit.")
+        elif _nom_veilleur:
+            lignes.append(
+                "🌙 Veille : **" + _nom_veilleur + "** a gardé le camp "
+                "pendant que les autres dormaient — nuit sûre.")
+            _dispense = True
+        if not _dispense and _pjs_veille:
+            _d20_nuit = random.randint(1, 20)
+            if _d20_nuit <= 5:
+                from .fiches import fiche_perso_condition as _fpc_ve
+                for _n_f in cibles:
+                    try:
+                        await _fpc_ve(ctx, _n_f, "Fatigué", True)
+                    except Exception:                    # noqa: BLE001
+                        pass
+                patches["pj_updated"] = ", ".join(cibles)
+                lignes.append(
+                    "🌙 **Nuit agitée** (d20=" + str(_d20_nuit) + ") : "
+                    "personne n'a monté la garde — un craquement de "
+                    "pierre, des pas étouffés, une odeur âcre… tout le "
+                    "camp s'est réveillé d'un bond. **Fatigué** pour la "
+                    "journée (désignez un veilleur au prochain repos).")
+    except Exception as e_ve:                                # noqa: BLE001
+        print(f"[dnd35] Veille de nuit échouée (ignoré) : {e_ve}")
     return ToolResult(text="\n".join(lignes), state_patch=patches)
 
 

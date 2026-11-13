@@ -12857,6 +12857,30 @@ on_status=on_status)
                         (result.narration or "").rstrip()
                         + "\n\n" + "\n\n".join(_lignes_coh)
                     )
+                # 🧪 (fix 13/11) : les poisons EN COURS dont l'effet
+                # secondaire (1 min en 3.5) est échu — nouvelle sauvegarde
+                # de Vigueur, dégâts de caractéristique si échec.
+                try:
+                    from .tools.dangers import (
+                        poisons_secondaires_pour_pj as _pois_2e)
+                    _lignes_pois: list[str] = []
+                    for _pj_pois in (_etat_final.get("pj") or []):
+                        _nom_pois = str((_pj_pois or {}).get("nom")
+                                        or "").strip()
+                        if not _nom_pois:
+                            continue
+                        _ctx_pois = ToolContext(
+                            partie_id=partie_id, joueur="",
+                            data_dir=str(cfg.abs(cfg.paths.data_dir)))
+                        _lignes_pois.extend(
+                            await _pois_2e(_ctx_pois, _nom_pois))
+                    if _lignes_pois:
+                        result.narration = (
+                            (result.narration or "").rstrip()
+                            + "\n\n" + "\n\n".join(_lignes_pois))
+                except Exception as e_pois:              # noqa: BLE001
+                    print(f"[dnd35] Poisons secondaires échoués (ignoré) : "
+                          f"{e_pois}")
             except Exception as _e_align:                    # noqa: BLE001
                 print(f"[dnd35] Alignement narration/état échoué (ignoré) : "
                       f"{_e_align}")

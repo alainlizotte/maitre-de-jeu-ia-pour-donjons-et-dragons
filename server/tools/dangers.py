@@ -350,3 +350,190 @@ def _mod_vigueur(fiche: dict) -> tuple[int, str]:
     except Exception:                                        # noqa: BLE001
         pass
     return total, detail
+
+
+
+# ─────────────────────────────────────────────────────────────────────── #
+# 🧪 Poison (PHB 3.5) : sauvegarde de Vigueur → dégâts de caractéristique
+# initial, puis secondaire une minute plus tard (application serveur).
+# ─────────────────────────────────────────────────────────────────────── #
+
+
+def _rouler_formule(formule: str) -> int:
+    """Roule une formule de dés simple (« 1d2 », « 1d4+1 », « 2d6 »)."""
+    import re as _re_p
+    m = _re_p.match(r"^\s*(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?\s*$",
+                    str(formule or ""))
+    if not m:
+        try:
+            return max(0, int(formule))
+        except (TypeError, ValueError):
+            return 1
+    nb, faces = int(m.group(1)), int(m.group(2))
+    signe, bonus = m.group(3), int(m.group(4) or 0)
+    total = sum(random.randint(1, faces) for _ in range(max(1, nb)))
+    if signe == "-":
+        total -= bonus
+    elif signe == "+":
+        total += bonus
+    return max(0, total)
+
+
+@tool
+async def appliquer_poison(
+    ctx: ToolContext,
+    nom: str,
+    nom_poison: str,
+    dd: int,
+    degats_initial: str = "1d2",
+    carac: str = "CON",
+    source: str = "",
+) -> ToolResult:
+    """
+    Applique un POISON à un personnage (règles D&D 3.5) — la sauvegarde de
+    Vigueur est résolue par le serveur, les dégâts de caractéristique
+    aussi. À utiliser quand une morsure, une arme enduite, un gaz ou un
+    piège empoisonne un PJ.
+
+    :param nom (str): personnage empoisonné.
+    :param nom_poison (str): nom du poison (ex. "venin de goule",
+        "sérum de faiblesse", "poison de scorpion").
+    :param dd (int): DD de la sauvegarde de Vigueur (PHB : 10 à 20).
+    :param degats_initial (str): formule de dégâts de caractéristique en
+        cas d'échec (ex. "1d2", "1d4", "1d6") — c'est le dégât INITIAL ;
+        le SECONDAIRE (même formule, nouvelle sauvegarde) frappe une
+        minute plus tard, appliqué automatiquement par le serveur au tour
+        suivant.
+    :param carac (str): caractéristique touchée — "CON" (le plus courant :
+        chaque point réduit aussi les PV max de 1 par niveau), "FOR" ou
+        "DEX".
+    :param source (str): d'où vient le poison (morsure, piège, arme…).
+
+    Règles 3.5 : les dégâts de caractéristique se soignent au repos (2
+    points par nuit au lit) ou par restauration ; les PV max remontent
+    quand la CON guérit.
+    """
+    import random as _rnd_p
+    from datetime import datetime as _dt_p
+    from .dice import lancer_sauvegarde  # noqa: PLC0415
+    from .fiches import _load_fiche, _save_fiche  # noqa: PLC0415
+
+    fiche = _load_fiche(ctx, nom)
+    if not fiche:
+        return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    try:
+        dd_n = int(dd)
+    except (TypeError, ValueError):
+        dd_n = 10
+    carac_n = str(carac or "CON").upper()
+    if carac_n not in ("CON", "FOR", "DEX", "SAG", "INT", "CHA"):
+        carac_n = "CON"
+
+    tr = await lancer_sauvegarde(
+        ctx, type_sauvegarde="vigueur", modificateur=0, difficulte=dd_n,
+        nom_personnage=nom, source=f"poison ({nom_poison})")
+    texte = (tr.text or "").strip()
+    ok = ("✅" in texte) or ("réussite automatique" in texte)
+
+    if ok:
+        return ToolResult(text=(
+            f"🧪 **{nom_poison}** ({source or 'poison'}) — "
+            f"**{nom}** y RÉSISTE.\n\n" + texte))
+
+    dmg = _rouler_formule(str(degats_initial or "1d2"))
+    dc = fiche.setdefault("degats_carac", {})
+    dc[carac_n] = int(dc.get(carac_n, 0) or 0) + dmg
+    conds = [str(c) for c in (fiche.get("conditions") or [])]
+    if "Empoisonné" not in conds:
+        conds.append("Empoisonné")
+    fiche["conditions"] = conds
+    fiche.setdefault("poisons_en_cours", []).append({
+        "nom": str(nom_poison), "dd": dd_n, "carac": carac_n,
+        "degats": str(degats_initial or "1d2"),
+        "ts": _dt_p.now().isoformat(),
+    })
+    # ☠️ l'effet CON sur les PV max passe par la normalisation (inventaire)
+    try:
+        from .inventaire import _normaliser_fiche as _nf_p
+        _nf_p(fiche)
+    except Exception:                                        # noqa: BLE001
+        pass
+    _save_fiche(ctx, nom, fiche)
+    _effet = {
+        "CON": "PV max réduits de 1 par niveau (−"
+               f"{dmg} × niveau) tant que la CON est endommagée",
+        "FOR": "coups moins forts (dégâts au FOR)",
+        "DEX": "réflexes affaiblis (CA et Réflexes au DEX endommagé)",
+    }.get(carac_n, f"{carac_n} endommagée")
+    return ToolResult(text=(
+        f"🧪 **{nom_poison}** ({source or 'poison'}) — **{nom}** cède :"
+        "\n\n" + texte
+        + f"\n\n☠️ **{dmg} points de {carac_n} endommagés** — {_effet}. "
+        "Condition **Empoisonné** posée. L'effet SECONDAIRE frappera "
+        "automatiquement dans une minute (nouvelle sauvegarde, même "
+        "formule) — appliqué par le serveur au tour suivant.")
+    )
+
+
+async def poisons_secondaires_pour_pj(
+    ctx: ToolContext, nom: str,
+) -> list[str]:
+    """Les poisons EN COURS dont l'échéance secondaire (1 min en 3.5) est
+    passée : nouvelle sauvegarde de Vigueur, dégâts si échec, sortie de
+    liste. Renvoie les lignes à ajouter à la narration."""
+    from datetime import datetime as _dt_ps
+    from .dice import lancer_sauvegarde  # noqa: PLC0415
+    from .fiches import _load_fiche, _save_fiche  # noqa: PLC0415
+
+    fiche = _load_fiche(ctx, nom)
+    if not fiche:
+        return []
+    en_cours = fiche.get("poisons_en_cours") or []
+    if not en_cours:
+        return []
+    lignes: list[str] = []
+    restants: list[dict] = []
+    for p in en_cours:
+        ts = str(p.get("ts") or "")
+        try:
+            echu = (_dt_ps.now() - _dt_ps.fromisoformat(ts)).total_seconds() >= 0
+        except ValueError:
+            echu = True
+        if not echu:
+            restants.append(p)
+            continue
+        tr = await lancer_sauvegarde(
+            ctx, type_sauvegarde="vigueur", modificateur=0,
+            difficulte=int(p.get("dd", 10) or 10), nom_personnage=nom,
+            source=f"poison secondaire ({p.get('nom', '?')})")
+        texte = (tr.text or "").strip()
+        ok = ("✅" in texte) or ("réussite automatique" in texte)
+        if ok:
+            lignes.append(
+                "🧪 **" + str(p.get("nom", "Poison"))
+                + "** (effet secondaire) : "
+                + texte.splitlines()[0] + f" — **{nom}** y résiste.")
+        else:
+            dmg = _rouler_formule(str(p.get("degats", "1d2")))
+            carac = str(p.get("carac") or "CON")
+            dc = fiche.setdefault("degats_carac", {})
+            dc[carac] = int(dc.get(carac, 0) or 0) + dmg
+            lignes.append(
+                "🧪 **" + str(p.get("nom", "Poison"))
+                + "** (effet secondaire) : la sauvegarde échoue — "
+                f"**{dmg} points de {carac} endommagés**.")
+    if restants:
+        fiche["poisons_en_cours"] = restants
+    else:
+        fiche.pop("poisons_en_cours", None)
+        if "Empoisonné" in (fiche.get("conditions") or []):
+            fiche["conditions"] = [
+                c for c in (fiche.get("conditions") or [])
+                if c != "Empoisonné"]
+    try:
+        from .inventaire import _normaliser_fiche as _nf_ps
+        _nf_ps(fiche)
+    except Exception:                                        # noqa: BLE001
+        pass
+    _save_fiche(ctx, nom, fiche)
+    return lignes

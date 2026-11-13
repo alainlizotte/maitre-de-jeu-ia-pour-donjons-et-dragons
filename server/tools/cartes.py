@@ -825,7 +825,60 @@ def _journaliser_lieu(
         pass
 
 
+def _controle_eclairage(ctx: ToolContext) -> str:
+    """🕯️ (fix 13/11) : ÉCLAIRAGE — le groupe a-t-il une source de lumière
+    (torche, lanterne, baguette de lumière, sort Lumière préparé) ? Le 9B
+    narre l'obscurité au feeling : ce contrôle lui donne la vérité."""
+    try:
+        from .fiches import _load_fiche as _lf_lum
+        from ..game.state import PartyState as _PS_lum
+        _etat_lum = _PS_lum(data_dir=ctx.data_dir,
+                            partie_id=ctx.partie_id).load()
+        _sources_lum: list[str] = []
+        for _p_lum in (_etat_lum.get("pj") or []):
+            _n_lum = str((_p_lum or {}).get("nom") or "").strip()
+            if not _n_lum:
+                continue
+            _f_lum = _lf_lum(ctx, _n_lum)
+            if not _f_lum:
+                continue
+            for _e_lum in (_f_lum.get("inventaire") or []):
+                _n_e = str(_e_lum.get("nom") or "").lower()
+                if any(k in _n_e for k in (
+                        "torche", "lanterne", "lampe",
+                        "baguette de lumière", "pierre lumineuse")):
+                    _sources_lum.append(
+                        f"{_n_lum} : {_e_lum.get('nom')}"
+                        f" x{_e_lum.get('qte', 1)}")
+            _prep_l = ((_f_lum.get("sorts") or {}).get("prepares") or {})
+            try:
+                if any("lumière" in str(k).lower()
+                       and int(v or 0) > 0
+                       for k, v in _prep_l.items()):
+                    _sources_lum.append(
+                        f"{_n_lum} : sort Lumière préparé")
+            except (TypeError, ValueError):
+                pass
+        if _sources_lum:
+            return ("🕯️ Éclairage : " + " ; ".join(_sources_lum)
+                    + ". Une torche brûle 1 h (6 h de stock par torche "
+                    "non allumée).")
+        return (
+            "🕯️ **OBSURITÉ TOTALE** : personne ne porte de torche, "
+            "lanterne ni lumière magique — narre l'obscurité absolue "
+            "(avancer au toucher, murs froids, odeurs) : attaquer dans le "
+            "noir = 50 % de chances de rater (concealment), les "
+            "Perceptions auditives remplacent la vue. Allume une torche "
+            "(inventaire) ou le sort Lumière avant de risquer un combat — "
+            "sinon c'est la retraite.")
+    except Exception as e_lum:                           # noqa: BLE001
+        print(f"[dnd35] Contrôle éclairage échoué (ignoré) : {e_lum}")
+        return ""
+
+
 @tool
+
+
 async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     """
     Démarre le mode donjon : initialise une grille de salles procédurales avec
@@ -914,11 +967,14 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
             pos = donjon_existant.get("courant", [0, 0])
             x, y = (pos[0], pos[1]) if len(pos) >= 2 else (0, 0)
             url = _url_for(_svg_path(ctx, "donjon"), ctx.data_dir)
+            _lum_dedans = _controle_eclairage(ctx)
+            _sep_dedans = ("\n\n" + _lum_dedans) if _lum_dedans else ""
             return ToolResult(
                 text=(
                     f"ℹ️ Vous êtes déjà dans **{_id_actif}** (salle actuelle : "
                     f"({x},{y})). Pour avancer, utilise `carte_donjon_explorer` "
-                    f"avec une direction (nord/sud/est/ouest).\n\n🖼️ Carte : {url}"
+                    f"avec une direction (nord/sud/est/ouest).{_sep_dedans}"
+                    f"\n\n🖼️ Carte : {url}"
                 ),
             )
         # Donjon VRAIMENT différent : archiver l'actif AVANT la
@@ -1069,8 +1125,11 @@ async def carte_donjon_entrer(ctx: ToolContext, donjon_id: str) -> ToolResult:
     except OSError as e:
         return ToolResult(text=f"❌ Erreur SVG : {e}")
     url = _url_for(path, ctx.data_dir)
+    _avert_lum = _controle_eclairage(ctx)
+    if _avert_lum:
+        _avert_lum = _avert_lum + "\n\n"
     return ToolResult(
-        text=f"{msg_restore}\n\n🖼️ Carte : {url}",
+        text=f"{_avert_lum}{msg_restore}\n\n🖼️ Carte : {url}",
         state_patch={"donjon": donjon, "phase": "exploration",
                      "carte_donjon": url},
     )

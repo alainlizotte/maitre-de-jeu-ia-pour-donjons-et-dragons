@@ -335,6 +335,9 @@ _DM_SECTIONS = (
     "📜 **Contenu canonique de la salle (scénario)**",
     "📜 **Salle DU SCÉNARIO**",
     "🚪 Portes de cette salle",
+    # 🍺 (fix 14/11) : la LISTE des rumeurs (avec [VRAIE]/[FAUSSE]) = canal
+    # MJ — le modèle doit les NARRER à l'oral, jamais les recopier.
+    "🎲 **Rumeurs de taverne",
 )
 # (fix fuites, campagne shadows) : les REFUS des gardes serveur
 # (B25, salle videe, ecrasante, trame...) = canal MJ - ils contiennent

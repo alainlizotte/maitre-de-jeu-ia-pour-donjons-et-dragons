@@ -13,11 +13,11 @@ connectent depuis leur navigateur sur le réseau local.
 
 | | |
 |---|---|
-| **Backend** | FastAPI + WebSocket, **89 tools Python** (function-calling) |
+| **Backend** | FastAPI + WebSocket, **93 tools Python** (function-calling) |
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD ; **critiques confirmés, RD/résistances, attaques multiples, conditions à effets, dangers d'environnement, climat par région, trésors par ND** |
-| **Qualité** | **1186 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) — **campagnes complètes jouées** (*Dues for the Dead*, *Shadows Over the Moonsea* 7 chapitres, *The Crown of Mystra*) |
+| **Qualité** | **1193 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) — **campagnes complètes jouées** (*Dues for the Dead*, *Shadows Over the Moonsea* 7 chapitres, *The Crown of Mystra*) |
 | **Images** | ComfyUI — tout modèle de votre choix (**recommandé : Qwen-Image 1.0 ou FLUX.1-schnell**, Apache 2.0) — optionnel |
 | **Cartes** | Carte du monde par univers/scénario avec épingles, **chemin parcouru et lieux visités persistants**, plein écran projeté |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |
@@ -396,7 +396,7 @@ chapitres), `scripts/generer_donjon_scenario.py` (brouillon de manifeste).
 
 ## 🧪 Tests
 
-**1186 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
+**1193 tests déterministes** (sans LLM ni ComfyUI) couvrent le moteur de combat complet (initiative,
 morts par étapes 0/-10 PV, XP, stabilisation), la carte du donjon (constance des salles,
 refus des portes inexistantes, séquencement round 1), les fiches/sorts/inventaire, le
 crédit du trésor canonique et le partage de l'or, les scénarios et le pipeline
@@ -439,7 +439,7 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 3. Le **PromptBuilder** assemble le system prompt : instructions MJ + état de partie
    (phase, combat, quête/bible de scénario, **carte du donjon**, mémoire de campagne) +
    sections dynamiques par phase + extraits RAG si actif.
-4. L'**Orchestrator** boucle en function-calling : le LLM choisit parmi **89 tools Python**
+4. L'**Orchestrator** boucle en function-calling : le LLM choisit parmi **93 tools Python**
    (`lancer_attaque`, `engager_combat`, `fiche_perso_*`, `carte_donjon_*`, `incanter_sort`,
    `inventaire_*`, `memoire_*`, …) **filtrés par phase de jeu** ; toute « simulation » de jet
    est détectée et rejetée.
@@ -477,7 +477,7 @@ Variables d'environnement : `DND35_CONFIG` (chemin config), `DND35_PORT` (port h
 ├── scripts/                ← utilitaires (import bestiaire, scènes prégénérées,
 │                             génération de manifestes de donjons par scénario,
 │                             simulation)
-└── tests/                  ← 1186 tests pytest déterministes (combat, carte,
+└── tests/                  ← 1193 tests pytest déterministes (combat, carte,
                               manifestes de scénario, fiches, trésors/or,
                               E2E)
 ```

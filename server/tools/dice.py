@@ -1219,6 +1219,18 @@ async def lancer_attaque(
                 mc["notes"].append("+2 Aider autrui")
                 _effets["aides"] = [a for a in (_effets.get("aides") or [])
                                     if a not in _aides]
+            # 🐴 Charge montée (attaque_montee) : +2 à l'attaque, consommé
+            _charge_m = next(
+                (c for c in (_effets.get("charges_montees") or [])
+                 if _norm_arme(c.get("cavalier") or "")
+                 == _norm_arme(nom_attaquant)), None)
+            if _charge_m:
+                mc["att"] += 2
+                mc["notes"].append(
+                    "+2 Charge montée (bête lancée, ligne droite)")
+                _effets["charges_montees"] = [
+                    c for c in (_effets.get("charges_montees") or [])
+                    if c is not _charge_m]
             _feinte = next(
                 (f for f in (_effets.get("feintes") or [])
                  if _norm_arme(f.get("attaquant") or "")
@@ -1231,7 +1243,7 @@ async def lancer_attaque(
                 _effets["feintes"] = [
                     f for f in (_effets.get("feintes") or [])
                     if f is not _feinte]
-            if _aides or _feinte:
+            if _aides or _feinte or _charge_m:
                 _et_s["combat_effets"] = _effets
                 PartyState(data_dir=ctx.data_dir,
                            partie_id=ctx.partie_id).save(_et_s)
@@ -2074,3 +2086,106 @@ async def attaque_speciale(
         f"⚠️ type_attaque inconnu : '{type_attaque}'. Attendu : "
         "renversement, desarmement, bousculade, aider, feinte, "
         "immobilisation."))
+
+
+@tool
+async def attaque_montee(
+    ctx: ToolContext,
+    nom: str,
+    arme: str,
+    nom_cible: str,
+    ca_cible: Any = 10,
+    charge: bool = False,
+) -> ToolResult:
+    """
+    Attaque À CHEVAL (D&D 3.5) — requiert une monture possédée
+    (`inventaire_transferrer` confirme le bât). Le cavalier frappe depuis
+    la selle pendant que la bête se déplace.
+
+    :param nom (str): le cavalier (PJ).
+    :param arme (str): l'arme utilisée (ex. "Lance", "Épée longue").
+    :param nom_cible (str): la cible (monstre engagé).
+    :param ca_cible (int): CA de la cible (recoupée avec le bestiaire).
+    :param charge (bool): True = CHARGE MONTÉE : +2 à l'attaque
+        (appliqué serveur), -2 à la CA du cavalier jusqu'à son prochain
+        tour, déplacement en ligne droite ; une LANCE (ou une arme à deux
+        mains) chargée frappe DOUBLE — le MJ applique via `lancer_degats`.
+
+    Règles 3.5 : contrôler une monture = action libre avec 5 rangs
+    d'Équitation ; sinon jet d'Équitation DD 5 (échec = la bête fait ce
+    qu'elle veut, PAS d'attaque ce tour).
+    """
+    from .fiches import _load_fiche  # noqa: PLC0415
+    from ..game.state import PartyState  # noqa: PLC0415
+
+    fiche = _load_fiche(ctx, nom)
+    if not fiche:
+        return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+
+    # ── La monture existe-t-elle ? ──
+    _m_noms = [str((m or {}).get("nom") or "")
+               for m in (fiche.get("montures") or [])]
+    if not _m_noms:
+        for e in (fiche.get("inventaire") or []):
+            try:
+                from .. import equipement_phb as _eq_cm
+                _a_cm = _eq_cm.article(e.get("nom"))
+                if (isinstance(_a_cm, dict)
+                        and str(_a_cm.get("categorie") or "").lower()
+                        == "monture"):
+                    _m_noms.append(str(_a_cm["nom"]))
+                    break
+            except Exception:                            # noqa: BLE001
+                pass
+    if not _m_noms:
+        return ToolResult(text=(
+            f"❌ **{fiche.get('nom', nom)}** n'a pas de monture possédée — "
+            "achète-en une au marché (`marche_acheter`) ; on ne charge pas "
+            "à pied."))
+
+    # ── Contrôle de la bête (Équitation) ──
+    rangs = int((fiche.get("competences") or {}).get("Équitation", 0) or 0)
+    _d = int((fiche.get("carac") or {}).get("DEX", 10) or 10)
+    _mod_dex = (_d - 10) // 2
+    preface = (f"🐴 **{fiche.get('nom', nom)}** en selle sur "
+               f"**{_m_noms[0]}**.")
+    if rangs >= 5:
+        preface += (" Contrôle de la bête par l'habitude (5+ rangs "
+                    "d'Équitation — action libre).")
+        controle_ok = True
+    else:
+        jet_eq = random.randint(1, 20) + rangs + _mod_dex
+        controle_ok = jet_eq >= 5
+        preface += (
+            f" Équitation DD 5 (rangs {rangs}) : d20="
+            f"{jet_eq - rangs - _mod_dex} + {rangs} (rangs) + "
+            f"{_mod_dex:+d} (DEX) = **{jet_eq}** — "
+            + ("bête contrôlée." if controle_ok else
+               "**ÉCHEC** : la bête se cabre et fait ce qu'elle veut — "
+               "PAS d'attaque ce round."))
+
+    if not controle_ok:
+        return ToolResult(text=preface)
+
+    # ── La charge : le bonus est posé puis consommé par lancer_attaque ──
+    if charge:
+        etat_c = PartyState(data_dir=ctx.data_dir,
+                            partie_id=ctx.partie_id).load()
+        _eff = etat_c.setdefault("combat_effets", {})
+        _eff.setdefault("charges_montees", []).append({"cavalier": nom})
+        PartyState(data_dir=ctx.data_dir,
+                   partie_id=ctx.partie_id).save(etat_c)
+        preface += (" 🐎 **CHARGE MONTÉE** : la bête lance au galop — +2 à "
+                    "l'attaque (appliqué serveur), -2 à la CA du cavalier "
+                    "jusqu'à son prochain tour, ligne droite obligée.")
+
+    tr = await lancer_attaque(
+        ctx, bonus_attaque=0, ca_cible=ca_cible, nom_attaquant=nom,
+        arme=arme, nom_cible=nom_cible)
+    if charge and ("lance" in str(arme).lower()):
+        return ToolResult(text=(
+            preface + "\n\n" + (tr.text or "").strip()
+            + "\n\n🗡️ **La lance chargée frappe DOUBLE** — si le coup "
+            "touche, applique les dégâts via `lancer_degats` puis "
+            "double-les (règle 3.5 de la charge à la lance)."))
+    return ToolResult(text=preface + "\n\n" + (tr.text or "").strip())

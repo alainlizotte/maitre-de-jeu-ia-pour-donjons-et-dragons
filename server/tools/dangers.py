@@ -537,3 +537,157 @@ async def poisons_secondaires_pour_pj(
         pass
     _save_fiche(ctx, nom, fiche)
     return lignes
+
+
+
+# ─────────────────────────────────────────────────────────────────────── #
+# 🦠 Maladie (PHB 3.5) : infection (save Vigueur), puis UNE progression
+# par jour — au réveil de chaque repos long : sauvegarde quotidienne,
+# dégâts si échec ; 3 succès consécutifs = guérison naturelle.
+# ─────────────────────────────────────────────────────────────────────── #
+
+
+@tool
+async def appliquer_maladie(
+    ctx: ToolContext,
+    nom: str,
+    nom_maladie: str,
+    dd: int,
+    degats_quotidiens: str = "1d4",
+    carac: str = "CON",
+    source: str = "",
+) -> ToolResult:
+    """
+    Inocule une MALADIE à un personnage (règles D&D 3.5) — la sauvegarde
+    d'infection est résolue par le serveur ; la progression est
+    QUOTIDIENNE : chaque repos long déclenche la sauvegarde du jour
+    (échec = dégâts de caractéristique), 3 succès consécutifs guérissent.
+
+    :param nom (str): personnage contaminé.
+    :param nom_maladie (str): nom de la maladie (ex. "fièvre des marais",
+        "rouge des étables", "cécité des catacombes").
+    :param dd (int): DD des sauvegardes (Vigueur).
+    :param degats_quotidiens (str): formule de dégâts par jour d'échec
+        (ex. "1d4") — touchant `carac`.
+    :param carac (str): caractéristique touchée ("CON" recommandé).
+    :param source (str): d'où vient la maladie (morsure, eau souillée…).
+    """
+    from datetime import datetime as _dt_m
+    from .dice import lancer_sauvegarde  # noqa: PLC0415
+    from .fiches import _load_fiche, _save_fiche  # noqa: PLC0415
+
+    fiche = _load_fiche(ctx, nom)
+    if not fiche:
+        return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    try:
+        dd_n = int(dd)
+    except (TypeError, ValueError):
+        dd_n = 10
+    # déjà malade ? pas de double infection de la même maladie
+    for m_en in (fiche.get("maladies_en_cours") or []):
+        if _norm(m_en.get("nom")) == _norm(nom_maladie):
+            return ToolResult(text=(
+                f"🦠 {fiche.get('nom', nom)} souffre DÉJÀ de "
+                f"**{m_en.get('nom')}** — la progression quotidienne "
+                "s'applique à chaque repos."))
+    tr = await lancer_sauvegarde(
+        ctx, type_sauvegarde="vigueur", modificateur=0, difficulte=dd_n,
+        nom_personnage=nom, source=f"maladie ({nom_maladie})")
+    texte = (tr.text or "").strip()
+    ok = ("✅" in texte) or ("réussite automatique" in texte)
+    if ok:
+        return ToolResult(text=(
+            f"🦠 **{nom_maladie}** ({source or 'contamination'}) — "
+            f"**{nom}** y résiste.\n\n" + texte))
+    fiche.setdefault("maladies_en_cours", []).append({
+        "nom": str(nom_maladie), "dd": dd_n,
+        "degats": str(degats_quotidiens or "1d4"),
+        "carac": str(carac or "CON").upper(),
+        "succes_consecutifs": 0,
+        "ts": _dt_m.now().isoformat(),
+    })
+    conds = [str(c) for c in (fiche.get("conditions") or [])]
+    if "Malade" not in conds:
+        conds.append("Malade")
+    fiche["conditions"] = conds
+    try:
+        from .inventaire import _normaliser_fiche as _nf_m
+        _nf_m(fiche)
+    except Exception:                                        # noqa: BLE001
+        pass
+    _save_fiche(ctx, nom, fiche)
+    return ToolResult(text=(
+        f"🦠 **{nom_maladie}** ({source or 'contamination'}) — la "
+        f"première sauvegarde échoue, **{nom}** est CONTAMINÉ (condition "
+        "**Malade**).\n\n" + texte
+        + "\n\n⏳ La maladie PROGRESSE chaque jour : au réveil de chaque "
+        "repos long, une sauvegarde de Vigueur DD "
+        f"{dd_n} — échec = {degats_quotidiens} points de {carac} "
+        "endommagés ; 3 SUCCÈS consécutifs = guérison naturelle (le sort "
+        "Guérison des maladies guérit net).")
+    )
+
+
+async def maladies_quotidiennes_pour_pj(
+    ctx: ToolContext, nom: str,
+) -> list[str]:
+    """La progression QUOTIDIENNE des maladies en cours — appelée au
+    réveil de chaque repos long. Renvoie les lignes à narrer."""
+    from .dice import lancer_sauvegarde  # noqa: PLC0415
+    from .fiches import _load_fiche, _save_fiche  # noqa: PLC0415
+
+    fiche = _load_fiche(ctx, nom)
+    if not fiche:
+        return []
+    maladies = fiche.get("maladies_en_cours") or []
+    if not maladies:
+        return []
+    lignes: list[str] = []
+    restantes: list[dict] = []
+    for m in maladies:
+        tr = await lancer_sauvegarde(
+            ctx, type_sauvegarde="vigueur", modificateur=0,
+            difficulte=int(m.get("dd", 10) or 10), nom_personnage=nom,
+            source=f"maladie quotidienne ({m.get('nom', '?')})")
+        texte = (tr.text or "").strip()
+        ok = ("✅" in texte) or ("réussite automatique" in texte)
+        n_m = str(m.get("nom", "Maladie"))
+        if ok:
+            succes = int(m.get("succes_consecutifs", 0) or 0) + 1
+            if succes >= 3:
+                lignes.append(
+                    "🦠 **" + n_m + "** : troisième succès consécutif — "
+                    f"la maladie est VAINCUE naturellement. **{nom}** "
+                    "guérit (condition Malade retirée).")
+                continue
+            m["succes_consecutifs"] = succes
+            restantes.append(m)
+            lignes.append(
+                "🦠 **" + n_m + "** (jour de lutte) : "
+                + texte.splitlines()[0] + f" — {succes}/3 succès "
+                "consécutifs.")
+        else:
+            m["succes_consecutifs"] = 0
+            dmg = _rouler_formule(str(m.get("degats", "1d4")))
+            carac = str(m.get("carac") or "CON")
+            dc = fiche.setdefault("degats_carac", {})
+            dc[carac] = int(dc.get(carac, 0) or 0) + dmg
+            restantes.append(m)
+            lignes.append(
+                "🦠 **" + n_m + "** (jour de lutte) : la sauvegarde "
+                f"échoue — **{dmg} points de {carac} endommagés**.")
+    if restantes:
+        fiche["maladies_en_cours"] = restantes
+    else:
+        fiche.pop("maladies_en_cours", None)
+        if "Malade" in (fiche.get("conditions") or []):
+            fiche["conditions"] = [
+                c for c in (fiche.get("conditions") or [])
+                if c != "Malade"]
+    try:
+        from .inventaire import _normaliser_fiche as _nf_mq
+        _nf_mq(fiche)
+    except Exception:                                        # noqa: BLE001
+        pass
+    _save_fiche(ctx, nom, fiche)
+    return lignes

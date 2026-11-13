@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import unicodedata
 from typing import Any, Optional
@@ -1887,6 +1888,121 @@ async def inventaire_transferrer(
         text=_dest_txt + _charge_txt,
         state_patch=patch,
     )
+
+
+@tool
+async def identifier_objet(
+    ctx: ToolContext,
+    nom: str,
+    objet: str,
+    methode: str = "sort",
+    lanceur: str = "",
+) -> ToolResult:
+    """
+    IDENTIFIE un objet magique (D&D 3.5) — AVANT l'identification, le MJ
+    ne révèle que l'apparence ; APRÈS, il révèle les propriétés
+    canoniques dans sa narration (l'objet est marqué identifié sur la
+    fiche).
+
+    :param nom (str): le personnage qui porte/étudie l'objet.
+    :param objet (str): le nom de l'objet dans l'inventaire.
+    :param methode (str): "sort" — le sort Identification (niv. 1
+        clerc/magicien : un emplacement est consommé chez `lanceur`,
+        composante perle 100 po payée sur son or si disponible) · "essai"
+        — 1 heure d'étude + jet d'Art de la magie contre une difficulté
+        de base quinze, majorée du niveau estimé du créateur : plus lent,
+        peut échouer (retenter la nuit suivante).
+    :param lanceur (str): QUI lance le sort / fait l'essai (le PJ
+        lanceur ; défaut = `nom`).
+    """
+    from .fiches import _load_fiche, _save_fiche  # noqa: PLC0415
+
+    fiche = _load_fiche(ctx, nom)
+    if not fiche:
+        return ToolResult(text=f"❌ Aucune fiche trouvée pour '{nom}'.")
+    inv = _inventaire(fiche)
+    frag = _norm(objet)
+    trouve = next(
+        (e for e in inv
+         if (ne := _norm(e.get("nom")))
+         and (ne == frag or frag in ne or ne in frag)),
+        None)
+    if trouve is None:
+        return ToolResult(text=(
+            f"❌ « {objet} » n'est pas dans l'inventaire de "
+            f"{fiche.get('nom', nom)}."))
+
+    qui = str(lanceur or nom).strip()
+    f_lanceur = _load_fiche(ctx, qui) or fiche
+    _m_essai = re.search(r"\b(sort|essai|magie)\b",
+                         str(methode or ""), re.IGNORECASE)
+
+    if _m_essai and _m_essai.group(1).lower() == "sort":
+        # Le sort Identification : un emplacement de sort niv. 1 chez le
+        # lanceur + la composante matérielle (perle 100 po).
+        from .. import sorts as _cat_s  # noqa: PLC0415
+        _classe = str(f_lanceur.get("classe") or "")
+        _s_l = _cat_s.sorts_de_fiche(f_lanceur)
+        _prep = _s_l.get("prepares") or {}
+        _cle_ident = next(
+            (k for k in _prep
+             if "identif" in str(k).lower()
+             and int(_prep[k] or 0) > 0), None)
+        if _cle_ident is None:
+            return ToolResult(text=(
+                f"❌ **{f_lanceur.get('nom', qui)}** n'a PAS le sort "
+                "Identification préparé (niv. 1 clerc/magicien). Utilise "
+                "`preparer_sorts`, ou tente l'essai d'Art de la magie "
+                "(methode='essai', 1 h d'étude, difficulté de base quinze)."))
+        _prep[_cle_ident] = int(_prep[_cle_ident] or 1) - 1
+        _s_l["prepares"] = _prep
+        f_lanceur["sorts"] = _s_l
+        _note_compo = ""
+        if int(f_lanceur.get("or", 0) or 0) >= 1000:
+            f_lanceur["or"] = int(f_lanceur.get("or", 0) or 0) - 1000
+            _note_compo = " Perle de 100 po consommée."
+        elif int(f_lanceur.get("or", 0) or 0) > 0:
+            _note_compo = " ⚠️ L'or ne suffit pas pour la perle (100 po) — "                           "composante empruntée : le MJ arbitre."
+        else:
+            _note_compo = " ⚠️ Aucune perle (100 po) : composante "                           "manquante — le MJ arbitre."
+        _save_fiche(ctx, str(f_lanceur.get("nom") or qui), f_lanceur)
+    else:
+        # Essai : Art de la magie (INT) contre difficulté 15 + niveau.
+        _int_v = int((f_lanceur.get("carac") or {}).get("INT", 10) or 10)
+        _mod_int = (_int_v - 10) // 2
+        _rangs = int((f_lanceur.get("competences") or {})
+                     .get("Art de la magie", 0) or 0)
+        _jet = random.randint(1, 20) + _rangs + _mod_int
+        _dd_essai = 15 + max(1, int(f_lanceur.get("niveau") or 1))
+        if _jet < _dd_essai:
+            return ToolResult(text=(
+                f"🔍 **Essai d'Art de la magie raté** : d20="
+                f"{_jet - _rangs - _mod_int} + {_rangs} (rangs) + "
+                f"{_mod_int:+d} (INT) = **{_jet}** contre DD {_dd_essai} — "
+                "l'objet garde ses secrets. Une nouvelle étude (1 h) "
+                "peut être tentée après un repos."))
+        _note_compo = ""
+        _preface = (
+            f"🔍 **Essai d'Art de la magie réussi** : d20="
+            f"{_jet - _rangs - _mod_int} + {_rangs} + {_mod_int:+d} = "
+            f"**{_jet}** vs DD {_dd_essai}.")
+
+    trouve["identifie"] = True
+    # 🔧 (fix 14/11) : `_inventaire` renvoie une COPIE réparée — la
+    # mutation de `trouve` ne touchait pas la fiche (le flag ne
+    # persistait pas). Réassigne comme les autres outils.
+    fiche["inventaire"] = inv
+    _save_fiche(ctx, str(fiche.get("nom") or nom), fiche)
+    if _m_essai and _m_essai.group(1).lower() == "sort":
+        _preface = ("✨ **Sort d'Identification lancé** par "
+                    f"{f_lanceur.get('nom', qui)}." + _note_compo)
+    return ToolResult(text=(
+        _preface
+        + f"\n\n✅ **{trouve.get('nom')}** est identifié (marqué sur la "
+        "fiche). RÉVÈLE MAINTENANT ses propriétés canoniques dans la "
+        "narration — et seulement maintenant : avant l'identification, "
+        "l'objet n'était que « une arme qui luit faiblement »."
+    ))
 
 
 def _normaliser_fiche(fiche: dict[str, Any]) -> dict[str, Any]:

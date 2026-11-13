@@ -715,6 +715,21 @@ async def repos_long(
     except Exception:                                        # noqa: BLE001
         pass
 
+    # 🦠 (fix 14/11) : la progression QUOTIDIENNE des maladies en cours —
+    # le réveil d'un repos = un jour de lutte (sauvegarde quotidienne).
+    try:
+        from .dangers import maladies_quotidiennes_pour_pj as _mqq
+        for _n_mq in cibles:
+            try:
+                _l_mq = await _mqq(ctx, _n_mq)
+                if _l_mq:
+                    lignes.extend(_l_mq)
+            except Exception as e_mq_pj:                 # noqa: BLE001
+                print(f"[dnd35] Maladie quotidienne ({_n_mq}) ignorée : "
+                      f"{e_mq_pj}")
+    except Exception as e_mq:                            # noqa: BLE001
+        print(f"[dnd35] Progression des maladies échouée (ignoré) : {e_mq}")
+
     # 🌙 (fix 13/11) : VEILLE DE NUIT — un camp sans sentinelle en terrain
     # inconnu risque une nuit agitée (d20 1-5 = 25 % → tout le camp
     # **Fatigué** le matin). Dispensé : veilleur désigné, nuit d'auberge

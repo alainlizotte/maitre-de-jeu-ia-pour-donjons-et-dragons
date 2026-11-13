@@ -17,7 +17,7 @@ connectent depuis leur navigateur sur le réseau local.
 | **Frontend** | React 18 + TypeScript + Vite 6 + Tailwind 4 |
 | **LLM** | llama.cpp (par défaut) / Ollama (OpenAI-compatible) — Gemma 4, Qwen 3.5… |
 | **Règles** | Moteur de combat serveur + XP/niveaux 3.5 officiels (DMG) ; sorts, repos, voyage SRD ; **critiques confirmés, RD/résistances, attaques multiples, conditions à effets, dangers d'environnement, climat par région, trésors par ND** |
-| **Qualité** | **1151 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) — **campagnes complètes jouées** (*Dues for the Dead*, *Shadows Over the Moonsea* 7 chapitres, *The Crown of Mystra*) |
+| **Qualité** | **1186 tests pytest** (moteur de combat, carte, fiches, scénarios, trésors, robustesse bêta, E2E sans LLM) + **E2E pilotés avec LLM réel** (`tests/e2e_*_reels.py`, `tests/e2e_regles_drs.py`) — **campagnes complètes jouées** (*Dues for the Dead*, *Shadows Over the Moonsea* 7 chapitres, *The Crown of Mystra*) |
 | **Images** | ComfyUI — tout modèle de votre choix (**recommandé : Qwen-Image 1.0 ou FLUX.1-schnell**, Apache 2.0) — optionnel |
 | **Cartes** | Carte du monde par univers/scénario avec épingles, **chemin parcouru et lieux visités persistants**, plein écran projeté |
 | **Données** | Inventaire & encombrement (poids PHB 3.5, or compris), mémoire de campagne persistante |

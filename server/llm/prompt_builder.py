@@ -1380,6 +1380,10 @@ class PromptBuilder:
     ) -> str:
         """Construit le récapitulatif de l'état.
 
+    # 🛡️ (fix 14/11, E2E 6e92855b) : le 9B peut patcher `quete` avec une CHAÎNE via etat_partie_patch — normalise en dict (titre) pour que tous les .get() du récap survivent.
+    _quete_raw = (etat or {}).get('quete')
+    if isinstance(_quete_raw, str):
+        etat['quete'] = {'titre': _quete_raw, 'source': ''}
         En phase d'ouverture sans PJ créé, on produit un récap **minimal**
         orienté action — allège le contexte pour que le LLM déclenche les tools
         plutôt que de noyer l'instruction dans 6 ko de récap. Sinon on
@@ -1892,6 +1896,10 @@ class PromptBuilder:
     ) -> tuple[str, dict[str, Any]]:
         """Construit le message système complet d'un tour.
 
+    # 🛡️ (fix 14/11) : même garde que build_recap.
+    _quete_raw = (etat or {}).get('quete')
+    if isinstance(_quete_raw, str):
+        etat['quete'] = {'titre': _quete_raw, 'source': ''}
         Renvoie `(system_message, etat)` — l'état est retourné pour que la
         session puisse l'exposer au frontend (UI) en parallèle du LLM.
         """

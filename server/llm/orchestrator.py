@@ -85,6 +85,15 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "scenario_etape",
         "ajouter_evenement_histoire",
         "set_derniere_narration",
+        # 🍺 (fix 14/11, E2E bfc609e1) : une partie en VILLE (quête prise
+        # au chat sans scénario chargé) reste en opening_complete — elle a
+        # besoin du marché, de l'inventaire, de la taverne et des jets,
+        # sinon les achats et les rumeurs sont inaccessibles.
+        "marche_consulter", "marche_stock", "marche_acheter",
+        "marche_vendre", "equipement_catalogue", "auberge_commander",
+        "inventaire_ajouter", "inventaire_consulter",
+        "inventaire_transferrer", "rumeurs_taverne", "identifier_objet",
+        "appliquer_poison", "voyage_demarrer",
     ),
     "exploration": (
         "etat_partie_get",
@@ -166,6 +175,17 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         # sans ce tool le compteur de flèches n'existe qu'en combat.
         "inventaire_consommer_munition",
         "inventaire_consulter",
+        # 🍺 (fix 14/11, E2E bfc609e1) : les outils de saveur/profondeur du
+        # Tier 1-2 — MASQUÉS des sous-ensembles, ils étaient inappelables
+        # (leçon déjà apprise : un tool absent de la phase = tour 100 %
+        # narratif). Taverne, monture, poison/maladie, identification.
+        "rumeurs_taverne",
+        "inventaire_transferrer",
+        "attaque_montee",
+        "appliquer_poison",
+        "appliquer_maladie",
+        "identifier_objet",
+        "fiche_perso_condition",
         # Scénario : relire le livret et suivre les étapes de la trame.
         "scenarios_laelith_lister",
         "scenarios_laelith_charger",
@@ -207,6 +227,12 @@ _PHASE_TOOLS: dict[str, tuple[str, ...]] = {
         "attaque_opportunite",
         "combat_preparer_action",
         "combat_attendre",
+        # 🐴 (fix 14/11) : la CHARGE MONTÉE en combat + le poison des
+        # morsures/armes ennemies (appliqué serveur) + lâcher son arme
+        # (action libre 3.5 — désarmement subi).
+        "attaque_montee",
+        "appliquer_poison",
+        "inventaire_transferrer",
         "danger_chute",
         "danger_noyade",
         "danger_environnement",
@@ -285,6 +311,11 @@ _OUTILS_DECISION = frozenset({
     # Inventaire
     "inventaire_ajouter", "inventaire_ramasser", "inventaire_retirer",
     "inventaire_consommer_munition",
+    # 🍺 (fix 14/11, E2E bfc609e1) : saveur/profondeur — sinon le plafond
+    # d'exposition les évince et le modèle ne peut pas les appeler.
+    "rumeurs_taverne", "inventaire_transferrer", "identifier_objet",
+    "appliquer_poison", "appliquer_maladie", "attaque_montee",
+    "fiche_perso_condition",
     # Magie 3.5
     "incanter_sort", "preparer_sorts",
     # Familier / compagnon animal (appel lié à la fiche, renvoi)
@@ -323,6 +354,9 @@ _COMBAT_PRIORITAIRES = frozenset({
     "attaque_speciale", "attaque_opportunite",
     "combat_preparer_action", "combat_attendre",
     "danger_chute", "danger_noyade", "danger_environnement",
+    # 🐴 (fix 14/11) : charge montée + poison des morsures + lâcher son
+    # arme (action libre 3.5).
+    "attaque_montee", "appliquer_poison", "inventaire_transferrer",
 })
 
 # Plafond BASSE d'exposition des outils : en dessous de cette taille, un jeu

@@ -174,6 +174,16 @@ class PartyState:
     def patch(self, chemin: str, valeur_json: str) -> tuple[bool, str]:
         """Patche une clé hiérarchique.
 
+    # 🛡️ (fix 14/11, E2E 6e92855b) : le 9B patche `quete` avec du
+    # TEXTE BRUT ("Purifier le sanctuaire...") — l'état attend un dict
+    # {titre, source}. Coerce pour ne pas corrompre l'état (le récap
+    # du prompt plantait sur .get()).
+    try:
+        _racine = chemin.split('.')[0] if chemin else ''
+        if _racine == 'quete' and not isinstance(valeur_json, dict):
+            valeur_json = {'titre': str(valeur_json), 'source': ''}
+    except Exception:
+        pass
         - `valeur_json` est interprété comme JSON si possible (int, bool, list,
           dict), sinon texte brut.
         - Gère les listes indexées : quand un parent est une liste (ex. `pj`
@@ -207,6 +217,20 @@ class PartyState:
         _LISTES_REQUISES = {"pj"}
         if len(keys) == 1 and keys[0] in _LISTES_REQUISES and not isinstance(v, list):
             return False, f"❌ Refusé : la clé '{keys[0]}' doit rester une liste (reçu {type(v).__name__})."
+        # 🛡️ (fix 14/11, E2E 6e92855b) : le 9B patche `quete` avec du TEXTE
+        # BRUT ("Purifier le sanctuaire...") — l'état attend un dict
+        # {titre, source}. Coerce pour ne pas corrompre l'état (le récap
+        # du prompt plantait sur quete.get()).
+        if keys[0] == "quete" and not isinstance(v, dict):
+            v = {"titre": str(v), "source": ""}
+            # repositionne dans l'état (le _set_child a déjà écrit v)
+            if len(keys) == 1:
+                etat["quete"] = v
+            else:
+                _cur_q = etat
+                for _k in keys[1:-1]:
+                    _cur_q = _cur_q.setdefault(_k, {})
+                _cur_q[keys[-1]] = v
 
         err = self.save(etat)
         if err:
